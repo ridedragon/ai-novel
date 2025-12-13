@@ -3306,6 +3306,13 @@ function App() {
                  <Code2 className="w-3.5 h-3.5" />
                  正则
                </button>
+               <button 
+                 onClick={() => setShowSettings(true)}
+                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors"
+               >
+                 <Settings className="w-3.5 h-3.5" />
+                 设置
+               </button>
              </div>
           </div>
         </div>
@@ -4402,64 +4409,59 @@ function App() {
         </div>
         )}
 
-        <button
-          onClick={() => setShowSettings(true)}
-          className="absolute bottom-6 right-6 p-3 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-full shadow-lg text-gray-400 hover:text-white transition-all z-10"
-        >
-          <Settings className="w-6 h-6" />
-        </button>
       </div>
 
       {/* Global Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-end">
           <div className="w-full md:w-96 bg-gray-800 h-full p-6 shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-200">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">全局设置</h2>
-              <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-6">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-300">Theme Color</label>
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="color" 
-                    value={themeColor} 
-                    onChange={(e) => setThemeColor(e.target.value)} 
-                    className="h-10 w-20 bg-transparent border border-gray-700 rounded cursor-pointer" 
-                  />
-                  <span className="text-sm text-gray-400">{themeColor}</span>
-                  <button 
-                    onClick={() => setThemeColor('#2563eb')} 
-                    className="text-xs text-[var(--theme-color-light)] hover:text-[var(--theme-color)] underline"
-                  >
-                    Reset
-                  </button>
-                </div>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold">全局设置</h2>
+                <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-300">API Key</label>
-                <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} className="bg-gray-900 border border-gray-700 rounded p-2.5 text-sm focus:border-[var(--theme-color)] outline-none" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-300">Base URL</label>
-                <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} className="bg-gray-900 border border-gray-700 rounded p-2.5 text-sm focus:border-[var(--theme-color)] outline-none" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <div className="flex justify-between items-center">
-                    <label className="text-sm font-medium text-gray-300">Model Name</label>
-                    {modelList.includes(model) && (
-                        <button 
-                            onClick={(e) => handleDeleteModel(e, model)}
-                            className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
-                        >
-                            <Trash2 className="w-3 h-3" /> 删除
-                        </button>
-                    )}
+              <div className="space-y-6">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-gray-300">Theme Color</label>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="color" 
+                      value={themeColor} 
+                      onChange={(e) => setThemeColor(e.target.value)} 
+                      className="h-10 w-20 bg-transparent border border-gray-700 rounded cursor-pointer" 
+                    />
+                    <span className="text-sm text-gray-400">{themeColor}</span>
+                    <button 
+                      onClick={() => setThemeColor('#2563eb')} 
+                      className="text-xs text-[var(--theme-color-light)] hover:text-[var(--theme-color)] underline"
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-gray-300">API Key</label>
+                  <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} className="bg-gray-900 border border-gray-700 rounded p-2.5 text-sm focus:border-[var(--theme-color)] outline-none" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-gray-300">Base URL</label>
+                  <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} className="bg-gray-900 border border-gray-700 rounded p-2.5 text-sm focus:border-[var(--theme-color)] outline-none" />
+                </div>
+              <div className="space-y-4 border-t border-gray-700 pt-4">
+                  {/* Default Model */}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center">
+                        <label className="text-sm font-medium text-gray-300">默认模型 (正文/通用)</label>
+                        {modelList.includes(model) && (
+                            <button 
+                                onClick={(e) => handleDeleteModel(e, model)}
+                                className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
+                            >
+                                <Trash2 className="w-3 h-3" /> 删除
+                            </button>
+                        )}
+                    </div>
                     <div className="relative">
                         <select 
                             value={model} 
@@ -4472,10 +4474,38 @@ function App() {
                         </select>
                         <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" />
                     </div>
-                    <div className="flex gap-2">
+                  </div>
+
+                  {/* Specific Models */}
+                  {[
+                    { label: '大纲生成模型', value: outlineModel, setter: setOutlineModel },
+                    { label: '角色生成模型', value: characterModel, setter: setCharacterModel },
+                    { label: '世界观生成模型', value: worldviewModel, setter: setWorldviewModel },
+                    { label: '正文优化模型', value: optimizeModel, setter: setOptimizeModel }
+                  ].map((item, idx) => (
+                    <div key={idx} className="flex flex-col gap-1">
+                        <label className="text-xs font-medium text-gray-400">{item.label}</label>
+                        <div className="relative">
+                            <select 
+                                value={item.value} 
+                                onChange={(e) => item.setter(e.target.value)} 
+                                className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-xs focus:border-[var(--theme-color)] outline-none appearance-none text-gray-300"
+                            >
+                                <option value="">跟随默认模型</option>
+                                {modelList.map(m => (
+                                    <option key={m} value={m}>{m}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-3 top-2.5 w-3 h-3 text-gray-500 pointer-events-none" />
+                        </div>
+                    </div>
+                  ))}
+
+                  {/* Add New Model */}
+                  <div className="flex gap-2 pt-2">
                         <input 
                             type="text" 
-                            placeholder="添加自定义模型..." 
+                            placeholder="添加新模型到列表..." 
                             value={newModelInput}
                             onChange={(e) => setNewModelInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleAddModel()}
@@ -4490,16 +4520,11 @@ function App() {
                             <Plus className="w-4 h-4" />
                         </button>
                     </div>
-                </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-300">System Prompt</label>
-                <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} className="bg-gray-900 border border-gray-700 rounded p-2.5 text-sm h-32 resize-none focus:border-[var(--theme-color)] outline-none" />
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Advanced Settings Panel ("对话补全源") */}
       {showAdvancedSettings && (
