@@ -471,7 +471,6 @@ function App() {
   const [userPrompt, setUserPrompt] = useState('')
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
-  const [isSubSidebarOpen, setIsSubSidebarOpen] = useState(false)
   
   // Auto Write Refs & State
   const isAutoWritingRef = useRef(false)
@@ -678,11 +677,6 @@ function App() {
   const setVolumes = (value: NovelVolume[]) => {
       if (!activeNovelId) return
       setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, volumes: value } : n))
-  }
-
-  const setSystemPrompt = (value: string) => {
-      if (!activeNovelId) return
-      setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, systemPrompt: value } : n))
   }
 
   // Volume Actions
