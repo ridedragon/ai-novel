@@ -471,6 +471,7 @@ function App() {
   const [userPrompt, setUserPrompt] = useState('')
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
+  const [isSubSidebarOpen, setIsSubSidebarOpen] = useState(false)
   
   // Auto Write Refs & State
   const isAutoWritingRef = useRef(false)
@@ -3379,7 +3380,7 @@ function App() {
                  {creationModule === 'characters' && (
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
                        {/* Left Sidebar */}
-                       <div className="w-64 border-r border-gray-700 flex flex-col bg-gray-800">
+                       <div className={`w-full md:w-64 border-r border-gray-700 flex flex-col bg-gray-800 ${activeCharacterSetId ? 'hidden md:flex' : 'flex'}`}>
                           {/* Header */}
                           <div className="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
                              <div className="font-bold flex items-center gap-2">
@@ -3450,13 +3451,19 @@ function App() {
                        </div>
                        
                        {/* Right Content */}
-                       <div className="flex-1 flex flex-col bg-gray-900">
+                       <div className={`flex-1 flex flex-col bg-gray-900 ${activeCharacterSetId ? 'flex' : 'hidden md:flex'}`}>
                           {activeCharacterSetId ? (
                              <>
                                 {/* Header / Toolbar */}
                                 <div className="p-4 border-b border-gray-700 bg-gray-800 shrink-0">
                                     <div className="flex items-center justify-between mb-4">
                                        <div className="flex items-center gap-3">
+                                          <button 
+                                             onClick={() => setActiveCharacterSetId(null)}
+                                             className="md:hidden p-1.5 -ml-2 mr-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white"
+                                          >
+                                             <ArrowLeft className="w-5 h-5" />
+                                          </button>
                                           <h3 className="font-bold text-lg text-gray-200">
                                              {activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)?.name} 
                                              <span className="text-sm font-normal text-gray-500 ml-2">内的角色卡</span>
@@ -3650,7 +3657,7 @@ function App() {
                  {creationModule === 'worldview' && (
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
                        {/* Left Sidebar */}
-                       <div className="w-64 border-r border-gray-700 flex flex-col bg-gray-800">
+                       <div className={`w-full md:w-64 border-r border-gray-700 flex flex-col bg-gray-800 ${activeWorldviewSetId ? 'hidden md:flex' : 'flex'}`}>
                           {/* Header */}
                           <div className="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
                              <div className="font-bold flex items-center gap-2">
@@ -3721,13 +3728,19 @@ function App() {
                        </div>
                        
                        {/* Right Content */}
-                       <div className="flex-1 flex flex-col bg-gray-900">
+                       <div className={`flex-1 flex flex-col bg-gray-900 ${activeWorldviewSetId ? 'flex' : 'hidden md:flex'}`}>
                           {activeWorldviewSetId ? (
                              <>
                                 {/* Header / Toolbar */}
                                 <div className="p-4 border-b border-gray-700 bg-gray-800 shrink-0">
                                     <div className="flex items-center justify-between mb-4">
                                        <div className="flex items-center gap-3">
+                                          <button 
+                                             onClick={() => setActiveWorldviewSetId(null)}
+                                             className="md:hidden p-1.5 -ml-2 mr-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white"
+                                          >
+                                             <ArrowLeft className="w-5 h-5" />
+                                          </button>
                                           <h3 className="font-bold text-lg text-gray-200">
                                              {activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)?.name} 
                                              <span className="text-sm font-normal text-gray-500 ml-2">内的设定</span>
@@ -3858,7 +3871,7 @@ function App() {
                  {creationModule === 'outline' && (
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
                        {/* Left Sidebar */}
-                       <div className="w-64 border-r border-gray-700 flex flex-col bg-gray-800">
+                       <div className={`w-full md:w-64 border-r border-gray-700 flex flex-col bg-gray-800 ${activeOutlineSetId ? 'hidden md:flex' : 'flex'}`}>
                           {/* Header */}
                           <div className="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
                              <div className="font-bold flex items-center gap-2">
@@ -3929,13 +3942,19 @@ function App() {
                        </div>
                        
                        {/* Right Content */}
-                       <div className="flex-1 flex flex-col bg-gray-900">
+                       <div className={`flex-1 flex flex-col bg-gray-900 ${activeOutlineSetId ? 'flex' : 'hidden md:flex'}`}>
                           {activeOutlineSetId ? (
                              <>
                                 {/* Header / Toolbar */}
                                 <div className="p-4 border-b border-gray-700 bg-gray-800 shrink-0">
                                     <div className="flex items-center justify-between mb-4">
                                        <div className="flex items-center gap-3">
+                                          <button 
+                                             onClick={() => setActiveOutlineSetId(null)}
+                                             className="md:hidden p-1.5 -ml-2 mr-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white"
+                                          >
+                                             <ArrowLeft className="w-5 h-5" />
+                                          </button>
                                           <h3 className="font-bold text-lg text-gray-200">
                                              {activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.name} 
                                              <span className="text-sm font-normal text-gray-500 ml-2">章节大纲</span>

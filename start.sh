@@ -13,4 +13,10 @@ if [ ! -d "node_modules" ]; then
 fi
 
 echo "Starting development server..."
-npm run dev
+
+# 修复 Termux/Linux 下的执行权限问题
+if [ -d "node_modules/.bin" ]; then
+    chmod +x node_modules/.bin/* 2>/dev/null
+fi
+
+npm run dev -- --host

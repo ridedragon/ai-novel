@@ -41,34 +41,39 @@
 1.  将手机连接电脑。
 2.  将整个 `ai-novel-writer` 文件夹复制到手机的内部存储根目录，例如重命名为 `ai-writer`。
 
-**方法 B：Termux 中操作（如果项目已在 Git 仓库）**
-如果你的代码在 GitHub 等平台，可以直接：
+**方法 B：Termux 中操作（推荐）**
+可以直接从 GitHub 拉取最新代码：
 ```bash
-git clone <你的仓库地址>
-cd <项目目录名>
+git clone https://github.com/ridedragon/ai-novel.git
+cd ai-novel
 ```
 
 ## 第四步：在 Termux 中运行项目
 
-假设你使用**方法 A**将文件放在了手机存储根目录的 `ai-writer` 文件夹中：
+假设你使用**方法 B**拉取了代码：
 
 1.  **进入项目目录**：
     ```bash
-    cd storage/shared/ai-writer
+    cd ai-novel
     ```
-    *   注意：Termux 中 `storage/shared` 对应手机的内部存储根目录。
+    *   如果是**方法 A**，则进入 `cd storage/shared/ai-writer`。
 
-2.  **安装依赖** (只需首次运行)：
+2.  **安装依赖与启动**：
+    推荐直接运行启动脚本，它会自动安装依赖、修复权限并启动服务：
+    ```bash
+    bash start.sh
+    ```
+    
+    *   如果在运行过程中遇到 `sh: 1: vite: Permission denied` 错误，脚本会自动尝试修复。如果仍然报错，请手动运行：`chmod +x node_modules/.bin/vite`。
+    *   首次运行会自动执行 `npm install`，可能需要几分钟。
+    *   脚本已包含 `--host` 参数，确保可以通过手机 IP 访问。
+
+    或者手动分步运行：
     ```bash
     npm install
-    ```
-    *   这也可能需要几分钟，取决于网络状况。如果报错，可以尝试 `npm install --no-bin-links`。
-
-3.  **启动服务**：
-    ```bash
+    chmod +x node_modules/.bin/vite  # 修复 Termux 下的权限问题
     npm run dev -- --host
     ```
-    *   加上 `--host` 参数是为了确保通过 IP 也能访问，防止部分手机浏览器无法解析 localhost。
 
 ## 第五步：浏览器访问
 
