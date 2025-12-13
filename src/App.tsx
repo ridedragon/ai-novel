@@ -4,7 +4,7 @@ import {
   SlidersHorizontal, X, Edit2, Copy, RotateCcw, Link, Link2, Trash2, 
   Upload, Download, ChevronDown, GripVertical, Eye, EyeOff, ToggleLeft, ToggleRight,
   FilePlus, Unlink, Home, Book, Edit3, List, PlayCircle, StopCircle, Wand2, Code2,
-  Folder, ChevronRight, ChevronLeft, FolderPlus, FolderInput, Users, Globe, ArrowLeft, Menu
+  Folder, ChevronRight, ChevronLeft, FolderPlus, FolderInput, Users, Globe, ArrowLeft, Menu, ArrowUp, ArrowDown
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import OpenAI from 'openai'
@@ -5406,50 +5406,56 @@ function App() {
                                   {currentPreset.prompts.map((prompt, idx) => (
                                       <div key={prompt.id || idx} className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-3">
                                           <div className="flex items-center justify-between">
-                                              <div className="flex items-center gap-2">
-                                                  <span className="text-gray-500 font-mono text-xs">#{idx + 1}</span>
-                                                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium border ${
+                                              <div className="flex items-center gap-2 overflow-hidden">
+                                                  <span className="text-gray-500 font-mono text-xs shrink-0">#{idx + 1}</span>
+                                                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium border shrink-0 ${
                                                       prompt.role === 'system' ? 'bg-purple-900/30 border-purple-700 text-purple-300' :
                                                       prompt.role === 'user' ? 'bg-blue-900/30 border-blue-700 text-blue-300' :
                                                       'bg-green-900/30 border-green-700 text-green-300'
                                                   }`}>
                                                       {prompt.role === 'system' ? 'Sys' : prompt.role === 'user' ? 'User' : 'Ast'}
                                                   </span>
-                                                  {prompt.name && <span className="text-xs text-[var(--theme-color)] font-bold truncate max-w-[100px]">{prompt.name}</span>}
+                                                  <span className="text-sm text-gray-200 font-medium truncate">
+                                                      {prompt.name || <span className="text-gray-500 italic text-xs">未命名</span>}
+                                                  </span>
                                               </div>
-                                              <div className="flex items-center gap-1">
+                                              <div className="flex items-center gap-1 shrink-0">
                                                   <button 
                                                       onClick={() => togglePromptEnabled(idx)}
                                                       className={`p-1.5 rounded transition-colors ${prompt.enabled ? 'text-[var(--theme-color)] bg-[var(--theme-color)]/10' : 'text-gray-500 bg-gray-700/50'}`}
                                                   >
-                                                      {prompt.enabled ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                                                      {prompt.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
                                                   </button>
                                               </div>
                                           </div>
 
-                                          <div 
-                                              onClick={() => handleEditPrompt(idx, prompt)}
-                                              className="text-xs text-gray-300 bg-gray-900/50 p-2.5 rounded border border-gray-700/50 font-mono line-clamp-3 active:bg-gray-900 transition-colors"
-                                          >
-                                              {prompt.content || <span className="text-gray-600 italic">(空内容)</span>}
-                                          </div>
-
-                                          <div className="flex items-center justify-between pt-1 border-t border-gray-700/50">
-                                              <div className="flex items-center gap-2">
-                                                  <div className="p-1.5 text-gray-500">
-                                                    <GripVertical className="w-4 h-4" />
-                                                  </div>
+                                          <div className="flex items-center justify-between pt-2 border-t border-gray-700/50">
+                                              <div className="flex items-center gap-1">
+                                                  <button 
+                                                      onClick={() => moveGeneratorPrompt(idx, idx - 1)}
+                                                      disabled={idx === 0}
+                                                      className="p-1.5 text-gray-400 hover:text-white bg-gray-700/50 hover:bg-gray-700 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                                                  >
+                                                      <ArrowUp className="w-4 h-4" />
+                                                  </button>
+                                                  <button 
+                                                      onClick={() => moveGeneratorPrompt(idx, idx + 1)}
+                                                      disabled={idx === currentPreset.prompts.length - 1}
+                                                      className="p-1.5 text-gray-400 hover:text-white bg-gray-700/50 hover:bg-gray-700 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                                                  >
+                                                      <ArrowDown className="w-4 h-4" />
+                                                  </button>
                                               </div>
                                               <div className="flex items-center gap-2">
                                                   <button 
                                                       onClick={() => handleEditPrompt(idx, prompt)}
-                                                      className="p-1.5 text-gray-400 hover:text-white bg-gray-700/50 hover:bg-gray-700 rounded transition-colors flex items-center gap-1 text-xs"
+                                                      className="px-3 py-1.5 text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-700 rounded transition-colors flex items-center gap-1.5 text-xs font-medium"
                                                   >
                                                       <Edit2 className="w-3.5 h-3.5" /> 编辑
                                                   </button>
                                                   <button 
                                                       onClick={() => removePrompt(idx)}
-                                                      className="p-1.5 text-red-400 hover:text-red-300 bg-red-900/20 hover:bg-red-900/30 rounded transition-colors flex items-center gap-1 text-xs"
+                                                      className="px-3 py-1.5 text-red-400 hover:text-red-300 bg-red-900/20 hover:bg-red-900/30 rounded transition-colors flex items-center gap-1.5 text-xs font-medium"
                                                   >
                                                       <Trash2 className="w-3.5 h-3.5" /> 删除
                                                   </button>
