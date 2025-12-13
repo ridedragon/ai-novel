@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [react(), Terminal()],
   server: {
     port: 8002,
-    host: true
+    host: true,
+    strictPort: true
   }
 })

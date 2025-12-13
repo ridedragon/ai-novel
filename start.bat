@@ -12,6 +12,12 @@ if not exist node_modules (
     )
 )
 
+REM Kill process on port 8002 if exists
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8002') do (
+    echo Killing process with PID %%a occupying port 8002...
+    taskkill /f /pid %%a >nul 2>&1
+)
+
 echo Starting development server...
 call npm run dev
 pause

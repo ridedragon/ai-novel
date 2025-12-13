@@ -3429,7 +3429,7 @@ function App() {
                           </div>
                           
                           {/* Bottom Input (Left Input Box) */}
-                          <div className="p-3 border-t border-gray-700 bg-gray-800">
+                          <div className="p-3 pr-20 md:pr-3 border-t border-gray-700 bg-gray-800">
                              <div className="text-xs text-gray-500 mb-2 font-medium">新建角色文件</div>
                              <div className="flex gap-2">
                                 <input 
@@ -3706,7 +3706,7 @@ function App() {
                           </div>
                           
                           {/* Bottom Input (Left Input Box) */}
-                          <div className="p-3 border-t border-gray-700 bg-gray-800">
+                          <div className="p-3 pr-20 md:pr-3 border-t border-gray-700 bg-gray-800">
                              <div className="text-xs text-gray-500 mb-2 font-medium">新建世界观文件</div>
                              <div className="flex gap-2">
                                 <input 
@@ -3920,7 +3920,7 @@ function App() {
                           </div>
                           
                           {/* Bottom Input (Left Input Box) */}
-                          <div className="p-3 border-t border-gray-700 bg-gray-800">
+                          <div className="p-3 pr-20 md:pr-3 border-t border-gray-700 bg-gray-800">
                              <div className="text-xs text-gray-500 mb-2 font-medium">新建大纲文件</div>
                              <div className="flex gap-2">
                                 <input 
@@ -5182,7 +5182,7 @@ function App() {
       {/* Generator Settings Modal */}
       {showGeneratorSettingsModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-          <div className="bg-gray-800 w-full md:w-[900px] h-[700px] rounded-lg shadow-2xl border border-gray-600 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-gray-800 w-full md:w-[900px] h-[700px] max-h-[90vh] rounded-lg shadow-2xl border border-gray-600 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
              <div className="p-4 bg-gray-900 border-b border-gray-700 flex justify-between items-center">
                  <h3 className="text-lg font-bold text-gray-200">
                     {generatorSettingsType === 'outline' ? '大纲助手设置' : 
