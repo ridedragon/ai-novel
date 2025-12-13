@@ -5192,9 +5192,9 @@ function App() {
                  <button onClick={() => setShowGeneratorSettingsModal(false)} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
              </div>
              
-             <div className="flex-1 flex overflow-hidden">
+             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
                 {/* Sidebar: Preset List */}
-                <div className="w-48 border-r border-gray-700 bg-gray-900/50 flex flex-col">
+                <div className="w-full md:w-48 h-48 md:h-auto border-b md:border-r md:border-b-0 border-gray-700 bg-gray-900/50 flex flex-col shrink-0">
                    <div className="p-2 border-b border-gray-700">
                       <button 
                         onClick={handleAddNewGeneratorPreset}
@@ -5313,8 +5313,8 @@ function App() {
                                   </button>
                               </div>
                               
-                              <div className="border border-gray-700 rounded-lg overflow-hidden">
-                                  <table className="w-full text-left text-sm">
+                              <div className="border border-gray-700 rounded-lg overflow-x-auto">
+                                  <table className="w-full text-left text-sm min-w-[500px]">
                                       <thead className="bg-gray-900 text-gray-400 font-medium">
                                           <tr>
                                               <th className="px-4 py-3 w-16 text-center">排序</th>
