@@ -3167,7 +3167,7 @@ function App() {
                             }`}
                           >
                             <button
-                              onClick={() => setActiveChapterId(chapter.id)}
+                              onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
                               className="bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate"
                             >
                               <FileText className="w-4 h-4 shrink-0 opacity-70" />
@@ -3227,7 +3227,7 @@ function App() {
                     }`}
                   >
                     <button
-                      onClick={() => setActiveChapterId(chapter.id)}
+                      onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
                       className="bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate"
                     >
                       <FileText className="w-4 h-4 shrink-0" />
