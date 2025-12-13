@@ -5313,8 +5313,9 @@ function App() {
                                   </button>
                               </div>
                               
-                              <div className="border border-gray-700 rounded-lg overflow-x-auto">
-                                  <table className="w-full text-left text-sm min-w-[500px]">
+                              {/* Desktop Table View */}
+                              <div className="hidden md:block border border-gray-700 rounded-lg overflow-hidden">
+                                  <table className="w-full text-left text-sm">
                                       <thead className="bg-gray-900 text-gray-400 font-medium">
                                           <tr>
                                               <th className="px-4 py-3 w-16 text-center">排序</th>
@@ -5398,6 +5399,69 @@ function App() {
                                           )}
                                       </tbody>
                                   </table>
+                              </div>
+
+                              {/* Mobile Card View */}
+                              <div className="md:hidden space-y-3">
+                                  {currentPreset.prompts.map((prompt, idx) => (
+                                      <div key={prompt.id || idx} className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex flex-col gap-3">
+                                          <div className="flex items-center justify-between">
+                                              <div className="flex items-center gap-2">
+                                                  <span className="text-gray-500 font-mono text-xs">#{idx + 1}</span>
+                                                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium border ${
+                                                      prompt.role === 'system' ? 'bg-purple-900/30 border-purple-700 text-purple-300' :
+                                                      prompt.role === 'user' ? 'bg-blue-900/30 border-blue-700 text-blue-300' :
+                                                      'bg-green-900/30 border-green-700 text-green-300'
+                                                  }`}>
+                                                      {prompt.role === 'system' ? 'Sys' : prompt.role === 'user' ? 'User' : 'Ast'}
+                                                  </span>
+                                                  {prompt.name && <span className="text-xs text-[var(--theme-color)] font-bold truncate max-w-[100px]">{prompt.name}</span>}
+                                              </div>
+                                              <div className="flex items-center gap-1">
+                                                  <button 
+                                                      onClick={() => togglePromptEnabled(idx)}
+                                                      className={`p-1.5 rounded transition-colors ${prompt.enabled ? 'text-[var(--theme-color)] bg-[var(--theme-color)]/10' : 'text-gray-500 bg-gray-700/50'}`}
+                                                  >
+                                                      {prompt.enabled ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                                                  </button>
+                                              </div>
+                                          </div>
+
+                                          <div 
+                                              onClick={() => handleEditPrompt(idx, prompt)}
+                                              className="text-xs text-gray-300 bg-gray-900/50 p-2.5 rounded border border-gray-700/50 font-mono line-clamp-3 active:bg-gray-900 transition-colors"
+                                          >
+                                              {prompt.content || <span className="text-gray-600 italic">(空内容)</span>}
+                                          </div>
+
+                                          <div className="flex items-center justify-between pt-1 border-t border-gray-700/50">
+                                              <div className="flex items-center gap-2">
+                                                  <div className="p-1.5 text-gray-500">
+                                                    <GripVertical className="w-4 h-4" />
+                                                  </div>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                  <button 
+                                                      onClick={() => handleEditPrompt(idx, prompt)}
+                                                      className="p-1.5 text-gray-400 hover:text-white bg-gray-700/50 hover:bg-gray-700 rounded transition-colors flex items-center gap-1 text-xs"
+                                                  >
+                                                      <Edit2 className="w-3.5 h-3.5" /> 编辑
+                                                  </button>
+                                                  <button 
+                                                      onClick={() => removePrompt(idx)}
+                                                      className="p-1.5 text-red-400 hover:text-red-300 bg-red-900/20 hover:bg-red-900/30 rounded transition-colors flex items-center gap-1 text-xs"
+                                                  >
+                                                      <Trash2 className="w-3.5 h-3.5" /> 删除
+                                                  </button>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  ))}
+                                  {currentPreset.prompts.length === 0 && (
+                                      <div className="text-center py-8 text-gray-500 text-sm italic border border-dashed border-gray-700 rounded-lg">
+                                          暂无提示词
+                                      </div>
+                                  )}
                               </div>
                            </div>
                         </div>
