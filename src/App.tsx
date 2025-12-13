@@ -5226,7 +5226,7 @@ function App() {
                 </div>
 
                 {/* Main: Edit Area */}
-                <div className="flex-1 flex flex-col bg-gray-800">
+                <div className="flex-1 flex flex-col bg-gray-800 overflow-hidden">
                    {(() => {
                       const currentPresets = getGeneratorPresets()
                       const currentPreset = currentPresets.find(p => p.id === getActiveGeneratorPresetId())
