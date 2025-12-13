@@ -2752,65 +2752,71 @@ function App() {
 
   if (!activeNovelId) {
     return (
-      <div className="min-h-screen bg-gray-900 text-gray-100 p-8 font-sans overflow-y-auto">
+      <div className="min-h-screen bg-gray-900 text-gray-100 p-4 md:p-8 font-sans overflow-y-auto">
         <div className="max-w-5xl mx-auto">
-          <div className="flex justify-between items-center mb-8">
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <Book className="w-8 h-8 text-[var(--theme-color)]" />
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
+              <Book className="w-7 h-7 md:w-8 md:h-8 text-[var(--theme-color)]" />
               我的小说库
             </h1>
-            <div className="flex gap-4">
+            <div className="flex gap-3">
               <button
                 onClick={() => setShowSettings(true)}
-                className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-300 transition-colors"
+                className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-300 transition-colors border border-gray-700"
                 title="设置"
               >
-                <Settings className="w-6 h-6" />
+                <Settings className="w-5 h-5" />
               </button>
               <button 
                 onClick={handleCreateNovel}
-                className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] rounded-lg text-white transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] rounded-lg text-white transition-colors text-sm font-medium shadow-lg shadow-blue-900/20"
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="w-4 h-4" />
                 创建新小说
               </button>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {novels.map(novel => (
               <div 
                 key={novel.id} 
                 onClick={() => { setActiveNovelId(novel.id); setActiveChapterId(novel.chapters[0].id); }} 
-                className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] cursor-pointer transition-all hover:shadow-lg group relative flex flex-col h-48"
+                className="bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-[var(--theme-color)] cursor-pointer transition-all hover:shadow-lg group relative flex flex-col h-44"
               >
-                <h3 className="text-xl font-bold mb-2 text-gray-100 truncate">{novel.title}</h3>
-                <p className="text-sm text-gray-400 mb-4 line-clamp-3 flex-1">{novel.systemPrompt}</p>
+                <h3 className="text-lg font-bold mb-2 text-gray-100 truncate pr-16">{novel.title}</h3>
+                <p className="text-xs text-gray-400 mb-4 line-clamp-3 flex-1 leading-relaxed">{novel.systemPrompt}</p>
                 <div className="flex justify-between items-center text-xs text-gray-500 mt-auto border-t border-gray-700/50 pt-3">
-                  <span>{novel.chapters.length} 章节</span>
+                  <span className="bg-gray-900/50 px-2 py-0.5 rounded text-gray-400">{novel.chapters.length} 章节</span>
                   <span>{new Date(novel.createdAt).toLocaleDateString()}</span>
                 </div>
-                <button 
-                  onClick={(e) => handleExportNovel(novel, e)}
-                  className="absolute top-4 right-14 p-2 bg-gray-700/50 hover:bg-[var(--theme-color)] rounded-full transition-all text-white hover:shadow-lg"
-                  title="导出全书"
-                >
-                  <Download className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={(e) => handleDeleteNovel(novel.id, e)}
-                  className="absolute top-4 right-4 p-2 bg-gray-700/50 hover:bg-red-600/80 rounded-full transition-all text-white hover:shadow-lg"
-                  title="删除小说"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                
+                <div className="absolute top-4 right-4 flex gap-2">
+                   <button 
+                    onClick={(e) => handleExportNovel(novel, e)}
+                    className="p-1.5 bg-gray-700/50 hover:bg-[var(--theme-color)] rounded-lg transition-all text-gray-300 hover:text-white"
+                    title="导出全书"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                  <button 
+                    onClick={(e) => handleDeleteNovel(novel.id, e)}
+                    className="p-1.5 bg-gray-700/50 hover:bg-red-600/80 rounded-lg transition-all text-gray-300 hover:text-white"
+                    title="删除小说"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
             
             {novels.length === 0 && (
-              <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-500">
-                 <Book className="w-16 h-16 mb-4 opacity-20" />
-                 <p className="text-lg">暂无小说，开始创作你的第一个故事吧！</p>
+              <div className="col-span-full flex flex-col items-center justify-center py-12 text-gray-500 border-2 border-dashed border-gray-800 rounded-xl bg-gray-800/20">
+                 <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                    <Book className="w-8 h-8 opacity-40" />
+                 </div>
+                 <p className="text-base font-medium text-gray-400">暂无小说</p>
+                 <p className="text-sm mt-1">点击右上角开始创作你的第一个故事吧！</p>
               </div>
             )}
           </div>
