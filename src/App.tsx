@@ -3312,7 +3312,7 @@ function App() {
         </div>
 
         {showOutline ? (
-           <div className={`flex-1 bg-gray-900 flex flex-col ${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline') ? 'p-0 overflow-hidden' : 'p-8 overflow-y-auto'}`}>
+           <div className={`flex-1 bg-gray-900 flex flex-col ${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline') ? 'p-0 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
               <div className={`${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline') ? 'w-full h-full' : 'max-w-4xl mx-auto w-full space-y-6'}`}>
                  {/* Dashboard Menu */}
                  {creationModule === 'menu' && (
@@ -4247,7 +4247,7 @@ function App() {
               </div>
            </div>
         ) : (
-        <div className="flex-1 overflow-y-auto p-8 bg-gray-900 flex flex-col">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-900 flex flex-col">
           {!activeChapter ? (
              <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
                 <FileText className="w-16 h-16 mb-4 opacity-10" />
@@ -4354,11 +4354,11 @@ function App() {
                     <textarea
                         value={activeChapter.content}
                         onChange={handleChapterContentChange}
-                        className="w-full flex-1 bg-gray-800 border border-gray-700 rounded-lg p-6 pr-24 text-gray-200 focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none resize-none font-mono text-lg leading-relaxed min-h-[500px]"
+                        className="w-full flex-1 bg-gray-800 border border-gray-700 rounded-lg p-4 md:p-6 pr-4 md:pr-24 text-gray-200 focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none resize-none font-mono text-lg leading-relaxed min-h-[500px]"
                         placeholder="在此编辑章节内容..."
                     />
                     ) : (
-                    <div className="prose prose-invert prose-lg max-w-none overflow-y-auto custom-scrollbar pr-24">
+                    <div className="prose prose-invert prose-lg max-w-none overflow-y-auto custom-scrollbar pr-4 md:pr-24">
                         {activeChapter.content ? (
                         <ReactMarkdown>{activeChapter.content.replace(/<[^>]+>/g, '')}</ReactMarkdown>
                         ) : (
