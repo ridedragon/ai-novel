@@ -476,12 +476,17 @@ function App() {
     const val = localStorage.getItem('bigSummaryInterval')
     return val ? parseInt(val) : 6
   })
+  
+  const [smallSummaryPrompt, setSmallSummaryPrompt] = useState(() => localStorage.getItem('smallSummaryPrompt') || "请把以上小说章节的内容总结成一个简短的剧情摘要（300字以内）。保留关键的人名、地名和事件。")
+  const [bigSummaryPrompt, setBigSummaryPrompt] = useState(() => localStorage.getItem('bigSummaryPrompt') || "请根据以上的分段摘要，写一个宏观的剧情大纲（500字以内），概括这段时间内的主要情节发展。")
 
   useEffect(() => {
     localStorage.setItem('longTextMode', String(longTextMode))
     localStorage.setItem('smallSummaryInterval', String(smallSummaryInterval))
     localStorage.setItem('bigSummaryInterval', String(bigSummaryInterval))
-  }, [longTextMode, smallSummaryInterval, bigSummaryInterval])
+    localStorage.setItem('smallSummaryPrompt', smallSummaryPrompt)
+    localStorage.setItem('bigSummaryPrompt', bigSummaryPrompt)
+  }, [longTextMode, smallSummaryInterval, bigSummaryInterval, smallSummaryPrompt, bigSummaryPrompt])
 
   // Persistence
   useEffect(() => {
@@ -945,22 +950,28 @@ function App() {
     content += `System Prompt: ${novel.systemPrompt}\n\n`
     content += `=================================\n\n`
 
+    const processContent = (text: string) => {
+      let processed = text.replace(/<[^>]+>/g, '')
+      processed = processed.replace(/(\r\n|\n|\r)+/g, '\n').trim()
+      return processed
+    }
+
     // Volumes
     novel.volumes.forEach(vol => {
       content += `【${vol.title}】\n\n`
-      const volChapters = novel.chapters.filter(c => c.volumeId === vol.id)
+      const volChapters = novel.chapters.filter(c => c.volumeId === vol.id && (!c.subtype || c.subtype === 'story'))
       volChapters.forEach(chap => {
-        content += `### ${chap.title}\n\n${chap.content}\n\n`
+        content += `${chap.title}\n${processContent(chap.content)}\n\n`
       })
       content += `\n`
     })
 
     // Uncategorized
-    const uncategorizedChapters = novel.chapters.filter(c => !c.volumeId)
+    const uncategorizedChapters = novel.chapters.filter(c => !c.volumeId && (!c.subtype || c.subtype === 'story'))
     if (uncategorizedChapters.length > 0) {
       content += `【未分卷】\n\n`
       uncategorizedChapters.forEach(chap => {
-        content += `### ${chap.title}\n\n${chap.content}\n\n`
+        content += `${chap.title}\n${processContent(chap.content)}\n\n`
       })
     }
 
@@ -971,10 +982,16 @@ function App() {
     const volume = volumes.find(v => v.id === volumeId)
     if (!volume) return
     
+    const processContent = (text: string) => {
+      let processed = text.replace(/<[^>]+>/g, '')
+      processed = processed.replace(/(\r\n|\n|\r)+/g, '\n').trim()
+      return processed
+    }
+
     let content = `【${volume.title}】\n\n`
-    const volChapters = chapters.filter(c => c.volumeId === volumeId)
+    const volChapters = chapters.filter(c => c.volumeId === volumeId && (!c.subtype || c.subtype === 'story'))
     volChapters.forEach(chap => {
-      content += `### ${chap.title}\n\n${chap.content}\n\n`
+      content += `${chap.title}\n${processContent(chap.content)}\n\n`
     })
     
     downloadFile(content, `${volume.title}.txt`)
@@ -984,7 +1001,10 @@ function App() {
     const chapter = chapters.find(c => c.id === chapterId)
     if (!chapter) return
     
-    const content = `### ${chapter.title}\n\n${chapter.content}`
+    let processedContent = chapter.content.replace(/<[^>]+>/g, '')
+    processedContent = processedContent.replace(/(\r\n|\n|\r)+/g, '\n').trim()
+
+    const content = `${chapter.title}\n${processedContent}`
     downloadFile(content, `${chapter.title}.txt`)
   }
 
@@ -2486,6 +2506,11 @@ function App() {
             finalGeneratedContent = generatedContent
         }
 
+        // Trigger Summary
+        if (longTextMode) {
+             await checkAndGenerateSummary(newChapterId, finalGeneratedContent, novelId)
+        }
+
         terminal.log(`[AutoWrite] Attempt ${attempt + 1} successful.`)
         success = true
         break // Success loop break
@@ -2828,23 +2853,29 @@ function App() {
   }
 
   // Summary Generation Helper
-  const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string) => {
-    if (!longTextMode || !apiKey || !activeNovelId) return
+  const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string, targetNovelId: string = activeNovelId || '') => {
+    if (!longTextMode || !apiKey || !targetNovelId) return
 
     // Get latest chapters from Ref to ensure we have up-to-date data even inside closures/loops
-    const currentNovel = novelsRef.current.find(n => n.id === activeNovelId)
+    const currentNovel = novelsRef.current.find(n => n.id === targetNovelId)
     if (!currentNovel) return
 
-    // Merge current content into the latest chapters list
-    const latestChapters = currentNovel.chapters.map(c => c.id === targetChapterId ? { ...c, content: currentContent } : c)
-    const storyChapters = getStoryChapters(latestChapters)
+    // Snapshot of chapters for this generation session
+    // This snapshot will be updated locally as we generate new summaries,
+    // ensuring that subsequent generations (e.g. Big Summary) can see the Small Summary generated just before it.
+    let currentChaptersSnapshot = currentNovel.chapters.map(c => c.id === targetChapterId ? { ...c, content: currentContent } : c)
     
-    // Sort by ID to ensure correct order
-    storyChapters.sort((a, b) => a.id - b.id)
-    
+    // Helper to get story chapters from the snapshot
+    const getSnapshotStoryChapters = () => currentChaptersSnapshot.filter(c => !c.subtype || c.subtype === 'story').sort((a, b) => a.id - b.id)
+
+    const storyChapters = getSnapshotStoryChapters()
     const index = storyChapters.findIndex(c => c.id === targetChapterId)
     if (index === -1) return
     
+    // Determine the volume ID of the current chapter to place summary in the same volume
+    const targetChapterObj = storyChapters[index]
+    const targetVolumeId = targetChapterObj.volumeId
+
     const currentCount = index + 1
     const sInterval = typeof smallSummaryInterval === 'number' ? smallSummaryInterval : 3
     const bInterval = typeof bigSummaryInterval === 'number' ? bigSummaryInterval : 6
@@ -2855,23 +2886,29 @@ function App() {
         
         terminal.log(`[Summary] Checking ${type} summary for range ${rangeStr}...`)
 
-        // Prepare Context
+        // Prepare Context using the Snapshot
         let sourceText = ""
         if (type === 'small') {
-             const targetChapters = storyChapters.slice(start - 1, end)
+             const targetChapters = getSnapshotStoryChapters().slice(start - 1, end)
              sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${c.content}`).join('\n\n')
         } else {
              // For Big Summary, try to use Small Summaries first
-             const relevantSmallSummaries = latestChapters.filter(c => {
+             // We filter from currentChaptersSnapshot which includes any just-generated small summaries
+             const relevantSmallSummaries = currentChaptersSnapshot.filter(c => {
                  if (c.subtype !== 'small_summary' || !c.summaryRange) return false
                  const [s, e] = c.summaryRange.split('-').map(Number)
                  return s >= start && e <= end
+             }).sort((a, b) => {
+                 // Sort by start range to keep order
+                 const startA = parseInt(a.summaryRange!.split('-')[0])
+                 const startB = parseInt(b.summaryRange!.split('-')[0])
+                 return startA - startB
              })
              
              if (relevantSmallSummaries.length > 0) {
                  sourceText = relevantSmallSummaries.map(c => `Small Summary (${c.summaryRange}):\n${c.content}`).join('\n\n')
              } else {
-                 const targetChapters = storyChapters.slice(start - 1, end)
+                 const targetChapters = getSnapshotStoryChapters().slice(start - 1, end)
                  sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${c.content}`).join('\n\n')
              }
         }
@@ -2880,9 +2917,7 @@ function App() {
 
         try {
             const openai = new OpenAI({ apiKey, baseURL: baseUrl, dangerouslyAllowBrowser: true })
-            const prompt = type === 'small' 
-                ? "请把以上小说章节的内容总结成一个简短的剧情摘要（300字以内）。保留关键的人名、地名和事件。"
-                : "请根据以上的分段摘要，写一个宏观的剧情大纲（500字以内），概括这段时间内的主要情节发展。"
+            const prompt = type === 'small' ? smallSummaryPrompt : bigSummaryPrompt
 
             const completion = await openai.chat.completions.create({
                 model: outlineModel || model,
@@ -2895,24 +2930,56 @@ function App() {
             
             const summaryContent = completion.choices[0]?.message?.content || ''
             if (summaryContent) {
-                // Check if exists to update
-                // Re-fetch latest state via setChapters functional update or use latestChapters?
-                // Using latestChapters is safer for logic, but setChapters update handles concurrent writes.
-                const existing = latestChapters.find(c => c.subtype === subtype && c.summaryRange === rangeStr)
+                // Check if exists in Snapshot
+                const existingIndex = currentChaptersSnapshot.findIndex(c => c.subtype === subtype && c.summaryRange === rangeStr)
                 
-                if (existing) {
-                    setChapters(prev => prev.map(c => c.id === existing.id ? { ...c, content: summaryContent } : c))
+                // Helper to update chapters for specific novel
+                const updateNovelChapters = (updater: (chapters: Chapter[]) => Chapter[]) => {
+                    setNovels(prevNovels => prevNovels.map(n => {
+                        if (n.id === targetNovelId) {
+                            return { ...n, chapters: updater(n.chapters) }
+                        }
+                        return n
+                    }))
+                }
+
+                if (existingIndex !== -1) {
+                    // Update existing
+                    const existingChapter = currentChaptersSnapshot[existingIndex]
+                    const updatedChapter = { ...existingChapter, content: summaryContent }
+                    
+                    // Update Snapshot
+                    currentChaptersSnapshot[existingIndex] = updatedChapter
+                    
+                    // Update React State
+                    updateNovelChapters(prev => prev.map(c => c.id === existingChapter.id ? updatedChapter : c))
+                    
                     terminal.log(`[Summary] Updated ${type} summary for ${rangeStr}.`)
                 } else {
+                    // Create new
                     const newChapter: Chapter = {
-                        id: Date.now(),
+                        id: Date.now() + Math.floor(Math.random() * 10000), // Random padding to avoid ID collision
                         title: `${type === 'small' ? '🔹小总结' : '🔸大总结'} (${rangeStr})`,
                         content: summaryContent,
                         subtype: subtype,
                         summaryRange: rangeStr,
-                        volumeId: undefined 
+                        volumeId: targetVolumeId // Use same volume as current chapter
                     }
-                    setChapters(prev => [...prev, newChapter])
+                    
+                    // Update Snapshot
+                    currentChaptersSnapshot = [...currentChaptersSnapshot, newChapter]
+                    
+                    // Update React State: Insert AFTER the target chapter
+                    updateNovelChapters(prev => {
+                        const idx = prev.findIndex(c => c.id === targetChapterId)
+                        if (idx !== -1) {
+                            const newArr = [...prev]
+                            newArr.splice(idx + 1, 0, newChapter)
+                            return newArr
+                        }
+                        return [...prev, newChapter]
+                    })
+                    
                     terminal.log(`[Summary] Created ${type} summary for ${rangeStr}.`)
                 }
             }
@@ -2993,9 +3060,7 @@ function App() {
 
         try {
             const openai = new OpenAI({ apiKey, baseURL: baseUrl, dangerouslyAllowBrowser: true })
-            const prompt = type === 'small' 
-                ? "请把以上小说章节的内容总结成一个简短的剧情摘要（300字以内）。保留关键的人名、地名和事件。"
-                : "请根据以上的分段摘要，写一个宏观的剧情大纲（500字以内），概括这段时间内的主要情节发展。"
+            const prompt = type === 'small' ? smallSummaryPrompt : bigSummaryPrompt
 
             const completion = await openai.chat.completions.create({
                 model: outlineModel || model,
@@ -4057,7 +4122,7 @@ function App() {
                                 </div>
                                 
                                 {/* Grid Content */}
-                                <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+                                <div className="flex-1 p-6 pb-24 overflow-y-auto custom-scrollbar">
                                     {(() => {
                                        const currentSet = activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)
                                        const characters = currentSet?.characters || []
@@ -4313,7 +4378,7 @@ function App() {
                                 </div>
                                 
                                 {/* Grid Content */}
-                                <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+                                <div className="flex-1 p-6 pb-24 overflow-y-auto custom-scrollbar">
                                     {(() => {
                                        const currentSet = activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)
                                        const entries = currentSet?.entries || []
@@ -4648,7 +4713,7 @@ function App() {
                                 </div>
                                 
                                 {/* Grid Content */}
-                                <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+                                <div className="flex-1 p-6 pb-24 overflow-y-auto custom-scrollbar">
                                     {(() => {
                                        const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
                                        const items = currentSet?.items || []
@@ -5076,6 +5141,28 @@ function App() {
                                 />
                             </div>
                         </div>
+
+                        <div className="space-y-2 mt-2">
+                           <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-400">小总结提示词</label>
+                                <textarea 
+                                    value={smallSummaryPrompt} 
+                                    onChange={(e) => setSmallSummaryPrompt(e.target.value)} 
+                                    className="bg-gray-900 border border-gray-700 rounded p-2 text-xs focus:border-[var(--theme-color)] outline-none h-20 resize-none"
+                                    placeholder="输入小总结生成的提示词..." 
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-400">大总结提示词</label>
+                                <textarea 
+                                    value={bigSummaryPrompt} 
+                                    onChange={(e) => setBigSummaryPrompt(e.target.value)} 
+                                    className="bg-gray-900 border border-gray-700 rounded p-2 text-xs focus:border-[var(--theme-color)] outline-none h-20 resize-none"
+                                    placeholder="输入大总结生成的提示词..." 
+                                />
+                            </div>
+                        </div>
+
                         <div className="pt-2">
                              <button
                                 onClick={handleScanSummaries}
