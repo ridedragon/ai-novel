@@ -814,6 +814,23 @@ function App() {
       })
   }
 
+  const handleRenameNovel = (id: string, currentTitle: string, e: React.MouseEvent) => {
+      e.stopPropagation()
+      setDialog({
+        isOpen: true,
+        type: 'prompt',
+        title: '重命名小说',
+        message: '请输入新的小说名称：',
+        inputValue: currentTitle,
+        onConfirm: (newName) => {
+           if (newName && newName.trim()) {
+              setNovels(novels.map(n => n.id === id ? { ...n, title: newName.trim() } : n))
+              closeDialog()
+           }
+        }
+      })
+  }
+
   // Chapter Actions
   const handleDeleteChapter = (chapterId: number) => {
       setDialog({
@@ -2899,6 +2916,13 @@ function App() {
                 
                 <div className="absolute top-4 right-4 flex gap-2">
                    <button 
+                    onClick={(e) => handleRenameNovel(novel.id, novel.title, e)}
+                    className="p-1.5 bg-gray-700/50 hover:bg-[var(--theme-color)] rounded-lg transition-all text-gray-300 hover:text-white"
+                    title="重命名小说"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                   <button 
                     onClick={(e) => handleExportNovel(novel, e)}
                     className="p-1.5 bg-gray-700/50 hover:bg-[var(--theme-color)] rounded-lg transition-all text-gray-300 hover:text-white"
                     title="导出全书"
@@ -3540,6 +3564,31 @@ function App() {
                                 <Users className="w-5 h-5 text-[var(--theme-color)]" />
                                 <span>角色集</span>
                              </div>
+
+                             <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
+                                <button 
+                                    onClick={() => setCreationModule('worldview')}
+                                    className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                    title="切换到世界观"
+                                >
+                                    <Globe className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={() => setCreationModule('characters')}
+                                    className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
+                                    title="切换到角色集"
+                                >
+                                    <Users className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={() => setCreationModule('outline')}
+                                    className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                    title="切换到大纲"
+                                >
+                                    <Book className="w-4 h-4" />
+                                </button>
+                             </div>
+
                              <button onClick={() => setCreationModule('menu')} className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors">
                                 <ArrowLeft className="w-4 h-4" />
                              </button>
@@ -3817,6 +3866,31 @@ function App() {
                                 <Globe className="w-5 h-5 text-[var(--theme-color)]" />
                                 <span>世界观</span>
                              </div>
+
+                             <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
+                                <button 
+                                    onClick={() => setCreationModule('worldview')}
+                                    className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
+                                    title="切换到世界观"
+                                >
+                                    <Globe className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={() => setCreationModule('characters')}
+                                    className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                    title="切换到角色集"
+                                >
+                                    <Users className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={() => setCreationModule('outline')}
+                                    className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                    title="切换到大纲"
+                                >
+                                    <Book className="w-4 h-4" />
+                                </button>
+                             </div>
+
                              <button onClick={() => setCreationModule('menu')} className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors">
                                 <ArrowLeft className="w-4 h-4" />
                              </button>
@@ -4031,6 +4105,31 @@ function App() {
                                 <Book className="w-5 h-5 text-[var(--theme-color)]" />
                                 <span>故事大纲</span>
                              </div>
+
+                             <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
+                                <button 
+                                    onClick={() => setCreationModule('worldview')}
+                                    className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                    title="切换到世界观"
+                                >
+                                    <Globe className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={() => setCreationModule('characters')}
+                                    className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                    title="切换到角色集"
+                                >
+                                    <Users className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={() => setCreationModule('outline')}
+                                    className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
+                                    title="切换到大纲"
+                                >
+                                    <Book className="w-4 h-4" />
+                                </button>
+                             </div>
+
                              <button onClick={() => setCreationModule('menu')} className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors">
                                 <ArrowLeft className="w-4 h-4" />
                              </button>
