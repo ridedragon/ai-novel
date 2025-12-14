@@ -28,6 +28,9 @@ interface Chapter {
   
   versions?: ChapterVersion[]
   activeVersionId?: string
+
+  subtype?: 'story' | 'small_summary' | 'big_summary'
+  summaryRange?: string
 }
 
 interface NovelVolume {
@@ -234,6 +237,8 @@ const adjustColor = (hex: string, lum: number) => {
   return rgb
 }
 
+const getStoryChapters = (chapters: Chapter[]) => chapters.filter(c => !c.subtype || c.subtype === 'story')
+
 const ensureChapterVersions = (chapter: Chapter): Chapter => {
   if (chapter.versions && chapter.versions.length > 0) return chapter
 
@@ -426,6 +431,23 @@ function App() {
   useEffect(() => {
     localStorage.setItem('globalCreationPrompt', globalCreationPrompt)
   }, [globalCreationPrompt])
+
+  // Long Text Mode State
+  const [longTextMode, setLongTextMode] = useState(() => localStorage.getItem('longTextMode') === 'true')
+  const [smallSummaryInterval, setSmallSummaryInterval] = useState<number | string>(() => {
+    const val = localStorage.getItem('smallSummaryInterval')
+    return val ? parseInt(val) : 3
+  })
+  const [bigSummaryInterval, setBigSummaryInterval] = useState<number | string>(() => {
+    const val = localStorage.getItem('bigSummaryInterval')
+    return val ? parseInt(val) : 6
+  })
+
+  useEffect(() => {
+    localStorage.setItem('longTextMode', String(longTextMode))
+    localStorage.setItem('smallSummaryInterval', String(smallSummaryInterval))
+    localStorage.setItem('bigSummaryInterval', String(bigSummaryInterval))
+  }, [longTextMode, smallSummaryInterval, bigSummaryInterval])
 
   // Persistence
   useEffect(() => {
@@ -2519,15 +2541,91 @@ function App() {
     let currentContent = activeChapter.content
     if (currentContent) currentContent += '\n\n'
 
-    // Build context from previous chapters in the same volume
+    // Build context
     let contextContent = ''
-    if (activeChapter.volumeId) {
-        // Find previous chapters in same volume
-        const volumeChapters = chapters.filter(c => c.volumeId === activeChapter.volumeId)
-        const currentIdx = volumeChapters.findIndex(c => c.id === activeChapter.id)
-        if (currentIdx > 0) {
-            const previousChapters = volumeChapters.slice(0, currentIdx)
-            contextContent = previousChapters.map(c => c.content).join('\n\n') + '\n\n'
+    
+    if (longTextMode) {
+        const storyChapters = getStoryChapters(chapters)
+        const currentChapterIndex = storyChapters.findIndex(c => c.id === activeChapter.id)
+        
+        if (currentChapterIndex !== -1) {
+             const currentNum = currentChapterIndex + 1
+             
+             // 1. Find latest Big Summary
+             const bigSummaries = chapters.filter(c => c.subtype === 'big_summary')
+             const parseRange = (s: string) => {
+                 const parts = s.split('-')
+                 return { start: parseInt(parts[0]) || 0, end: parseInt(parts[1]) || 0 }
+             }
+             
+             let bestBig = null
+             let bigEnd = 0
+             bigSummaries.forEach(bs => {
+                 if (bs.summaryRange) {
+                     const { end } = parseRange(bs.summaryRange)
+                     if (end < currentNum && end > bigEnd) {
+                         bigEnd = end
+                         bestBig = bs
+                     }
+                 }
+             })
+             
+             if (bestBig) {
+                 contextContent += `【剧情大纲 (${(bestBig as Chapter).title})】：\n${(bestBig as Chapter).content}\n\n`
+             }
+             
+             // 2. Find Small Summaries after Big Summary
+             const smallSummaries = chapters.filter(c => c.subtype === 'small_summary')
+             let smallEnd = bigEnd
+             
+             const relevantSmall = smallSummaries.filter(ss => {
+                 if (!ss.summaryRange) return false
+                 const { start, end } = parseRange(ss.summaryRange)
+                 return start > bigEnd && end < currentNum
+             }).sort((a, b) => {
+                 const ra = parseRange(a.summaryRange!)
+                 const rb = parseRange(b.summaryRange!)
+                 return ra.start - rb.start
+             })
+             
+             relevantSmall.forEach(ss => {
+                 contextContent += `【剧情概要 (${ss.title})】：\n${ss.content}\n\n`
+                 const { end } = parseRange(ss.summaryRange!)
+                 if (end > smallEnd) smallEnd = end
+             })
+             
+             // 3. Add Story Chapters
+             const previousStoryChapters = storyChapters.filter((c, idx) => {
+                 const cNum = idx + 1
+                 if (cNum >= currentNum) return false 
+                 if (cNum > smallEnd) return true
+                 if (cNum === currentNum - 1) return true // Always include immediate previous chapter
+                 return false
+             })
+             
+             // Deduplicate by ID
+             const uniqueChapters = Array.from(new Set(previousStoryChapters.map(c => c.id)))
+                .map(id => previousStoryChapters.find(c => c.id === id))
+                .filter((c): c is Chapter => !!c)
+                .sort((a, b) => {
+                    const idxA = storyChapters.findIndex(sc => sc.id === a.id)
+                    const idxB = storyChapters.findIndex(sc => sc.id === b.id)
+                    return idxA - idxB
+                })
+
+             uniqueChapters.forEach(c => {
+                 contextContent += `### ${c.title}\n${c.content}\n\n`
+             })
+        }
+    } else {
+        // Standard Context Logic
+        if (activeChapter.volumeId) {
+            const volumeChapters = chapters.filter(c => c.volumeId === activeChapter.volumeId)
+            const currentIdx = volumeChapters.findIndex(c => c.id === activeChapter.id)
+            if (currentIdx > 0) {
+                const previousChapters = volumeChapters.slice(0, currentIdx)
+                contextContent = previousChapters.map(c => c.content).join('\n\n') + '\n\n'
+            }
         }
     }
     
@@ -2939,6 +3037,33 @@ function App() {
                             <Plus className="w-4 h-4" />
                         </button>
                     </div>
+
+                  {/* Long Text Mode Settings */}
+                  <div className="flex flex-col gap-2 pt-4 border-t border-gray-700">
+                        <label className="text-sm font-medium text-gray-300">长文模式设置</label>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-400">小总结间隔 (章)</label>
+                                <input 
+                                    type="number" 
+                                    min="1" 
+                                    value={smallSummaryInterval} 
+                                    onChange={(e) => setSmallSummaryInterval(e.target.value === '' ? '' : parseInt(e.target.value))} 
+                                    className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none" 
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-400">大总结间隔 (章)</label>
+                                <input 
+                                    type="number" 
+                                    min="1" 
+                                    value={bigSummaryInterval} 
+                                    onChange={(e) => setBigSummaryInterval(e.target.value === '' ? '' : parseInt(e.target.value))} 
+                                    className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none" 
+                                />
+                            </div>
+                        </div>
+                  </div>
               </div>
               </div>
             </div>
@@ -3307,6 +3432,13 @@ function App() {
              </button>
              <span className="text-sm font-semibold text-gray-400 whitespace-nowrap">自定义添加栏</span>
              <div className="flex items-center gap-2">
+               <button 
+                 onClick={() => setLongTextMode(!longTextMode)}
+                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs transition-colors ${longTextMode ? 'bg-[var(--theme-color)] text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
+               >
+                 <Book className="w-3.5 h-3.5" />
+                 长文模式
+               </button>
                <button 
                  onClick={() => setShowRegexModal(true)}
                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors"
@@ -4538,6 +4670,33 @@ function App() {
                             <Plus className="w-4 h-4" />
                         </button>
                     </div>
+
+                  {/* Long Text Mode Settings */}
+                  <div className="flex flex-col gap-2 pt-4 border-t border-gray-700">
+                        <label className="text-sm font-medium text-gray-300">长文模式设置</label>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-400">小总结间隔 (章)</label>
+                                <input 
+                                    type="number" 
+                                    min="1" 
+                                    value={smallSummaryInterval} 
+                                    onChange={(e) => setSmallSummaryInterval(parseInt(e.target.value) || 3)} 
+                                    className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none" 
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-400">大总结间隔 (章)</label>
+                                <input 
+                                    type="number" 
+                                    min="1" 
+                                    value={bigSummaryInterval} 
+                                    onChange={(e) => setBigSummaryInterval(parseInt(e.target.value) || 6)} 
+                                    className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none" 
+                                />
+                            </div>
+                        </div>
+                  </div>
               </div>
               </div>
             </div>
