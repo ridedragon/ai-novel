@@ -323,6 +323,117 @@ const ensureChapterVersions = (chapter: Chapter): Chapter => {
   }
 }
 
+const safeParseJSONArray = (content: string): any[] => {
+  // 1. 尝试直接解析找到的数组 (最快)
+  const arrayMatch = content.match(/\[[\s\S]*\]/)
+  if (arrayMatch) {
+    try {
+      const result = JSON.parse(arrayMatch[0])
+      if (Array.isArray(result)) return result
+    } catch (e) {
+      console.warn('Direct array parse failed, trying object extraction...', e)
+    }
+  }
+
+  // 2. 备选方案：提取所有顶层 JSON 对象 (Robust)
+  const objects: any[] = []
+  let braceCount = 0
+  let startIndex = -1
+  let inString = false
+
+  for (let i = 0; i < content.length; i++) {
+    const char = content[i]
+    
+    if (inString) {
+        if (char === '\\') {
+            i++ // Skip next char
+        } else if (char === '"') {
+            inString = false
+        }
+    } else {
+        if (char === '"') {
+            inString = true
+        } else if (char === '{') {
+            if (braceCount === 0) startIndex = i
+            braceCount++
+        } else if (char === '}') {
+            braceCount--
+            if (braceCount === 0 && startIndex !== -1) {
+                // Found an object
+                try { 
+                    const obj = JSON.parse(content.substring(startIndex, i + 1))
+                    if (obj) objects.push(obj)
+                } catch(e){}
+                startIndex = -1
+            }
+        }
+    }
+  }
+
+  if (objects.length > 0) return objects
+  
+  throw new Error('无法解析有效的 JSON 数据')
+}
+
+const normalizeGeneratorResult = (data: any[], type: 'outline' | 'character' | 'worldview'): any[] => {
+    if (!Array.isArray(data)) return []
+    
+    // Flatten if it's a nested array [ [{},{}] ]
+    if (data.length > 0 && Array.isArray(data[0])) {
+        data = data.flat()
+    }
+
+    // Special case: if data is [ { "outline": [...] } ]
+    if (data.length === 1 && data[0] && typeof data[0] === 'object' && !data[0].title && !data[0].name && !data[0].item) {
+        const values = Object.values(data[0])
+        const arrayVal = values.find(v => Array.isArray(v))
+        if (arrayVal) {
+            data = arrayVal as any[]
+        }
+    }
+    
+    return data.map(item => {
+        if (typeof item !== 'object' || !item) return null
+        
+        const processField = (val: any): string => {
+            if (typeof val === 'string') return val
+            if (typeof val === 'number') return String(val)
+            if (typeof val === 'object' && val) {
+                // Try to find a meaningful string property
+                if (val.text) return String(val.text)
+                if (val.content) return String(val.content)
+                if (val.name) return String(val.name)
+                // Fallback: join values or stringify
+                const values = Object.values(val).filter(v => typeof v === 'string' || typeof v === 'number')
+                if (values.length > 0) return values.join(' ')
+                return JSON.stringify(val)
+            }
+            return ''
+        }
+
+        if (type === 'outline') {
+            // Flexible matching for keys
+            const title = processField(item.title || item.chapter || item.name || item.header || Object.values(item)[0] || '')
+            const summary = processField(item.summary || item.content || item.description || item.plot || Object.values(item)[1] || '')
+            return { title, summary }
+        }
+        
+        if (type === 'character') {
+            const name = processField(item.name || item.character || item.role || Object.values(item)[0] || '')
+            const bio = processField(item.bio || item.description || item.background || item.setting || Object.values(item)[1] || '')
+            return { name, bio }
+        }
+
+        if (type === 'worldview') {
+            const itemKey = processField(item.item || item.name || item.key || item.object || Object.values(item)[0] || '')
+            const setting = processField(item.setting || item.description || item.content || item.value || Object.values(item)[1] || '')
+            return { item: itemKey, setting }
+        }
+        
+        return item
+    }).filter(item => item !== null)
+}
+
 function App() {
   // Theme Settings
   const [themeColor, setThemeColor] = useState(() => localStorage.getItem('themeColor') || '#2563eb')
@@ -488,6 +599,8 @@ function App() {
 
   // Long Text Mode State
   const [longTextMode, setLongTextMode] = useState(() => localStorage.getItem('longTextMode') === 'true')
+  const [contextScope, setContextScope] = useState<string>(() => localStorage.getItem('contextScope') || 'all')
+  
   const [smallSummaryInterval, setSmallSummaryInterval] = useState<number | string>(() => {
     const val = localStorage.getItem('smallSummaryInterval')
     return val ? parseInt(val) : 3
@@ -502,6 +615,7 @@ function App() {
 
   useEffect(() => {
     localStorage.setItem('longTextMode', String(longTextMode))
+    localStorage.setItem('contextScope', contextScope)
     localStorage.setItem('smallSummaryInterval', String(smallSummaryInterval))
     localStorage.setItem('bigSummaryInterval', String(bigSummaryInterval))
     localStorage.setItem('smallSummaryPrompt', smallSummaryPrompt)
@@ -969,8 +1083,8 @@ function App() {
   }
 
   // Export Functions
-  const downloadFile = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+  const downloadFile = (content: string, filename: string, type: string = 'text/plain;charset=utf-8') => {
+    const blob = new Blob([content], { type })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -1053,16 +1167,41 @@ function App() {
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
   const [error, setError] = useState('')
 
-  // Advanced Settings State
-  const [contextLength, setContextLength] = useState(200000)
-  const [maxReplyLength, setMaxReplyLength] = useState(64000)
-  const [candidateCount, setCandidateCount] = useState(1)
-  const [stream, setStream] = useState(true)
-  const [temperature, setTemperature] = useState(1.30)
-  const [frequencyPenalty, setFrequencyPenalty] = useState(0.00)
-  const [presencePenalty, setPresencePenalty] = useState(0.00)
-  const [topP, setTopP] = useState(0.97)
-  const [topK, setTopK] = useState(1)
+  // Advanced Settings State - Initialized from Draft or Preset
+  const getInitialSetting = <T,>(key: keyof CompletionPreset, defaultValue: T): T => {
+    try {
+      const activeId = localStorage.getItem('activePresetId') || 'default'
+      // 1. Try Draft
+      const draftJson = localStorage.getItem(`completion_settings_draft_${activeId}`)
+      if (draftJson) {
+        const draft = JSON.parse(draftJson)
+        if (draft[key] !== undefined) return draft[key]
+      }
+      // 2. Try Preset
+      const presetsJson = localStorage.getItem('completionPresets')
+      if (presetsJson) {
+        const presets = JSON.parse(presetsJson)
+        const preset = presets.find((p: any) => p.id === activeId)
+        if (preset && preset[key] !== undefined) return preset[key]
+      }
+      // 3. Try Default Preset
+      const defaultPreset = defaultPresets.find(p => p.id === 'default')
+      if (defaultPreset && defaultPreset[key] !== undefined) return defaultPreset[key] as unknown as T
+    } catch (e) {
+      console.error(`Failed to load initial state for ${String(key)}`, e)
+    }
+    return defaultValue
+  }
+
+  const [contextLength, setContextLength] = useState(() => getInitialSetting('contextLength', 200000))
+  const [maxReplyLength, setMaxReplyLength] = useState(() => getInitialSetting('maxReplyLength', 64000))
+  const [candidateCount, setCandidateCount] = useState(() => getInitialSetting('candidateCount', 1))
+  const [stream, setStream] = useState(() => getInitialSetting('stream', true))
+  const [temperature, setTemperature] = useState(() => getInitialSetting('temperature', 1.30))
+  const [frequencyPenalty, setFrequencyPenalty] = useState(() => getInitialSetting('frequencyPenalty', 0.00))
+  const [presencePenalty, setPresencePenalty] = useState(() => getInitialSetting('presencePenalty', 0.00))
+  const [topP, setTopP] = useState(() => getInitialSetting('topP', 0.97))
+  const [topK, setTopK] = useState(() => getInitialSetting('topK', 1))
   const [maxRetries, setMaxRetries] = useState(() => parseInt(localStorage.getItem('maxRetries') || '3'))
 
   useEffect(() => {
@@ -1125,26 +1264,94 @@ function App() {
   }, [activePresetId])
 
   // Prompt Management State
-  const [prompts, setPrompts] = useState<PromptItem[]>(defaultPrompts)
-
-  // Sync state with active preset on load and change
-  useEffect(() => {
-    const preset = completionPresets.find(p => p.id === activePresetId)
-    if (preset) {
-      setContextLength(preset.contextLength)
-      setMaxReplyLength(preset.maxReplyLength)
-      setTemperature(preset.temperature)
-      setFrequencyPenalty(preset.frequencyPenalty)
-      setPresencePenalty(preset.presencePenalty)
-      setTopP(preset.topP)
-      setTopK(preset.topK > 0 ? preset.topK : 1)
-      setStream(preset.stream)
-      setCandidateCount(preset.candidateCount)
-      if (preset.prompts) {
-        setPrompts(preset.prompts)
+  const [prompts, setPrompts] = useState<PromptItem[]>(() => {
+    try {
+      const activeId = localStorage.getItem('activePresetId') || 'default'
+      // 1. Try Draft
+      const draftJson = localStorage.getItem(`completion_settings_draft_${activeId}`)
+      if (draftJson) {
+        const draft = JSON.parse(draftJson)
+        if (draft.prompts && Array.isArray(draft.prompts)) return draft.prompts
       }
+      // 2. Try Preset
+      const presetsJson = localStorage.getItem('completionPresets')
+      if (presetsJson) {
+        const presets = JSON.parse(presetsJson)
+        const preset = presets.find((p: any) => p.id === activeId)
+        if (preset && preset.prompts) return preset.prompts
+      }
+    } catch (e) {
+      console.error('Failed to initialize prompts', e)
     }
-  }, [activePresetId, completionPresets])
+    return defaultPrompts
+  })
+
+  const prevActivePresetIdRef = useRef(activePresetId)
+
+  // Draft State Persistence
+  useEffect(() => {
+    // Only save if we are not in the middle of a preset switch
+    if (activePresetId !== prevActivePresetIdRef.current) return
+
+    const draft = {
+      contextLength,
+      maxReplyLength,
+      temperature,
+      frequencyPenalty,
+      presencePenalty,
+      topP,
+      topK,
+      stream,
+      candidateCount,
+      prompts
+    }
+    localStorage.setItem(`completion_settings_draft_${activePresetId}`, JSON.stringify(draft))
+  }, [contextLength, maxReplyLength, temperature, frequencyPenalty, presencePenalty, topP, topK, stream, candidateCount, prompts, activePresetId])
+
+  // Sync state when switching presets (only on change)
+  useEffect(() => {
+    if (activePresetId !== prevActivePresetIdRef.current) {
+      let loadedFromDraft = false
+      try {
+          const savedDraft = localStorage.getItem(`completion_settings_draft_${activePresetId}`)
+          if (savedDraft) {
+              const draft = JSON.parse(savedDraft)
+              setContextLength(draft.contextLength)
+              setMaxReplyLength(draft.maxReplyLength)
+              setTemperature(draft.temperature)
+              setFrequencyPenalty(draft.frequencyPenalty)
+              setPresencePenalty(draft.presencePenalty)
+              setTopP(draft.topP)
+              setTopK(draft.topK)
+              setStream(draft.stream)
+              setCandidateCount(draft.candidateCount)
+              if (draft.prompts) setPrompts(draft.prompts)
+              loadedFromDraft = true
+          }
+      } catch (e) {
+          console.error('Failed to load preset draft', e)
+      }
+
+      if (!loadedFromDraft) {
+          const preset = completionPresets.find(p => p.id === activePresetId)
+          if (preset) {
+            setContextLength(preset.contextLength)
+            setMaxReplyLength(preset.maxReplyLength)
+            setTemperature(preset.temperature)
+            setFrequencyPenalty(preset.frequencyPenalty)
+            setPresencePenalty(preset.presencePenalty)
+            setTopP(preset.topP)
+            setTopK(preset.topK > 0 ? preset.topK : 1)
+            setStream(preset.stream)
+            setCandidateCount(preset.candidateCount)
+            if (preset.prompts) {
+              setPrompts(preset.prompts)
+            }
+          }
+      }
+      prevActivePresetIdRef.current = activePresetId
+    }
+  }, [activePresetId])
   
   const [selectedPromptId, setSelectedPromptId] = useState<number>(1)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -1306,13 +1513,7 @@ function App() {
         }))
     }
     
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2))
-    const downloadAnchorNode = document.createElement('a')
-    downloadAnchorNode.setAttribute("href", dataStr)
-    downloadAnchorNode.setAttribute("download", `preset_${Date.now()}.json`)
-    document.body.appendChild(downloadAnchorNode)
-    downloadAnchorNode.click()
-    downloadAnchorNode.remove()
+    downloadFile(JSON.stringify(exportData, null, 2), `preset_${Date.now()}.json`, 'application/json')
   }
 
   const handleDeletePreset = () => {
@@ -1368,6 +1569,25 @@ function App() {
         return p
     })
     setCompletionPresets(updatedPresets)
+    
+    // Explicitly save to localStorage
+    localStorage.setItem('completionPresets', JSON.stringify(updatedPresets))
+    
+    // Also update the draft to match saved state (optional, but clean)
+    const draft = {
+      contextLength,
+      maxReplyLength,
+      temperature,
+      frequencyPenalty,
+      presencePenalty,
+      topP,
+      topK,
+      stream,
+      candidateCount,
+      prompts
+    }
+    localStorage.setItem(`completion_settings_draft_${activePresetId}`, JSON.stringify(draft))
+
     setDialog({
       isOpen: true,
       type: 'alert',
@@ -1376,6 +1596,38 @@ function App() {
       inputValue: '',
       onConfirm: closeDialog
     })
+  }
+
+  const handleResetPreset = () => {
+      const preset = completionPresets.find(p => p.id === activePresetId)
+      if (preset) {
+          setDialog({
+              isOpen: true, 
+              type: 'confirm', 
+              title: '重置预设', 
+              message: '确定要丢弃当前未保存的修改，重置为预设默认值吗？', 
+              inputValue: '', 
+              onConfirm: () => {
+                  // Clear draft
+                  localStorage.removeItem(`completion_settings_draft_${activePresetId}`)
+                  
+                  // Reload settings
+                  setContextLength(preset.contextLength)
+                  setMaxReplyLength(preset.maxReplyLength)
+                  setTemperature(preset.temperature)
+                  setFrequencyPenalty(preset.frequencyPenalty)
+                  setPresencePenalty(preset.presencePenalty)
+                  setTopP(preset.topP)
+                  setTopK(preset.topK > 0 ? preset.topK : 1)
+                  setStream(preset.stream)
+                  setCandidateCount(preset.candidateCount)
+                  if (preset.prompts) {
+                    setPrompts(preset.prompts)
+                  }
+                  closeDialog()
+              }
+          })
+      }
   }
 
   const handleOpenRenameModal = () => {
@@ -1496,13 +1748,7 @@ function App() {
   }
 
   const handleExportPrompt = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(selectedPrompt, null, 2))
-    const downloadAnchorNode = document.createElement('a')
-    downloadAnchorNode.setAttribute("href", dataStr)
-    downloadAnchorNode.setAttribute("download", `${selectedPrompt.name}.json`)
-    document.body.appendChild(downloadAnchorNode)
-    downloadAnchorNode.click()
-    downloadAnchorNode.remove()
+    downloadFile(JSON.stringify(selectedPrompt, null, 2), `${selectedPrompt.name}.json`, 'application/json')
   }
 
   const movePrompt = (fromIndex: number, toIndex: number) => {
@@ -1795,9 +2041,10 @@ function App() {
         if (!content) throw new Error("Empty response received")
 
         try {
-          const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim()
-          const outlineData = JSON.parse(jsonStr)
-          if (Array.isArray(outlineData)) {
+          const rawData = safeParseJSONArray(content)
+          const outlineData = normalizeGeneratorResult(rawData, 'outline')
+          
+          if (Array.isArray(outlineData) && outlineData.length > 0) {
               setNovels(prev => prev.map(n => {
                 if (n.id === activeNovelId) {
                    const currentSets = n.outlineSets || []
@@ -1833,9 +2080,10 @@ function App() {
           } else {
             throw new Error('Format error: Not an array')
           }
-        } catch (e) {
-          terminal.error('Parse error:', e)
-          throw new Error('解析大纲失败，AI 返回格式不正确')
+        } catch (e: any) {
+          console.error('JSON Parse Error. Raw content:', content)
+          terminal.error(`Parse error: ${e.message}`)
+          throw new Error('解析大纲失败，AI 返回格式不正确。请检查 API 响应。')
         }
 
       } catch (err: any) {
@@ -1986,9 +2234,10 @@ function App() {
         if (!content) throw new Error("Empty response received")
 
         try {
-          const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim()
-          const charData = JSON.parse(jsonStr)
-          if (Array.isArray(charData)) {
+          const rawData = safeParseJSONArray(content)
+          const charData = normalizeGeneratorResult(rawData, 'character')
+
+          if (Array.isArray(charData) && charData.length > 0) {
             setNovels(prev => prev.map(n => {
                 if (n.id === activeNovelId) {
                    const currentSets = n.characterSets || []
@@ -2023,8 +2272,9 @@ function App() {
           } else {
             throw new Error('Format error: Not an array')
           }
-        } catch (e) {
-          terminal.error('Parse error:', e)
+        } catch (e: any) {
+          console.error('JSON Parse Error. Raw content:', content)
+          terminal.error(`Parse error: ${e.message}`)
           throw new Error('解析角色失败，AI 返回格式不正确')
         }
 
@@ -2197,9 +2447,10 @@ function App() {
         if (!content) throw new Error("Empty response received")
 
         try {
-          const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim()
-          const worldData = JSON.parse(jsonStr)
-          if (Array.isArray(worldData)) {
+          const rawData = safeParseJSONArray(content)
+          const worldData = normalizeGeneratorResult(rawData, 'worldview')
+
+          if (Array.isArray(worldData) && worldData.length > 0) {
             setNovels(prev => prev.map(n => {
                 if (n.id === activeNovelId) {
                    const currentSets = n.worldviewSets || []
@@ -2234,8 +2485,9 @@ function App() {
           } else {
             throw new Error('Format error: Not an array')
           }
-        } catch (e) {
-          terminal.error('Parse error:', e)
+        } catch (e: any) {
+          console.error('JSON Parse Error. Raw content:', content)
+          terminal.error(`Parse error: ${e.message}`)
           throw new Error('解析世界观失败，AI 返回格式不正确')
         }
 
@@ -2308,6 +2560,125 @@ function App() {
         }
         return c
     }))
+  }
+
+  // Context Builder Helper
+  const getChapterContext = (targetNovel: Novel | undefined, targetChapter: Chapter) => {
+      if (!targetNovel) return ''
+      
+      const chapters = targetNovel.chapters
+      let contextContent = ''
+    
+      if (longTextMode) {
+          // Determine filtering volume
+          let filterVolumeId: string | null = null
+          if (contextScope === 'current') {
+              filterVolumeId = targetChapter.volumeId || null
+          } else if (contextScope !== 'all') {
+              filterVolumeId = contextScope
+          }
+  
+          const storyChapters = getStoryChapters(chapters)
+          const currentChapterIndex = storyChapters.findIndex(c => c.id === targetChapter.id)
+          
+          if (currentChapterIndex !== -1) {
+               const currentNum = currentChapterIndex + 1
+               const parseRange = (s: string) => {
+                   const parts = s.split('-')
+                   return { start: parseInt(parts[0]) || 0, end: parseInt(parts[1]) || 0 }
+               }
+               
+               // 1. Find latest Big Summary
+               let bigSummaries = chapters.filter(c => c.subtype === 'big_summary')
+               
+               if (filterVolumeId) {
+                   bigSummaries = bigSummaries.filter(bs => {
+                       if (bs.volumeId === filterVolumeId) return true
+                       // Fallback: check range coverage (approximate)
+                       return false 
+                   })
+               }
+  
+               let bestBig = null
+               let bigEnd = 0
+               bigSummaries.forEach(bs => {
+                   if (bs.summaryRange) {
+                       const { end } = parseRange(bs.summaryRange)
+                       if (end < currentNum && end > bigEnd) {
+                           bigEnd = end
+                           bestBig = bs
+                       }
+                   }
+               })
+               
+               if (bestBig) {
+                   contextContent += `【剧情大纲 (${(bestBig as Chapter).title})】：\n${(bestBig as Chapter).content}\n\n`
+               }
+               
+               // 2. Find Small Summaries after Big Summary
+               let smallSummaries = chapters.filter(c => c.subtype === 'small_summary')
+               
+               if (filterVolumeId) {
+                   smallSummaries = smallSummaries.filter(ss => ss.volumeId === filterVolumeId)
+               }
+  
+               let smallEnd = bigEnd
+               
+               const relevantSmall = smallSummaries.filter(ss => {
+                   if (!ss.summaryRange) return false
+                   const { start, end } = parseRange(ss.summaryRange)
+                   return start > bigEnd && end < currentNum
+               }).sort((a, b) => {
+                   const ra = parseRange(a.summaryRange!)
+                   const rb = parseRange(b.summaryRange!)
+                   return ra.start - rb.start
+               })
+               
+               relevantSmall.forEach(ss => {
+                   contextContent += `【剧情概要 (${ss.title})】：\n${ss.content}\n\n`
+                   const { end } = parseRange(ss.summaryRange!)
+                   if (end > smallEnd) smallEnd = end
+               })
+               
+               // 3. Add Story Chapters
+               const previousStoryChapters = storyChapters.filter((c, idx) => {
+                   // First apply volume filter
+                   if (filterVolumeId && c.volumeId !== filterVolumeId) return false
+  
+                   const cNum = idx + 1
+                   if (cNum >= currentNum) return false 
+                   if (cNum > smallEnd) return true
+                   if (cNum === currentNum - 1) return true // Always include immediate previous chapter
+                   return false
+               })
+               
+               // Deduplicate by ID
+               const uniqueChapters = Array.from(new Set(previousStoryChapters.map(c => c.id)))
+                  .map(id => previousStoryChapters.find(c => c.id === id))
+                  .filter((c): c is Chapter => !!c)
+                  .sort((a, b) => {
+                      const idxA = storyChapters.findIndex(sc => sc.id === a.id)
+                      const idxB = storyChapters.findIndex(sc => sc.id === b.id)
+                      return idxA - idxB
+                  })
+  
+               uniqueChapters.forEach(c => {
+                   contextContent += `### ${c.title}\n${c.content}\n\n`
+               })
+          }
+      } else {
+          // Standard Context Logic
+          if (targetChapter.volumeId) {
+              const volumeChapters = chapters.filter(c => c.volumeId === targetChapter.volumeId)
+              const currentIdx = volumeChapters.findIndex(c => c.id === targetChapter.id)
+              if (currentIdx > 0) {
+                  const previousChapters = volumeChapters.slice(0, currentIdx)
+                  contextContent = previousChapters.map(c => c.content).join('\n\n') + '\n\n'
+              }
+          }
+      }
+      
+      return contextContent
   }
 
   // Optimize Function
@@ -2394,33 +2765,19 @@ function App() {
 
         const activePreset = optimizePresets.find(p => p.id === activeOptimizePresetId) || optimizePresets[0]
         
-        const messages: any[] = []
+        // Correctly build messages from the active preset's prompts
+        const messages: any[] = activePreset.prompts
+          .filter(p => p.enabled)
+          .map(p => {
+             let content = p.content
+             content = content.replace('{{content}}', sourceContentToUse)
+             content = content.replace('{{input}}', userPrompt)
+             return { role: p.role, content }
+          })
         
-        // Filter system prompts from current prompts state
-        const systemPrompts = prompts.filter(p => p.role === 'system' && p.active)
-        systemPrompts.forEach(p => {
-            messages.push({ role: 'system', content: p.content })
-        })
-
-        // Filter other prompts from current prompts state
-        prompts.filter(p => p.role !== 'system' && p.active).forEach(p => {
-          messages.push({ role: p.role, content: p.content })
-        })
-        
-        // Use task prompts from current prompts state as well if needed, 
-        // but it seems logic was mixing activePreset and prompts state.
-        // Assuming 'prompts' state is the source of truth for current editing.
-        const taskPrompts = prompts.filter(p => p.role !== 'system' && p.active)
-
-        taskPrompts.forEach(p => {
-            let content = p.content
-            content = content.replace('{{content}}', sourceContentToUse)
-            content = content.replace('{{input}}', userPrompt)
-            messages.push({ role: p.role, content })
-        })
-
-        if (taskPrompts.length === 0) {
-            messages.push({ role: 'user', content: `Please optimize the following content:\n\n${sourceContentToUse}` })
+        // Fallback if no user prompt is found (shouldn't happen with default presets)
+        if (!messages.some(m => m.role === 'user')) {
+             messages.push({ role: 'user', content: `Please optimize the following content:\n\n${sourceContentToUse}` })
         }
 
         const stream = await openai.chat.completions.create({
@@ -2464,10 +2821,13 @@ function App() {
         break // Success
 
       } catch (err: any) {
-        terminal.error(`[Optimize] Attempt ${attempt + 1} failed:`, err)
+        const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
+        terminal.error(`[Optimize] Attempt ${attempt + 1} failed: ${errorMsg}`);
+        console.error('[Optimize Error]', err);
+        
         attempt++
         if (attempt >= maxAttempts) {
-          setError(err.message || '优化出错 (重试次数已耗尽)')
+          setError(errorMsg || '优化出错 (重试次数已耗尽)')
         } else {
           await new Promise(resolve => setTimeout(resolve, 1000))
         }
@@ -2500,21 +2860,41 @@ function App() {
     const chapterInfo = outline[index]
     setAutoWriteStatus(`正在创作第 ${index + 1} / ${outline.length} 章：${chapterInfo.title}`)
 
-    // Create placeholder chapter
-    const newChapterId = Date.now()
-    const newChapter = { 
-      id: newChapterId, 
-      title: chapterInfo.title, 
-      content: '',
-      volumeId: targetVolumeId 
-    }
+    const currentNovel = novelsRef.current.find(n => n.id === novelId)
+    const existingChapter = currentNovel?.chapters.find(c => c.title === chapterInfo.title)
     
-    setNovels(prev => prev.map(n => {
-       if (n.id === novelId) {
-          return { ...n, chapters: [...n.chapters, newChapter] }
-       }
-       return n
-    }))
+    let newChapterId: number
+    let newChapter: Chapter
+
+    if (existingChapter) {
+        newChapterId = existingChapter.id
+        newChapter = { ...existingChapter, volumeId: targetVolumeId || existingChapter.volumeId }
+        
+        setNovels(prev => prev.map(n => {
+           if (n.id === novelId) {
+              return {
+                  ...n,
+                  chapters: n.chapters.map(c => c.id === newChapterId ? { ...c, volumeId: targetVolumeId || c.volumeId } : c)
+              }
+           }
+           return n
+        }))
+    } else {
+        newChapterId = Date.now()
+        newChapter = { 
+          id: newChapterId, 
+          title: chapterInfo.title, 
+          content: '',
+          volumeId: targetVolumeId 
+        }
+        
+        setNovels(prev => prev.map(n => {
+           if (n.id === novelId) {
+              return { ...n, chapters: [...n.chapters, newChapter] }
+           }
+           return n
+        }))
+    }
     
     setActiveChapterId(newChapterId)
 
@@ -2535,18 +2915,33 @@ function App() {
         })
         
         // Build Context
-        const safeLimit = Math.max(1000, contextLimit - 2000) 
-        const contextWindow = previousContent.slice(-safeLimit)
+        // Use dynamic context builder to respect Long Text Mode and Volume settings
+        const currentNovel = novelsRef.current.find(n => n.id === novelId)
+        
+        // We need to pass a version of novel that includes the current (placeholder) chapter
+        // so getChapterContext can resolve volume relations correctly.
+        // Since setNovels might not have reflected in ref yet (or it might have, but safer to be explicit)
+        // Actually, setNovels was called above, but we are in the same tick or microtask? 
+        // We used setNovels with callback. 
+        // Ideally we construct a temp object.
+        let tempNovel = currentNovel
+        if (tempNovel) {
+             const hasChapter = tempNovel.chapters.some(c => c.id === newChapter.id)
+             if (!hasChapter) {
+                 tempNovel = { ...tempNovel, chapters: [...tempNovel.chapters, newChapter] }
+             }
+        }
+
+        const rawContext = getChapterContext(tempNovel, newChapter)
         
         const scripts = getActiveScripts()
-        const processedContext = processTextWithRegex(contextWindow, scripts, 'input')
+        const processedContext = processTextWithRegex(rawContext, scripts, 'input')
         const contextMsg = processedContext ? `【前文剧情回顾】：\n${processedContext}\n\n` : ""
 
         const fullOutlineContext = includeFullOutline 
           ? `【全书大纲参考】：\n${outline.map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`).join('\n')}\n\n` 
           : ''
 
-    const currentNovel = novelsRef.current.find(n => n.id === novelId)
     const worldInfo = buildWorldInfoContext(currentNovel)
 
     const mainPrompt = `${worldInfo}${contextMsg}${fullOutlineContext}你正在创作小说《${novelTitle}》。
@@ -2741,7 +3136,7 @@ function App() {
         const item = currentSet.items[i]
         const existingChapter = activeNovel.chapters.find(c => c.title === item.title)
         
-        if (existingChapter) {
+        if (existingChapter && existingChapter.content && existingChapter.content.trim().length > 0) {
             previousContent += existingChapter.content + "\n\n"
         } else {
             startIndex = i
@@ -2791,95 +3186,8 @@ function App() {
     if (currentContent) currentContent += '\n\n'
 
     // Build context
-    let contextContent = ''
-    
-    if (longTextMode) {
-        const storyChapters = getStoryChapters(chapters)
-        const currentChapterIndex = storyChapters.findIndex(c => c.id === activeChapter.id)
-        
-        if (currentChapterIndex !== -1) {
-             const currentNum = currentChapterIndex + 1
-             
-             // 1. Find latest Big Summary
-             const bigSummaries = chapters.filter(c => c.subtype === 'big_summary')
-             const parseRange = (s: string) => {
-                 const parts = s.split('-')
-                 return { start: parseInt(parts[0]) || 0, end: parseInt(parts[1]) || 0 }
-             }
-             
-             let bestBig = null
-             let bigEnd = 0
-             bigSummaries.forEach(bs => {
-                 if (bs.summaryRange) {
-                     const { end } = parseRange(bs.summaryRange)
-                     if (end < currentNum && end > bigEnd) {
-                         bigEnd = end
-                         bestBig = bs
-                     }
-                 }
-             })
-             
-             if (bestBig) {
-                 contextContent += `【剧情大纲 (${(bestBig as Chapter).title})】：\n${(bestBig as Chapter).content}\n\n`
-             }
-             
-             // 2. Find Small Summaries after Big Summary
-             const smallSummaries = chapters.filter(c => c.subtype === 'small_summary')
-             let smallEnd = bigEnd
-             
-             const relevantSmall = smallSummaries.filter(ss => {
-                 if (!ss.summaryRange) return false
-                 const { start, end } = parseRange(ss.summaryRange)
-                 return start > bigEnd && end < currentNum
-             }).sort((a, b) => {
-                 const ra = parseRange(a.summaryRange!)
-                 const rb = parseRange(b.summaryRange!)
-                 return ra.start - rb.start
-             })
-             
-             relevantSmall.forEach(ss => {
-                 contextContent += `【剧情概要 (${ss.title})】：\n${ss.content}\n\n`
-                 const { end } = parseRange(ss.summaryRange!)
-                 if (end > smallEnd) smallEnd = end
-             })
-             
-             // 3. Add Story Chapters
-             const previousStoryChapters = storyChapters.filter((_, idx) => {
-                 const cNum = idx + 1
-                 if (cNum >= currentNum) return false 
-                 if (cNum > smallEnd) return true
-                 if (cNum === currentNum - 1) return true // Always include immediate previous chapter
-                 return false
-             })
-             
-             // Deduplicate by ID
-             const uniqueChapters = Array.from(new Set(previousStoryChapters.map(c => c.id)))
-                .map(id => previousStoryChapters.find(c => c.id === id))
-                .filter((c): c is Chapter => !!c)
-                .sort((a, b) => {
-                    const idxA = storyChapters.findIndex(sc => sc.id === a.id)
-                    const idxB = storyChapters.findIndex(sc => sc.id === b.id)
-                    return idxA - idxB
-                })
-
-             uniqueChapters.forEach(c => {
-                 contextContent += `### ${c.title}\n${c.content}\n\n`
-             })
-        }
-    } else {
-        // Standard Context Logic
-        if (activeChapter.volumeId) {
-            const volumeChapters = chapters.filter(c => c.volumeId === activeChapter.volumeId)
-            const currentIdx = volumeChapters.findIndex(c => c.id === activeChapter.id)
-            if (currentIdx > 0) {
-                const previousChapters = volumeChapters.slice(0, currentIdx)
-                contextContent = previousChapters.map(c => c.content).join('\n\n') + '\n\n'
-            }
-        }
-    }
-    
-    // Add current content
-    contextContent += currentContent
+    const previousContext = getChapterContext(activeNovel || undefined, activeChapter)
+    const contextContent = previousContext + currentContent
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -3990,13 +4298,38 @@ function App() {
              </button>
              <span className="text-sm font-semibold text-gray-400 whitespace-nowrap">自定义添加栏</span>
              <div className="flex items-center gap-2">
-               <button 
-                 onClick={() => setLongTextMode(!longTextMode)}
-                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs transition-colors ${longTextMode ? 'bg-[var(--theme-color)] text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-               >
-                 <Book className="w-3.5 h-3.5" />
-                 长文模式
-               </button>
+               <div className="flex bg-gray-700 rounded-lg p-0.5 items-center gap-0.5">
+                   <button 
+                     onClick={() => setLongTextMode(!longTextMode)}
+                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors ${longTextMode ? 'bg-[var(--theme-color)] text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
+                   >
+                     <Book className="w-3.5 h-3.5" />
+                     长文模式
+                   </button>
+                   
+                   {longTextMode && (
+                     <div className="relative group border-l border-gray-600 pl-0.5">
+                        <select
+                            value={contextScope}
+                            onChange={(e) => setContextScope(e.target.value)}
+                            className="bg-transparent hover:bg-gray-600 text-gray-200 text-xs rounded px-2 py-1.5 border-none outline-none appearance-none cursor-pointer pr-6 transition-colors min-w-[80px] max-w-[120px]"
+                            title="上下文发送范围"
+                        >
+                            <option value="all" className="bg-gray-800 text-gray-200">全书范围</option>
+                            <option value="current" className="bg-gray-800 text-gray-200">仅当前卷</option>
+                            {volumes.length > 0 && (
+                                <optgroup label="指定分卷" className="bg-gray-800 text-gray-200">
+                                    {volumes.map(v => (
+                                        <option key={v.id} value={v.id} className="bg-gray-800 text-gray-200">{v.title}</option>
+                                    ))}
+                                </optgroup>
+                            )}
+                        </select>
+                        <ChevronDown className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                     </div>
+                   )}
+               </div>
+
                <button 
                  onClick={() => setShowRegexModal(true)}
                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors"
@@ -5147,7 +5480,7 @@ function App() {
                         placeholder="在此编辑章节内容..."
                     />
                     ) : (
-                    <div className="prose prose-invert prose-lg max-w-none overflow-y-auto custom-scrollbar pr-4 md:pr-24">
+                    <div className="prose prose-invert prose-lg max-w-none overflow-y-auto custom-scrollbar pr-4 md:pr-24 [&_p]:my-0 [&_p]:min-h-[1rem]">
                         {activeChapter.content ? (
                         <ReactMarkdown>{activeChapter.content.replace(/<[^>]+>/g, '')}</ReactMarkdown>
                         ) : (
@@ -5380,7 +5713,7 @@ function App() {
                 <span className="font-semibold text-gray-200">对话补全源</span>
               </div>
               <div className="flex items-center gap-2">
-                <button className="p-1.5 hover:bg-gray-700 rounded transition-colors" title="保存"><Save className="w-4 h-4 text-gray-400" /></button>
+                <button onClick={handleSavePreset} className="p-1.5 hover:bg-gray-700 rounded transition-colors" title="保存"><Save className="w-4 h-4 text-gray-400" /></button>
                 <button className="p-1.5 hover:bg-gray-700 rounded transition-colors" title="编辑" onClick={() => handleEditClick()}><Edit2 className="w-4 h-4 text-gray-400" /></button>
                 <button className="p-1.5 hover:bg-gray-700 rounded transition-colors" title="复制"><Copy className="w-4 h-4 text-gray-400" /></button>
                 <button onClick={() => setShowAdvancedSettings(false)} className="p-1.5 hover:bg-gray-700 rounded transition-colors text-red-400"><X className="w-4 h-4" /></button>
@@ -5630,15 +5963,19 @@ function App() {
 
                 {/* 5. Export */}
                 <button 
-                  onClick={handleExportPrompt}
+                  onClick={handleExportPreset}
                   className="p-2 bg-gray-900 border border-gray-700 rounded text-gray-400 hover:text-white transition-colors"
                   title="导出"
                 >
                   <Download className="w-4 h-4" />
                 </button>
                 
-                 {/* Reset/Undo (Placeholder for now) */}
-                 <button className="p-2 bg-gray-900 border border-gray-700 rounded text-gray-400 hover:text-white transition-colors">
+                 {/* Reset/Undo */}
+                 <button 
+                    onClick={handleResetPreset}
+                    className="p-2 bg-gray-900 border border-gray-700 rounded text-gray-400 hover:text-white transition-colors"
+                    title="重置为默认值"
+                 >
                     <RotateCcw className="w-4 h-4" />
                  </button>
 
