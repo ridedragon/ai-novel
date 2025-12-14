@@ -4363,10 +4363,11 @@ function App() {
                <div className="flex bg-gray-700 rounded-lg p-0.5 items-center gap-0.5 shrink-0">
                    <button 
                      onClick={() => setLongTextMode(!longTextMode)}
-                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors whitespace-nowrap ${longTextMode ? 'bg-[var(--theme-color)] text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
+                     className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-md text-xs transition-colors whitespace-nowrap ${longTextMode ? 'bg-[var(--theme-color)] text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
+                     title="长文模式"
                    >
                      <Book className="w-3.5 h-3.5" />
-                     长文模式
+                     <span className="hidden sm:inline">长文模式</span>
                    </button>
                    
                    {longTextMode && (
@@ -4374,7 +4375,7 @@ function App() {
                         <select
                             value={contextScope}
                             onChange={(e) => setContextScope(e.target.value)}
-                            className="bg-transparent hover:bg-gray-600 text-gray-200 text-xs rounded px-2 py-1.5 border-none outline-none appearance-none cursor-pointer pr-6 transition-colors min-w-[80px] max-w-[120px]"
+                            className="bg-transparent hover:bg-gray-600 text-gray-200 text-xs rounded px-2 py-1.5 border-none outline-none appearance-none cursor-pointer pr-6 transition-colors min-w-[60px] md:min-w-[80px] max-w-[100px] md:max-w-[120px]"
                             title="上下文发送范围"
                         >
                             <option value="all" className="bg-gray-800 text-gray-200">全书范围</option>
@@ -4394,17 +4395,19 @@ function App() {
 
                <button 
                  onClick={() => setShowRegexModal(true)}
-                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors whitespace-nowrap shrink-0"
+                 className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors whitespace-nowrap shrink-0"
+                 title="正则"
                >
                  <Code2 className="w-3.5 h-3.5" />
-                 正则
+                 <span className="hidden sm:inline">正则</span>
                </button>
                <button 
                  onClick={() => setShowSettings(true)}
-                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors whitespace-nowrap shrink-0"
+                 className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors whitespace-nowrap shrink-0"
+                 title="设置"
                >
                  <Settings className="w-3.5 h-3.5" />
-                 设置
+                 <span className="hidden sm:inline">设置</span>
                </button>
              </div>
           </div>
