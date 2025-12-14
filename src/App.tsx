@@ -581,6 +581,14 @@ function App() {
   })
   const [activeOptimizePresetId, setActiveOptimizePresetId] = useState<string>(() => localStorage.getItem('activeOptimizePresetId') || 'default')
 
+  // Auto Optimize State
+  const [autoOptimize, setAutoOptimize] = useState(() => localStorage.getItem('autoOptimize') === 'true')
+  const autoOptimizeRef = useRef(autoOptimize)
+  useEffect(() => {
+    localStorage.setItem('autoOptimize', String(autoOptimize))
+    autoOptimizeRef.current = autoOptimize
+  }, [autoOptimize])
+
   // Common Generator Settings Modal
   const [showGeneratorSettingsModal, setShowGeneratorSettingsModal] = useState(false)
   const [generatorSettingsType, setGeneratorSettingsType] = useState<'outline' | 'character' | 'worldview' | 'optimize'>('outline')
@@ -1747,10 +1755,6 @@ function App() {
     input.click()
   }
 
-  const handleExportPrompt = () => {
-    downloadFile(JSON.stringify(selectedPrompt, null, 2), `${selectedPrompt.name}.json`, 'application/json')
-  }
-
   const movePrompt = (fromIndex: number, toIndex: number) => {
     const updatedPrompts = [...prompts]
     const [movedItem] = updatedPrompts.splice(fromIndex, 1)
@@ -2572,8 +2576,14 @@ function App() {
       if (longTextMode) {
           // Determine filtering volume
           let filterVolumeId: string | null = null
+          let filterUncategorized = false
+
           if (contextScope === 'current') {
-              filterVolumeId = targetChapter.volumeId || null
+              if (targetChapter.volumeId) {
+                  filterVolumeId = targetChapter.volumeId
+              } else {
+                  filterUncategorized = true
+              }
           } else if (contextScope !== 'all') {
               filterVolumeId = contextScope
           }
@@ -2591,13 +2601,12 @@ function App() {
                // 1. Find latest Big Summary
                let bigSummaries = chapters.filter(c => c.subtype === 'big_summary')
                
-               if (filterVolumeId) {
-                   bigSummaries = bigSummaries.filter(bs => {
-                       if (bs.volumeId === filterVolumeId) return true
-                       // Fallback: check range coverage (approximate)
-                       return false 
-                   })
-               }
+               // Apply Volume Filter
+               bigSummaries = bigSummaries.filter(bs => {
+                   if (filterVolumeId) return bs.volumeId === filterVolumeId
+                   if (filterUncategorized) return !bs.volumeId
+                   return true
+               })
   
                let bestBig = null
                let bigEnd = 0
@@ -2618,9 +2627,12 @@ function App() {
                // 2. Find Small Summaries after Big Summary
                let smallSummaries = chapters.filter(c => c.subtype === 'small_summary')
                
-               if (filterVolumeId) {
-                   smallSummaries = smallSummaries.filter(ss => ss.volumeId === filterVolumeId)
-               }
+               // Apply Volume Filter
+               smallSummaries = smallSummaries.filter(ss => {
+                   if (filterVolumeId) return ss.volumeId === filterVolumeId
+                   if (filterUncategorized) return !ss.volumeId
+                   return true
+               })
   
                let smallEnd = bigEnd
                
@@ -2644,6 +2656,7 @@ function App() {
                const previousStoryChapters = storyChapters.filter((c, idx) => {
                    // First apply volume filter
                    if (filterVolumeId && c.volumeId !== filterVolumeId) return false
+                   if (filterUncategorized && c.volumeId) return false
   
                    const cNum = idx + 1
                    if (cNum >= currentNum) return false 
@@ -2682,22 +2695,41 @@ function App() {
   }
 
   // Optimize Function
-  const handleOptimize = async () => {
+  const handleOptimize = async (targetId?: number, initialContent?: string) => {
     if (!apiKey) {
       setError('请先配置 API Key')
       setShowSettings(true)
       return
     }
-    if (!activeChapter) {
+
+    const idToUse = targetId ?? activeChapterId
+    if (idToUse === null) {
         setError('请先选择或创建一个章节')
         return
+    }
+    
+    let sourceContentToUse = initialContent
+    if (sourceContentToUse === undefined) {
+         const chap = chapters.find(c => c.id === idToUse)
+         if (chap) {
+             sourceContentToUse = chap.content
+         } else if (activeNovelId) {
+             const currentNovel = novelsRef.current.find(n => n.id === activeNovelId)
+             const refChap = currentNovel?.chapters.find(c => c.id === idToUse)
+             sourceContentToUse = refChap?.content
+         }
+    }
+
+    if (!sourceContentToUse) {
+         // terminal.log('[Optimize] No content to optimize.')
+         return
     }
     
     setIsOptimizing(true)
     setError('')
 
-    const sourceContentToUse = activeChapter.content
     const baseTime = Date.now()
+
     const newVersionId = `opt_${baseTime}`
 
     // 辅助函数：构建版本历史
@@ -2739,7 +2771,7 @@ function App() {
 
     // 1. Initial State Update: 创建新版本占位符
     setChapters(prev => prev.map(c => {
-        if (c.id === activeChapterId) {
+        if (c.id === idToUse) {
             const newVersions = buildVersions(c.versions, '')
             return {
                 ...c,
@@ -2798,7 +2830,7 @@ function App() {
           newContent += content
           
           setChapters(prev => prev.map(c => {
-              if (c.id === activeChapterId) {
+              if (c.id === idToUse) {
                   // 使用 buildVersions 确保版本完整性
                   const newVersions = buildVersions(c.versions, newContent)
                   return { 
@@ -3037,6 +3069,12 @@ function App() {
         // Trigger Summary
         if (longTextMode) {
              await checkAndGenerateSummary(newChapterId, finalGeneratedContent, novelId)
+        }
+
+        // Trigger Auto Optimize
+        if (autoOptimizeRef.current) {
+             terminal.log(`[AutoWrite] Auto-optimizing chapter ${newChapterId}...`)
+             await handleOptimize(newChapterId, finalGeneratedContent)
         }
 
         terminal.log(`[AutoWrite] Attempt ${attempt + 1} successful.`)
@@ -3365,14 +3403,18 @@ function App() {
     const getSnapshotStoryChapters = () => currentChaptersSnapshot.filter(c => !c.subtype || c.subtype === 'story').sort((a, b) => a.id - b.id)
 
     const storyChapters = getSnapshotStoryChapters()
-    const index = storyChapters.findIndex(c => c.id === targetChapterId)
-    if (index === -1) return
+    const globalIndex = storyChapters.findIndex(c => c.id === targetChapterId)
+    if (globalIndex === -1) return
     
     // Determine the volume ID of the current chapter to place summary in the same volume
-    const targetChapterObj = storyChapters[index]
+    const targetChapterObj = storyChapters[globalIndex]
     const targetVolumeId = targetChapterObj.volumeId
 
-    const currentCount = index + 1
+    // Calculate Volume-based Count
+    const volumeStoryChapters = storyChapters.filter(c => c.volumeId === targetChapterObj.volumeId)
+    const indexInVolume = volumeStoryChapters.findIndex(c => c.id === targetChapterId)
+    const currentCountInVolume = indexInVolume + 1
+
     const sInterval = typeof smallSummaryInterval === 'number' ? smallSummaryInterval : 3
     const bInterval = typeof bigSummaryInterval === 'number' ? bigSummaryInterval : 6
 
@@ -3385,7 +3427,11 @@ function App() {
         // Prepare Context using the Snapshot
         let sourceText = ""
         if (type === 'small') {
+             // Ensure we only include chapters from the target volume
              const targetChapters = getSnapshotStoryChapters().slice(start - 1, end)
+                .filter(c => c.volumeId === targetVolumeId)
+             
+             if (targetChapters.length === 0) return
              sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${c.content}`).join('\n\n')
         } else {
              // For Big Summary, try to use Small Summaries first
@@ -3485,15 +3531,31 @@ function App() {
         }
     }
 
-    // Check Small Summary Trigger
-    if (currentCount % sInterval === 0) {
-        await generate('small', currentCount - sInterval + 1, currentCount)
+    // Check Small Summary Trigger (Volume Based)
+    if (currentCountInVolume % sInterval === 0) {
+        // Map back to Global Range for Labeling
+        const batchStartVolIndex = indexInVolume - sInterval + 1
+        const batchChapters = volumeStoryChapters.slice(batchStartVolIndex, indexInVolume + 1)
+        
+        if (batchChapters.length > 0) {
+             const globalStart = storyChapters.findIndex(c => c.id === batchChapters[0].id) + 1
+             const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1
+             await generate('small', globalStart, globalEnd)
+        }
     }
 
-    // Check Big Summary Trigger
-    if (currentCount % bInterval === 0) {
-        await generate('big', currentCount - bInterval + 1, currentCount)
+    // Check Big Summary Trigger (Volume Based)
+    if (currentCountInVolume % bInterval === 0) {
+        const batchStartVolIndex = indexInVolume - bInterval + 1
+        const batchChapters = volumeStoryChapters.slice(batchStartVolIndex, indexInVolume + 1)
+        
+        if (batchChapters.length > 0) {
+             const globalStart = storyChapters.findIndex(c => c.id === batchChapters[0].id) + 1
+             const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1
+             await generate('big', globalStart, globalEnd)
+        }
     }
+
   }
 
   const handleScanSummaries = async () => {
@@ -5445,14 +5507,35 @@ function App() {
                         </div>
                     )}
 
+                    <div 
+                        onClick={() => setAutoOptimize(!autoOptimize)}
+                        className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors select-none mr-2 ${
+                            autoOptimize ? 'bg-purple-500/10' : 'hover:bg-gray-800'
+                        }`}
+                        title="写作完成后自动进行优化"
+                    >
+                        <div className={`w-7 h-4 rounded-full relative transition-colors duration-200 ${autoOptimize ? 'bg-purple-500' : 'bg-gray-600'}`}>
+                            <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-all duration-200 ${autoOptimize ? 'left-3.5' : 'left-0.5'}`} />
+                        </div>
+                        <span className={`text-xs font-medium ${autoOptimize ? 'text-purple-300' : 'text-gray-500'}`}>自动</span>
+                    </div>
+
                     <button 
-                        onClick={handleOptimize}
+                        onClick={() => handleOptimize()}
                         disabled={isOptimizing}
-                        className="p-2 hover:bg-gray-800 rounded-lg text-purple-400 hover:text-purple-300 transition-colors relative group"
+                        className={`
+                            flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm border border-transparent
+                            ${isOptimizing 
+                                ? 'bg-gray-800 text-gray-400 cursor-not-allowed border-gray-700' 
+                                : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-500/20 border-purple-500 hover:shadow-purple-500/30 hover:-translate-y-0.5 active:translate-y-0'
+                            }
+                        `}
                         title="优化当前章节 (基于原文)"
                     >
-                        {isOptimizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
+                        {isOptimizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                        <span>润色</span>
                     </button>
+
                     <button 
                         onClick={() => { setGeneratorSettingsType('optimize'); setShowGeneratorSettingsModal(true); }}
                         className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
@@ -5480,9 +5563,16 @@ function App() {
                         placeholder="在此编辑章节内容..."
                     />
                     ) : (
-                    <div className="prose prose-invert prose-lg max-w-none overflow-y-auto custom-scrollbar pr-4 md:pr-24 [&_p]:my-0 [&_p]:min-h-[1rem]">
+                    <div className="prose prose-invert prose-lg max-w-none overflow-y-auto custom-scrollbar pr-4 md:pr-24 [&_p]:my-0 [&_p]:min-h-[1rem] text-justify">
                         {activeChapter.content ? (
-                        <ReactMarkdown>{activeChapter.content.replace(/<[^>]+>/g, '')}</ReactMarkdown>
+                        <ReactMarkdown>
+                          {activeChapter.content
+                            .replace(/<[^>]+>/g, '')
+                            .split('\n')
+                            .map(line => line.trim())
+                            .filter(line => line)
+                            .join('\n\n')}
+                        </ReactMarkdown>
                         ) : (
                         <div className="text-gray-500 italic">
                             暂无内容，请在下方输入要求开始创作...
