@@ -239,6 +239,35 @@ const adjustColor = (hex: string, lum: number) => {
 
 const getStoryChapters = (chapters: Chapter[]) => chapters.filter(c => !c.subtype || c.subtype === 'story')
 
+const buildWorldInfoContext = (novel: Novel | undefined) => {
+  if (!novel) return ''
+  let context = ''
+  
+  // Worldview
+  if (novel.worldviewSets && novel.worldviewSets.length > 0) {
+      context += '【世界观设定】：\n'
+      novel.worldviewSets.forEach(set => {
+           set.entries.forEach(entry => {
+               context += `· ${entry.item}: ${entry.setting}\n`
+           })
+      })
+      context += '\n'
+  }
+  
+  // Characters
+  if (novel.characterSets && novel.characterSets.length > 0) {
+      context += '【角色档案】：\n'
+      novel.characterSets.forEach(set => {
+           set.characters.forEach(char => {
+               context += `· ${char.name}: ${char.bio}\n`
+           })
+      })
+      context += '\n'
+  }
+  
+  return context
+}
+
 const ensureChapterVersions = (chapter: Chapter): Chapter => {
   if (chapter.versions && chapter.versions.length > 0) return chapter
 
@@ -346,6 +375,11 @@ function App() {
       return []
     }
   })
+  const novelsRef = useRef(novels)
+  useEffect(() => {
+      novelsRef.current = novels
+  }, [novels])
+
   const [activeNovelId, setActiveNovelId] = useState<string | null>(null)
 
   // Outline Sets State
@@ -584,11 +618,6 @@ function App() {
     setIsEditingChapter(!isEditingChapter)
   }
 
-  const updateChapters = (newChapters: Chapter[]) => {
-      if (!activeNovelId) return
-      setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, chapters: newChapters } : n))
-  }
-
   const updateOutlineSets = (newSets: OutlineSet[]) => {
     if (!activeNovelId) return
     setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, outlineSets: newSets } : n))
@@ -690,11 +719,15 @@ function App() {
   const systemPrompt = activeNovel?.systemPrompt || '你是一个专业的小说家。请根据用户的要求创作小说，文笔要优美，情节要跌宕起伏。'
   
   const setChapters = (value: Chapter[] | ((prev: Chapter[]) => Chapter[])) => {
-      if (typeof value === 'function') {
-          updateChapters(value(chapters))
-      } else {
-          updateChapters(value)
-      }
+      if (!activeNovelId) return
+      setNovels(prevNovels => prevNovels.map(n => {
+          if (n.id === activeNovelId) {
+              const currentChapters = n.chapters
+              const newChapters = typeof value === 'function' ? value(currentChapters) : value
+              return { ...n, chapters: newChapters }
+          }
+          return n
+      }))
   }
 
   const setVolumes = (value: NovelVolume[]) => {
@@ -2378,7 +2411,10 @@ function App() {
           ? `【全书大纲参考】：\n${outline.map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`).join('\n')}\n\n` 
           : ''
 
-        const mainPrompt = `${contextMsg}${fullOutlineContext}你正在创作小说《${novelTitle}》。
+    const currentNovel = novelsRef.current.find(n => n.id === novelId)
+    const worldInfo = buildWorldInfoContext(currentNovel)
+
+    const mainPrompt = `${worldInfo}${contextMsg}${fullOutlineContext}你正在创作小说《${novelTitle}》。
 当前章节：${chapterInfo.title}
 本章大纲：${chapterInfo.summary}
 
@@ -2612,7 +2648,7 @@ function App() {
              })
              
              // 3. Add Story Chapters
-             const previousStoryChapters = storyChapters.filter((c, idx) => {
+             const previousStoryChapters = storyChapters.filter((_, idx) => {
                  const cNum = idx + 1
                  if (cNum >= currentNum) return false 
                  if (cNum > smallEnd) return true
@@ -2681,7 +2717,8 @@ function App() {
         const processedUserPrompt = processTextWithRegex(userPrompt, scripts, 'input')
         
         // Combine Context and User Prompt
-        messages.push({ role: 'user', content: contextMsg + processedUserPrompt })
+        const worldInfo = buildWorldInfoContext(activeNovel || undefined)
+        messages.push({ role: 'user', content: worldInfo + contextMsg + processedUserPrompt })
 
         const stream = await openai.chat.completions.create({
           model: model,
@@ -2723,18 +2760,25 @@ function App() {
         
         // Apply Output Regex to the FULL content generated in this turn
         const finalGeneratedContent = processTextWithRegex(newGeneratedContent, scripts, 'output')
+        const fullFinalContent = currentContent + finalGeneratedContent
+        
         if (finalGeneratedContent !== newGeneratedContent) {
             setChapters(prev => prev.map(c => 
               c.id === activeChapterId 
                 ? { 
                     ...c, 
-                    content: currentContent + finalGeneratedContent,
+                    content: fullFinalContent,
                     versions: c.versions 
-                      ? c.versions.map(v => v.id === c.activeVersionId ? { ...v, content: currentContent + finalGeneratedContent } : v) 
+                      ? c.versions.map(v => v.id === c.activeVersionId ? { ...v, content: fullFinalContent } : v) 
                       : undefined
                   }
                 : c
             ))
+        }
+
+        // Trigger Summary Generation
+        if (longTextMode && activeChapterId) {
+             checkAndGenerateSummary(activeChapterId, fullFinalContent)
         }
 
         terminal.log(`[Generate] Attempt ${attempt + 1} successful.`)
@@ -2781,6 +2825,243 @@ function App() {
           }
         : c
     ))
+  }
+
+  // Summary Generation Helper
+  const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string) => {
+    if (!longTextMode || !apiKey || !activeNovelId) return
+
+    // Get latest chapters from Ref to ensure we have up-to-date data even inside closures/loops
+    const currentNovel = novelsRef.current.find(n => n.id === activeNovelId)
+    if (!currentNovel) return
+
+    // Merge current content into the latest chapters list
+    const latestChapters = currentNovel.chapters.map(c => c.id === targetChapterId ? { ...c, content: currentContent } : c)
+    const storyChapters = getStoryChapters(latestChapters)
+    
+    // Sort by ID to ensure correct order
+    storyChapters.sort((a, b) => a.id - b.id)
+    
+    const index = storyChapters.findIndex(c => c.id === targetChapterId)
+    if (index === -1) return
+    
+    const currentCount = index + 1
+    const sInterval = typeof smallSummaryInterval === 'number' ? smallSummaryInterval : 3
+    const bInterval = typeof bigSummaryInterval === 'number' ? bigSummaryInterval : 6
+
+    const generate = async (type: 'small' | 'big', start: number, end: number) => {
+        const rangeStr = `${start}-${end}`
+        const subtype = type === 'small' ? 'small_summary' : 'big_summary' as const
+        
+        terminal.log(`[Summary] Checking ${type} summary for range ${rangeStr}...`)
+
+        // Prepare Context
+        let sourceText = ""
+        if (type === 'small') {
+             const targetChapters = storyChapters.slice(start - 1, end)
+             sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${c.content}`).join('\n\n')
+        } else {
+             // For Big Summary, try to use Small Summaries first
+             const relevantSmallSummaries = latestChapters.filter(c => {
+                 if (c.subtype !== 'small_summary' || !c.summaryRange) return false
+                 const [s, e] = c.summaryRange.split('-').map(Number)
+                 return s >= start && e <= end
+             })
+             
+             if (relevantSmallSummaries.length > 0) {
+                 sourceText = relevantSmallSummaries.map(c => `Small Summary (${c.summaryRange}):\n${c.content}`).join('\n\n')
+             } else {
+                 const targetChapters = storyChapters.slice(start - 1, end)
+                 sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${c.content}`).join('\n\n')
+             }
+        }
+
+        if (!sourceText) return
+
+        try {
+            const openai = new OpenAI({ apiKey, baseURL: baseUrl, dangerouslyAllowBrowser: true })
+            const prompt = type === 'small' 
+                ? "请把以上小说章节的内容总结成一个简短的剧情摘要（300字以内）。保留关键的人名、地名和事件。"
+                : "请根据以上的分段摘要，写一个宏观的剧情大纲（500字以内），概括这段时间内的主要情节发展。"
+
+            const completion = await openai.chat.completions.create({
+                model: outlineModel || model,
+                messages: [
+                    { role: 'system', content: 'You are a professional editor helper.' },
+                    { role: 'user', content: `${sourceText}\n\n${prompt}` }
+                ],
+                temperature: 0.5
+            })
+            
+            const summaryContent = completion.choices[0]?.message?.content || ''
+            if (summaryContent) {
+                // Check if exists to update
+                // Re-fetch latest state via setChapters functional update or use latestChapters?
+                // Using latestChapters is safer for logic, but setChapters update handles concurrent writes.
+                const existing = latestChapters.find(c => c.subtype === subtype && c.summaryRange === rangeStr)
+                
+                if (existing) {
+                    setChapters(prev => prev.map(c => c.id === existing.id ? { ...c, content: summaryContent } : c))
+                    terminal.log(`[Summary] Updated ${type} summary for ${rangeStr}.`)
+                } else {
+                    const newChapter: Chapter = {
+                        id: Date.now(),
+                        title: `${type === 'small' ? '🔹小总结' : '🔸大总结'} (${rangeStr})`,
+                        content: summaryContent,
+                        subtype: subtype,
+                        summaryRange: rangeStr,
+                        volumeId: undefined 
+                    }
+                    setChapters(prev => [...prev, newChapter])
+                    terminal.log(`[Summary] Created ${type} summary for ${rangeStr}.`)
+                }
+            }
+        } catch (e) {
+            console.error(e)
+            terminal.error(`[Summary] Failed to generate ${type} summary: ${(e as any).message}`)
+        }
+    }
+
+    // Check Small Summary Trigger
+    if (currentCount % sInterval === 0) {
+        await generate('small', currentCount - sInterval + 1, currentCount)
+    }
+
+    // Check Big Summary Trigger
+    if (currentCount % bInterval === 0) {
+        await generate('big', currentCount - bInterval + 1, currentCount)
+    }
+  }
+
+  const handleScanSummaries = async () => {
+    if (!longTextMode || !apiKey || !activeNovelId) {
+       setDialog({
+          isOpen: true,
+          type: 'alert',
+          title: '条件未满足',
+          message: '请确保已开启长文模式，配置API Key，并打开一本小说。',
+          inputValue: '',
+          onConfirm: closeDialog
+       })
+       return
+    }
+
+    const currentNovel = novelsRef.current.find(n => n.id === activeNovelId)
+    if (!currentNovel) return
+
+    setIsLoading(true)
+    terminal.log('[Scan] Starting summary scan...')
+
+    // Use current chapters snapshot for source reading
+    const allChapters = [...currentNovel.chapters]
+    const storyChapters = getStoryChapters(allChapters)
+    storyChapters.sort((a, b) => a.id - b.id)
+
+    const sInterval = typeof smallSummaryInterval === 'number' ? smallSummaryInterval : 3
+    const bInterval = typeof bigSummaryInterval === 'number' ? bigSummaryInterval : 6
+
+    // Local copy to track progress during scan
+    let localChapters = [...allChapters]
+
+    const generateForRange = async (type: 'small' | 'big', start: number, end: number) => {
+        const rangeStr = `${start}-${end}`
+        const subtype = type === 'small' ? 'small_summary' : 'big_summary' as const
+        
+        terminal.log(`[Scan] Processing ${type} summary for ${rangeStr}...`)
+
+        let sourceText = ""
+        if (type === 'small') {
+             const targetChapters = storyChapters.slice(start - 1, end)
+             if (targetChapters.length === 0) return
+             sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${c.content}`).join('\n\n')
+        } else {
+             const relevantSmallSummaries = localChapters.filter(c => {
+                 if (c.subtype !== 'small_summary' || !c.summaryRange) return false
+                 const [s, e] = c.summaryRange.split('-').map(Number)
+                 return s >= start && e <= end
+             })
+             
+             if (relevantSmallSummaries.length > 0) {
+                 sourceText = relevantSmallSummaries.map(c => `Small Summary (${c.summaryRange}):\n${c.content}`).join('\n\n')
+             } else {
+                 const targetChapters = storyChapters.slice(start - 1, end)
+                 sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${c.content}`).join('\n\n')
+             }
+        }
+        
+        if (!sourceText) return
+
+        try {
+            const openai = new OpenAI({ apiKey, baseURL: baseUrl, dangerouslyAllowBrowser: true })
+            const prompt = type === 'small' 
+                ? "请把以上小说章节的内容总结成一个简短的剧情摘要（300字以内）。保留关键的人名、地名和事件。"
+                : "请根据以上的分段摘要，写一个宏观的剧情大纲（500字以内），概括这段时间内的主要情节发展。"
+
+            const completion = await openai.chat.completions.create({
+                model: outlineModel || model,
+                messages: [
+                    { role: 'system', content: 'You are a professional editor helper.' },
+                    { role: 'user', content: `${sourceText}\n\n${prompt}` }
+                ],
+                temperature: 0.5
+            })
+
+            const summaryContent = completion.choices[0]?.message?.content || ''
+            if (summaryContent) {
+                const newChapter: Chapter = {
+                    id: Date.now() + Math.floor(Math.random() * 1000), 
+                    title: `${type === 'small' ? '🔹小总结' : '🔸大总结'} (${rangeStr})`,
+                    content: summaryContent,
+                    subtype: subtype,
+                    summaryRange: rangeStr,
+                    volumeId: undefined 
+                }
+                
+                localChapters.push(newChapter)
+                setChapters(prev => [...prev, newChapter])
+                terminal.log(`[Scan] Generated ${type} summary for ${rangeStr}.`)
+            }
+        } catch (e) {
+            terminal.error(`[Scan] Error generating ${rangeStr}: ${(e as any).message}`)
+        }
+    }
+
+    const total = storyChapters.length
+    
+    // 1. Scan Small Summaries
+    for (let i = sInterval; i <= total; i += sInterval) {
+        const start = i - sInterval + 1
+        const end = i
+        const rangeStr = `${start}-${end}`
+        
+        const exists = localChapters.some(c => c.subtype === 'small_summary' && c.summaryRange === rangeStr)
+        if (!exists) {
+            await generateForRange('small', start, end)
+        }
+    }
+    
+    // 2. Scan Big Summaries
+    for (let i = bInterval; i <= total; i += bInterval) {
+        const start = i - bInterval + 1
+        const end = i
+        const rangeStr = `${start}-${end}`
+        
+        const exists = localChapters.some(c => c.subtype === 'big_summary' && c.summaryRange === rangeStr)
+        if (!exists) {
+            await generateForRange('big', start, end)
+        }
+    }
+
+    setIsLoading(false)
+    terminal.log('[Scan] Scan complete.')
+    setDialog({
+        isOpen: true,
+        type: 'alert',
+        title: '扫描完成',
+        message: '已尝试为所有缺失的区段生成总结。',
+        inputValue: '',
+        onConfirm: closeDialog
+    })
   }
 
   // Regex Management
@@ -4794,6 +5075,16 @@ function App() {
                                     className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none" 
                                 />
                             </div>
+                        </div>
+                        <div className="pt-2">
+                             <button
+                                onClick={handleScanSummaries}
+                                disabled={isLoading}
+                                className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-200 transition-colors flex items-center justify-center gap-2"
+                             >
+                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                                扫描并补充缺失的总结
+                             </button>
                         </div>
                   </div>
               </div>
