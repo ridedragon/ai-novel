@@ -1622,6 +1622,14 @@ function App() {
         const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
         const notes = currentSet?.userNotes || ''
 
+        // Build Existing Outline Context
+        let outlineContext = ''
+        if (currentSet && currentSet.items && currentSet.items.length > 0) {
+            outlineContext = '\n【现有大纲】：\n' + currentSet.items.map((item, index) => 
+                `${index + 1}. ${item.title}\n   ${item.summary}`
+            ).join('\n') + '\n'
+        }
+
         const activePreset = outlinePresets.find(p => p.id === activeOutlinePresetId) || outlinePresets[0]
         
         // Build Messages from Preset
@@ -1629,7 +1637,7 @@ function App() {
           .filter(p => p.enabled)
           .map(p => {
             let content = p.content
-            content = content.replace('{{context}}', `${worldviewContext}\n${characterContext}`)
+            content = content.replace('{{context}}', `${worldviewContext}\n${characterContext}\n${outlineContext}`)
             content = content.replace('{{notes}}', notes)
             content = content.replace('{{input}}', userPrompt)
             return { role: p.role, content }
