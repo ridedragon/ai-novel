@@ -5508,7 +5508,7 @@ function App() {
       {selectedCharacter && activeNovel && (
          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200">
             <div 
-              className="bg-gray-800 w-full md:w-[800px] h-[80vh] rounded-xl shadow-2xl border border-gray-600 flex overflow-hidden animate-in zoom-in-95 duration-200"
+              className="bg-gray-800 w-full md:w-[800px] h-[90vh] md:h-[80vh] rounded-xl shadow-2xl border border-gray-600 flex flex-col md:flex-row overflow-hidden animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
                {(() => {
@@ -5529,19 +5529,21 @@ function App() {
                   return (
                      <>
                         {/* Sidebar (Visuals) */}
-                        <div className="w-64 bg-gray-900 border-r border-gray-700 flex flex-col items-center p-8 shrink-0">
-                           <div className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold text-4xl shadow-2xl mb-6">
+                        <div className="w-full md:w-64 bg-gray-900 border-b md:border-b-0 md:border-r border-gray-700 flex flex-row md:flex-col items-center p-4 md:p-8 shrink-0 gap-4 md:gap-0">
+                           <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl md:text-4xl shadow-2xl md:mb-6 shrink-0">
                               {character.name.slice(0, 1) || '?'}
                            </div>
-                           <h2 className="text-xl font-bold text-gray-100 text-center mb-2 break-all">{character.name || '未命名'}</h2>
-                           <p className="text-xs text-gray-500 text-center mb-8">
-                              {set.name}
-                           </p>
+                           <div className="flex-1 md:w-full flex flex-col items-start md:items-center min-w-0">
+                             <h2 className="text-lg md:text-xl font-bold text-gray-100 text-left md:text-center md:mb-2 truncate w-full">{character.name || '未命名'}</h2>
+                             <p className="text-xs text-gray-500 text-left md:text-center md:mb-8 truncate w-full">
+                                {set.name}
+                             </p>
+                           </div>
                            
-                           <div className="w-full space-y-2 mt-auto">
+                           <div className="w-auto md:w-full space-y-2 mt-0 md:mt-auto shrink-0">
                               <button 
                                  onClick={() => setSelectedCharacter(null)}
-                                 className="w-full py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-300 transition-colors"
+                                 className="px-4 md:w-full py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-300 transition-colors"
                               >
                                  关闭
                               </button>
@@ -5596,7 +5598,7 @@ function App() {
       {selectedWorldviewEntry && activeNovel && (
          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200">
             <div 
-              className="bg-gray-800 w-full md:w-[800px] h-[80vh] rounded-xl shadow-2xl border border-gray-600 flex overflow-hidden animate-in zoom-in-95 duration-200"
+              className="bg-gray-800 w-full md:w-[800px] h-[90vh] md:h-[80vh] rounded-xl shadow-2xl border border-gray-600 flex flex-col md:flex-row overflow-hidden animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
                {(() => {
@@ -5617,19 +5619,21 @@ function App() {
                   return (
                      <>
                         {/* Sidebar (Visuals) */}
-                        <div className="w-64 bg-gray-900 border-r border-gray-700 flex flex-col items-center p-8 shrink-0">
-                           <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-600 to-teal-500 flex items-center justify-center text-white font-bold text-4xl shadow-2xl mb-6">
-                              <Globe className="w-16 h-16" />
+                        <div className="w-full md:w-64 bg-gray-900 border-b md:border-b-0 md:border-r border-gray-700 flex flex-row md:flex-col items-center p-4 md:p-8 shrink-0 gap-4 md:gap-0">
+                           <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-blue-600 to-teal-500 flex items-center justify-center text-white font-bold text-xl md:text-4xl shadow-2xl md:mb-6 shrink-0">
+                              <Globe className="w-8 h-8 md:w-16 md:h-16" />
                            </div>
-                           <h2 className="text-xl font-bold text-gray-100 text-center mb-2 break-all">{entry.item || '未命名'}</h2>
-                           <p className="text-xs text-gray-500 text-center mb-8">
-                              {set.name}
-                           </p>
+                           <div className="flex-1 md:w-full flex flex-col items-start md:items-center min-w-0">
+                             <h2 className="text-lg md:text-xl font-bold text-gray-100 text-left md:text-center md:mb-2 truncate w-full">{entry.item || '未命名'}</h2>
+                             <p className="text-xs text-gray-500 text-left md:text-center md:mb-8 truncate w-full">
+                                {set.name}
+                             </p>
+                           </div>
                            
-                           <div className="w-full space-y-2 mt-auto">
+                           <div className="w-auto md:w-full space-y-2 mt-0 md:mt-auto shrink-0">
                               <button 
                                  onClick={() => setSelectedWorldviewEntry(null)}
-                                 className="w-full py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-300 transition-colors"
+                                 className="px-4 md:w-full py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-300 transition-colors"
                               >
                                  关闭
                               </button>
