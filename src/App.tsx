@@ -4351,26 +4351,26 @@ function App() {
       {/* Main Content - Right */}
       <div className="flex-1 flex flex-col min-w-0 relative">
         <div className="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 shrink-0">
-          <div className="flex items-center gap-4 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-2 md:gap-4 overflow-x-auto no-scrollbar w-full">
              <button 
                onClick={() => setIsMobileSidebarOpen(true)}
-               className="md:hidden text-gray-400 hover:text-white"
+               className="md:hidden text-gray-400 hover:text-white shrink-0"
              >
                <Menu className="w-5 h-5" />
              </button>
-             <span className="text-sm font-semibold text-gray-400 whitespace-nowrap">自定义添加栏</span>
-             <div className="flex items-center gap-2">
-               <div className="flex bg-gray-700 rounded-lg p-0.5 items-center gap-0.5">
+             <span className="text-sm font-semibold text-gray-400 whitespace-nowrap hidden md:block">自定义添加栏</span>
+             <div className="flex items-center gap-2 shrink-0">
+               <div className="flex bg-gray-700 rounded-lg p-0.5 items-center gap-0.5 shrink-0">
                    <button 
                      onClick={() => setLongTextMode(!longTextMode)}
-                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors ${longTextMode ? 'bg-[var(--theme-color)] text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
+                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors whitespace-nowrap ${longTextMode ? 'bg-[var(--theme-color)] text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
                    >
                      <Book className="w-3.5 h-3.5" />
                      长文模式
                    </button>
                    
                    {longTextMode && (
-                     <div className="relative group border-l border-gray-600 pl-0.5">
+                     <div className="relative group border-l border-gray-600 pl-0.5 shrink-0">
                         <select
                             value={contextScope}
                             onChange={(e) => setContextScope(e.target.value)}
@@ -4394,14 +4394,14 @@ function App() {
 
                <button 
                  onClick={() => setShowRegexModal(true)}
-                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors"
+                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors whitespace-nowrap shrink-0"
                >
                  <Code2 className="w-3.5 h-3.5" />
                  正则
                </button>
                <button 
                  onClick={() => setShowSettings(true)}
-                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors"
+                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors whitespace-nowrap shrink-0"
                >
                  <Settings className="w-3.5 h-3.5" />
                  设置
