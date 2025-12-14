@@ -476,6 +476,7 @@ function App() {
   const isAutoWritingRef = useRef(false)
   const autoWriteAbortControllerRef = useRef<AbortController | null>(null)
   const [autoWriteOutlineSetId, setAutoWriteOutlineSetId] = useState<string | null>(null)
+  const [includeFullOutlineInAutoWrite, setIncludeFullOutlineInAutoWrite] = useState(false)
   const [activeCharacterSetId, setActiveCharacterSetId] = useState<string | null>(null)
   const [newCharacterSetName, setNewCharacterSetName] = useState('')
   const [selectedCharacter, setSelectedCharacter] = useState<{setId: string, index: number} | null>(null)
@@ -2270,7 +2271,8 @@ function App() {
     promptsToUse: PromptItem[],
     previousContent: string,
     contextLimit: number,
-    targetVolumeId?: string
+    targetVolumeId?: string,
+    includeFullOutline: boolean = false
   ) => {
     if (!isAutoWritingRef.current) return
 
@@ -2325,7 +2327,11 @@ function App() {
         const processedContext = processTextWithRegex(contextWindow, scripts, 'input')
         const contextMsg = processedContext ? `【前文剧情回顾】：\n${processedContext}\n\n` : ""
 
-        const mainPrompt = `${contextMsg}你正在创作小说《${novelTitle}》。
+        const fullOutlineContext = includeFullOutline 
+          ? `【全书大纲参考】：\n${outline.map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`).join('\n')}\n\n` 
+          : ''
+
+        const mainPrompt = `${contextMsg}${fullOutlineContext}你正在创作小说《${novelTitle}》。
 当前章节：${chapterInfo.title}
 本章大纲：${chapterInfo.summary}
 
@@ -2430,7 +2436,7 @@ function App() {
 
     // Append new content to previous content for next chapter
     const nextContent = previousContent + '\n\n' + finalGeneratedContent
-    await autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, nextContent, contextLimit, targetVolumeId)
+    await autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, nextContent, contextLimit, targetVolumeId, includeFullOutline)
   }
 
   const startAutoWriting = () => {
@@ -2484,7 +2490,7 @@ function App() {
     autoWriteAbortControllerRef.current = new AbortController()
     
     const activePrompts = prompts.filter(p => p.enabled && p.active)
-    autoWriteLoop(currentSet.items, 0, activeNovel.id, activeNovel.title, activePrompts, "", contextLength, targetVolumeId)
+    autoWriteLoop(currentSet.items, 0, activeNovel.id, activeNovel.title, activePrompts, "", contextLength, targetVolumeId, includeFullOutlineInAutoWrite)
   }
 
   const handleGenerate = async () => {
@@ -4191,6 +4197,16 @@ function App() {
                                                    AI 将会根据上述大纲逐章进行创作。生成的章节将自动添加到左侧章节列表中。
                                                 </p>
                                                 
+                                                <div 
+                                                   className="flex items-center justify-between bg-gray-900/50 p-3 rounded-lg cursor-pointer hover:bg-gray-900/80 transition-colors select-none"
+                                                   onClick={() => setIncludeFullOutlineInAutoWrite(!includeFullOutlineInAutoWrite)}
+                                                >
+                                                    <span className="text-sm text-gray-300">发送完整大纲上下文 (全局参考)</span>
+                                                    <div className={`w-10 h-5 rounded-full relative transition-colors duration-200 ${includeFullOutlineInAutoWrite ? 'bg-[var(--theme-color)]' : 'bg-gray-600'}`}>
+                                                        <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-200 ${includeFullOutlineInAutoWrite ? 'left-6' : 'left-1'}`} />
+                                                    </div>
+                                                </div>
+
                                                 {isAutoWriting && activeOutlineSetId === autoWriteOutlineSetId ? (
                                                    <div className="flex items-center gap-4 p-4 bg-purple-900/20 border border-purple-500/50 rounded text-purple-200">
                                                       <Loader2 className="w-5 h-5 animate-spin" />
