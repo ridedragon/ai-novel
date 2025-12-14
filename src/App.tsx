@@ -114,6 +114,9 @@ interface GeneratorPreset {
   id: string
   name: string
   prompts: GeneratorPrompt[]
+  temperature?: number
+  topP?: number
+  topK?: number
 }
 
 interface RegexScript {
@@ -151,7 +154,10 @@ interface CompletionPreset {
 const defaultOutlinePresets: GeneratorPreset[] = [
   { 
     id: 'default', 
-    name: '默认大纲助手', 
+    name: '默认大纲助手',
+    temperature: 0.7,
+    topP: 0.95,
+    topK: 1,
     prompts: [
       { id: '1', role: 'system', content: '你是一个专业的小说大纲生成助手。请根据用户的要求生成一份详细的小说大纲。', enabled: true },
       { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户的要求是：{{input}}\n\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "第一章：标题", "summary": "本章的详细剧情摘要..." },\n  { "title": "第二章：标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
@@ -160,6 +166,9 @@ const defaultOutlinePresets: GeneratorPreset[] = [
   { 
     id: 'creative', 
     name: '创意脑洞型', 
+    temperature: 0.85,
+    topP: 0.98,
+    topK: 1,
     prompts: [
       { id: '1', role: 'system', content: '你是一个充满想象力的小说策划。请根据用户的模糊想法，构思一个跌宕起伏、出人意料的故事大纲。', enabled: true },
       { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户的要求是：{{input}}\n\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "第一章：标题", "summary": "本章的详细剧情摘要..." },\n  { "title": "第二章：标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
@@ -168,6 +177,9 @@ const defaultOutlinePresets: GeneratorPreset[] = [
   { 
     id: 'scifi', 
     name: '科幻风格', 
+    temperature: 0.6,
+    topP: 0.9,
+    topK: 1,
     prompts: [
       { id: '1', role: 'system', content: '你是一个硬核科幻小说作家。请侧重于世界观设定、技术细节和社会影响，生成一份严谨的科幻小说大纲。', enabled: true },
       { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户的要求是：{{input}}\n\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "第一章：标题", "summary": "本章的详细剧情摘要..." },\n  { "title": "第二章：标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
@@ -179,6 +191,9 @@ const defaultCharacterPresets: GeneratorPreset[] = [
   {
     id: 'default',
     name: '默认角色设计',
+    temperature: 0.7,
+    topP: 0.95,
+    topK: 1,
     prompts: [
       { id: '1', role: 'system', content: '你是一个专业的小说角色设计专家。', enabled: true },
       { id: '2', role: 'user', content: '请根据用户的要求生成或补充角色列表。\n\n【现有角色列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的角色（如果是修改现有角色，请返回修改后的完整信息）。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "name": "角色名", "bio": "角色的详细设定、性格、外貌等..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
@@ -190,6 +205,9 @@ const defaultWorldviewPresets: GeneratorPreset[] = [
   {
     id: 'default',
     name: '默认世界观构建',
+    temperature: 0.7,
+    topP: 0.95,
+    topK: 1,
     prompts: [
       { id: '1', role: 'system', content: '你是一个专业的小说世界观架构师。', enabled: true },
       { id: '2', role: 'user', content: '请根据用户的要求生成或补充世界观设定。\n\n【现有设定列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的世界观设定项（如果是修改现有设定，请返回修改后的完整信息）。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "item": "设定项名称（如：地理环境、魔法体系）", "setting": "详细的设定内容..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
@@ -201,6 +219,9 @@ const defaultOptimizePresets: GeneratorPreset[] = [
   {
     id: 'default',
     name: '默认润色优化',
+    temperature: 0.5,
+    topP: 0.9,
+    topK: 1,
     prompts: [
       { id: '1', role: 'system', content: '你是一个专业的小说编辑。请对用户提供的章节内容进行润色和优化，使其描写更生动、行文更流畅，但不要改变原意。', enabled: true },
       { id: '2', role: 'user', content: '请优化以下小说章节内容：\n\n{{content}}\n\n【用户额外指令】：\n{{input}}\n\n请直接返回优化后的正文内容，不要包含任何解释。', enabled: true }
@@ -216,10 +237,10 @@ const defaultPrompts: PromptItem[] = [
 ]
 
 const defaultPresets: CompletionPreset[] = [
-  { id: 'default', name: 'Default', contextLength: 200000, maxReplyLength: 64000, temperature: 1.30, frequencyPenalty: 0.00, presencePenalty: 0.00, topP: 0.97, topK: 0, stream: true, candidateCount: 1, prompts: defaultPrompts },
-  { id: '3.0', name: '3.0', contextLength: 100000, maxReplyLength: 32000, temperature: 1.10, frequencyPenalty: 0, presencePenalty: 0, topP: 0.95, topK: 0, stream: true, candidateCount: 1 },
-  { id: '3.1', name: '3.1(1)', contextLength: 128000, maxReplyLength: 32000, temperature: 1.20, frequencyPenalty: 0, presencePenalty: 0, topP: 0.98, topK: 0, stream: true, candidateCount: 1 },
-  { id: 'flower', name: 'FlowerDuet 🌸 V1.7', contextLength: 200000, maxReplyLength: 64000, temperature: 1.30, frequencyPenalty: 0, presencePenalty: 0, topP: 0.97, topK: 0, stream: true, candidateCount: 1 },
+  { id: 'default', name: 'Default', contextLength: 200000, maxReplyLength: 64000, temperature: 1.30, frequencyPenalty: 0.00, presencePenalty: 0.00, topP: 0.97, topK: 1, stream: true, candidateCount: 1, prompts: defaultPrompts },
+  { id: '3.0', name: '3.0', contextLength: 100000, maxReplyLength: 32000, temperature: 1.10, frequencyPenalty: 0, presencePenalty: 0, topP: 0.95, topK: 1, stream: true, candidateCount: 1 },
+  { id: '3.1', name: '3.1(1)', contextLength: 128000, maxReplyLength: 32000, temperature: 1.20, frequencyPenalty: 0, presencePenalty: 0, topP: 0.98, topK: 1, stream: true, candidateCount: 1 },
+  { id: 'flower', name: 'FlowerDuet 🌸 V1.7', contextLength: 200000, maxReplyLength: 64000, temperature: 1.30, frequencyPenalty: 0, presencePenalty: 0, topP: 0.97, topK: 1, stream: true, candidateCount: 1 },
 ]
 
 const adjustColor = (hex: string, lum: number) => {
@@ -658,11 +679,12 @@ function App() {
     updateCharacterSet(setId, { characters: newCharacters })
   }
 
-  // Backwards compatibility helper
+  // Backwards compatibility helper & State Validation
   useEffect(() => {
     if (activeNovelId && activeNovel) {
+      // 1. Character Sets
       if ((!activeNovel.characterSets || activeNovel.characterSets.length === 0) && activeNovel.characters && activeNovel.characters.length > 0) {
-        // Migrate legacy characters to a default set
+        // Migrate legacy characters
         const defaultSet: CharacterSet = {
           id: 'default',
           name: '默认角色集',
@@ -670,12 +692,18 @@ function App() {
         }
         setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, characterSets: [defaultSet], characters: undefined } : n))
         setActiveCharacterSetId('default')
-      } else if (activeNovel.characterSets && activeNovel.characterSets.length > 0 && !activeCharacterSetId) {
-        setActiveCharacterSetId(activeNovel.characterSets[0].id)
+      } else {
+        // Validate active ID
+        const currentSets = activeNovel.characterSets || []
+        const isValid = currentSets.some(s => s.id === activeCharacterSetId)
+        if (!isValid) {
+            setActiveCharacterSetId(currentSets.length > 0 ? currentSets[0].id : null)
+        }
       }
 
-      // Worldview Migration
+      // 2. Worldview Sets
       if ((!activeNovel.worldviewSets || activeNovel.worldviewSets.length === 0) && activeNovel.worldview && activeNovel.worldview.length > 0) {
+        // Migrate legacy worldview
         const defaultSet: WorldviewSet = {
              id: 'default_world',
              name: '默认世界观',
@@ -683,12 +711,18 @@ function App() {
         }
         setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, worldviewSets: [defaultSet], worldview: undefined } : n))
         setActiveWorldviewSetId('default_world')
-      } else if (activeNovel.worldviewSets && activeNovel.worldviewSets.length > 0 && !activeWorldviewSetId) {
-        setActiveWorldviewSetId(activeNovel.worldviewSets[0].id)
+      } else {
+        // Validate active ID
+        const currentSets = activeNovel.worldviewSets || []
+        const isValid = currentSets.some(s => s.id === activeWorldviewSetId)
+        if (!isValid) {
+            setActiveWorldviewSetId(currentSets.length > 0 ? currentSets[0].id : null)
+        }
       }
 
-      // Outline Migration
+      // 3. Outline Sets
       if ((!activeNovel.outlineSets || activeNovel.outlineSets.length === 0) && activeNovel.outline && activeNovel.outline.length > 0) {
+        // Migrate legacy outline
         const defaultSet: OutlineSet = {
              id: 'default_outline',
              name: '默认大纲',
@@ -696,8 +730,13 @@ function App() {
         }
         setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, outlineSets: [defaultSet], outline: undefined } : n))
         setActiveOutlineSetId('default_outline')
-      } else if (activeNovel.outlineSets && activeNovel.outlineSets.length > 0 && !activeOutlineSetId) {
-        setActiveOutlineSetId(activeNovel.outlineSets[0].id)
+      } else {
+        // Validate active ID
+        const currentSets = activeNovel.outlineSets || []
+        const isValid = currentSets.some(s => s.id === activeOutlineSetId)
+        if (!isValid) {
+            setActiveOutlineSetId(currentSets.length > 0 ? currentSets[0].id : null)
+        }
       }
     }
   }, [activeNovelId, activeNovel?.characterSets, activeNovel?.characters, activeNovel?.worldviewSets, activeNovel?.worldview, activeNovel?.outlineSets, activeNovel?.outline])
@@ -1024,7 +1063,7 @@ function App() {
   const [frequencyPenalty, setFrequencyPenalty] = useState(0.00)
   const [presencePenalty, setPresencePenalty] = useState(0.00)
   const [topP, setTopP] = useState(0.97)
-  const [topK, setTopK] = useState(0)
+  const [topK, setTopK] = useState(1)
   const [maxRetries, setMaxRetries] = useState(() => parseInt(localStorage.getItem('maxRetries') || '3'))
 
   useEffect(() => {
@@ -1099,7 +1138,7 @@ function App() {
       setFrequencyPenalty(preset.frequencyPenalty)
       setPresencePenalty(preset.presencePenalty)
       setTopP(preset.topP)
-      setTopK(preset.topK)
+      setTopK(preset.topK > 0 ? preset.topK : 1)
       setStream(preset.stream)
       setCandidateCount(preset.candidateCount)
       if (preset.prompts) {
@@ -1155,7 +1194,7 @@ function App() {
       setFrequencyPenalty(preset.frequencyPenalty)
       setPresencePenalty(preset.presencePenalty)
       setTopP(preset.topP)
-      setTopK(preset.topK)
+      setTopK(preset.topK > 0 ? preset.topK : 1)
       setStream(preset.stream)
       setCandidateCount(preset.candidateCount)
       if (preset.prompts) {
@@ -1184,7 +1223,7 @@ function App() {
             if (imported.frequency_penalty !== undefined) setFrequencyPenalty(imported.frequency_penalty)
             if (imported.presence_penalty !== undefined) setPresencePenalty(imported.presence_penalty)
             if (imported.top_p !== undefined) setTopP(imported.top_p)
-            if (imported.top_k !== undefined) setTopK(imported.top_k)
+            if (imported.top_k !== undefined) setTopK(imported.top_k > 0 ? imported.top_k : 1)
             if (imported.stream_openai !== undefined) setStream(imported.stream_openai)
             
             // Handle Prompts
@@ -1674,13 +1713,25 @@ function App() {
       setShowSettings(true)
       return
     }
-    if (!activeOutlineSetId) {
-        setError('请先选择或创建一个大纲文件')
-        return
-    }
     
     setIsGeneratingOutline(true)
     setError('')
+
+    let targetSetId = activeOutlineSetId;
+    let targetSet = activeNovel?.outlineSets?.find(s => s.id === targetSetId);
+
+    if (!targetSetId || !targetSet) {
+        const newSet: OutlineSet = {
+            id: crypto.randomUUID(),
+            name: '默认大纲',
+            items: []
+        };
+        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, outlineSets: [...(n.outlineSets || []), newSet] } : n));
+        setActiveOutlineSetId(newSet.id);
+        
+        targetSetId = newSet.id;
+        targetSet = newSet;
+    }
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -1711,13 +1762,12 @@ function App() {
             }
         }
 
-        const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
-        const notes = currentSet?.userNotes || ''
+        const notes = targetSet?.userNotes || ''
 
         // Build Existing Outline Context
         let outlineContext = ''
-        if (currentSet && currentSet.items && currentSet.items.length > 0) {
-            outlineContext = '\n【现有大纲】：\n' + currentSet.items.map((item, index) => 
+        if (targetSet && targetSet.items && targetSet.items.length > 0) {
+            outlineContext = '\n【现有大纲】：\n' + targetSet.items.map((item, index) => 
                 `${index + 1}. ${item.title}\n   ${item.summary}`
             ).join('\n') + '\n'
         }
@@ -1748,8 +1798,10 @@ function App() {
         const completion = await openai.chat.completions.create({
           model: outlineModel || model,
           messages: messages,
-          temperature: 0.7,
-        })
+          temperature: activePreset.temperature ?? 0.7,
+          top_p: activePreset.topP ?? 0.95,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
+        } as any)
 
         const content = completion.choices[0]?.message?.content || ''
         
@@ -1759,20 +1811,35 @@ function App() {
           const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim()
           const outlineData = JSON.parse(jsonStr)
           if (Array.isArray(outlineData)) {
-              const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
-              if (currentSet) {
-                  // 自动记录用户输入到备注中
-                  const timestamp = new Date().toLocaleTimeString()
-                  const newRecord = `[${timestamp}] ${userPrompt}`
-                  const updatedNotes = currentSet.userNotes 
-                      ? `${currentSet.userNotes}\n${newRecord}` 
-                      : newRecord
+              setNovels(prev => prev.map(n => {
+                if (n.id === activeNovelId) {
+                   const currentSets = n.outlineSets || []
+                   const existingSetIndex = currentSets.findIndex(s => s.id === targetSetId)
+                   
+                   if (existingSetIndex !== -1) {
+                        const existingSet = currentSets[existingSetIndex]
+                        
+                        // 自动记录用户输入到备注中
+                        const timestamp = new Date().toLocaleTimeString()
+                        const newRecord = `[${timestamp}] ${userPrompt}`
+                        const updatedNotes = existingSet.userNotes 
+                            ? `${existingSet.userNotes}\n${newRecord}` 
+                            : newRecord
 
-                  updateOutlineSet(activeOutlineSetId, { 
-                      items: [...currentSet.items, ...outlineData],
-                      userNotes: updatedNotes
-                  })
-              }
+                        const updatedSet = {
+                             ...existingSet,
+                             items: [...existingSet.items, ...outlineData],
+                             userNotes: updatedNotes
+                        }
+                        
+                        const newOutlineSets = [...currentSets]
+                        newOutlineSets[existingSetIndex] = updatedSet
+                        return { ...n, outlineSets: newOutlineSets }
+                   }
+                }
+                return n
+              }))
+
               setUserPrompt('')
               terminal.log(`[Outline] Attempt ${attempt + 1} successful.`)
               break // Success
@@ -1858,13 +1925,25 @@ function App() {
       setShowSettings(true)
       return
     }
-    if (!activeCharacterSetId) {
-        setError('请先选择或创建一个角色文件')
-        return
-    }
     
     setIsGeneratingCharacters(true)
     setError('')
+
+    let targetSetId = activeCharacterSetId;
+    let targetSet = activeNovel?.characterSets?.find(s => s.id === targetSetId);
+
+    if (!targetSetId || !targetSet) {
+        const newSet: CharacterSet = {
+            id: crypto.randomUUID(),
+            name: '默认角色集',
+            characters: []
+        };
+        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, characterSets: [...(n.characterSets || []), newSet] } : n));
+        setActiveCharacterSetId(newSet.id);
+        
+        targetSetId = newSet.id;
+        targetSet = newSet;
+    }
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -1878,9 +1957,8 @@ function App() {
           dangerouslyAllowBrowser: true
         })
 
-        const currentSet = activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)
-        const existingChars = currentSet?.characters || []
-        const notes = currentSet?.userNotes || ''
+        const existingChars = targetSet?.characters || []
+        const notes = targetSet?.userNotes || ''
 
         let worldviewContext = ''
         if (selectedWorldviewSetIdForCharGen) {
@@ -1911,8 +1989,10 @@ function App() {
         const completion = await openai.chat.completions.create({
           model: characterModel || model,
           messages: messages,
-          temperature: 0.7,
-        })
+          temperature: activePreset.temperature ?? 0.7,
+          top_p: activePreset.topP ?? 0.95,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
+        } as any)
 
         const content = completion.choices[0]?.message?.content || ''
         
@@ -1922,20 +2002,34 @@ function App() {
           const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim()
           const charData = JSON.parse(jsonStr)
           if (Array.isArray(charData)) {
-            const currentSet = activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)
-            if (currentSet) {
-              // 自动记录用户输入到备注中
-              const timestamp = new Date().toLocaleTimeString()
-              const newRecord = `[${timestamp}] ${userPrompt}`
-              const updatedNotes = currentSet.userNotes 
-                  ? `${currentSet.userNotes}\n${newRecord}` 
-                  : newRecord
+            setNovels(prev => prev.map(n => {
+                if (n.id === activeNovelId) {
+                   const currentSets = n.characterSets || []
+                   const existingSetIndex = currentSets.findIndex(s => s.id === targetSetId)
+                   
+                   if (existingSetIndex !== -1) {
+                        const existingSet = currentSets[existingSetIndex]
+                        
+                        const timestamp = new Date().toLocaleTimeString()
+                        const newRecord = `[${timestamp}] ${userPrompt}`
+                        const updatedNotes = existingSet.userNotes 
+                            ? `${existingSet.userNotes}\n${newRecord}` 
+                            : newRecord
 
-              updateCharacterSet(activeCharacterSetId, { 
-                  characters: [...currentSet.characters, ...charData],
-                  userNotes: updatedNotes
-              })
-            }
+                        const updatedSet = {
+                             ...existingSet,
+                             characters: [...existingSet.characters, ...charData],
+                             userNotes: updatedNotes
+                        }
+                        
+                        const newCharacterSets = [...currentSets]
+                        newCharacterSets[existingSetIndex] = updatedSet
+                        return { ...n, characterSets: newCharacterSets }
+                   }
+                }
+                return n
+            }))
+
             setUserPrompt('')
             terminal.log(`[Characters] Attempt ${attempt + 1} successful.`)
             break // Success
@@ -2050,13 +2144,25 @@ function App() {
       setShowSettings(true)
       return
     }
-    if (!activeWorldviewSetId) {
-        setError('请先选择 or 创建一个世界观文件')
-        return
-    }
     
     setIsGeneratingWorldview(true)
     setError('')
+
+    let targetSetId = activeWorldviewSetId;
+    let targetSet = activeNovel?.worldviewSets?.find(s => s.id === targetSetId);
+
+    if (!targetSetId || !targetSet) {
+        const newSet: WorldviewSet = {
+            id: crypto.randomUUID(),
+            name: '默认世界观',
+            entries: []
+        };
+        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, worldviewSets: [...(n.worldviewSets || []), newSet] } : n));
+        setActiveWorldviewSetId(newSet.id);
+        
+        targetSetId = newSet.id;
+        targetSet = newSet;
+    }
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -2070,9 +2176,8 @@ function App() {
           dangerouslyAllowBrowser: true
         })
 
-        const currentSet = activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)
-        const existingEntries = currentSet?.entries || []
-        const notes = currentSet?.userNotes || ''
+        const existingEntries = targetSet?.entries || []
+        const notes = targetSet?.userNotes || ''
 
         const activePreset = worldviewPresets.find(p => p.id === activeWorldviewPresetId) || worldviewPresets[0]
         const contextStr = JSON.stringify(existingEntries, null, 2)
@@ -2095,8 +2200,10 @@ function App() {
         const completion = await openai.chat.completions.create({
           model: worldviewModel || model,
           messages: messages,
-          temperature: 0.7,
-        })
+          temperature: activePreset.temperature ?? 0.7,
+          top_p: activePreset.topP ?? 0.95,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
+        } as any)
 
         const content = completion.choices[0]?.message?.content || ''
         
@@ -2106,20 +2213,34 @@ function App() {
           const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim()
           const worldData = JSON.parse(jsonStr)
           if (Array.isArray(worldData)) {
-            const currentSet = activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)
-            if (currentSet) {
-              // 自动记录用户输入到备注中
-              const timestamp = new Date().toLocaleTimeString()
-              const newRecord = `[${timestamp}] ${userPrompt}`
-              const updatedNotes = currentSet.userNotes 
-                  ? `${currentSet.userNotes}\n${newRecord}` 
-                  : newRecord
+            setNovels(prev => prev.map(n => {
+                if (n.id === activeNovelId) {
+                   const currentSets = n.worldviewSets || []
+                   const existingSetIndex = currentSets.findIndex(s => s.id === targetSetId)
+                   
+                   if (existingSetIndex !== -1) {
+                        const existingSet = currentSets[existingSetIndex]
+                        
+                        const timestamp = new Date().toLocaleTimeString()
+                        const newRecord = `[${timestamp}] ${userPrompt}`
+                        const updatedNotes = existingSet.userNotes 
+                            ? `${existingSet.userNotes}\n${newRecord}` 
+                            : newRecord
 
-              updateWorldviewSet(activeWorldviewSetId, { 
-                  entries: [...currentSet.entries, ...worldData],
-                  userNotes: updatedNotes
-              })
-            }
+                        const updatedSet = {
+                             ...existingSet,
+                             entries: [...existingSet.entries, ...worldData],
+                             userNotes: updatedNotes
+                        }
+                        
+                        const newWorldviewSets = [...currentSets]
+                        newWorldviewSets[existingSetIndex] = updatedSet
+                        return { ...n, worldviewSets: newWorldviewSets }
+                   }
+                }
+                return n
+            }))
+
             setUserPrompt('')
             terminal.log(`[Worldview] Attempt ${attempt + 1} successful.`)
             break // Success
@@ -2313,9 +2434,11 @@ function App() {
         const stream = await openai.chat.completions.create({
           model: optimizeModel || model,
           messages: messages,
-          temperature: 0.7,
+          temperature: activePreset.temperature ?? 0.5,
+          top_p: activePreset.topP ?? 0.9,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
           stream: true
-        }) as any
+        } as any) as any
 
         let newContent = ''
         let hasReceivedContent = false
@@ -2452,12 +2575,12 @@ function App() {
 
         messages.push({ role: 'user', content: mainPrompt })
 
-        const stream = await openai.chat.completions.create({
+        const response = await openai.chat.completions.create({
           model: model,
           messages: messages,
-          stream: true,
+          stream: stream,
           temperature: temperature,
-          max_tokens: maxReplyLength > 4096 ? undefined : maxReplyLength,
+          max_tokens: maxReplyLength,
         }, {
           signal: autoWriteAbortControllerRef.current?.signal
         }) as any
@@ -2465,26 +2588,44 @@ function App() {
         let generatedContent = ''
         let hasReceivedContent = false
         
-        for await (const chunk of stream) {
-          if (!isAutoWritingRef.current) throw new Error('Aborted')
-          const content = chunk.choices[0]?.delta?.content || ''
-          if (content) hasReceivedContent = true
-          generatedContent += content
-          
-          setNovels(prev => prev.map(n => {
-              if (n.id === novelId) {
-                  return {
-                      ...n,
-                      chapters: n.chapters.map(c => 
-                          c.id === newChapterId ? { ...c, content: generatedContent } : c
-                      )
+        if (stream) {
+            for await (const chunk of response) {
+              if (!isAutoWritingRef.current) throw new Error('Aborted')
+              const content = chunk.choices[0]?.delta?.content || ''
+              if (content) hasReceivedContent = true
+              generatedContent += content
+              
+              setNovels(prev => prev.map(n => {
+                  if (n.id === novelId) {
+                      return {
+                          ...n,
+                          chapters: n.chapters.map(c => 
+                              c.id === newChapterId ? { ...c, content: generatedContent } : c
+                          )
+                      }
                   }
-              }
-              return n
-          }))
+                  return n
+              }))
+            }
+        } else {
+            if (!isAutoWritingRef.current) throw new Error('Aborted')
+            generatedContent = response.choices[0]?.message?.content || ''
+            if (generatedContent) hasReceivedContent = true
+            
+            setNovels(prev => prev.map(n => {
+                  if (n.id === novelId) {
+                      return {
+                          ...n,
+                          chapters: n.chapters.map(c => 
+                              c.id === newChapterId ? { ...c, content: generatedContent } : c
+                          )
+                      }
+                  }
+                  return n
+              }))
         }
 
-        if (!hasReceivedContent && stream) {
+        if (!hasReceivedContent) {
            throw new Error("Empty response received")
         }
 
@@ -2598,7 +2739,45 @@ function App() {
     autoWriteAbortControllerRef.current = new AbortController()
     
     const activePrompts = prompts.filter(p => p.enabled && p.active)
-    autoWriteLoop(currentSet.items, 0, activeNovel.id, activeNovel.title, activePrompts, "", contextLength, targetVolumeId, includeFullOutlineInAutoWrite)
+
+    // Calculate start index and previous content
+    let startIndex = 0
+    let previousContent = ""
+    
+    // Find the first outline item that does not have a corresponding chapter
+    for (let i = 0; i < currentSet.items.length; i++) {
+        const item = currentSet.items[i]
+        const existingChapter = activeNovel.chapters.find(c => c.title === item.title)
+        
+        if (existingChapter) {
+            previousContent += existingChapter.content + "\n\n"
+        } else {
+            startIndex = i
+            break
+        }
+        
+        if (i === currentSet.items.length - 1) {
+             startIndex = currentSet.items.length
+        }
+    }
+
+    if (startIndex >= currentSet.items.length) {
+         setDialog({
+            isOpen: true,
+            type: 'alert',
+            title: '生成完成',
+            message: '所有大纲章节都已存在。如需重新生成，请先删除对应章节。',
+            inputValue: '',
+            onConfirm: () => {
+                closeDialog()
+                setIsAutoWriting(false)
+                isAutoWritingRef.current = false
+            }
+         })
+         return
+    }
+
+    autoWriteLoop(currentSet.items, startIndex, activeNovel.id, activeNovel.title, activePrompts, previousContent, contextLength, targetVolumeId, includeFullOutlineInAutoWrite)
   }
 
   const handleGenerate = async () => {
@@ -2745,41 +2924,58 @@ function App() {
         const worldInfo = buildWorldInfoContext(activeNovel || undefined)
         messages.push({ role: 'user', content: worldInfo + contextMsg + processedUserPrompt })
 
-        const stream = await openai.chat.completions.create({
+        const response = await openai.chat.completions.create({
           model: model,
           messages: messages,
-          stream: true,
+          stream: stream,
           temperature: temperature,
           top_p: topP,
-          top_k: topK,
+          top_k: topK > 0 ? topK : 1,
           presence_penalty: presencePenalty,
           frequency_penalty: frequencyPenalty,
-          max_tokens: maxReplyLength > 4096 ? undefined : maxReplyLength,
+          max_tokens: maxReplyLength,
         } as any) as any
 
         let newGeneratedContent = ''
         let hasReceivedContent = false
 
-        for await (const chunk of stream) {
-          const content = chunk.choices[0]?.delta?.content || ''
-          if (content) hasReceivedContent = true
-          newGeneratedContent += content
-          
-          // Update chapter content in real-time
-          setChapters(prev => prev.map(c => 
-            c.id === activeChapterId 
-              ? { 
-                  ...c, 
-                  content: currentContent + newGeneratedContent,
-                  versions: c.versions 
-                      ? c.versions.map(v => v.id === c.activeVersionId ? { ...v, content: currentContent + newGeneratedContent } : v) 
-                      : undefined
-                }
-              : c
-          ))
+        if (stream) {
+            for await (const chunk of response) {
+              const content = chunk.choices[0]?.delta?.content || ''
+              if (content) hasReceivedContent = true
+              newGeneratedContent += content
+              
+              // Update chapter content in real-time
+              setChapters(prev => prev.map(c => 
+                c.id === activeChapterId 
+                  ? { 
+                      ...c, 
+                      content: currentContent + newGeneratedContent,
+                      versions: c.versions 
+                          ? c.versions.map(v => v.id === c.activeVersionId ? { ...v, content: currentContent + newGeneratedContent } : v) 
+                          : undefined
+                    }
+                  : c
+              ))
+            }
+        } else {
+            newGeneratedContent = response.choices[0]?.message?.content || ''
+            if (newGeneratedContent) hasReceivedContent = true
+            
+            setChapters(prev => prev.map(c => 
+                c.id === activeChapterId 
+                  ? { 
+                      ...c, 
+                      content: currentContent + newGeneratedContent,
+                      versions: c.versions 
+                          ? c.versions.map(v => v.id === c.activeVersionId ? { ...v, content: currentContent + newGeneratedContent } : v) 
+                          : undefined
+                    }
+                  : c
+              ))
         }
         
-        if (!hasReceivedContent && stream) {
+        if (!hasReceivedContent) {
            throw new Error("Empty response received from AI")
         }
         
@@ -5293,7 +5489,7 @@ function App() {
                         { label: '频率惩罚', value: frequencyPenalty, setValue: setFrequencyPenalty, min: -2, max: 2, step: 0.01 },
                         { label: '存在惩罚', value: presencePenalty, setValue: setPresencePenalty, min: -2, max: 2, step: 0.01 },
                         { label: 'Top P', value: topP, setValue: setTopP, min: 0, max: 1, step: 0.01 },
-                        { label: 'Top K', value: topK, setValue: setTopK, min: 0, max: 500, step: 1 },
+                        { label: 'Top K', value: topK, setValue: setTopK, min: 1, max: 500, step: 1 },
                       ].map((item) => (
                         <div key={item.label} className="space-y-1">
                           <div className="flex justify-between text-xs text-gray-400">
@@ -5988,6 +6184,30 @@ function App() {
                                  onChange={(e) => updatePreset({ name: e.target.value })}
                                  className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
                               />
+                           </div>
+
+                           <div className="bg-gray-900/30 rounded-lg p-4 border border-gray-700/50 space-y-4">
+                              {[
+                                 { label: '温度 (Temperature)', value: currentPreset.temperature ?? 0.7, setValue: (v: number) => updatePreset({ temperature: v }), min: 0, max: 2, step: 0.01 },
+                                 { label: 'Top P', value: currentPreset.topP ?? 0.95, setValue: (v: number) => updatePreset({ topP: v }), min: 0, max: 1, step: 0.01 },
+                                 { label: 'Top K', value: currentPreset.topK ?? 1, setValue: (v: number) => updatePreset({ topK: v }), min: 1, max: 500, step: 1 },
+                              ].map((item) => (
+                                 <div key={item.label} className="space-y-1">
+                                    <div className="flex justify-between text-xs text-gray-400">
+                                       <span>{item.label}</span>
+                                       <span className="bg-gray-900 px-2 py-0.5 rounded border border-gray-700 font-mono">{item.value.toFixed(2)}</span>
+                                    </div>
+                                    <input 
+                                       type="range" 
+                                       min={item.min} 
+                                       max={item.max} 
+                                       step={item.step} 
+                                       value={item.value} 
+                                       onChange={(e) => item.setValue(parseFloat(e.target.value))} 
+                                       className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-[var(--theme-color)]" 
+                                    />
+                                 </div>
+                              ))}
                            </div>
 
                            <div className="space-y-4 flex-1 flex flex-col">
