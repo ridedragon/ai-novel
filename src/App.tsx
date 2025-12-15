@@ -520,6 +520,7 @@ function App() {
   const [showCharacterSetSelector, setShowCharacterSetSelector] = useState(false)
   const [selectedWorldviewSetIdForOutlineGen, setSelectedWorldviewSetIdForOutlineGen] = useState<string | null>(null)
   const [showWorldviewSelectorForOutline, setShowWorldviewSelectorForOutline] = useState(false)
+  const [editingOutlineItemIndex, setEditingOutlineItemIndex] = useState<number | null>(null)
 
   // Outline Presets State
   const [outlinePresets, setOutlinePresets] = useState<GeneratorPreset[]>(() => {
@@ -4056,8 +4057,9 @@ function App() {
           </div>
         )}
 
-        {/* Global Alert/Confirm/Prompt Dialog */}
-        {dialog.isOpen && (
+
+      {/* Global Alert/Confirm/Prompt Dialog */}
+      {dialog.isOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
             <div className="bg-gray-800 w-[400px] rounded-lg shadow-2xl border border-gray-600 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="p-4 bg-gray-900 border-b border-gray-700 flex justify-center">
@@ -5327,43 +5329,37 @@ function App() {
                                           <div className="space-y-6">
                                              <div className="space-y-4">
                                                 {items.map((item, idx) => (
-                                                   <div key={idx} className="p-4 bg-gray-800 rounded-xl border border-gray-700 shadow-sm hover:border-[var(--theme-color)] transition-colors group">
-                                                      <div className="flex items-center gap-2 mb-2">
+                                                   <div 
+                                                      key={idx} 
+                                                      onClick={() => setEditingOutlineItemIndex(idx)}
+                                                      className="p-4 bg-gray-800 rounded-xl border border-gray-700 shadow-sm hover:border-[var(--theme-color)] transition-colors group cursor-pointer relative"
+                                                   >
+                                                      <div className="flex items-center gap-2 mb-2 pointer-events-none">
                                                          <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-400 shrink-0">
                                                             {idx + 1}
                                                          </div>
-                                                         <input 
-                                                            value={item.title}
-                                                            onChange={(e) => {
-                                                               const newItems = [...items]
-                                                               newItems[idx].title = e.target.value
-                                                               updateOutlineItemsInSet(activeOutlineSetId, newItems)
-                                                            }}
-                                                            className="flex-1 bg-transparent font-bold text-gray-200 border-none focus:ring-0 px-0 text-base"
-                                                            placeholder="章节标题"
-                                                         />
-                                                         <button 
-                                                            onClick={() => {
-                                                               const newItems = items.filter((_, i) => i !== idx)
-                                                               updateOutlineItemsInSet(activeOutlineSetId, newItems)
-                                                            }}
-                                                            className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
-                                                         >
-                                                            <Trash2 className="w-4 h-4" />
-                                                         </button>
+                                                         <div className="flex-1 font-bold text-gray-200 text-base truncate">
+                                                            {item.title || '未命名章节'}
+                                                         </div>
                                                       </div>
-                                                      <div className="pl-8">
-                                                         <textarea 
-                                                            value={item.summary}
-                                                            onChange={(e) => {
-                                                               const newItems = [...items]
-                                                               newItems[idx].summary = e.target.value
-                                                               updateOutlineItemsInSet(activeOutlineSetId, newItems)
-                                                            }}
-                                                            className="w-full bg-gray-900/50 rounded-lg p-3 text-sm text-gray-300 border border-gray-700/50 focus:border-[var(--theme-color)] outline-none resize-none h-24"
-                                                            placeholder="章节摘要..."
-                                                         />
+                                                      <div className="pl-8 pointer-events-none">
+                                                         <div className="w-full bg-gray-900/30 rounded-lg p-3 text-sm text-gray-400 border border-gray-700/30 line-clamp-3 min-h-[3rem]">
+                                                            {item.summary || <span className="italic opacity-50">点击编辑章节摘要...</span>}
+                                                         </div>
                                                       </div>
+                                                      
+                                                      {/* Floating Delete Button */}
+                                                      <button 
+                                                         onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            const newItems = items.filter((_, i) => i !== idx)
+                                                            updateOutlineItemsInSet(activeOutlineSetId, newItems)
+                                                         }}
+                                                         className="absolute top-4 right-4 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-gray-800/80 rounded"
+                                                         title="删除章节"
+                                                      >
+                                                         <Trash2 className="w-4 h-4" />
+                                                      </button>
                                                    </div>
                                                 ))}
                                              </div>
@@ -6421,6 +6417,85 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Outline Edit Modal */}
+      {editingOutlineItemIndex !== null && activeNovel && activeOutlineSetId && (
+         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
+            <div 
+               className="bg-gray-800 w-full h-full md:w-[800px] md:h-[80vh] md:rounded-xl shadow-2xl border-none md:border border-gray-600 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+               onClick={(e) => e.stopPropagation()}
+            >
+               {(() => {
+                  const set = activeNovel.outlineSets?.find(s => s.id === activeOutlineSetId)
+                  const item = set?.items[editingOutlineItemIndex]
+                  
+                  if (!set || !item) {
+                     setEditingOutlineItemIndex(null)
+                     return null
+                  }
+
+                  const updateItem = (updates: Partial<OutlineItem>) => {
+                     const newItems = [...set.items]
+                     newItems[editingOutlineItemIndex] = { ...item, ...updates }
+                     updateOutlineItemsInSet(set.id, newItems)
+                  }
+
+                  return (
+                     <>
+                        {/* Header */}
+                        <div className="p-4 border-b border-gray-700 bg-gray-900 flex justify-between items-center shrink-0">
+                           <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center font-bold text-gray-400">
+                                 {editingOutlineItemIndex + 1}
+                              </div>
+                              <span className="font-bold text-lg text-gray-200">编辑章节大纲</span>
+                           </div>
+                           <button 
+                              onClick={() => setEditingOutlineItemIndex(null)}
+                              className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors"
+                           >
+                              <X className="w-6 h-6" />
+                           </button>
+                        </div>
+                        
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar bg-gray-800">
+                           <div className="space-y-2">
+                              <label className="text-sm font-medium text-gray-400">章节标题</label>
+                              <input 
+                                 value={item.title}
+                                 onChange={(e) => updateItem({ title: e.target.value })}
+                                 className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-lg font-bold focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
+                                 placeholder="输入章节标题..."
+                              />
+                           </div>
+                           
+                           <div className="space-y-2 flex-1 flex flex-col min-h-[50vh]">
+                              <label className="text-sm font-medium text-gray-400">章节摘要</label>
+                              <textarea 
+                                 value={item.summary}
+                                 onChange={(e) => updateItem({ summary: e.target.value })}
+                                 className="w-full flex-1 bg-gray-900 border border-gray-600 rounded-lg p-4 text-base leading-relaxed focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none resize-none transition-all font-mono"
+                                 placeholder="输入详细的章节剧情摘要..."
+                              />
+                           </div>
+                        </div>
+
+                        {/* Footer (Mobile Only Save hint or just Close) */}
+                        <div className="p-4 border-t border-gray-700 bg-gray-900 md:hidden">
+                           <button 
+                              onClick={() => setEditingOutlineItemIndex(null)}
+                              className="w-full py-3 bg-[var(--theme-color)] text-white rounded-lg font-medium shadow-lg"
+                           >
+                              完成
+                           </button>
+                        </div>
+                     </>
+                  )
+               })()}
+            </div>
+         </div>
       )}
 
       {/* Regex Management Modal */}
