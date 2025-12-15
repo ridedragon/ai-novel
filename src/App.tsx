@@ -4417,8 +4417,8 @@ function App() {
 
       {/* Main Content - Right */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        <div className="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 shrink-0">
-          <div className="flex items-center gap-2 md:gap-4 overflow-x-auto no-scrollbar w-full">
+        <div className="min-h-[3.5rem] bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 py-2 shrink-0 transition-all">
+          <div className="flex flex-wrap items-center gap-2 md:gap-4 w-full">
              <button 
                onClick={() => setIsMobileSidebarOpen(true)}
                className="md:hidden text-gray-400 hover:text-white shrink-0"
@@ -4426,7 +4426,7 @@ function App() {
                <Menu className="w-5 h-5" />
              </button>
              <span className="text-sm font-semibold text-gray-400 whitespace-nowrap hidden md:block">自定义添加栏</span>
-             <div className="flex items-center gap-2 shrink-0">
+             <div className="flex flex-wrap items-center gap-2 shrink-0">
                <div className="flex bg-gray-700 rounded-lg p-0.5 items-center gap-0.5 shrink-0">
                    <button 
                      onClick={() => setLongTextMode(!longTextMode)}
@@ -5582,11 +5582,11 @@ function App() {
                 <p>暂无章节</p>
                 <p className="text-sm mt-2">请点击左侧"添加章节"开始创作</p>
              </div>
-          ) : (
+        ) : (
             <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col">
-                <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-bold text-gray-100">{activeChapter.title}</h1>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                <h1 className="text-2xl font-bold text-gray-100 break-words">{activeChapter.title}</h1>
+                <div className="flex flex-wrap items-center gap-2">
                     {/* Version Switcher */}
                     {activeChapter.versions && activeChapter.versions.length > 1 && (
                         <div className="bg-gray-800 border border-gray-600 rounded-lg flex items-center p-0.5 gap-1 mr-2">
