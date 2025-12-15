@@ -5932,27 +5932,6 @@ function App() {
                 </div>
                 
                 <div className="relative flex-1 flex flex-col min-h-0">
-                    {analysisResult && (
-                        <div className="bg-gray-800 border-b border-gray-700 p-4 max-h-60 overflow-y-auto shrink-0 rounded-b-lg mx-4 md:mx-0 mb-4 shadow-lg">
-                            <div className="text-xs font-bold text-[var(--theme-color)] mb-2 flex justify-between items-center sticky top-0 bg-gray-800 pb-2 border-b border-gray-700/50 z-10">
-                                <span className="flex items-center gap-2">
-                                    <Bot className="w-3.5 h-3.5"/>
-                                    AI 分析建议
-                                </span>
-                                <button 
-                                    onClick={() => setAnalysisResult('')} 
-                                    className="text-gray-500 hover:text-white p-1 hover:bg-gray-700 rounded transition-colors"
-                                    title="清除建议"
-                                >
-                                    <X className="w-3.5 h-3.5"/>
-                                </button>
-                            </div>
-                            <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed prose prose-invert prose-sm max-w-none">
-                                <ReactMarkdown>{analysisResult}</ReactMarkdown>
-                            </div>
-                        </div>
-                    )}
-
                     {isEditingChapter ? (
                     <textarea
                         value={activeChapter.content}
@@ -7158,6 +7137,20 @@ function App() {
                                  </div>
                               ))}
                            </div>
+
+                           {generatorSettingsType === 'analysis' && (
+                               <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-3 mb-4">
+                                   <div className="flex justify-between items-center mb-2">
+                                       <label className="text-xs font-bold text-gray-400 flex items-center gap-1">
+                                           <Bot className="w-3 h-3"/> 上次分析结果参考
+                                       </label>
+                                       <span className="text-[10px] text-gray-500">用于调试预设效果</span>
+                                   </div>
+                                   <div className="w-full max-h-32 overflow-y-auto text-xs text-gray-300 font-mono whitespace-pre-wrap custom-scrollbar bg-gray-900 p-2 rounded border border-gray-800">
+                                       {analysisResult || '暂无分析记录。请在主界面开启“两阶段优化”并运行一次润色，AI 的分析反馈将显示在这里。'}
+                                   </div>
+                               </div>
+                           )}
 
                            <div className="space-y-4 flex-1 flex flex-col">
                               <div className="flex items-center justify-between">
