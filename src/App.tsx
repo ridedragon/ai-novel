@@ -5239,7 +5239,7 @@ function App() {
                                     </div>
                                     
                                     {/* AI Input Area */}
-                                    <div className="flex items-center gap-4 mb-2 relative z-20">
+                                    <div className="flex items-center gap-4 mb-2 relative z-20 w-[96%] mx-auto md:w-full">
                                        <div className="flex items-center gap-2">
                                           <span className="text-xs text-gray-400">参考：</span>
                                           
@@ -5334,7 +5334,7 @@ function App() {
                                           </div>
                                        </div>
                                     </div>
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 w-[96%] mx-auto md:w-full">
                                        <input 
                                          type="text" 
                                          value={userPrompt}
@@ -5355,16 +5355,18 @@ function App() {
 
                                     {/* User Notes Area */}
                                     <div className="mt-4 pt-4 border-t border-gray-700/50">
-                                       <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
+                                       <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2 w-[96%] mx-auto md:w-full">
                                           <FileText className="w-3 h-3" />
                                           <span>用户输入记录 & 设定上下文 (AI 生成时会参考此内容)</span>
                                        </div>
-                                       <textarea 
-                                          value={activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.userNotes || ''}
-                                          onChange={(e) => updateOutlineSet(activeOutlineSetId!, { userNotes: e.target.value })}
-                                          className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono"
-                                          placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这份大纲的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
-                                       />
+                                       <div className="w-[96%] mx-auto md:w-full">
+                                          <textarea 
+                                             value={activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.userNotes || ''}
+                                             onChange={(e) => updateOutlineSet(activeOutlineSetId!, { userNotes: e.target.value })}
+                                             className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono"
+                                             placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这份大纲的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
+                                          />
+                                       </div>
                                     </div>
                                 </div>
                                 
@@ -5390,39 +5392,70 @@ function App() {
                                                 {items.map((item, idx) => (
                                                    <div 
                                                       key={idx}
+                                                      data-outline-index={idx}
                                                       draggable={isOutlineDragEnabled}
                                                       onDragStart={(e) => handleOutlineDragStart(e, idx)}
                                                       onDragOver={(e) => handleOutlineDragOver(e, idx)}
                                                       onDragEnd={handleOutlineDragEnd}
                                                       onClick={() => setEditingOutlineItemIndex(idx)}
-                                                      className={`p-4 pl-10 pr-28 bg-gray-800 rounded-xl border border-gray-700 shadow-sm hover:border-[var(--theme-color)] transition-colors group cursor-pointer relative ${draggedOutlineIndex === idx ? 'opacity-50' : ''}`}
+                                                      className={`w-[96%] mx-auto md:w-full p-3 pl-9 pr-24 md:p-4 md:pl-10 md:pr-28 bg-gray-800 rounded-xl border border-gray-700 shadow-sm hover:border-[var(--theme-color)] transition-colors group cursor-pointer relative ${draggedOutlineIndex === idx ? 'opacity-50' : ''}`}
                                                    >
                                                       {/* Drag Handle */}
                                                       <div 
-                                                         className="absolute left-2 top-1/2 -translate-y-1/2 p-2 cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 z-10 hover:bg-gray-700/50 rounded"
+                                                         className="absolute left-1 md:left-2 top-1/2 -translate-y-1/2 p-3 cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 z-10 hover:bg-gray-700/50 rounded"
                                                          onMouseEnter={() => setIsOutlineDragEnabled(true)}
                                                          onMouseLeave={() => setIsOutlineDragEnabled(false)}
+                                                         onTouchStart={(e) => {
+                                                            e.stopPropagation();
+                                                            setDraggedOutlineIndex(idx);
+                                                         }}
+                                                         onTouchMove={(e) => {
+                                                            e.stopPropagation();
+                                                            // e.preventDefault(); // Might block scrolling, but we need it for drag. 
+                                                            // User wants easy adjust.
+                                                            const touch = e.touches[0];
+                                                            const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                                                            const itemRow = target?.closest('[data-outline-index]');
+                                                            if (itemRow) {
+                                                                const targetIndex = parseInt(itemRow.getAttribute('data-outline-index') || '-1');
+                                                                if (targetIndex !== -1 && targetIndex !== idx) {
+                                                                    // We need to use a ref to track current drag index if we want continuous swap,
+                                                                    // but here we are in a map. 
+                                                                    // Since moveOutlineItemDrag updates state, idx will change.
+                                                                    // But touch tracking might get lost if element re-renders.
+                                                                    // Simple swap is better than nothing.
+                                                                    if (draggedOutlineIndex !== null && draggedOutlineIndex !== targetIndex) {
+                                                                         moveOutlineItemDrag(draggedOutlineIndex, targetIndex);
+                                                                         setDraggedOutlineIndex(targetIndex);
+                                                                    }
+                                                                }
+                                                            }
+                                                         }}
+                                                         onTouchEnd={() => {
+                                                            setDraggedOutlineIndex(null);
+                                                            setIsOutlineDragEnabled(false);
+                                                         }}
                                                          onClick={(e) => e.stopPropagation()}
                                                       >
-                                                         <GripVertical className="w-5 h-5" />
+                                                         <GripVertical className="w-6 h-6 md:w-5 md:h-5" />
                                                       </div>
 
                                                       <div className="flex items-center gap-2 mb-2 pointer-events-none">
-                                                         <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-400 shrink-0">
+                                                         <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-400 shrink-0">
                                                             {idx + 1}
                                                          </div>
-                                                         <div className="flex-1 font-bold text-gray-200 text-base truncate">
+                                                         <div className="flex-1 font-bold text-gray-200 text-sm md:text-base truncate">
                                                             {item.title || '未命名章节'}
                                                          </div>
                                                       </div>
-                                                      <div className="pl-8 pointer-events-none">
-                                                         <div className="w-full bg-gray-900/30 rounded-lg p-3 text-sm text-gray-400 border border-gray-700/30 line-clamp-3 min-h-[3rem]">
+                                                      <div className="pl-6 md:pl-8 pointer-events-none">
+                                                         <div className="w-full bg-gray-900/30 rounded-lg p-2 md:p-3 text-xs md:text-sm text-gray-400 border border-gray-700/30 line-clamp-3 min-h-[2.5rem] md:min-h-[3rem]">
                                                             {item.summary || <span className="italic opacity-50">点击编辑章节摘要...</span>}
                                                          </div>
                                                       </div>
                                                       
                                                       {/* Action Buttons */}
-                                                      <div className="absolute top-4 right-4 flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800/90 rounded-lg p-1 border border-gray-700/50 backdrop-blur-sm shadow-sm" onClick={(e) => e.stopPropagation()}>
+                                                      <div className="absolute top-2 right-2 md:top-4 md:right-4 flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800/90 rounded-lg p-1 border border-gray-700/50 backdrop-blur-sm shadow-sm" onClick={(e) => e.stopPropagation()}>
                                                          <button 
                                                             onClick={(e) => { e.stopPropagation(); handleMoveOutlineItem(idx, 'up'); }}
                                                             disabled={idx === 0}
