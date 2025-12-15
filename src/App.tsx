@@ -7180,19 +7180,7 @@ function App() {
              </div>
 
              {/* Footer / Toolbar */}
-             <div className="p-4 border-t border-gray-700 bg-gray-800 shrink-0 flex items-center justify-between">
-                <div className="flex gap-2">
-                   {['{{context}}', '{{notes}}', '{{input}}'].map(tag => (
-                      <button 
-                         key={tag}
-                         onClick={() => setTempEditingPrompt({ ...tempEditingPrompt, content: tempEditingPrompt.content + tag })}
-                         className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300 border border-gray-600 transition-colors"
-                      >
-                         {tag}
-                      </button>
-                   ))}
-                </div>
-                
+             <div className="p-4 border-t border-gray-700 bg-gray-800 shrink-0 flex items-center justify-end">
                 <div className="flex gap-3">
                    <button 
                       onClick={() => { setShowGeneratorPromptEditModal(false); setTempEditingPrompt(null); setEditingGeneratorPromptIndex(null); }}
