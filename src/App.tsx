@@ -2988,7 +2988,7 @@ function App() {
         }))
     }
     
-    setActiveChapterId(newChapterId)
+    // setActiveChapterId(newChapterId) // 移除自动跳转
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -3134,7 +3134,8 @@ function App() {
         // Trigger Auto Optimize
         if (autoOptimizeRef.current) {
              terminal.log(`[AutoWrite] Auto-optimizing chapter ${newChapterId}...`)
-             await handleOptimize(newChapterId, finalGeneratedContent)
+             // 移除 await，让优化在后台并行执行
+             handleOptimize(newChapterId, finalGeneratedContent).catch(e => console.error(e))
         }
 
         terminal.log(`[AutoWrite] Attempt ${attempt + 1} successful.`)
