@@ -5015,7 +5015,7 @@ function App() {
                                          type="text" 
                                          value={userPrompt}
                                          onChange={(e) => setUserPrompt(e.target.value)}
-                                         className="flex-1 min-w-0 bg-gray-900 border border-gray-600 rounded px-4 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                                         className="flex-1 bg-gray-900 border border-gray-600 rounded px-4 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
                                          placeholder="AI 辅助生成：描述角色特征，例如'一个冷酷的杀手，擅长使用飞刀'..."
                                          onKeyDown={(e) => e.key === 'Enter' && !isGeneratingCharacters && handleGenerateCharacters()}
                                        />
@@ -5050,14 +5050,14 @@ function App() {
                                        <textarea 
                                           value={activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)?.userNotes || ''}
                                           onChange={(e) => updateCharacterSet(activeCharacterSetId!, { userNotes: e.target.value })}
-                                          className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono whitespace-pre-wrap break-words"
+                                          className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono"
                                           placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这组角色的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
                                        />
                                     </div>
                                 </div>
                                 
                                 {/* Grid Content */}
-                                <div className="flex-1 p-6 pb-24 overflow-y-auto custom-scrollbar">
+                                <div className="flex-1 p-6 pb-24 overflow-y-auto custom-scrollbar min-w-0">
                                     {(() => {
                                        const currentSet = activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)
                                        const characters = currentSet?.characters || []
@@ -5284,7 +5284,7 @@ function App() {
                                          type="text" 
                                          value={userPrompt}
                                          onChange={(e) => setUserPrompt(e.target.value)}
-                                         className="flex-1 min-w-0 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] outline-none"
+                                         className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] outline-none"
                                          placeholder="AI 辅助生成：例如'设计一个包含九大元素的魔法体系，以及相应的施法代价'..."
                                          onKeyDown={(e) => e.key === 'Enter' && !isGeneratingWorldview && handleGenerateWorldview()}
                                        />
@@ -5313,7 +5313,7 @@ function App() {
                                 </div>
                                 
                                 {/* Grid Content */}
-                                <div className="flex-1 p-4 md:p-6 pb-24 overflow-y-auto custom-scrollbar">
+                                <div className="flex-1 p-4 md:p-6 pb-24 overflow-y-auto custom-scrollbar min-w-0">
                                     {/* User Notes Area */}
                                     <div className="mb-4 pb-4 md:mb-6 md:pb-6 border-b border-gray-700/50">
                                        <div className="text-[10px] md:text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
@@ -5321,10 +5321,10 @@ function App() {
                                           <span>用户输入记录 & 设定上下文 (AI 生成时会参考此内容)</span>
                                        </div>
                                        <textarea 
-                                          value={activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)?.userNotes || ''}
-                                          onChange={(e) => updateWorldviewSet(activeWorldviewSetId!, { userNotes: e.target.value })}
-                                          className="w-full h-20 md:h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-2 md:p-3 text-xs md:text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-32 md:focus:h-48 placeholder-gray-500 font-mono whitespace-pre-wrap break-words"
-                                          placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这组世界观的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
+                                          value={activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)?.userNotes || ''}
+                                          onChange={(e) => updateCharacterSet(activeCharacterSetId!, { userNotes: e.target.value })}
+                                          className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono whitespace-pre-wrap break-words"
+                                          placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这组角色的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
                                        />
                                     </div>
                                     {(() => {
@@ -5632,7 +5632,7 @@ function App() {
                                          type="text" 
                                          value={userPrompt}
                                          onChange={(e) => setUserPrompt(e.target.value)}
-                                         className="flex-1 min-w-0 bg-gray-900 border border-gray-600 rounded px-4 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                                         className="flex-1 bg-gray-900 border border-gray-600 rounded px-4 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
                                          placeholder="AI 辅助生成：描述大纲要求，例如'第一卷主要讲述主角如何获得超能力'..."
                                          onKeyDown={(e) => e.key === 'Enter' && !isGeneratingOutline && handleGenerateOutline()}
                                        />
@@ -5668,7 +5668,7 @@ function App() {
                                           <textarea 
                                              value={activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.userNotes || ''}
                                              onChange={(e) => updateOutlineSet(activeOutlineSetId!, { userNotes: e.target.value })}
-                                             className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono whitespace-pre-wrap break-words"
+                                             className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono"
                                              placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这份大纲的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
                                           />
                                        </div>
@@ -5676,7 +5676,7 @@ function App() {
                                 </div>
                                 
                                 {/* Grid Content */}
-                                <div className="flex-1 p-6 pb-24 overflow-y-auto custom-scrollbar">
+                                <div className="flex-1 p-6 pb-24 overflow-y-auto custom-scrollbar min-w-0">
                                     {(() => {
                                        const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
                                        const items = currentSet?.items || []
@@ -6009,12 +6009,12 @@ function App() {
                 
                 <div className="relative flex-1 flex flex-col min-h-0">
                     {isEditingChapter ? (
-                    <textarea
-                        value={activeChapter.content}
-                        onChange={handleChapterContentChange}
-                        className="w-full flex-1 bg-gray-800 border border-gray-700 rounded-lg p-4 md:p-6 pr-4 md:pr-24 text-gray-200 focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none resize-none font-mono text-lg leading-relaxed min-h-[500px]"
-                        placeholder="在此编辑章节内容..."
-                    />
+                                          <textarea 
+                                             value={activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.userNotes || ''}
+                                             onChange={(e) => updateOutlineSet(activeOutlineSetId!, { userNotes: e.target.value })}
+                                             className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono whitespace-pre-wrap break-words"
+                                             placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这份大纲的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
+                                          />
                     ) : (
                     <div className="prose prose-invert prose-lg max-w-none overflow-y-auto custom-scrollbar pr-4 md:pr-24 [&_p]:my-0 [&_p]:min-h-[1rem] text-justify">
                         {activeChapter.content ? (
