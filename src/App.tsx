@@ -4122,7 +4122,7 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-100 font-sans overflow-hidden">
+    <div className="flex h-screen h-[100dvh] bg-gray-900 text-gray-100 font-sans overflow-hidden">
       
       {/* Mobile Sidebar Overlay */}
       {isMobileSidebarOpen && (
@@ -4596,24 +4596,24 @@ function App() {
                              <>
                                 {/* Header / Toolbar */}
                                 <div className="p-4 border-b border-gray-700 bg-gray-800 shrink-0">
-                                    <div className="flex items-center justify-between mb-4">
-                                       <div className="flex items-center gap-3">
+                                    <div className="flex items-center justify-between mb-4 gap-2">
+                                       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                                           <button 
                                              onClick={() => setActiveCharacterSetId(null)}
-                                             className="md:hidden p-1.5 -ml-2 mr-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white"
+                                             className="md:hidden p-1.5 -ml-2 mr-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white shrink-0"
                                           >
                                              <ArrowLeft className="w-5 h-5" />
                                           </button>
-                                          <h3 className="font-bold text-lg text-gray-200">
+                                          <h3 className="font-bold text-lg text-gray-200 truncate">
                                              {activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)?.name} 
-                                             <span className="text-sm font-normal text-gray-500 ml-2">内的角色卡</span>
+                                             <span className="hidden md:inline text-sm font-normal text-gray-500 ml-2">内的角色卡</span>
                                           </h3>
                                           <button 
                                              onClick={() => { setGeneratorSettingsType('character'); setShowGeneratorSettingsModal(true); }}
-                                             className="text-xs flex items-center gap-1.5 text-gray-400 hover:text-[var(--theme-color)] transition-colors bg-gray-900/50 px-3 py-1 rounded-full border border-gray-700 hover:border-[var(--theme-color)]"
+                                             className="text-xs flex items-center gap-1.5 text-gray-400 hover:text-[var(--theme-color)] transition-colors bg-gray-900/50 px-2 md:px-3 py-1 rounded-full border border-gray-700 hover:border-[var(--theme-color)] shrink-0 max-w-[100px] md:max-w-none"
                                           >
-                                             <Settings className="w-3 h-3" />
-                                             <span>{characterPresets.find(p => p.id === activeCharacterPresetId)?.name || '默认设置'}</span>
+                                             <Settings className="w-3 h-3 shrink-0" />
+                                             <span className="truncate">{characterPresets.find(p => p.id === activeCharacterPresetId)?.name || '默认设置'}</span>
                                           </button>
                                        </div>
                                        <button 
@@ -4625,10 +4625,11 @@ function App() {
                                                 }
                                              }
                                           }}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors border border-gray-600"
+                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors border border-gray-600 shrink-0"
                                        >
                                           <Plus className="w-3.5 h-3.5" />
-                                          手动添加角色
+                                          <span className="hidden md:inline">手动添加角色</span>
+                                          <span className="md:hidden">添加</span>
                                        </button>
                                     </div>
                                     
@@ -4898,24 +4899,24 @@ function App() {
                              <>
                                 {/* Header / Toolbar */}
                                 <div className="p-4 border-b border-gray-700 bg-gray-800 shrink-0">
-                                    <div className="flex items-center justify-between mb-4">
-                                       <div className="flex items-center gap-3">
+                                    <div className="flex items-center justify-between mb-4 gap-2">
+                                       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                                           <button 
                                              onClick={() => setActiveWorldviewSetId(null)}
-                                             className="md:hidden p-1.5 -ml-2 mr-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white"
+                                             className="md:hidden p-1.5 -ml-2 mr-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white shrink-0"
                                           >
                                              <ArrowLeft className="w-5 h-5" />
                                           </button>
-                                          <h3 className="font-bold text-lg text-gray-200">
+                                          <h3 className="font-bold text-lg text-gray-200 truncate">
                                              {activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)?.name} 
-                                             <span className="text-sm font-normal text-gray-500 ml-2">内的设定</span>
+                                             <span className="hidden md:inline text-sm font-normal text-gray-500 ml-2">内的设定</span>
                                           </h3>
                                           <button 
                                              onClick={() => { setGeneratorSettingsType('worldview'); setShowGeneratorSettingsModal(true); }}
-                                             className="text-xs flex items-center gap-1.5 text-gray-400 hover:text-[var(--theme-color)] transition-colors bg-gray-900/50 px-3 py-1 rounded-full border border-gray-700 hover:border-[var(--theme-color)]"
+                                             className="text-xs flex items-center gap-1.5 text-gray-400 hover:text-[var(--theme-color)] transition-colors bg-gray-900/50 px-2 md:px-3 py-1 rounded-full border border-gray-700 hover:border-[var(--theme-color)] shrink-0 max-w-[100px] md:max-w-none"
                                           >
-                                             <Settings className="w-3 h-3" />
-                                             <span>{worldviewPresets.find(p => p.id === activeWorldviewPresetId)?.name || '默认设置'}</span>
+                                             <Settings className="w-3 h-3 shrink-0" />
+                                             <span className="truncate">{worldviewPresets.find(p => p.id === activeWorldviewPresetId)?.name || '默认设置'}</span>
                                           </button>
                                        </div>
                                        <button 
@@ -4927,10 +4928,11 @@ function App() {
                                                 }
                                              }
                                           }}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors border border-gray-600"
+                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors border border-gray-600 shrink-0"
                                        >
                                           <Plus className="w-3.5 h-3.5" />
-                                          手动添加设定
+                                          <span className="hidden md:inline">手动添加设定</span>
+                                          <span className="md:hidden">添加</span>
                                        </button>
                                     </div>
                                     
@@ -5137,24 +5139,24 @@ function App() {
                              <>
                                 {/* Header / Toolbar */}
                                 <div className="p-4 border-b border-gray-700 bg-gray-800 shrink-0">
-                                    <div className="flex items-center justify-between mb-4">
-                                       <div className="flex items-center gap-3">
+                                    <div className="flex items-center justify-between mb-4 gap-2">
+                                       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                                           <button 
                                              onClick={() => setActiveOutlineSetId(null)}
-                                             className="md:hidden p-1.5 -ml-2 mr-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white"
+                                             className="md:hidden p-1.5 -ml-2 mr-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white shrink-0"
                                           >
                                              <ArrowLeft className="w-5 h-5" />
                                           </button>
-                                          <h3 className="font-bold text-lg text-gray-200">
+                                          <h3 className="font-bold text-lg text-gray-200 truncate">
                                              {activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.name} 
-                                             <span className="text-sm font-normal text-gray-500 ml-2">章节大纲</span>
+                                             <span className="hidden md:inline text-sm font-normal text-gray-500 ml-2">章节大纲</span>
                                           </h3>
                                           <button 
                                              onClick={() => { setGeneratorSettingsType('outline'); setShowGeneratorSettingsModal(true); }}
-                                             className="text-xs flex items-center gap-1.5 text-gray-400 hover:text-[var(--theme-color)] transition-colors bg-gray-900/50 px-3 py-1 rounded-full border border-gray-700 hover:border-[var(--theme-color)]"
+                                             className="text-xs flex items-center gap-1.5 text-gray-400 hover:text-[var(--theme-color)] transition-colors bg-gray-900/50 px-2 md:px-3 py-1 rounded-full border border-gray-700 hover:border-[var(--theme-color)] shrink-0 max-w-[100px] md:max-w-none"
                                           >
-                                             <Settings className="w-3 h-3" />
-                                             <span>{outlinePresets.find(p => p.id === activeOutlinePresetId)?.name || '默认大纲'}</span>
+                                             <Settings className="w-3 h-3 shrink-0" />
+                                             <span className="truncate">{outlinePresets.find(p => p.id === activeOutlinePresetId)?.name || '默认大纲'}</span>
                                           </button>
                                        </div>
                                        
@@ -5167,10 +5169,11 @@ function App() {
                                                 }
                                              }
                                           }}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors border border-gray-600"
+                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors border border-gray-600 shrink-0"
                                        >
                                           <Plus className="w-3.5 h-3.5" />
-                                          手动添加章节
+                                          <span className="hidden md:inline">手动添加章节</span>
+                                          <span className="md:hidden">添加</span>
                                        </button>
                                     </div>
                                     
