@@ -2998,6 +2998,15 @@ function App() {
     const currentNovel = novelsRef.current.find(n => n.id === novelId)
     const existingChapter = currentNovel?.chapters.find(c => c.title === chapterInfo.title)
     
+    if (existingChapter && existingChapter.content && existingChapter.content.trim().length > 0) {
+        terminal.log(`[AutoWrite] Skipping existing chapter: ${chapterInfo.title}`)
+        const nextContent = previousContent + '\n\n' + existingChapter.content
+        setTimeout(() => {
+             autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, nextContent, contextLimit, targetVolumeId, includeFullOutline)
+        }, 50)
+        return
+    }
+
     let newChapterId: number
     let newChapter: Chapter
 
@@ -3167,6 +3176,10 @@ function App() {
           }))
         } else {
             finalGeneratedContent = generatedContent
+        }
+
+        if (!finalGeneratedContent || finalGeneratedContent.trim().length === 0) {
+             throw new Error("生成内容为空（或被正则完全过滤）")
         }
 
         // Trigger Summary
