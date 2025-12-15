@@ -3340,6 +3340,12 @@ function App() {
              checkAndGenerateSummary(activeChapterId, fullFinalContent)
         }
 
+        // Trigger Auto Optimize
+        if (autoOptimizeRef.current && activeChapterId) {
+             terminal.log(`[Generate] Auto-optimizing chapter ${activeChapterId}...`)
+             await handleOptimize(activeChapterId, fullFinalContent)
+        }
+
         terminal.log(`[Generate] Attempt ${attempt + 1} successful.`)
         setUserPrompt('')
         break // Success, exit loop
@@ -4948,8 +4954,12 @@ function App() {
                                        </button>
                                     </div>
 
+                                </div>
+                                
+                                {/* Grid Content */}
+                                <div className="flex-1 p-6 pb-24 overflow-y-auto custom-scrollbar">
                                     {/* User Notes Area */}
-                                    <div className="mt-4 pt-4 border-t border-gray-700/50">
+                                    <div className="mb-6 pb-6 border-b border-gray-700/50">
                                        <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
                                           <FileText className="w-3 h-3" />
                                           <span>用户输入记录 & 设定上下文 (AI 生成时会参考此内容)</span>
@@ -4961,10 +4971,6 @@ function App() {
                                           placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这组世界观的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
                                        />
                                     </div>
-                                </div>
-                                
-                                {/* Grid Content */}
-                                <div className="flex-1 p-6 pb-24 overflow-y-auto custom-scrollbar">
                                     {(() => {
                                        const currentSet = activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)
                                        const entries = currentSet?.entries || []
