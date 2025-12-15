@@ -228,6 +228,20 @@ const defaultOptimizePresets: GeneratorPreset[] = [
   }
 ]
 
+const defaultAnalysisPresets: GeneratorPreset[] = [
+  {
+    id: 'default',
+    name: '默认分析预设',
+    temperature: 0.7,
+    topP: 0.95,
+    topK: 1,
+    prompts: [
+      { id: '1', role: 'system', content: '你是一个严厉的小说主编。请犀利地指出文章中的问题。', enabled: true },
+      { id: '2', role: 'user', content: '请分析以下正文：\n\n{{content}}\n\n【用户要求】：\n{{input}}\n\n请列出具体的修改建议（如剧情节奏、人物性格、描写细节等），不需要重写正文。', enabled: true }
+    ]
+  }
+]
+
 const defaultPrompts: PromptItem[] = [
   { id: 1, name: "Main Prompt", role: "system", content: "Write {{char}}'s next reply in a fictional chat between {{char}} and {{user}}. Write 1 reply only in internet RP style, italicize actions, and avoid quotation marks. Use markdown. Be proactive, creative, and drive the plot and conversation forward. Write at least 1 paragraph, up to 4. Always stay in character and avoid repetition.", trigger: "All types (default)", position: "relative", active: true, icon: "📝" },
   { id: 2, name: "NSFW Prompt", role: "system", content: "NSFW/Smut is allowed. Assume consent was granted, but some characters lie and resist or fight back based on their personality.", trigger: "All types (default)", position: "relative", active: true, icon: "🔞" },
@@ -586,6 +600,35 @@ function App() {
   })
   const [activeOptimizePresetId, setActiveOptimizePresetId] = useState<string>(() => localStorage.getItem('activeOptimizePresetId') || 'default')
 
+  // Analysis Presets State
+  const [analysisPresets, setAnalysisPresets] = useState<GeneratorPreset[]>(() => {
+    try {
+      const saved = localStorage.getItem('analysisPresets')
+      return saved ? JSON.parse(saved) : defaultAnalysisPresets
+    } catch (e) {
+      return defaultAnalysisPresets
+    }
+  })
+  const [activeAnalysisPresetId, setActiveAnalysisPresetId] = useState<string>(() => localStorage.getItem('activeAnalysisPresetId') || 'default')
+  
+  useEffect(() => {
+    localStorage.setItem('analysisPresets', JSON.stringify(analysisPresets))
+  }, [analysisPresets])
+
+  useEffect(() => {
+    localStorage.setItem('activeAnalysisPresetId', activeAnalysisPresetId)
+  }, [activeAnalysisPresetId])
+
+  // Two Step Optimization State
+  const [twoStepOptimization, setTwoStepOptimization] = useState(() => localStorage.getItem('twoStepOptimization') === 'true')
+  const twoStepOptimizationRef = useRef(twoStepOptimization)
+  useEffect(() => {
+    localStorage.setItem('twoStepOptimization', String(twoStepOptimization))
+    twoStepOptimizationRef.current = twoStepOptimization
+  }, [twoStepOptimization])
+
+  const [analysisResult, setAnalysisResult] = useState('')
+
   // Auto Optimize State
   const [autoOptimize, setAutoOptimize] = useState(() => localStorage.getItem('autoOptimize') === 'true')
   const autoOptimizeRef = useRef(autoOptimize)
@@ -596,7 +639,7 @@ function App() {
 
   // Common Generator Settings Modal
   const [showGeneratorSettingsModal, setShowGeneratorSettingsModal] = useState(false)
-  const [generatorSettingsType, setGeneratorSettingsType] = useState<'outline' | 'character' | 'worldview' | 'optimize'>('outline')
+  const [generatorSettingsType, setGeneratorSettingsType] = useState<'outline' | 'character' | 'worldview' | 'optimize' | 'analysis'>('outline')
   
   // Generator Prompt Edit Modal State
   const [showGeneratorPromptEditModal, setShowGeneratorPromptEditModal] = useState(false)
@@ -1870,6 +1913,7 @@ function App() {
         case 'character': return characterPresets
         case 'worldview': return worldviewPresets
         case 'optimize': return optimizePresets
+        case 'analysis': return analysisPresets
         default: return outlinePresets
      }
   }
@@ -1879,6 +1923,7 @@ function App() {
         case 'character': setCharacterPresets(newPresets); break;
         case 'worldview': setWorldviewPresets(newPresets); break;
         case 'optimize': setOptimizePresets(newPresets); break;
+        case 'analysis': setAnalysisPresets(newPresets); break;
         default: setOutlinePresets(newPresets); break;
      }
   }
@@ -1888,6 +1933,7 @@ function App() {
         case 'character': return activeCharacterPresetId
         case 'worldview': return activeWorldviewPresetId
         case 'optimize': return activeOptimizePresetId
+        case 'analysis': return activeAnalysisPresetId
         default: return activeOutlinePresetId
      }
   }
@@ -1897,6 +1943,7 @@ function App() {
         case 'character': setActiveCharacterPresetId(id); break;
         case 'worldview': setActiveWorldviewPresetId(id); break;
         case 'optimize': setActiveOptimizePresetId(id); break;
+        case 'analysis': setActiveAnalysisPresetId(id); break;
         default: setActiveOutlinePresetId(id); break;
      }
   }
@@ -1905,7 +1952,8 @@ function App() {
     const newId = `${generatorSettingsType}_${Date.now()}`
     const typeName = generatorSettingsType === 'outline' ? '大纲' : 
                      generatorSettingsType === 'character' ? '角色' : 
-                     generatorSettingsType === 'worldview' ? '世界观' : '优化'
+                     generatorSettingsType === 'worldview' ? '世界观' : 
+                     generatorSettingsType === 'analysis' ? '分析' : '优化'
     const newPreset: GeneratorPreset = {
       id: newId,
       name: `新${typeName}预设`,
@@ -2880,6 +2928,56 @@ function App() {
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
+    let currentAnalysisResult = ''
+
+    // Phase 1: Analysis (if enabled)
+    if (twoStepOptimizationRef.current) {
+        try {
+            if (optimizeAbortControllerRef.current?.signal.aborted) return
+            terminal.log(`[Optimize] Starting Phase 1: Analysis...`)
+            const openai = new OpenAI({
+                apiKey: apiKey,
+                baseURL: baseUrl,
+                dangerouslyAllowBrowser: true
+            })
+
+            const analysisPreset = analysisPresets.find(p => p.id === activeAnalysisPresetId) || analysisPresets[0]
+            
+            const analysisMessages: any[] = analysisPreset.prompts
+                .filter(p => p.enabled)
+                .map(p => {
+                    let content = p.content
+                    content = content.replace('{{content}}', sourceContentToUse)
+                    content = content.replace('{{input}}', userPrompt)
+                    return { role: p.role, content }
+                })
+
+            const completion = await openai.chat.completions.create({
+                model: optimizeModel || model,
+                messages: analysisMessages,
+                temperature: analysisPreset.temperature ?? 0.7,
+                top_p: analysisPreset.topP ?? 0.95,
+                top_k: analysisPreset.topK && analysisPreset.topK > 0 ? analysisPreset.topK : 1,
+            } as any, {
+                signal: optimizeAbortControllerRef.current.signal
+            })
+
+            currentAnalysisResult = completion.choices[0]?.message?.content || ''
+            setAnalysisResult(currentAnalysisResult)
+            terminal.log(`[Optimize] Analysis complete.`)
+
+        } catch (err: any) {
+            if (err.name === 'AbortError' || err.message === 'Aborted') {
+                terminal.log('[Optimize] Analysis aborted.')
+                setIsOptimizing(false)
+                return
+            }
+            terminal.error(`[Optimize] Analysis failed: ${err.message}`)
+            setError('分析阶段失败: ' + err.message)
+            setIsOptimizing(false)
+            return
+        }
+    }
 
     while (attempt < maxAttempts) {
       try {
@@ -2894,14 +2992,39 @@ function App() {
         const activePreset = optimizePresets.find(p => p.id === activeOptimizePresetId) || optimizePresets[0]
         
         // Correctly build messages from the active preset's prompts
+        let isAnalysisUsed = false
         const messages: any[] = activePreset.prompts
           .filter(p => p.enabled)
           .map(p => {
              let content = p.content
              content = content.replace('{{content}}', sourceContentToUse)
              content = content.replace('{{input}}', userPrompt)
+             
+             if (currentAnalysisResult) {
+                 if (content.includes('{{analysis}}')) {
+                     content = content.replace('{{analysis}}', currentAnalysisResult)
+                     isAnalysisUsed = true
+                 }
+             }
              return { role: p.role, content }
           })
+        
+        // If analysis result exists but wasn't used in placeholder, append to the last user message
+        if (currentAnalysisResult && !isAnalysisUsed) {
+             let lastUserIdx = -1
+             for (let i = messages.length - 1; i >= 0; i--) {
+                 if (messages[i].role === 'user') {
+                     lastUserIdx = i
+                     break
+                 }
+             }
+             
+             if (lastUserIdx !== -1) {
+                 messages[lastUserIdx].content += `\n\n【AI 修改建议】：\n${currentAnalysisResult}`
+             } else {
+                 messages.push({ role: 'user', content: `请基于以下修改建议优化正文：\n\n${currentAnalysisResult}` })
+             }
+        }
         
         // Fallback if no user prompt is found (shouldn't happen with default presets)
         if (!messages.some(m => m.role === 'user')) {
@@ -5809,6 +5932,27 @@ function App() {
                 </div>
                 
                 <div className="relative flex-1 flex flex-col min-h-0">
+                    {analysisResult && (
+                        <div className="bg-gray-800 border-b border-gray-700 p-4 max-h-60 overflow-y-auto shrink-0 rounded-b-lg mx-4 md:mx-0 mb-4 shadow-lg">
+                            <div className="text-xs font-bold text-[var(--theme-color)] mb-2 flex justify-between items-center sticky top-0 bg-gray-800 pb-2 border-b border-gray-700/50 z-10">
+                                <span className="flex items-center gap-2">
+                                    <Bot className="w-3.5 h-3.5"/>
+                                    AI 分析建议
+                                </span>
+                                <button 
+                                    onClick={() => setAnalysisResult('')} 
+                                    className="text-gray-500 hover:text-white p-1 hover:bg-gray-700 rounded transition-colors"
+                                    title="清除建议"
+                                >
+                                    <X className="w-3.5 h-3.5"/>
+                                </button>
+                            </div>
+                            <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed prose prose-invert prose-sm max-w-none">
+                                <ReactMarkdown>{analysisResult}</ReactMarkdown>
+                            </div>
+                        </div>
+                    )}
+
                     {isEditingChapter ? (
                     <textarea
                         value={activeChapter.content}
@@ -6837,7 +6981,8 @@ function App() {
                  <h3 className="text-lg font-bold text-gray-200">
                     {generatorSettingsType === 'outline' ? '大纲助手设置' : 
                      generatorSettingsType === 'character' ? '角色生成设置' : 
-                     generatorSettingsType === 'worldview' ? '世界观生成设置' : '优化助手设置'}
+                     generatorSettingsType === 'worldview' ? '世界观生成设置' : 
+                     generatorSettingsType === 'analysis' ? '分析阶段设置' : '优化助手设置'}
                  </h3>
                  <button onClick={() => setShowGeneratorSettingsModal(false)} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
              </div>
@@ -6846,6 +6991,41 @@ function App() {
                 {/* Sidebar: Preset List */}
                 <div className="w-full md:w-48 h-48 md:h-auto border-b md:border-r md:border-b-0 border-gray-700 bg-gray-900/50 flex flex-col shrink-0">
                    <div className="p-2 border-b border-gray-700">
+                      
+                      {generatorSettingsType === 'optimize' && (
+                          <div className="mb-2 pb-2 border-b border-gray-700 space-y-2">
+                              <div 
+                                className="flex items-center justify-between text-xs text-gray-300 cursor-pointer p-1.5 hover:bg-gray-800 rounded select-none"
+                                onClick={() => setTwoStepOptimization(!twoStepOptimization)}
+                              >
+                                  <span>两阶段优化</span>
+                                  <div className={`w-7 h-4 rounded-full relative transition-colors ${twoStepOptimization ? 'bg-[var(--theme-color)]' : 'bg-gray-600'}`}>
+                                      <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${twoStepOptimization ? 'left-3.5' : 'left-0.5'}`} />
+                                  </div>
+                              </div>
+                              
+                              {twoStepOptimization && (
+                                  <button 
+                                    onClick={() => setGeneratorSettingsType('analysis')}
+                                    className="w-full py-1.5 text-xs bg-purple-900/30 hover:bg-purple-900/50 text-purple-200 border border-purple-800 rounded transition-colors flex items-center justify-center gap-1"
+                                  >
+                                    <Settings className="w-3 h-3" /> 配置分析预设
+                                  </button>
+                              )}
+                          </div>
+                      )}
+                      
+                      {generatorSettingsType === 'analysis' && (
+                          <div className="mb-2 pb-2 border-b border-gray-700">
+                              <button 
+                                onClick={() => setGeneratorSettingsType('optimize')}
+                                className="w-full py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors flex items-center justify-center gap-1"
+                              >
+                                <ArrowLeft className="w-3 h-3" /> 返回优化设置
+                              </button>
+                          </div>
+                      )}
+
                       <button 
                         onClick={handleAddNewGeneratorPreset}
                         className="w-full py-1.5 flex items-center justify-center gap-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-xs rounded transition-colors"
