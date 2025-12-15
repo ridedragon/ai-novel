@@ -521,6 +521,10 @@ function App() {
   const [selectedWorldviewSetIdForOutlineGen, setSelectedWorldviewSetIdForOutlineGen] = useState<string | null>(null)
   const [showWorldviewSelectorForOutline, setShowWorldviewSelectorForOutline] = useState(false)
   const [editingOutlineItemIndex, setEditingOutlineItemIndex] = useState<number | null>(null)
+  
+  // Drag and Drop State for Outline
+  const [draggedOutlineIndex, setDraggedOutlineIndex] = useState<number | null>(null)
+  const [isOutlineDragEnabled, setIsOutlineDragEnabled] = useState(false)
 
   // Outline Presets State
   const [outlinePresets, setOutlinePresets] = useState<GeneratorPreset[]>(() => {
@@ -783,7 +787,62 @@ function App() {
     updateOutlineSet(setId, { items: newItems })
   }
 
+  const handleMoveOutlineItem = (index: number, direction: 'up' | 'down') => {
+    if (!activeNovelId || !activeOutlineSetId) return
+    
+    const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
+    if (!currentSet) return
+    
+    const newItems = [...currentSet.items]
+    if (direction === 'up') {
+        if (index <= 0) return
+        // Swap with previous
+        const temp = newItems[index]
+        newItems[index] = newItems[index - 1]
+        newItems[index - 1] = temp
+    } else {
+        if (index >= newItems.length - 1) return
+        // Swap with next
+        const temp = newItems[index]
+        newItems[index] = newItems[index + 1]
+        newItems[index + 1] = temp
+    }
+    
+    updateOutlineItemsInSet(activeOutlineSetId, newItems)
+  }
+
+  const moveOutlineItemDrag = (fromIndex: number, toIndex: number) => {
+    if (!activeNovelId || !activeOutlineSetId) return
+    const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
+    if (!currentSet) return
+    
+    const newItems = [...currentSet.items]
+    const [movedItem] = newItems.splice(fromIndex, 1)
+    newItems.splice(toIndex, 0, movedItem)
+    
+    updateOutlineItemsInSet(activeOutlineSetId, newItems)
+  }
+
+  const handleOutlineDragStart = (_: React.DragEvent, index: number) => {
+    setDraggedOutlineIndex(index)
+  }
+  
+  const handleOutlineDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    if (draggedOutlineIndex === null) return
+    if (draggedOutlineIndex !== index) {
+        moveOutlineItemDrag(draggedOutlineIndex, index)
+        setDraggedOutlineIndex(index)
+    }
+  }
+  
+  const handleOutlineDragEnd = () => {
+    setDraggedOutlineIndex(null)
+    setIsOutlineDragEnabled(false)
+  }
+
   // Character Set Helpers
+
   const updateCharacterSets = (newSets: CharacterSet[]) => {
     if (!activeNovelId) return
     setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, characterSets: newSets } : n))
@@ -5330,10 +5389,24 @@ function App() {
                                              <div className="space-y-4">
                                                 {items.map((item, idx) => (
                                                    <div 
-                                                      key={idx} 
+                                                      key={idx}
+                                                      draggable={isOutlineDragEnabled}
+                                                      onDragStart={(e) => handleOutlineDragStart(e, idx)}
+                                                      onDragOver={(e) => handleOutlineDragOver(e, idx)}
+                                                      onDragEnd={handleOutlineDragEnd}
                                                       onClick={() => setEditingOutlineItemIndex(idx)}
-                                                      className="p-4 bg-gray-800 rounded-xl border border-gray-700 shadow-sm hover:border-[var(--theme-color)] transition-colors group cursor-pointer relative"
+                                                      className={`p-4 pl-10 pr-28 bg-gray-800 rounded-xl border border-gray-700 shadow-sm hover:border-[var(--theme-color)] transition-colors group cursor-pointer relative ${draggedOutlineIndex === idx ? 'opacity-50' : ''}`}
                                                    >
+                                                      {/* Drag Handle */}
+                                                      <div 
+                                                         className="absolute left-2 top-1/2 -translate-y-1/2 p-2 cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 z-10 hover:bg-gray-700/50 rounded"
+                                                         onMouseEnter={() => setIsOutlineDragEnabled(true)}
+                                                         onMouseLeave={() => setIsOutlineDragEnabled(false)}
+                                                         onClick={(e) => e.stopPropagation()}
+                                                      >
+                                                         <GripVertical className="w-5 h-5" />
+                                                      </div>
+
                                                       <div className="flex items-center gap-2 mb-2 pointer-events-none">
                                                          <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-400 shrink-0">
                                                             {idx + 1}
@@ -5348,18 +5421,48 @@ function App() {
                                                          </div>
                                                       </div>
                                                       
-                                                      {/* Floating Delete Button */}
-                                                      <button 
-                                                         onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            const newItems = items.filter((_, i) => i !== idx)
-                                                            updateOutlineItemsInSet(activeOutlineSetId, newItems)
-                                                         }}
-                                                         className="absolute top-4 right-4 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-gray-800/80 rounded"
-                                                         title="删除章节"
-                                                      >
-                                                         <Trash2 className="w-4 h-4" />
-                                                      </button>
+                                                      {/* Action Buttons */}
+                                                      <div className="absolute top-4 right-4 flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800/90 rounded-lg p-1 border border-gray-700/50 backdrop-blur-sm shadow-sm" onClick={(e) => e.stopPropagation()}>
+                                                         <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleMoveOutlineItem(idx, 'up'); }}
+                                                            disabled={idx === 0}
+                                                            className="p-2 text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 rounded hover:bg-gray-700 transition-colors active:bg-gray-600"
+                                                            title="上移"
+                                                         >
+                                                            <ArrowUp className="w-4 h-4" />
+                                                         </button>
+                                                         <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleMoveOutlineItem(idx, 'down'); }}
+                                                            disabled={idx === items.length - 1}
+                                                            className="p-2 text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 rounded hover:bg-gray-700 transition-colors active:bg-gray-600"
+                                                            title="下移"
+                                                         >
+                                                            <ArrowDown className="w-4 h-4" />
+                                                         </button>
+                                                         <div className="w-px h-4 bg-gray-700 mx-0.5"></div>
+                                                         <button 
+                                                            onClick={(e) => {
+                                                               e.stopPropagation()
+                                                               setDialog({
+                                                                 isOpen: true,
+                                                                 type: 'confirm',
+                                                                 title: '删除章节大纲',
+                                                                 message: `确定要删除章节 "${item.title}" 吗？`,
+                                                                 inputValue: '',
+                                                                 onConfirm: () => {
+                                                                    const newItems = items.filter((_, i) => i !== idx)
+                                                                    updateOutlineItemsInSet(activeOutlineSetId, newItems)
+                                                                    closeDialog()
+                                                                 }
+                                                               })
+                                                            }}
+                                                            className="p-2 text-gray-400 hover:text-red-400 rounded hover:bg-gray-700 transition-colors active:bg-gray-600"
+                                                            title="删除章节"
+                                                         >
+                                                            <Trash2 className="w-4 h-4" />
+                                                         </button>
+                                                      </div>
+
                                                    </div>
                                                 ))}
                                              </div>
