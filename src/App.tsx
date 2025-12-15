@@ -109,6 +109,13 @@ interface GeneratorPrompt {
   enabled: boolean
 }
 
+interface PresetApiConfig {
+  apiKey?: string
+  baseUrl?: string
+  model?: string
+  modelList?: string[]
+}
+
 interface GeneratorPreset {
   id: string
   name: string
@@ -116,6 +123,7 @@ interface GeneratorPreset {
   temperature?: number
   topP?: number
   topK?: number
+  apiConfig?: PresetApiConfig
 }
 
 interface RegexScript {
@@ -148,6 +156,7 @@ interface CompletionPreset {
   candidateCount: number
   prompts?: PromptItem[]
   regexScripts?: RegexScript[]
+  apiConfig?: PresetApiConfig
 }
 
 const defaultOutlinePresets: GeneratorPreset[] = [
@@ -468,6 +477,7 @@ function App() {
   const [characterModel, setCharacterModel] = useState(() => localStorage.getItem('characterModel') || '')
   const [worldviewModel, setWorldviewModel] = useState(() => localStorage.getItem('worldviewModel') || '')
   const [optimizeModel, setOptimizeModel] = useState(() => localStorage.getItem('optimizeModel') || '')
+  const [analysisModel, setAnalysisModel] = useState(() => localStorage.getItem('analysisModel') || '')
   
   const [modelList, setModelList] = useState<string[]>(() => {
     try {
@@ -487,8 +497,9 @@ function App() {
     localStorage.setItem('characterModel', characterModel)
     localStorage.setItem('worldviewModel', worldviewModel)
     localStorage.setItem('optimizeModel', optimizeModel)
+    localStorage.setItem('analysisModel', analysisModel)
     localStorage.setItem('modelList', JSON.stringify(modelList))
-  }, [apiKey, baseUrl, model, outlineModel, characterModel, worldviewModel, optimizeModel, modelList])
+  }, [apiKey, baseUrl, model, outlineModel, characterModel, worldviewModel, optimizeModel, analysisModel, modelList])
 
   const handleAddModel = () => {
     if (newModelInput.trim()) {
@@ -639,6 +650,7 @@ function App() {
 
   // Common Generator Settings Modal
   const [showGeneratorSettingsModal, setShowGeneratorSettingsModal] = useState(false)
+  const [showGeneratorApiConfig, setShowGeneratorApiConfig] = useState(false)
   const [generatorSettingsType, setGeneratorSettingsType] = useState<'outline' | 'character' | 'worldview' | 'optimize' | 'analysis'>('outline')
   
   // Generator Prompt Edit Modal State
@@ -734,7 +746,7 @@ function App() {
   const outlineAbortControllerRef = useRef<AbortController | null>(null)
   const characterAbortControllerRef = useRef<AbortController | null>(null)
   const worldviewAbortControllerRef = useRef<AbortController | null>(null)
-  const optimizeAbortControllerRef = useRef<AbortController | null>(null)
+  const optimizeAbortControllersRef = useRef<Map<number, AbortController>>(new Map())
   const generateAbortControllerRef = useRef<AbortController | null>(null)
   const [autoWriteOutlineSetId, setAutoWriteOutlineSetId] = useState<string | null>(null)
   const [includeFullOutlineInAutoWrite, setIncludeFullOutlineInAutoWrite] = useState(false)
@@ -756,7 +768,7 @@ function App() {
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false)
   const [isGeneratingCharacters, setIsGeneratingCharacters] = useState(false)
   const [isGeneratingWorldview, setIsGeneratingWorldview] = useState(false)
-  const [isOptimizing, setIsOptimizing] = useState(false)
+  const [optimizingChapterIds, setOptimizingChapterIds] = useState<Set<number>>(new Set())
   const [isAutoWriting, setIsAutoWriting] = useState(false)
   const [autoWriteStatus, setAutoWriteStatus] = useState('')
 
@@ -1324,6 +1336,7 @@ function App() {
   const [topP, setTopP] = useState(() => getInitialSetting('topP', 0.97))
   const [topK, setTopK] = useState(() => getInitialSetting('topK', 1))
   const [maxRetries, setMaxRetries] = useState(() => parseInt(localStorage.getItem('maxRetries') || '3'))
+  const [presetApiConfig, setPresetApiConfig] = useState<PresetApiConfig | undefined>(() => getInitialSetting('apiConfig', undefined))
 
   useEffect(() => {
     localStorage.setItem('maxRetries', maxRetries.toString())
@@ -1424,10 +1437,11 @@ function App() {
       topK,
       stream,
       candidateCount,
-      prompts
+      prompts,
+      apiConfig: presetApiConfig
     }
     localStorage.setItem(`completion_settings_draft_${activePresetId}`, JSON.stringify(draft))
-  }, [contextLength, maxReplyLength, temperature, frequencyPenalty, presencePenalty, topP, topK, stream, candidateCount, prompts, activePresetId])
+  }, [contextLength, maxReplyLength, temperature, frequencyPenalty, presencePenalty, topP, topK, stream, candidateCount, prompts, activePresetId, presetApiConfig])
 
   // Sync state when switching presets (only on change)
   useEffect(() => {
@@ -1447,6 +1461,7 @@ function App() {
               setStream(draft.stream)
               setCandidateCount(draft.candidateCount)
               if (draft.prompts) setPrompts(draft.prompts)
+              setPresetApiConfig(draft.apiConfig)
               loadedFromDraft = true
           }
       } catch (e) {
@@ -1468,6 +1483,7 @@ function App() {
             if (preset.prompts) {
               setPrompts(preset.prompts)
             }
+            setPresetApiConfig(preset.apiConfig)
           }
       }
       prevActivePresetIdRef.current = activePresetId
@@ -1527,6 +1543,7 @@ function App() {
       if (preset.prompts) {
         setPrompts(preset.prompts)
       }
+      setPresetApiConfig(preset.apiConfig)
       setShowPresetDropdown(false)
     }
   }
@@ -1684,7 +1701,8 @@ function App() {
                 topK,
                 stream,
                 candidateCount,
-                prompts: prompts
+                prompts: prompts,
+                apiConfig: presetApiConfig
             }
         }
         return p
@@ -1705,7 +1723,8 @@ function App() {
       topK,
       stream,
       candidateCount,
-      prompts
+      prompts,
+      apiConfig: presetApiConfig
     }
     localStorage.setItem(`completion_settings_draft_${activePresetId}`, JSON.stringify(draft))
 
@@ -1745,6 +1764,7 @@ function App() {
                   if (preset.prompts) {
                     setPrompts(preset.prompts)
                   }
+                  setPresetApiConfig(preset.apiConfig)
                   closeDialog()
               }
           })
@@ -2007,6 +2027,19 @@ function App() {
   }
 
 
+  const getApiConfig = (presetConfig: PresetApiConfig | undefined, featureModel: string) => {
+      const finalApiKey = presetConfig?.apiKey || apiKey
+      const finalBaseUrl = presetConfig?.baseUrl || baseUrl
+      
+      // Model Priority: Preset Config > Feature Specific Global > Global Default
+      let finalModel = presetConfig?.model
+      if (!finalModel) {
+          finalModel = featureModel || model
+      }
+      
+      return { apiKey: finalApiKey, baseUrl: finalBaseUrl, model: finalModel }
+  }
+
   // Outline Actions
   const handleAddOutlineSet = () => {
     if (!newOutlineSetName.trim() || !activeNovelId) return
@@ -2063,7 +2096,10 @@ function App() {
 
   // Outline Generation
   const handleGenerateOutline = async () => {
-    if (!apiKey) {
+    const activePreset = outlinePresets.find(p => p.id === activeOutlinePresetId) || outlinePresets[0]
+    const apiConfig = getApiConfig(activePreset.apiConfig, outlineModel)
+
+    if (!apiConfig.apiKey) {
       setError('请先配置 API Key')
       setShowSettings(true)
       return
@@ -2096,9 +2132,12 @@ function App() {
       try {
         if (outlineAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Outline] Attempt ${attempt + 1}/${maxAttempts} started...`)
+        const activePreset = outlinePresets.find(p => p.id === activeOutlinePresetId) || outlinePresets[0]
+        const apiConfig = getApiConfig(activePreset.apiConfig, outlineModel)
+
         const openai = new OpenAI({
-          apiKey: apiKey,
-          baseURL: baseUrl,
+          apiKey: apiConfig.apiKey,
+          baseURL: apiConfig.baseUrl,
           dangerouslyAllowBrowser: true
         })
 
@@ -2129,8 +2168,6 @@ function App() {
             ).join('\n') + '\n'
         }
 
-        const activePreset = outlinePresets.find(p => p.id === activeOutlinePresetId) || outlinePresets[0]
-        
         // Build Messages from Preset
         const messages: any[] = activePreset.prompts
           .filter(p => p.enabled)
@@ -2153,7 +2190,7 @@ function App() {
         }
 
         const completion = await openai.chat.completions.create({
-          model: outlineModel || model,
+          model: apiConfig.model,
           messages: messages,
           temperature: activePreset.temperature ?? 0.7,
           top_p: activePreset.topP ?? 0.95,
@@ -2285,7 +2322,10 @@ function App() {
   }
 
   const handleGenerateCharacters = async () => {
-    if (!apiKey) {
+    const activePreset = characterPresets.find(p => p.id === activeCharacterPresetId) || characterPresets[0]
+    const apiConfig = getApiConfig(activePreset.apiConfig, characterModel)
+
+    if (!apiConfig.apiKey) {
       setError('请先配置 API Key')
       setShowSettings(true)
       return
@@ -2318,9 +2358,12 @@ function App() {
       try {
         if (characterAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Characters] Attempt ${attempt + 1}/${maxAttempts} started...`)
+        const activePreset = characterPresets.find(p => p.id === activeCharacterPresetId) || characterPresets[0]
+        const apiConfig = getApiConfig(activePreset.apiConfig, characterModel)
+
         const openai = new OpenAI({
-          apiKey: apiKey,
-          baseURL: baseUrl,
+          apiKey: apiConfig.apiKey,
+          baseURL: apiConfig.baseUrl,
           dangerouslyAllowBrowser: true
         })
 
@@ -2335,7 +2378,6 @@ function App() {
             }
         }
 
-        const activePreset = characterPresets.find(p => p.id === activeCharacterPresetId) || characterPresets[0]
         const contextStr = `${JSON.stringify(existingChars, null, 2)}\n${worldviewContext}`
 
         const messages: any[] = activePreset.prompts
@@ -2354,7 +2396,7 @@ function App() {
         }
 
         const completion = await openai.chat.completions.create({
-          model: characterModel || model,
+          model: apiConfig.model,
           messages: messages,
           temperature: activePreset.temperature ?? 0.7,
           top_p: activePreset.topP ?? 0.95,
@@ -2514,7 +2556,10 @@ function App() {
 
   // Worldview Generation
   const handleGenerateWorldview = async () => {
-    if (!apiKey) {
+    const activePreset = worldviewPresets.find(p => p.id === activeWorldviewPresetId) || worldviewPresets[0]
+    const apiConfig = getApiConfig(activePreset.apiConfig, worldviewModel)
+
+    if (!apiConfig.apiKey) {
       setError('请先配置 API Key')
       setShowSettings(true)
       return
@@ -2547,16 +2592,18 @@ function App() {
       try {
         if (worldviewAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Worldview] Attempt ${attempt + 1}/${maxAttempts} started...`)
+        const activePreset = worldviewPresets.find(p => p.id === activeWorldviewPresetId) || worldviewPresets[0]
+        const apiConfig = getApiConfig(activePreset.apiConfig, worldviewModel)
+
         const openai = new OpenAI({
-          apiKey: apiKey,
-          baseURL: baseUrl,
+          apiKey: apiConfig.apiKey,
+          baseURL: apiConfig.baseUrl,
           dangerouslyAllowBrowser: true
         })
 
         const existingEntries = targetSet?.entries || []
         const notes = targetSet?.userNotes || ''
 
-        const activePreset = worldviewPresets.find(p => p.id === activeWorldviewPresetId) || worldviewPresets[0]
         const contextStr = JSON.stringify(existingEntries, null, 2)
 
         const messages: any[] = activePreset.prompts
@@ -2575,7 +2622,7 @@ function App() {
         }
 
         const completion = await openai.chat.completions.create({
-          model: worldviewModel || model,
+          model: apiConfig.model,
           messages: messages,
           temperature: activePreset.temperature ?? 0.7,
           top_p: activePreset.topP ?? 0.95,
@@ -2836,9 +2883,25 @@ function App() {
       return contextContent
   }
 
+  const handleStopOptimize = (chapterId: number) => {
+      const controller = optimizeAbortControllersRef.current.get(chapterId)
+      if (controller) {
+          controller.abort()
+          optimizeAbortControllersRef.current.delete(chapterId)
+      }
+      setOptimizingChapterIds(prev => {
+          const next = new Set(prev)
+          next.delete(chapterId)
+          return next
+      })
+  }
+
   // Optimize Function
   const handleOptimize = async (targetId?: number, initialContent?: string) => {
-    if (!apiKey) {
+    const activePreset = optimizePresets.find(p => p.id === activeOptimizePresetId) || optimizePresets[0]
+    const apiConfig = getApiConfig(activePreset.apiConfig, optimizeModel)
+
+    if (!apiConfig.apiKey) {
       setError('请先配置 API Key')
       setShowSettings(true)
       return
@@ -2850,6 +2913,11 @@ function App() {
         return
     }
     
+    // Check if already optimizing
+    if (optimizingChapterIds.has(idToUse)) {
+        return
+    }
+
     let sourceContentToUse = initialContent
     if (sourceContentToUse === undefined) {
          const chap = chapters.find(c => c.id === idToUse)
@@ -2867,9 +2935,12 @@ function App() {
          return
     }
     
-    setIsOptimizing(true)
+    // Set Optimizing State
+    setOptimizingChapterIds(prev => new Set(prev).add(idToUse))
     setError('')
-    optimizeAbortControllerRef.current = new AbortController()
+    
+    const abortController = new AbortController()
+    optimizeAbortControllersRef.current.set(idToUse, abortController)
 
     const baseTime = Date.now()
 
@@ -2933,15 +3004,16 @@ function App() {
     // Phase 1: Analysis (if enabled)
     if (twoStepOptimizationRef.current) {
         try {
-            if (optimizeAbortControllerRef.current?.signal.aborted) return
+            if (abortController.signal.aborted) return
             terminal.log(`[Optimize] Starting Phase 1: Analysis...`)
+            const analysisPreset = analysisPresets.find(p => p.id === activeAnalysisPresetId) || analysisPresets[0]
+            const apiConfig = getApiConfig(analysisPreset.apiConfig, analysisModel)
+
             const openai = new OpenAI({
-                apiKey: apiKey,
-                baseURL: baseUrl,
+                apiKey: apiConfig.apiKey,
+                baseURL: apiConfig.baseUrl,
                 dangerouslyAllowBrowser: true
             })
-
-            const analysisPreset = analysisPresets.find(p => p.id === activeAnalysisPresetId) || analysisPresets[0]
             
             const analysisMessages: any[] = analysisPreset.prompts
                 .filter(p => p.enabled)
@@ -2953,13 +3025,13 @@ function App() {
                 })
 
             const completion = await openai.chat.completions.create({
-                model: optimizeModel || model,
+                model: apiConfig.model,
                 messages: analysisMessages,
                 temperature: analysisPreset.temperature ?? 0.7,
                 top_p: analysisPreset.topP ?? 0.95,
                 top_k: analysisPreset.topK && analysisPreset.topK > 0 ? analysisPreset.topK : 1,
             } as any, {
-                signal: optimizeAbortControllerRef.current.signal
+                signal: abortController.signal
             })
 
             currentAnalysisResult = completion.choices[0]?.message?.content || ''
@@ -2969,27 +3041,28 @@ function App() {
         } catch (err: any) {
             if (err.name === 'AbortError' || err.message === 'Aborted') {
                 terminal.log('[Optimize] Analysis aborted.')
-                setIsOptimizing(false)
+                handleStopOptimize(idToUse) // Clean up
                 return
             }
             terminal.error(`[Optimize] Analysis failed: ${err.message}`)
             setError('分析阶段失败: ' + err.message)
-            setIsOptimizing(false)
+            handleStopOptimize(idToUse)
             return
         }
     }
 
     while (attempt < maxAttempts) {
       try {
-        if (optimizeAbortControllerRef.current?.signal.aborted) break
+        if (abortController.signal.aborted) break
         terminal.log(`[Optimize] Attempt ${attempt + 1}/${maxAttempts} started...`)
+        const activePreset = optimizePresets.find(p => p.id === activeOptimizePresetId) || optimizePresets[0]
+        const apiConfig = getApiConfig(activePreset.apiConfig, optimizeModel)
+
         const openai = new OpenAI({
-          apiKey: apiKey,
-          baseURL: baseUrl,
+          apiKey: apiConfig.apiKey,
+          baseURL: apiConfig.baseUrl,
           dangerouslyAllowBrowser: true
         })
-
-        const activePreset = optimizePresets.find(p => p.id === activeOptimizePresetId) || optimizePresets[0]
         
         // Correctly build messages from the active preset's prompts
         let isAnalysisUsed = false
@@ -3032,21 +3105,21 @@ function App() {
         }
 
         const stream = await openai.chat.completions.create({
-          model: optimizeModel || model,
+          model: apiConfig.model,
           messages: messages,
           temperature: activePreset.temperature ?? 0.5,
           top_p: activePreset.topP ?? 0.9,
           top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
           stream: true
         } as any, {
-          signal: optimizeAbortControllerRef.current.signal
+          signal: abortController.signal
         }) as any
 
         let newContent = ''
         let hasReceivedContent = false
 
         for await (const chunk of stream) {
-          if (optimizeAbortControllerRef.current?.signal.aborted) throw new Error('Aborted')
+          if (abortController.signal.aborted) throw new Error('Aborted')
           const content = chunk.choices[0]?.delta?.content || ''
           if (content) hasReceivedContent = true
           newContent += content
@@ -3092,7 +3165,8 @@ function App() {
       }
     }
     
-    setIsOptimizing(false)
+    // Clean up
+    handleStopOptimize(idToUse)
   }
 
   // Auto Writing Loop
@@ -3175,9 +3249,11 @@ function App() {
 
       try {
         terminal.log(`[AutoWrite] Attempt ${attempt + 1}/${maxAttempts} started...`)
+        const config = getApiConfig(presetApiConfig, '')
+
         const openai = new OpenAI({
-          apiKey: apiKey,
-          baseURL: baseUrl,
+          apiKey: config.apiKey,
+          baseURL: config.baseUrl,
           dangerouslyAllowBrowser: true
         })
         
@@ -3230,7 +3306,7 @@ function App() {
         messages.push({ role: 'user', content: mainPrompt })
 
         const response = await openai.chat.completions.create({
-          model: model,
+          model: config.model,
           messages: messages,
           stream: stream,
           temperature: temperature,
@@ -3476,9 +3552,11 @@ function App() {
         if (generateAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Generate] Attempt ${attempt + 1}/${maxAttempts} started...`)
         
+        const config = getApiConfig(presetApiConfig, '')
+
         const openai = new OpenAI({
-          apiKey: apiKey,
-          baseURL: baseUrl,
+          apiKey: config.apiKey,
+          baseURL: config.baseUrl,
           dangerouslyAllowBrowser: true
         })
 
@@ -3505,7 +3583,7 @@ function App() {
         messages.push({ role: 'user', content: worldInfo + contextMsg + processedUserPrompt })
 
         const response = await openai.chat.completions.create({
-          model: model,
+          model: config.model,
           messages: messages,
           stream: stream,
           temperature: temperature,
@@ -4182,7 +4260,8 @@ function App() {
                     { label: '大纲生成模型', value: outlineModel, setter: setOutlineModel },
                     { label: '角色生成模型', value: characterModel, setter: setCharacterModel },
                     { label: '世界观生成模型', value: worldviewModel, setter: setWorldviewModel },
-                    { label: '正文优化模型', value: optimizeModel, setter: setOptimizeModel }
+                    { label: '正文优化模型', value: optimizeModel, setter: setOptimizeModel },
+                    { label: '正文分析模型', value: analysisModel, setter: setAnalysisModel }
                   ].map((item, idx) => (
                     <div key={idx} className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-gray-400">{item.label}</label>
@@ -5890,12 +5969,9 @@ function App() {
                         <span className={`text-xs font-medium ${autoOptimize ? 'text-purple-300' : 'text-gray-500'}`}>自动</span>
                     </div>
 
-                    {isOptimizing ? (
+                    {activeChapter && optimizingChapterIds.has(activeChapter.id) ? (
                         <button 
-                            onClick={() => {
-                                optimizeAbortControllerRef.current?.abort()
-                                setIsOptimizing(false)
-                            }}
+                            onClick={() => handleStopOptimize(activeChapter.id)}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm border border-transparent bg-red-600 hover:bg-red-500 text-white shadow-red-500/20 border-red-500"
                             title="停止优化"
                         >
@@ -7112,6 +7188,84 @@ function App() {
                                  onChange={(e) => updatePreset({ name: e.target.value })}
                                  className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
                               />
+                           </div>
+
+                           {/* Independent API Config Button & Panel */}
+                           <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-visible mb-4">
+                               <button 
+                                   onClick={() => setShowGeneratorApiConfig(!showGeneratorApiConfig)}
+                                   className="w-full flex items-center justify-between p-3 text-sm font-medium text-gray-300 hover:bg-gray-800 transition-colors bg-gray-900 rounded-lg"
+                               >
+                                   <div className="flex items-center gap-2">
+                                       <Settings className="w-4 h-4 text-[var(--theme-color)]" />
+                                       <span>独立 API 配置 (可选)</span>
+                                   </div>
+                                   {showGeneratorApiConfig ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                               </button>
+                               
+                               {showGeneratorApiConfig && (
+                                   <div className="p-4 border-t border-gray-700 space-y-4 bg-gray-800 animate-in slide-in-from-top-2 duration-200 rounded-b-lg">
+                                       <div className="space-y-1.5">
+                                            <label className="text-xs text-gray-400 font-medium">API Key</label>
+                                            <input 
+                                                type="password" 
+                                                value={currentPreset.apiConfig?.apiKey || ''}
+                                                onChange={(e) => updatePreset({ apiConfig: { ...currentPreset.apiConfig, apiKey: e.target.value } })}
+                                                placeholder="留空则使用全局设置"
+                                                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-xs text-gray-200 focus:border-[var(--theme-color)] outline-none placeholder-gray-600"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs text-gray-400 font-medium">Base URL</label>
+                                            <input 
+                                                type="text" 
+                                                value={currentPreset.apiConfig?.baseUrl || ''}
+                                                onChange={(e) => updatePreset({ apiConfig: { ...currentPreset.apiConfig, baseUrl: e.target.value } })}
+                                                placeholder="留空则使用全局设置"
+                                                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-xs text-gray-200 focus:border-[var(--theme-color)] outline-none placeholder-gray-600"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs text-gray-400 font-medium">Model</label>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    type="text" 
+                                                    value={currentPreset.apiConfig?.model || ''}
+                                                    onChange={(e) => updatePreset({ apiConfig: { ...currentPreset.apiConfig, model: e.target.value } })}
+                                                    placeholder="留空则使用全局/功能默认模型"
+                                                    className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-xs text-gray-200 focus:border-[var(--theme-color)] outline-none placeholder-gray-600"
+                                                />
+                                            </div>
+                                            <div className="mt-2">
+                                                <label className="text-xs text-gray-500 block mb-1">专用模型列表 (逗号分隔)</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={currentPreset.apiConfig?.modelList?.join(',') || ''}
+                                                    onChange={(e) => {
+                                                        const list = e.target.value.split(',').map(s => s.trim()).filter(s => s);
+                                                        updatePreset({ apiConfig: { ...currentPreset.apiConfig, modelList: list } });
+                                                    }}
+                                                    placeholder="配置后可在此处快速选择"
+                                                    className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-xs text-gray-200 focus:border-[var(--theme-color)] outline-none placeholder-gray-600"
+                                                />
+                                                {/* Quick Select */}
+                                                {currentPreset.apiConfig?.modelList && currentPreset.apiConfig.modelList.length > 0 && (
+                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                        {currentPreset.apiConfig.modelList.map(m => (
+                                                            <button
+                                                                key={m}
+                                                                onClick={() => updatePreset({ apiConfig: { ...currentPreset.apiConfig, model: m } })}
+                                                                className={`px-2 py-1 rounded text-xs border transition-colors ${currentPreset.apiConfig?.model === m ? 'bg-[var(--theme-color)] text-white border-transparent' : 'bg-gray-700 text-gray-300 border-gray-600 hover:border-gray-500 hover:bg-gray-600'}`}
+                                                            >
+                                                                {m}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                   </div>
+                               )}
                            </div>
 
                            <div className="bg-gray-900/30 rounded-lg p-4 border border-gray-700/50 space-y-4">
