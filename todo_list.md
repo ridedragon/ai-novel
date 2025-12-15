@@ -1,8 +1,0 @@
-- [x] Implement `handleMoveOutlineItem` function in `src/App.tsx` for swapping outline items.
-- [x] Locate the outline rendering map in `src/App.tsx`.
-- [x] Update the outline item UI to include "Up" and "Down" buttons.
-- [x] Ensure buttons handle click propagation correctly.
-- [x] Verify the "Up" button is disabled/hidden for the first item and "Down" for the last.
-- [x] Verify the buttons are easily clickable on mobile (adjust visibility/size).
-- [x] Fix syntax errors introduced by previous edit.
-- [x] Verify imports for new icons.

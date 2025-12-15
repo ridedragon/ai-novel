@@ -614,6 +614,9 @@ function App() {
   const [longTextMode, setLongTextMode] = useState(() => localStorage.getItem('longTextMode') === 'true')
   const [contextScope, setContextScope] = useState<string>(() => localStorage.getItem('contextScope') || 'all')
   
+  const longTextModeRef = useRef(longTextMode)
+  const contextScopeRef = useRef(contextScope)
+
   const [smallSummaryInterval, setSmallSummaryInterval] = useState<number | string>(() => {
     const val = localStorage.getItem('smallSummaryInterval')
     return val ? parseInt(val) : 3
@@ -627,13 +630,15 @@ function App() {
   const [bigSummaryPrompt, setBigSummaryPrompt] = useState(() => localStorage.getItem('bigSummaryPrompt') || "请根据以上的分段摘要，写一个宏观的剧情大纲（500字以内），概括这段时间内的主要情节发展。")
 
   useEffect(() => {
+    longTextModeRef.current = longTextMode
+    contextScopeRef.current = contextScope
     localStorage.setItem('longTextMode', String(longTextMode))
     localStorage.setItem('contextScope', contextScope)
     localStorage.setItem('smallSummaryInterval', String(smallSummaryInterval))
     localStorage.setItem('bigSummaryInterval', String(bigSummaryInterval))
     localStorage.setItem('smallSummaryPrompt', smallSummaryPrompt)
     localStorage.setItem('bigSummaryPrompt', bigSummaryPrompt)
-  }, [longTextMode, smallSummaryInterval, bigSummaryInterval, smallSummaryPrompt, bigSummaryPrompt])
+  }, [longTextMode, contextScope, smallSummaryInterval, bigSummaryInterval, smallSummaryPrompt, bigSummaryPrompt])
 
   // Persistence
   useEffect(() => {
@@ -2633,19 +2638,19 @@ function App() {
       const chapters = targetNovel.chapters
       let contextContent = ''
     
-      if (longTextMode) {
+      if (longTextModeRef.current) {
           // Determine filtering volume
           let filterVolumeId: string | null = null
           let filterUncategorized = false
 
-          if (contextScope === 'current') {
+          if (contextScopeRef.current === 'current') {
               if (targetChapter.volumeId) {
                   filterVolumeId = targetChapter.volumeId
               } else {
                   filterUncategorized = true
               }
-          } else if (contextScope !== 'all') {
-              filterVolumeId = contextScope
+          } else if (contextScopeRef.current !== 'all') {
+              filterVolumeId = contextScopeRef.current
           }
   
           const storyChapters = getStoryChapters(chapters)
@@ -3455,7 +3460,7 @@ function App() {
 
   // Summary Generation Helper
   const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string, targetNovelId: string = activeNovelId || '') => {
-    if (!longTextMode || !apiKey || !targetNovelId) return
+    if (!longTextModeRef.current || !apiKey || !targetNovelId) return
 
     // Get latest chapters from Ref to ensure we have up-to-date data even inside closures/loops
     const currentNovel = novelsRef.current.find(n => n.id === targetNovelId)
@@ -3626,7 +3631,7 @@ function App() {
   }
 
   const handleScanSummaries = async () => {
-    if (!longTextMode || !apiKey || !activeNovelId) {
+    if (!longTextModeRef.current || !apiKey || !activeNovelId) {
        setDialog({
           isOpen: true,
           type: 'alert',
