@@ -688,6 +688,11 @@ function App() {
   // Auto Write Refs & State
   const isAutoWritingRef = useRef(false)
   const autoWriteAbortControllerRef = useRef<AbortController | null>(null)
+  const outlineAbortControllerRef = useRef<AbortController | null>(null)
+  const characterAbortControllerRef = useRef<AbortController | null>(null)
+  const worldviewAbortControllerRef = useRef<AbortController | null>(null)
+  const optimizeAbortControllerRef = useRef<AbortController | null>(null)
+  const generateAbortControllerRef = useRef<AbortController | null>(null)
   const [autoWriteOutlineSetId, setAutoWriteOutlineSetId] = useState<string | null>(null)
   const [includeFullOutlineInAutoWrite, setIncludeFullOutlineInAutoWrite] = useState(false)
   const [activeCharacterSetId, setActiveCharacterSetId] = useState<string | null>(null)
@@ -2018,6 +2023,7 @@ function App() {
     
     setIsGeneratingOutline(true)
     setError('')
+    outlineAbortControllerRef.current = new AbortController()
 
     let targetSetId = activeOutlineSetId;
     let targetSet = activeNovel?.outlineSets?.find(s => s.id === targetSetId);
@@ -2040,6 +2046,7 @@ function App() {
 
     while (attempt < maxAttempts) {
       try {
+        if (outlineAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Outline] Attempt ${attempt + 1}/${maxAttempts} started...`)
         const openai = new OpenAI({
           apiKey: apiKey,
@@ -2103,7 +2110,9 @@ function App() {
           temperature: activePreset.temperature ?? 0.7,
           top_p: activePreset.topP ?? 0.95,
           top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
-        } as any)
+        } as any, {
+          signal: outlineAbortControllerRef.current.signal
+        })
 
         const content = completion.choices[0]?.message?.content || ''
         
@@ -2156,6 +2165,10 @@ function App() {
         }
 
       } catch (err: any) {
+        if (err.name === 'AbortError' || err.message === 'Aborted') {
+            terminal.log('[Outline] Generation aborted.')
+            break
+        }
         terminal.error(`[Outline] Attempt ${attempt + 1} failed:`, err)
         attempt++
         if (attempt >= maxAttempts) {
@@ -2232,6 +2245,7 @@ function App() {
     
     setIsGeneratingCharacters(true)
     setError('')
+    characterAbortControllerRef.current = new AbortController()
 
     let targetSetId = activeCharacterSetId;
     let targetSet = activeNovel?.characterSets?.find(s => s.id === targetSetId);
@@ -2254,6 +2268,7 @@ function App() {
 
     while (attempt < maxAttempts) {
       try {
+        if (characterAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Characters] Attempt ${attempt + 1}/${maxAttempts} started...`)
         const openai = new OpenAI({
           apiKey: apiKey,
@@ -2296,7 +2311,9 @@ function App() {
           temperature: activePreset.temperature ?? 0.7,
           top_p: activePreset.topP ?? 0.95,
           top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
-        } as any)
+        } as any, {
+          signal: characterAbortControllerRef.current.signal
+        })
 
         const content = completion.choices[0]?.message?.content || ''
         
@@ -2348,6 +2365,10 @@ function App() {
         }
 
       } catch (err: any) {
+        if (err.name === 'AbortError' || err.message === 'Aborted') {
+            terminal.log('[Characters] Generation aborted.')
+            break
+        }
         terminal.error(`[Characters] Attempt ${attempt + 1} failed:`, err)
         attempt++
         if (attempt >= maxAttempts) {
@@ -2453,6 +2474,7 @@ function App() {
     
     setIsGeneratingWorldview(true)
     setError('')
+    worldviewAbortControllerRef.current = new AbortController()
 
     let targetSetId = activeWorldviewSetId;
     let targetSet = activeNovel?.worldviewSets?.find(s => s.id === targetSetId);
@@ -2475,6 +2497,7 @@ function App() {
 
     while (attempt < maxAttempts) {
       try {
+        if (worldviewAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Worldview] Attempt ${attempt + 1}/${maxAttempts} started...`)
         const openai = new OpenAI({
           apiKey: apiKey,
@@ -2509,7 +2532,9 @@ function App() {
           temperature: activePreset.temperature ?? 0.7,
           top_p: activePreset.topP ?? 0.95,
           top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
-        } as any)
+        } as any, {
+          signal: worldviewAbortControllerRef.current.signal
+        })
 
         const content = completion.choices[0]?.message?.content || ''
         
@@ -2561,6 +2586,10 @@ function App() {
         }
 
       } catch (err: any) {
+        if (err.name === 'AbortError' || err.message === 'Aborted') {
+            terminal.log('[Worldview] Generation aborted.')
+            break
+        }
         terminal.error(`[Worldview] Attempt ${attempt + 1} failed:`, err)
         attempt++
         if (attempt >= maxAttempts) {
@@ -2792,6 +2821,7 @@ function App() {
     
     setIsOptimizing(true)
     setError('')
+    optimizeAbortControllerRef.current = new AbortController()
 
     const baseTime = Date.now()
 
@@ -2853,6 +2883,7 @@ function App() {
 
     while (attempt < maxAttempts) {
       try {
+        if (optimizeAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Optimize] Attempt ${attempt + 1}/${maxAttempts} started...`)
         const openai = new OpenAI({
           apiKey: apiKey,
@@ -2884,12 +2915,15 @@ function App() {
           top_p: activePreset.topP ?? 0.9,
           top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
           stream: true
-        } as any) as any
+        } as any, {
+          signal: optimizeAbortControllerRef.current.signal
+        }) as any
 
         let newContent = ''
         let hasReceivedContent = false
 
         for await (const chunk of stream) {
+          if (optimizeAbortControllerRef.current?.signal.aborted) throw new Error('Aborted')
           const content = chunk.choices[0]?.delta?.content || ''
           if (content) hasReceivedContent = true
           newContent += content
@@ -2918,6 +2952,10 @@ function App() {
         break // Success
 
       } catch (err: any) {
+        if (err.name === 'AbortError' || err.message === 'Aborted') {
+            terminal.log('[Optimize] Process aborted.')
+            break
+        }
         const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
         terminal.error(`[Optimize] Attempt ${attempt + 1} failed: ${errorMsg}`);
         console.error('[Optimize Error]', err);
@@ -3285,6 +3323,7 @@ function App() {
     
     setIsLoading(true)
     setError('')
+    generateAbortControllerRef.current = new AbortController()
     
     let currentContent = activeChapter.content
     if (currentContent) currentContent += '\n\n'
@@ -3298,6 +3337,7 @@ function App() {
 
     while (attempt < maxAttempts) {
       try {
+        if (generateAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Generate] Attempt ${attempt + 1}/${maxAttempts} started...`)
         
         const openai = new OpenAI({
@@ -3338,13 +3378,16 @@ function App() {
           presence_penalty: presencePenalty,
           frequency_penalty: frequencyPenalty,
           max_tokens: maxReplyLength,
-        } as any) as any
+        } as any, {
+          signal: generateAbortControllerRef.current.signal
+        }) as any
 
         let newGeneratedContent = ''
         let hasReceivedContent = false
 
         if (stream) {
             for await (const chunk of response) {
+              if (generateAbortControllerRef.current?.signal.aborted) throw new Error('Aborted')
               const content = chunk.choices[0]?.delta?.content || ''
               if (content) hasReceivedContent = true
               newGeneratedContent += content
@@ -3363,6 +3406,7 @@ function App() {
               ))
             }
         } else {
+            if (generateAbortControllerRef.current?.signal.aborted) throw new Error('Aborted')
             newGeneratedContent = response.choices[0]?.message?.content || ''
             if (newGeneratedContent) hasReceivedContent = true
             
@@ -3417,6 +3461,10 @@ function App() {
         break // Success, exit loop
 
       } catch (err: any) {
+        if (err.name === 'AbortError' || err.message === 'Aborted') {
+            terminal.log('[Generate] Process aborted.')
+            break
+        }
         terminal.error(`[Generate] Attempt ${attempt + 1} failed:`, err)
         attempt++
         if (attempt >= maxAttempts) {
@@ -4756,14 +4804,26 @@ function App() {
                                          placeholder="AI 辅助生成：描述角色特征，例如'一个冷酷的杀手，擅长使用飞刀'..."
                                          onKeyDown={(e) => e.key === 'Enter' && !isGeneratingCharacters && handleGenerateCharacters()}
                                        />
-                                       <button 
-                                         onClick={handleGenerateCharacters}
-                                         disabled={isGeneratingCharacters}
-                                         className="px-4 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-sm rounded flex items-center gap-2 disabled:opacity-50 shadow-lg transition-all"
-                                       >
-                                         {isGeneratingCharacters ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
-                                         生成
-                                       </button>
+                                       {isGeneratingCharacters ? (
+                                           <button 
+                                             onClick={() => {
+                                                 characterAbortControllerRef.current?.abort()
+                                                 setIsGeneratingCharacters(false)
+                                             }}
+                                             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded flex items-center gap-2 shadow-lg transition-all"
+                                           >
+                                             <StopCircle className="w-4 h-4" />
+                                             停止
+                                           </button>
+                                       ) : (
+                                           <button 
+                                             onClick={handleGenerateCharacters}
+                                             className="px-4 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-sm rounded flex items-center gap-2 shadow-lg transition-all"
+                                           >
+                                             <Bot className="w-4 h-4" />
+                                             生成
+                                           </button>
+                                       )}
                                     </div>
 
                                     {/* User Notes Area */}
@@ -5013,14 +5073,26 @@ function App() {
                                          placeholder="AI 辅助生成：例如'设计一个包含九大元素的魔法体系，以及相应的施法代价'..."
                                          onKeyDown={(e) => e.key === 'Enter' && !isGeneratingWorldview && handleGenerateWorldview()}
                                        />
-                                       <button 
-                                         onClick={handleGenerateWorldview}
-                                         disabled={isGeneratingWorldview}
-                                         className="px-3 py-1.5 md:px-4 md:py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-xs md:text-sm rounded flex items-center gap-2 disabled:opacity-50 shadow-lg transition-all"
-                                       >
-                                         {isGeneratingWorldview ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
-                                         生成
-                                       </button>
+                                       {isGeneratingWorldview ? (
+                                           <button 
+                                             onClick={() => {
+                                                 worldviewAbortControllerRef.current?.abort()
+                                                 setIsGeneratingWorldview(false)
+                                             }}
+                                             className="px-3 py-1.5 md:px-4 md:py-2 bg-red-600 hover:bg-red-700 text-white text-xs md:text-sm rounded flex items-center gap-2 shadow-lg transition-all"
+                                           >
+                                             <StopCircle className="w-4 h-4" />
+                                             停止
+                                           </button>
+                                       ) : (
+                                           <button 
+                                             onClick={handleGenerateWorldview}
+                                             className="px-3 py-1.5 md:px-4 md:py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-xs md:text-sm rounded flex items-center gap-2 shadow-lg transition-all"
+                                           >
+                                             <Bot className="w-4 h-4" />
+                                             生成
+                                           </button>
+                                       )}
                                     </div>
 
                                 </div>
@@ -5349,14 +5421,26 @@ function App() {
                                          placeholder="AI 辅助生成：描述大纲要求，例如'第一卷主要讲述主角如何获得超能力'..."
                                          onKeyDown={(e) => e.key === 'Enter' && !isGeneratingOutline && handleGenerateOutline()}
                                        />
-                                       <button 
-                                         onClick={handleGenerateOutline}
-                                         disabled={isGeneratingOutline}
-                                         className="px-4 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-sm rounded flex items-center gap-2 disabled:opacity-50 shadow-lg transition-all"
-                                       >
-                                         {isGeneratingOutline ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-                                         生成
-                                       </button>
+                                       {isGeneratingOutline ? (
+                                           <button 
+                                             onClick={() => {
+                                                 outlineAbortControllerRef.current?.abort()
+                                                 setIsGeneratingOutline(false)
+                                             }}
+                                             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded flex items-center gap-2 shadow-lg transition-all"
+                                           >
+                                             <StopCircle className="w-4 h-4" />
+                                             停止
+                                           </button>
+                                       ) : (
+                                           <button 
+                                             onClick={handleGenerateOutline}
+                                             className="px-4 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-sm rounded flex items-center gap-2 shadow-lg transition-all"
+                                           >
+                                             <Wand2 className="w-4 h-4" />
+                                             生成
+                                           </button>
+                                       )}
                                     </div>
 
                                     {/* User Notes Area */}
@@ -5670,21 +5754,28 @@ function App() {
                         <span className={`text-xs font-medium ${autoOptimize ? 'text-purple-300' : 'text-gray-500'}`}>自动</span>
                     </div>
 
-                    <button 
-                        onClick={() => handleOptimize()}
-                        disabled={isOptimizing}
-                        className={`
-                            flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm border border-transparent
-                            ${isOptimizing 
-                                ? 'bg-gray-800 text-gray-400 cursor-not-allowed border-gray-700' 
-                                : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-500/20 border-purple-500 hover:shadow-purple-500/30 hover:-translate-y-0.5 active:translate-y-0'
-                            }
-                        `}
-                        title="优化当前章节 (基于原文)"
-                    >
-                        {isOptimizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
-                        <span>润色</span>
-                    </button>
+                    {isOptimizing ? (
+                        <button 
+                            onClick={() => {
+                                optimizeAbortControllerRef.current?.abort()
+                                setIsOptimizing(false)
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm border border-transparent bg-red-600 hover:bg-red-500 text-white shadow-red-500/20 border-red-500"
+                            title="停止优化"
+                        >
+                            <StopCircle className="w-3.5 h-3.5" />
+                            <span>停止</span>
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={() => handleOptimize()}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm border border-transparent bg-purple-600 hover:bg-purple-500 text-white shadow-purple-500/20 border-purple-500 hover:shadow-purple-500/30 hover:-translate-y-0.5 active:translate-y-0"
+                            title="优化当前章节 (基于原文)"
+                        >
+                            <Wand2 className="w-3.5 h-3.5" />
+                            <span>润色</span>
+                        </button>
+                    )}
 
                     <button 
                         onClick={() => { setGeneratorSettingsType('optimize'); setShowGeneratorSettingsModal(true); }}
@@ -5752,13 +5843,26 @@ function App() {
                   }
                 }}
               />
-              <button
-                onClick={handleGenerate}
-                disabled={isLoading || !userPrompt.trim()}
-                className="absolute right-3 bottom-3 p-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 text-white rounded-md transition-colors"
-              >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              </button>
+              {isLoading ? (
+                  <button
+                    onClick={() => {
+                        generateAbortControllerRef.current?.abort()
+                        setIsLoading(false)
+                    }}
+                    className="absolute right-3 bottom-3 p-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+                    title="停止生成"
+                  >
+                    <StopCircle className="w-4 h-4" />
+                  </button>
+              ) : (
+                  <button
+                    onClick={handleGenerate}
+                    disabled={!userPrompt.trim()}
+                    className="absolute right-3 bottom-3 p-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 text-white rounded-md transition-colors"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+              )}
             </div>
           </div>
           {error && <div className="max-w-4xl mx-auto mt-2 text-xs text-red-400">{error}</div>}
