@@ -4942,14 +4942,14 @@ function App() {
                                          type="text" 
                                          value={userPrompt}
                                          onChange={(e) => setUserPrompt(e.target.value)}
-                                         className="flex-1 bg-gray-900 border border-gray-600 rounded px-4 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                                         className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] outline-none"
                                          placeholder="AI 辅助生成：例如'设计一个包含九大元素的魔法体系，以及相应的施法代价'..."
                                          onKeyDown={(e) => e.key === 'Enter' && !isGeneratingWorldview && handleGenerateWorldview()}
                                        />
                                        <button 
                                          onClick={handleGenerateWorldview}
                                          disabled={isGeneratingWorldview}
-                                         className="px-4 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-sm rounded flex items-center gap-2 disabled:opacity-50 shadow-lg transition-all"
+                                         className="px-3 py-1.5 md:px-4 md:py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-xs md:text-sm rounded flex items-center gap-2 disabled:opacity-50 shadow-lg transition-all"
                                        >
                                          {isGeneratingWorldview ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
                                          生成
@@ -4959,17 +4959,17 @@ function App() {
                                 </div>
                                 
                                 {/* Grid Content */}
-                                <div className="flex-1 p-6 pb-24 overflow-y-auto custom-scrollbar">
+                                <div className="flex-1 p-4 md:p-6 pb-24 overflow-y-auto custom-scrollbar">
                                     {/* User Notes Area */}
-                                    <div className="mb-6 pb-6 border-b border-gray-700/50">
-                                       <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
+                                    <div className="mb-4 pb-4 md:mb-6 md:pb-6 border-b border-gray-700/50">
+                                       <div className="text-[10px] md:text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
                                           <FileText className="w-3 h-3" />
                                           <span>用户输入记录 & 设定上下文 (AI 生成时会参考此内容)</span>
                                        </div>
                                        <textarea 
                                           value={activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)?.userNotes || ''}
                                           onChange={(e) => updateWorldviewSet(activeWorldviewSetId!, { userNotes: e.target.value })}
-                                          className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono"
+                                          className="w-full h-20 md:h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-2 md:p-3 text-xs md:text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-32 md:focus:h-48 placeholder-gray-500 font-mono"
                                           placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这组世界观的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
                                        />
                                     </div>
@@ -4988,20 +4988,20 @@ function App() {
                                        }
 
                                        return (
-                                          <div className="flex flex-col gap-4">
+                                          <div className="flex flex-col gap-3 md:gap-4">
                                              {entries.map((entry, idx) => (
                                                 <div 
                                                   key={idx} 
                                                   onClick={() => setSelectedWorldviewEntry({ setId: activeWorldviewSetId, index: idx })}
                                                   className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden hover:border-[var(--theme-color)] hover:shadow-lg transition-all group flex flex-col cursor-pointer relative"
                                                 >
-                                                   <div className="p-4 flex items-start gap-4">
-                                                      <div className="p-3 bg-gray-900/50 rounded-lg text-[var(--theme-color)] shrink-0">
-                                                         <Globe className="w-6 h-6" />
+                                                   <div className="p-3 md:p-4 flex items-start gap-3 md:gap-4">
+                                                      <div className="p-2 md:p-3 bg-gray-900/50 rounded-lg text-[var(--theme-color)] shrink-0">
+                                                         <Globe className="w-5 h-5 md:w-6 md:h-6" />
                                                       </div>
                                                       <div className="flex-1 min-w-0">
-                                                         <div className="flex justify-between items-start mb-2">
-                                                            <h4 className="font-bold text-gray-200 text-lg truncate">{entry.item || '未命名设定'}</h4>
+                                                         <div className="flex justify-between items-start mb-1 md:mb-2">
+                                                            <h4 className="font-bold text-gray-200 text-base md:text-lg truncate">{entry.item || '未命名设定'}</h4>
                                                             <button 
                                                                onClick={(e) => {
                                                                   e.stopPropagation()
