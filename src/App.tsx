@@ -2367,9 +2367,10 @@ function App() {
           }
         } catch (e: any) {
           console.error('JSON Parse Error. Raw content:', content)
-          const preview = content.length > 500 ? content.slice(0, 500) + '...' : content
-          terminal.error(`Parse error: ${e.message}\nRaw: ${preview}`)
-          throw new Error(`解析大纲失败，AI 返回格式不正确。\n\n返回内容预览：\n${preview}`)
+          // UI 显示预览，Terminal 显示完整内容以便调试
+          const preview = content.length > 1000 ? content.slice(0, 1000) + '... (内容过长已截断)' : content
+          terminal.error(`Parse error: ${e.message}\nRaw Content:\n${content}`)
+          throw new Error(`解析大纲失败，AI 返回格式不正确。\n\n返回内容预览(前1000字)：\n${preview}`)
         }
 
       } catch (err: any) {
@@ -2573,9 +2574,9 @@ function App() {
           }
         } catch (e: any) {
           console.error('JSON Parse Error. Raw content:', content)
-          const preview = content.length > 500 ? content.slice(0, 500) + '...' : content
-          terminal.error(`Parse error: ${e.message}\nRaw: ${preview}`)
-          throw new Error(`解析角色失败，AI 返回格式不正确。\n\n返回内容预览：\n${preview}`)
+          const preview = content.length > 1000 ? content.slice(0, 1000) + '... (内容过长已截断)' : content
+          terminal.error(`Parse error: ${e.message}\nRaw Content:\n${content}`)
+          throw new Error(`解析角色失败，AI 返回格式不正确。\n\n返回内容预览(前1000字)：\n${preview}`)
         }
 
       } catch (err: any) {
@@ -2800,9 +2801,9 @@ function App() {
           }
         } catch (e: any) {
           console.error('JSON Parse Error. Raw content:', content)
-          const preview = content.length > 500 ? content.slice(0, 500) + '...' : content
-          terminal.error(`Parse error: ${e.message}\nRaw: ${preview}`)
-          throw new Error(`解析世界观失败，AI 返回格式不正确。\n\n返回内容预览：\n${preview}`)
+          const preview = content.length > 1000 ? content.slice(0, 1000) + '... (内容过长已截断)' : content
+          terminal.error(`Parse error: ${e.message}\nRaw Content:\n${content}`)
+          throw new Error(`解析世界观失败，AI 返回格式不正确。\n\n返回内容预览(前1000字)：\n${preview}`)
         }
 
       } catch (err: any) {
