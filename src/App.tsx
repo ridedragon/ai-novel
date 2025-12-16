@@ -5856,12 +5856,12 @@ ${taskDescription}`
                 
                 <div className="relative flex-1 flex flex-col min-h-0">
                     {isEditingChapter ? (
-                                          <textarea 
-                                             value={activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.userNotes || ''}
-                                             onChange={(e) => updateOutlineSet(activeOutlineSetId!, { userNotes: e.target.value })}
-                                             className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono whitespace-pre-wrap break-words"
-                                             placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这份大纲的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
-                                          />
+                        <textarea
+                            value={activeChapter.content || ''}
+                            onChange={handleChapterContentChange}
+                            className="w-full h-full bg-gray-900 p-4 text-base leading-relaxed text-gray-200 outline-none resize-none font-mono"
+                            placeholder="在此处输入章节正文..."
+                        />
                     ) : (
                     <div className="prose prose-invert prose-lg max-w-none overflow-y-auto custom-scrollbar pr-4 md:pr-24 [&_p]:my-0 [&_p]:min-h-[1rem] text-justify">
                         {activeChapter.content ? (
