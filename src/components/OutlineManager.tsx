@@ -455,7 +455,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
             </div>
 
             {/* Auto Write Footer Panel */}
-            <div className="border-t border-gray-700 bg-gray-800 p-3 md:p-6 z-20 shrink-0">
+            <div className="fixed bottom-0 left-0 right-0 md:static border-t border-gray-700 bg-gray-800 p-3 md:p-6 z-20 shrink-0">
                <div className="max-w-4xl mx-auto flex flex-row items-center justify-between gap-3 md:gap-6">
                   {/* Left: Options */}
                   <div className="flex flex-col md:block md:flex-1 space-y-0 md:space-y-2">
