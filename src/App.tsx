@@ -3505,7 +3505,7 @@ function App() {
         }
 
         // Trigger Summary
-        if (longTextMode) {
+        if (longTextModeRef.current) {
              await checkAndGenerateSummary(newChapterId, finalGeneratedContent, novelId)
         }
 
@@ -3780,7 +3780,7 @@ function App() {
         }
 
         // Trigger Summary Generation
-        if (longTextMode && activeChapterId) {
+        if (longTextModeRef.current && activeChapterId) {
              checkAndGenerateSummary(activeChapterId, fullFinalContent)
         }
 
@@ -4806,7 +4806,7 @@ function App() {
 
       {/* Main Content - Right */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        <div className="min-h-[3.5rem] bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 py-2 shrink-0 transition-all">
+        <div className="min-h-[3.5rem] bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 py-2 shrink-0 transition-all relative z-30">
           <div className="flex flex-wrap items-center gap-2 md:gap-4 w-full">
              <button 
                onClick={() => setIsMobileSidebarOpen(true)}
