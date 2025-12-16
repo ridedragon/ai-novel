@@ -381,8 +381,8 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
             )}
 
             {/* Chapter List (Cards) */}
-            <div className="flex-1 overflow-y-auto p-2 md:p-8 custom-scrollbar flex flex-col">
-              <div className={`max-w-4xl mx-auto w-full space-y-3 md:space-y-4 pb-24 md:pb-24 ${activeSet.items.length === 0 ? 'flex-1 flex flex-col justify-center' : ''}`}>
+            <div className="flex-1 overflow-y-auto p-2 md:p-8 custom-scrollbar flex flex-col min-h-0">
+              <div className={`max-w-4xl mx-auto w-full space-y-3 md:space-y-4 pb-4 md:pb-8 ${activeSet.items.length === 0 ? 'flex-1 flex flex-col justify-center' : ''}`}>
                 {activeSet.items.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 md:py-20 text-gray-500 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-800/20">
                     <Book className="w-12 h-12 md:w-16 md:h-16 mb-3 md:mb-4 opacity-20" />
@@ -455,7 +455,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
             </div>
 
             {/* Auto Write Footer Panel */}
-            <div className="fixed bottom-0 left-0 right-0 md:static border-t border-gray-700 bg-gray-800 p-3 md:p-6 z-20 shrink-0">
+            <div className="border-t border-gray-700 bg-gray-800 p-3 md:p-6 z-20 shrink-0">
                <div className="max-w-4xl mx-auto flex flex-row items-center justify-between gap-3 md:gap-6">
                   {/* Left: Options */}
                   <div className="flex flex-col md:block md:flex-1 space-y-0 md:space-y-2">
