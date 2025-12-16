@@ -346,6 +346,77 @@ const ensureChapterVersions = (chapter: Chapter): Chapter => {
   }
 }
 
+// Helper: Sanitize JSON string (handle unescaped newlines in strings)
+const sanitizeJsonString = (content: string): string => {
+    let result = ''
+    let inString = false
+    let isEscaped = false
+    
+    for (let i = 0; i < content.length; i++) {
+        const char = content[i]
+        
+        if (inString) {
+            if (isEscaped) {
+                isEscaped = false
+                result += char
+            } else {
+                if (char === '\\') {
+                    isEscaped = true
+                    result += char
+                } else if (char === '"') {
+                    inString = false
+                    result += char
+                } else if (char === '\n') {
+                    result += '\\n' // Escape literal newlines
+                } else if (char === '\r') {
+                    // Ignore CR
+                } else if (char === '\t') {
+                    result += '\\t'
+                } else {
+                    result += char
+                }
+            }
+        } else {
+            if (char === '"') {
+                inString = true
+            }
+            result += char
+        }
+    }
+    return result
+}
+
+// Helper to fix common JSON issues (newlines in strings, truncation)
+const sanitizeAndParseJson = (content: string): any[] | null => {
+    // 1. Sanitize Newlines in Strings
+    let result = sanitizeJsonString(content)
+
+    // 2. Try parsing sanitized string
+    try {
+        const parsed = JSON.parse(result)
+        if (Array.isArray(parsed)) return parsed
+    } catch (e) {
+        // 3. Handle Truncation: Try to recover valid JSON if it ends abruptly
+        // Simple recovery: find last closing object brace "}" and close array
+        
+        // Check if string was cut off (odd number of quotes is a heuristic, but tracking state is better)
+        // Since sanitizeJsonString already ran, inString state is lost. 
+        // We can try a simple append.
+        
+        // Find last '}'
+        const lastBraceIndex = result.lastIndexOf('}')
+        if (lastBraceIndex !== -1) {
+            const recoveryTry = result.substring(0, lastBraceIndex + 1) + ']'
+            try {
+                const parsed = JSON.parse(recoveryTry)
+                if (Array.isArray(parsed)) return parsed
+            } catch(e2) {}
+        }
+    }
+    
+    return null
+}
+
 const safeParseJSONArray = (content: string): any[] => {
   // 0. 预处理：尝试提取 Markdown 代码块中的内容
   const markdownMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
@@ -353,13 +424,12 @@ const safeParseJSONArray = (content: string): any[] => {
       content = markdownMatch[1] // 使用代码块内部的内容
   }
 
-  // 1. 尝试直接解析整个字符串
-  try {
-    const result = JSON.parse(content)
-    if (Array.isArray(result)) return result
-  } catch (e) {}
+  // 1. 尝试使用增强的 Sanitize 解析 (处理换行符和简单截断)
+  const sanitizedResult = sanitizeAndParseJson(content)
+  if (sanitizedResult) return sanitizedResult
 
   // 2. 尝试提取第一个完整的数组 [...] (使用括号计数，比正则更可靠)
+  // 如果上面的 sanitize 失败了(可能是因为结构太乱)，我们尝试寻找干净的结构
   let braceCount = 0
   let startIndex = -1
   let inString = false
@@ -385,14 +455,12 @@ const safeParseJSONArray = (content: string): any[] => {
           } else if (char === ']') {
               braceCount--
               if (braceCount === 0 && startIndex !== -1) {
-                  // Found a potential array
-                  try {
-                      const potentialJson = content.substring(startIndex, i + 1)
-                      const result = JSON.parse(potentialJson)
-                      if (Array.isArray(result)) return result
-                  } catch (e) {
-                      // Continue searching if parsing failed
-                  }
+                  // Found a potential array chunk
+                  const potentialJson = content.substring(startIndex, i + 1)
+                  // Recursive call with sanitize enabled for this chunk
+                  const result = sanitizeAndParseJson(potentialJson)
+                  if (result) return result
+                  
                   // Reset to search for next array
                   startIndex = -1 
               }
@@ -401,7 +469,6 @@ const safeParseJSONArray = (content: string): any[] => {
   }
 
   // 3. 备选方案：提取所有顶层 JSON 对象 (Robust)
-  // 处理返回了多个分散对象的情况
   const objects: any[] = []
   braceCount = 0
   startIndex = -1
@@ -429,10 +496,19 @@ const safeParseJSONArray = (content: string): any[] => {
             braceCount--
             if (braceCount === 0 && startIndex !== -1) {
                 // Found an object
-                try { 
-                    const obj = JSON.parse(content.substring(startIndex, i + 1))
+                const potentialJson = content.substring(startIndex, i + 1)
+                try {
+                    // Try direct parse first
+                    const obj = JSON.parse(potentialJson)
                     if (obj) objects.push(obj)
-                } catch(e){}
+                } catch(e) {
+                    // Try sanitize parse
+                    try {
+                        const sanitized = sanitizeJsonString(potentialJson)
+                        const obj = JSON.parse(sanitized)
+                        if (obj) objects.push(obj)
+                    } catch (e2) {}
+                }
                 startIndex = -1
             }
         }
