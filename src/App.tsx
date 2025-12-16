@@ -5279,12 +5279,12 @@ function App() {
                                     </div>
                                     
                                     {/* AI Input Area */}
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 w-[96%] mx-auto md:w-full">
                                        <input 
                                          type="text" 
                                          value={userPrompt}
                                          onChange={(e) => setUserPrompt(e.target.value)}
-                                         className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] outline-none"
+                                         className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] outline-none"
                                          placeholder="AI 辅助生成：例如'设计一个包含九大元素的魔法体系，以及相应的施法代价'..."
                                          onKeyDown={(e) => e.key === 'Enter' && !isGeneratingWorldview && handleGenerateWorldview()}
                                        />
@@ -5313,18 +5313,18 @@ function App() {
                                 </div>
                                 
                                 {/* Grid Content */}
-                                <div className="flex-1 p-4 md:p-6 pb-24 overflow-y-auto custom-scrollbar min-w-0">
+                                <div className="flex-1 p-2 md:p-6 pb-24 overflow-y-auto custom-scrollbar min-w-0">
                                     {/* User Notes Area */}
-                                    <div className="mb-4 pb-4 md:mb-6 md:pb-6 border-b border-gray-700/50">
+                                    <div className="mb-3 pb-3 md:mb-6 md:pb-6 border-b border-gray-700/50 w-[96%] mx-auto md:w-full">
                                        <div className="text-[10px] md:text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
                                           <FileText className="w-3 h-3" />
                                           <span>用户输入记录 & 设定上下文 (AI 生成时会参考此内容)</span>
                                        </div>
                                        <textarea 
-                                          value={activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)?.userNotes || ''}
-                                          onChange={(e) => updateCharacterSet(activeCharacterSetId!, { userNotes: e.target.value })}
-                                          className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono whitespace-pre-wrap break-words"
-                                          placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这组角色的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
+                                          value={activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)?.userNotes || ''}
+                                          onChange={(e) => updateWorldviewSet(activeWorldviewSetId!, { userNotes: e.target.value })}
+                                          className="w-full h-24 md:h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-2 md:p-3 text-xs md:text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono whitespace-pre-wrap break-words"
+                                          placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这组世界观的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
                                        />
                                     </div>
                                     {(() => {
@@ -5342,20 +5342,20 @@ function App() {
                                        }
 
                                        return (
-                                          <div className="flex flex-col gap-3 md:gap-4">
+                                          <div className="flex flex-col gap-2 md:gap-4 w-[96%] mx-auto md:w-full">
                                              {entries.map((entry, idx) => (
                                                 <div 
                                                   key={idx} 
                                                   onClick={() => setSelectedWorldviewEntry({ setId: activeWorldviewSetId, index: idx })}
-                                                  className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden hover:border-[var(--theme-color)] hover:shadow-lg transition-all group flex flex-col cursor-pointer relative"
+                                                  className="bg-gray-800 border border-gray-700 rounded-lg md:rounded-xl overflow-hidden hover:border-[var(--theme-color)] hover:shadow-lg transition-all group flex flex-col cursor-pointer relative"
                                                 >
-                                                   <div className="p-3 md:p-4 flex items-start gap-3 md:gap-4">
-                                                      <div className="p-2 md:p-3 bg-gray-900/50 rounded-lg text-[var(--theme-color)] shrink-0">
-                                                         <Globe className="w-5 h-5 md:w-6 md:h-6" />
+                                                   <div className="p-2 md:p-4 flex items-start gap-2 md:gap-4">
+                                                      <div className="p-1.5 md:p-3 bg-gray-900/50 rounded-lg text-[var(--theme-color)] shrink-0">
+                                                         <Globe className="w-4 h-4 md:w-6 md:h-6" />
                                                       </div>
                                                       <div className="flex-1 min-w-0">
-                                                         <div className="flex justify-between items-start mb-1 md:mb-2">
-                                                            <h4 className="font-bold text-gray-200 text-base md:text-lg truncate">{entry.item || '未命名设定'}</h4>
+                                                         <div className="flex justify-between items-start mb-0.5 md:mb-2">
+                                                            <h4 className="font-bold text-gray-200 text-sm md:text-lg truncate">{entry.item || '未命名设定'}</h4>
                                                             <button 
                                                                onClick={(e) => {
                                                                   e.stopPropagation()
@@ -5365,10 +5365,10 @@ function App() {
                                                                className="bg-transparent p-1 text-gray-500 hover:text-red-400 hover:bg-gray-700 rounded transition-all opacity-0 group-hover:opacity-100"
                                                                title="删除设定"
                                                             >
-                                                               <Trash2 className="w-4 h-4" />
+                                                               <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                             </button>
                                                          </div>
-                                                         <p className="text-sm text-gray-400 line-clamp-2">{entry.setting || '暂无详细内容...'}</p>
+                                                         <p className="text-xs md:text-sm text-gray-400 line-clamp-2">{entry.setting || '暂无详细内容...'}</p>
                                                       </div>
                                                    </div>
                                                 </div>
