@@ -39,6 +39,7 @@ interface OutlineManagerProps {
   onRegenerateAll?: () => void
   onRegenerateItem?: (index: number) => void
   isGenerating?: boolean
+  onStopGeneration?: () => void
   regeneratingItemIndices?: Set<number>
   userPrompt?: string
   setUserPrompt?: (val: string) => void
@@ -68,6 +69,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
   onRegenerateAll,
   onRegenerateItem,
   isGenerating,
+  onStopGeneration,
   regeneratingItemIndices,
   userPrompt,
   setUserPrompt,
@@ -535,15 +537,24 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                               placeholder="AI 助手：描述你的大纲需求..."
                            />
                         </div>
-                        <button 
-                           onClick={isGenerating ? undefined : onGenerateOutline}
-                           disabled={isGenerating}
-                           className={`px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 ${isGenerating ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white'}`}
-                        >
-                           {isGenerating ? <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin" /> : <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />}
-                           <span className="hidden md:inline">{isGenerating ? '生成中...' : '生成大纲'}</span>
-                           <span className="md:hidden">生成</span>
-                        </button>
+                        {isGenerating ? (
+                           <button 
+                              onClick={onStopGeneration}
+                              className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-red-600 hover:bg-red-700 text-white"
+                           >
+                              <StopCircle className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                              <span className="hidden md:inline">停止</span>
+                           </button>
+                        ) : (
+                           <button 
+                              onClick={onGenerateOutline}
+                              className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white"
+                           >
+                              <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                              <span className="hidden md:inline">生成大纲</span>
+                              <span className="md:hidden">生成</span>
+                           </button>
+                        )}
                         {onRegenerateAll && activeSet.items.length > 0 && (
                            <button 
                               onClick={isGenerating ? undefined : handleRegenerateAllClick}

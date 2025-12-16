@@ -5382,6 +5382,10 @@ ${taskDescription}`
                           onRegenerateAll={handleRegenerateAllOutline}
                           onRegenerateItem={handleRegenerateOutlineItem}
                           isGenerating={isGeneratingOutline}
+                          onStopGeneration={() => {
+                             outlineAbortControllerRef.current?.abort()
+                             setIsGeneratingOutline(false)
+                          }}
                           regeneratingItemIndices={regeneratingOutlineItemIndices}
                           userPrompt={userPrompt}
                           setUserPrompt={setUserPrompt}
