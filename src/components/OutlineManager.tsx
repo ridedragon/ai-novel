@@ -12,6 +12,7 @@ import {
   Loader2,
   PlayCircle,
   Plus,
+  RefreshCw,
   Settings,
   StopCircle,
   Trash2,
@@ -34,7 +35,10 @@ interface OutlineManagerProps {
   setIncludeFullOutlineInAutoWrite: (val: boolean) => void
   // Helper for generating outline content via AI
   onGenerateOutline?: () => void
+  onRegenerateAll?: () => void
+  onRegenerateItem?: (index: number) => void
   isGenerating?: boolean
+  regeneratingItemIndices?: Set<number>
   userPrompt?: string
   setUserPrompt?: (val: string) => void
   onShowSettings?: () => void
@@ -60,7 +64,10 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
   includeFullOutlineInAutoWrite,
   setIncludeFullOutlineInAutoWrite,
   onGenerateOutline,
+  onRegenerateAll,
+  onRegenerateItem,
   isGenerating,
+  regeneratingItemIndices,
   userPrompt,
   setUserPrompt,
   onShowSettings,
@@ -229,6 +236,18 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
     }
     updateItems(newItems)
     setEditingChapterIndex(null)
+  }
+
+  const handleRegenerateAllClick = () => {
+    setConfirmState({
+      isOpen: true,
+      title: '重新生成全部大纲',
+      message: '确定要重新生成全部大纲吗？这将覆盖现有的大纲内容，无法撤销。',
+      onConfirm: () => {
+        if (onRegenerateAll) onRegenerateAll()
+        setConfirmState(prev => ({ ...prev, isOpen: false }))
+      }
+    })
   }
 
   return (
@@ -490,6 +509,17 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                            <span className="hidden md:inline">{isGenerating ? '生成中...' : '生成大纲'}</span>
                            <span className="md:hidden">生成</span>
                         </button>
+                        {onRegenerateAll && activeSet.items.length > 0 && (
+                           <button 
+                              onClick={isGenerating ? undefined : handleRegenerateAllClick}
+                              disabled={isGenerating}
+                              className="px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all bg-red-600 hover:bg-red-700 text-white shadow-lg shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="重新生成全部大纲 (覆盖)"
+                           >
+                              <RefreshCw className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isGenerating ? 'animate-spin' : ''}`} />
+                              <span className="hidden md:inline">重生成全部</span>
+                           </button>
+                        )}
                      </div>
                  </div>
               </div>
@@ -562,6 +592,26 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                          >
                             <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                          </button>
+                         {onRegenerateItem && (
+                            <>
+                               <div className="w-px h-3 md:h-4 bg-gray-600 mx-0.5 md:mx-1"></div>
+                               <button 
+                                  onClick={(e) => {
+                                     e.stopPropagation();
+                                     onRegenerateItem(idx);
+                                  }}
+                                  disabled={regeneratingItemIndices?.has(idx)}
+                                  className="p-1 md:p-1.5 text-gray-400 hover:text-[var(--theme-color)] hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="AI 重新生成本章"
+                               >
+                                  {regeneratingItemIndices?.has(idx) ? (
+                                     <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin text-[var(--theme-color)]" />
+                                  ) : (
+                                     <RefreshCw className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                  )}
+                               </button>
+                            </>
+                         )}
                       </div>
                     </div>
                   ))

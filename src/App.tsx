@@ -787,6 +787,7 @@ function App() {
   const [showOutline, setShowOutline] = useState(false)
   const [creationModule, setCreationModule] = useState<'menu' | 'outline' | 'characters' | 'worldview'>('menu')
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false)
+  const [regeneratingOutlineItemIndices, setRegeneratingOutlineItemIndices] = useState<Set<number>>(new Set())
   const [isGeneratingCharacters, setIsGeneratingCharacters] = useState(false)
   const [isGeneratingWorldview, setIsGeneratingWorldview] = useState(false)
   const [optimizingChapterIds, setOptimizingChapterIds] = useState<Set<number>>(new Set())
@@ -1114,12 +1115,20 @@ function App() {
        isOpen: true,
        type: 'confirm',
        title: '删除分卷',
-       message: '确定要删除此分卷吗？该分卷下的章节将被移动到"未分卷"中。',
+       message: '确定要删除此分卷吗？该分卷下的所有章节也将被一并删除，且无法恢复。',
        inputValue: '',
        onConfirm: () => {
          setVolumes(volumes.filter(v => v.id !== volumeId))
-         // Move chapters to undefined volumeId
-         setChapters(chapters.map(c => c.volumeId === volumeId ? { ...c, volumeId: undefined } : c))
+         
+         // Delete chapters in this volume
+         const newChapters = chapters.filter(c => c.volumeId !== volumeId)
+         setChapters(newChapters)
+
+         // If active chapter was in this volume, reset active chapter
+         if (activeChapterId && chapters.find(c => c.id === activeChapterId)?.volumeId === volumeId) {
+             setActiveChapterId(newChapters.length > 0 ? newChapters[0].id : null)
+         }
+
          closeDialog()
        }
      })
@@ -2141,7 +2150,139 @@ function App() {
   }
 
   // Outline Generation
-  const handleGenerateOutline = async () => {
+  const handleRegenerateOutlineItem = async (index: number) => {
+    const activePreset = outlinePresets.find(p => p.id === activeOutlinePresetId) || outlinePresets[0]
+    const apiConfig = getApiConfig(activePreset.apiConfig, outlineModel)
+
+    if (!apiConfig.apiKey) {
+      setError('请先配置 API Key')
+      setShowSettings(true)
+      return
+    }
+
+    if (!activeNovelId || !activeOutlineSetId) return
+    const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
+    if (!currentSet || !currentSet.items[index]) return
+
+    const targetItem = currentSet.items[index]
+    
+    setRegeneratingOutlineItemIndices(prev => new Set(prev).add(index))
+    setError('')
+    
+    // We reuse the outline abort controller or create a new one? 
+    // Ideally separate, but for simplicity let's use a local one or share if convenient. 
+    // Since it's a specific action, let's just let it run. If we need abort, we need a map. 
+    // For now, let's assume no explicit abort button for single item regeneration (user can just wait or reload).
+    
+    try {
+        const openai = new OpenAI({
+          apiKey: apiConfig.apiKey,
+          baseURL: apiConfig.baseUrl,
+          dangerouslyAllowBrowser: true
+        })
+
+        // Build Context (similar to main generator but focused)
+        let characterContext = ''
+        if (selectedCharacterSetIdForOutlineGen) {
+            const charSet = activeNovel?.characterSets?.find(s => s.id === selectedCharacterSetIdForOutlineGen)
+            if (charSet) {
+                characterContext = `\n【参考角色列表 (${charSet.name})】：\n${JSON.stringify(charSet.characters, null, 2)}\n角色备注：${charSet.userNotes || '无'}\n`
+            }
+        }
+
+        let worldviewContext = ''
+        if (selectedWorldviewSetIdForOutlineGen) {
+            const wvSet = activeNovel?.worldviewSets?.find(s => s.id === selectedWorldviewSetIdForOutlineGen)
+            if (wvSet) {
+                worldviewContext = `\n【参考世界观 (${wvSet.name})】：\n${JSON.stringify(wvSet.entries, null, 2)}\n世界观备注：${wvSet.userNotes || '无'}\n`
+            }
+        }
+
+        const notes = currentSet.userNotes || ''
+
+        // Outline Context: Provide surrounding chapters for continuity
+        // Previous 3 and Next 3
+        const start = Math.max(0, index - 3)
+        const end = Math.min(currentSet.items.length, index + 4)
+        const contextItems = currentSet.items.slice(start, end).map((item, idx) => {
+            const realIdx = start + idx
+            return `${realIdx + 1}. ${item.title}: ${realIdx === index ? '(待重新生成)' : item.summary}`
+        }).join('\n')
+        
+        const outlineContext = `\n【大纲上下文】：\n${contextItems}\n`
+
+        const specificInstruction = `请重新生成第 ${index + 1} 章的大纲。\n原标题：${targetItem.title}\n原大纲：${targetItem.summary}\n\n要求：根据上下文重新构思本章剧情，使其更精彩、连贯。保留原标题或适当微调。返回一个包含单个对象的 JSON 数组：[{ "title": "...", "summary": "..." }]`
+
+        // Build Messages
+        const messages: any[] = activePreset.prompts
+          .filter(p => p.enabled)
+          .map(p => {
+            let content = p.content
+            content = content.replace('{{context}}', `${worldviewContext}\n${characterContext}\n${outlineContext}`)
+            content = content.replace('{{notes}}', notes)
+            content = content.replace('{{input}}', specificInstruction)
+            return { role: p.role, content }
+          })
+
+        if (globalCreationPrompt.trim()) {
+            messages.unshift({ role: 'system', content: globalCreationPrompt })
+        }
+        
+        if (!messages.some(m => m.role === 'user')) {
+            messages.push({ role: 'user', content: specificInstruction })
+        }
+
+        const completion = await openai.chat.completions.create({
+          model: apiConfig.model,
+          messages: messages,
+          temperature: activePreset.temperature ?? 0.7,
+          top_p: activePreset.topP ?? 0.95,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
+        } as any)
+
+        const content = completion.choices[0]?.message?.content || ''
+        if (!content) throw new Error("Empty response")
+
+        const rawData = safeParseJSONArray(content)
+        const outlineData = normalizeGeneratorResult(rawData, 'outline')
+
+        if (Array.isArray(outlineData) && outlineData.length > 0) {
+            const newItem = outlineData[0]
+            
+            // Update State
+            setNovels(prev => prev.map(n => {
+                if (n.id === activeNovelId) {
+                    const currentSets = n.outlineSets || []
+                    const setIndex = currentSets.findIndex(s => s.id === activeOutlineSetId)
+                    if (setIndex !== -1) {
+                        const newItems = [...currentSets[setIndex].items]
+                        newItems[index] = { ...newItems[index], title: newItem.title, summary: newItem.summary }
+                        
+                        const newSets = [...currentSets]
+                        newSets[setIndex] = { ...newSets[setIndex], items: newItems }
+                        return { ...n, outlineSets: newSets }
+                    }
+                }
+                return n
+            }))
+            terminal.log(`[Outline] Item ${index + 1} regenerated.`)
+        } else {
+            throw new Error("Invalid format received")
+        }
+
+    } catch (e: any) {
+        terminal.error(`[Regenerate] Failed: ${e.message}`)
+        setError(`重生成失败: ${e.message}`)
+    } finally {
+        setRegeneratingOutlineItemIndices(prev => {
+            const next = new Set(prev)
+            next.delete(index)
+            return next
+        })
+    }
+  }
+
+  const handleGenerateOutline = async (mode: 'append' | 'replace' = 'append') => {
     const activePreset = outlinePresets.find(p => p.id === activeOutlinePresetId) || outlinePresets[0]
     const apiConfig = getApiConfig(activePreset.apiConfig, outlineModel)
 
@@ -2206,9 +2347,9 @@ function App() {
 
         const notes = targetSet?.userNotes || ''
 
-        // Build Existing Outline Context
+        // Build Existing Outline Context (Only relevant if appending or referring to previous)
         let outlineContext = ''
-        if (targetSet && targetSet.items && targetSet.items.length > 0) {
+        if (mode === 'append' && targetSet && targetSet.items && targetSet.items.length > 0) {
             outlineContext = '\n【现有大纲】：\n' + targetSet.items.map((item, index) => 
                 `${index + 1}. ${item.title}\n   ${item.summary}`
             ).join('\n') + '\n'
@@ -2264,14 +2405,16 @@ function App() {
                         
                         // 自动记录用户输入到备注中
                         const timestamp = new Date().toLocaleTimeString()
-                        const newRecord = `[${timestamp}] ${userPrompt}`
+                        const newRecord = `[${timestamp}] (${mode === 'replace' ? '重新生成' : '追加'}) ${userPrompt}`
                         const updatedNotes = existingSet.userNotes 
                             ? `${existingSet.userNotes}\n${newRecord}` 
                             : newRecord
 
+                        const updatedItems = mode === 'replace' ? outlineData : [...existingSet.items, ...outlineData]
+
                         const updatedSet = {
                              ...existingSet,
-                             items: [...existingSet.items, ...outlineData],
+                             items: updatedItems,
                              userNotes: updatedNotes
                         }
                         
@@ -2320,6 +2463,10 @@ function App() {
     }
     
     setIsGeneratingOutline(false)
+  }
+
+  const handleRegenerateAllOutline = async () => {
+      await handleGenerateOutline('replace')
   }
 
   // Character Generation
@@ -5226,8 +5373,11 @@ ${taskDescription}`
                           }}
                           includeFullOutlineInAutoWrite={includeFullOutlineInAutoWrite}
                           setIncludeFullOutlineInAutoWrite={setIncludeFullOutlineInAutoWrite}
-                          onGenerateOutline={handleGenerateOutline}
+                          onGenerateOutline={() => handleGenerateOutline('append')}
+                          onRegenerateAll={handleRegenerateAllOutline}
+                          onRegenerateItem={handleRegenerateOutlineItem}
                           isGenerating={isGeneratingOutline}
+                          regeneratingItemIndices={regeneratingOutlineItemIndices}
                           userPrompt={userPrompt}
                           setUserPrompt={setUserPrompt}
                           onShowSettings={() => { setGeneratorSettingsType('outline'); setShowGeneratorSettingsModal(true); }}
