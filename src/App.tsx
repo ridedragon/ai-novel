@@ -6261,7 +6261,12 @@ ${taskDescription}`
         ) : (
             <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col">
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-                <h1 className="text-2xl font-bold text-gray-100 break-words">{activeChapter.title}</h1>
+                <div className="flex flex-col gap-1">
+                  <h1 className="text-2xl font-bold text-gray-100 break-words">{activeChapter.title}</h1>
+                  <span className="text-xs text-gray-500">
+                    字数: {activeChapter.content ? activeChapter.content.length : 0}
+                  </span>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Version Switcher */}
                     {activeChapter.versions && activeChapter.versions.length > 1 && (
