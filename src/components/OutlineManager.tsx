@@ -1,11 +1,25 @@
-import React, { useState, useEffect } from 'react'
-import { 
-  Book, Plus, Trash2, Edit3, Settings, 
-  GripVertical, ArrowUp, ArrowDown, Bot, 
-  PlayCircle, StopCircle, Loader2, ChevronDown, 
-  Folder, FileText, Check, X, MoreVertical
+import {
+  ArrowDown,
+  ArrowUp,
+  Book,
+  Bot,
+  Check,
+  ChevronDown,
+  Edit3,
+  Folder,
+  Globe,
+  GripVertical,
+  Loader2,
+  PlayCircle,
+  Plus,
+  Settings,
+  StopCircle,
+  Trash2,
+  Users,
+  X
 } from 'lucide-react'
-import { Novel, OutlineSet, OutlineItem } from '../types'
+import React, { useState } from 'react'
+import { Novel, OutlineItem, OutlineSet } from '../types'
 
 interface OutlineManagerProps {
   novel: Novel
@@ -26,6 +40,12 @@ interface OutlineManagerProps {
   onShowSettings?: () => void
   modelName?: string
   sidebarHeader?: React.ReactNode
+  
+  // New props for selection
+  selectedCharacterSetId?: string | null
+  setSelectedCharacterSetId?: (id: string | null) => void
+  selectedWorldviewSetId?: string | null
+  setSelectedWorldviewSetId?: (id: string | null) => void
 }
 
 export const OutlineManager: React.FC<OutlineManagerProps> = ({
@@ -45,7 +65,11 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
   setUserPrompt,
   onShowSettings,
   modelName,
-  sidebarHeader
+  sidebarHeader,
+  selectedCharacterSetId,
+  setSelectedCharacterSetId,
+  selectedWorldviewSetId,
+  setSelectedWorldviewSetId
 }) => {
   const [newSetName, setNewSetName] = useState('')
   const [editingSetId, setEditingSetId] = useState<string | null>(null)
@@ -61,6 +85,10 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
 
   // Mobile: Toggle Sidebar List
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
+  
+  // Selectors State
+  const [showWorldviewSelector, setShowWorldviewSelector] = useState(false)
+  const [showCharacterSelector, setShowCharacterSelector] = useState(false)
 
   // Confirmation State
   const [confirmState, setConfirmState] = useState<{
@@ -209,14 +237,14 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
       {/* Sidebar: Set List */}
       <div className={`w-full md:w-64 bg-gray-800 border-r border-gray-700 flex flex-col shrink-0 transition-all duration-300 ${isMobileListOpen ? 'h-auto max-h-[60vh]' : 'h-auto'} md:h-auto`}>
         {sidebarHeader && (
-          <div className="p-4 border-b border-gray-700 shrink-0">
+          <div className="p-3 md:p-4 border-b border-gray-700 shrink-0">
             {sidebarHeader}
           </div>
         )}
         
         {/* Title / Mobile Toggle */}
         <div 
-          className="p-4 border-b border-gray-700 flex items-center justify-between shrink-0 cursor-pointer md:cursor-default hover:bg-gray-700/30 md:hover:bg-transparent transition-colors"
+          className="p-3 md:p-4 border-b border-gray-700 flex items-center justify-between shrink-0 cursor-pointer md:cursor-default hover:bg-gray-700/30 md:hover:bg-transparent transition-colors"
           onClick={() => setIsMobileListOpen(!isMobileListOpen)}
         >
           <h3 className="font-bold flex items-center gap-2 text-gray-200">
@@ -355,27 +383,114 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
             {/* AI Generation Input */}
             {onGenerateOutline && (
               <div className="p-3 md:p-4 bg-gray-800/30 border-b border-gray-700/50">
-                 <div className="max-w-4xl mx-auto flex gap-2 md:gap-3">
-                    <div className="flex-1 relative">
-                       <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 md:w-4 md:h-4 text-[var(--theme-color)]" />
-                       <input 
-                          type="text" 
-                          value={userPrompt || ''}
-                          onChange={(e) => setUserPrompt && setUserPrompt(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && !isGenerating && onGenerateOutline()}
-                          className="w-full bg-gray-900 border border-gray-600 rounded-lg pl-9 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
-                          placeholder="AI 助手：描述你的大纲需求..."
-                       />
+                 <div className="max-w-4xl mx-auto space-y-2">
+                    {/* Context Selectors */}
+                    <div className="flex flex-wrap items-center gap-2">
+                       <span className="text-xs text-gray-400 shrink-0">参考:</span>
+                       
+                       {/* Worldview Selector */}
+                       <div className="relative">
+                          <button
+                             onClick={() => setShowWorldviewSelector(!showWorldviewSelector)}
+                             className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-200 border border-gray-600 transition-colors"
+                          >
+                             <Globe className="w-3 h-3 text-[var(--theme-color)]" />
+                             {selectedWorldviewSetId
+                                ? novel.worldviewSets?.find(s => s.id === selectedWorldviewSetId)?.name || '世界观已删除'
+                                : '选择世界观'}
+                             <ChevronDown className="w-3 h-3" />
+                          </button>
+                          {showWorldviewSelector && (
+                             <>
+                                <div className="fixed inset-0 z-20" onClick={() => setShowWorldviewSelector(false)}></div>
+                                <div 
+                                   className="absolute top-full left-0 mt-1 w-48 border border-gray-600 rounded-lg shadow-2xl z-30 max-h-60 overflow-y-auto ring-1 ring-black/20"
+                                   style={{ backgroundColor: '#1f2937' }}
+                                >
+                                   <button
+                                      onClick={() => { setSelectedWorldviewSetId && setSelectedWorldviewSetId(null); setShowWorldviewSelector(false); }}
+                                      className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white border-b border-gray-600 transition-colors bg-transparent hover:bg-gray-700"
+                                   >
+                                      不使用世界观
+                                   </button>
+                                   {novel.worldviewSets?.map(ws => (
+                                      <button
+                                         key={ws.id}
+                                         onClick={() => { setSelectedWorldviewSetId && setSelectedWorldviewSetId(ws.id); setShowWorldviewSelector(false); }}
+                                         className={`w-full text-left px-3 py-2 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${selectedWorldviewSetId === ws.id ? 'text-[var(--theme-color)] font-medium' : 'text-gray-300'}`}
+                                      >
+                                         <span className="truncate flex-1">{ws.name}</span>
+                                         {selectedWorldviewSetId === ws.id && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)] shrink-0"></div>}
+                                      </button>
+                                   ))}
+                                </div>
+                             </>
+                          )}
+                       </div>
+
+                       {/* Character Selector */}
+                       <div className="relative">
+                          <button
+                             onClick={() => setShowCharacterSelector(!showCharacterSelector)}
+                             className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-200 border border-gray-600 transition-colors"
+                          >
+                             <Users className="w-3 h-3 text-[var(--theme-color)]" />
+                             {selectedCharacterSetId
+                                ? novel.characterSets?.find(s => s.id === selectedCharacterSetId)?.name || '角色集已删除'
+                                : '选择角色集'}
+                             <ChevronDown className="w-3 h-3" />
+                          </button>
+                          {showCharacterSelector && (
+                             <>
+                                <div className="fixed inset-0 z-20" onClick={() => setShowCharacterSelector(false)}></div>
+                                <div 
+                                   className="absolute top-full left-0 mt-1 w-48 border border-gray-600 rounded-lg shadow-2xl z-30 max-h-60 overflow-y-auto ring-1 ring-black/20"
+                                   style={{ backgroundColor: '#1f2937' }}
+                                >
+                                   <button
+                                      onClick={() => { setSelectedCharacterSetId && setSelectedCharacterSetId(null); setShowCharacterSelector(false); }}
+                                      className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white border-b border-gray-600 transition-colors bg-transparent hover:bg-gray-700"
+                                   >
+                                      不使用角色集
+                                   </button>
+                                   {novel.characterSets?.map(cs => (
+                                      <button
+                                         key={cs.id}
+                                         onClick={() => { setSelectedCharacterSetId && setSelectedCharacterSetId(cs.id); setShowCharacterSelector(false); }}
+                                         className={`w-full text-left px-3 py-2 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${selectedCharacterSetId === cs.id ? 'text-[var(--theme-color)] font-medium' : 'text-gray-300'}`}
+                                      >
+                                         <span className="truncate flex-1">{cs.name}</span>
+                                         {selectedCharacterSetId === cs.id && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)] shrink-0"></div>}
+                                      </button>
+                                   ))}
+                                </div>
+                             </>
+                          )}
+                       </div>
                     </div>
-                    <button 
-                       onClick={isGenerating ? undefined : onGenerateOutline}
-                       disabled={isGenerating}
-                       className={`px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 ${isGenerating ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white'}`}
-                    >
-                       {isGenerating ? <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin" /> : <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />}
-                       <span className="hidden md:inline">{isGenerating ? '生成中...' : '生成大纲'}</span>
-                       <span className="md:hidden">生成</span>
-                    </button>
+
+                    <div className="flex gap-2 md:gap-3">
+                        <div className="flex-1 relative">
+                           <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 md:w-4 md:h-4 text-[var(--theme-color)]" />
+                           <input 
+                              type="text" 
+                              value={userPrompt || ''}
+                              onChange={(e) => setUserPrompt && setUserPrompt(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && !isGenerating && onGenerateOutline()}
+                              className="w-full bg-gray-900 border border-gray-600 rounded-lg pl-9 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
+                              placeholder="AI 助手：描述你的大纲需求..."
+                           />
+                        </div>
+                        <button 
+                           onClick={isGenerating ? undefined : onGenerateOutline}
+                           disabled={isGenerating}
+                           className={`px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 ${isGenerating ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white'}`}
+                        >
+                           {isGenerating ? <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin" /> : <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />}
+                           <span className="hidden md:inline">{isGenerating ? '生成中...' : '生成大纲'}</span>
+                           <span className="md:hidden">生成</span>
+                        </button>
+                     </div>
                  </div>
               </div>
             )}

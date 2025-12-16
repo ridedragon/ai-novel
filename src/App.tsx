@@ -5675,6 +5675,10 @@ ${taskDescription}`
                           setUserPrompt={setUserPrompt}
                           onShowSettings={() => { setGeneratorSettingsType('outline'); setShowGeneratorSettingsModal(true); }}
                           modelName={outlinePresets.find(p => p.id === activeOutlinePresetId)?.name || '默认大纲'}
+                          selectedCharacterSetId={selectedCharacterSetIdForOutlineGen}
+                          setSelectedCharacterSetId={setSelectedCharacterSetIdForOutlineGen}
+                          selectedWorldviewSetId={selectedWorldviewSetIdForOutlineGen}
+                          setSelectedWorldviewSetId={setSelectedWorldviewSetIdForOutlineGen}
                           sidebarHeader={
                              <div className="flex items-center justify-between">
                                 <div className="font-bold flex items-center gap-2">
