@@ -9,155 +9,25 @@ import {
 import ReactMarkdown from 'react-markdown'
 import OpenAI from 'openai'
 import terminal from 'virtual:terminal'
-
-interface ChapterVersion {
-  id: string
-  content: string
-  timestamp: number
-  type: 'original' | 'optimized' | 'user_edit'
-}
-
-interface Chapter {
-  id: number
-  title: string
-  content: string
-  volumeId?: string // 所属卷ID
-  sourceContent?: string // 原始内容 (Deprecated)
-  optimizedContent?: string // 优化后内容 (Deprecated)
-  showingVersion?: 'source' | 'optimized' // 当前显示版本 (Deprecated)
-  
-  versions?: ChapterVersion[]
-  activeVersionId?: string
-
-  subtype?: 'story' | 'small_summary' | 'big_summary'
-  summaryRange?: string
-}
-
-interface NovelVolume {
-  id: string
-  title: string
-  collapsed: boolean
-}
-
-interface OutlineItem {
-  title: string
-  summary: string
-}
-
-interface OutlineSet {
-  id: string
-  name: string
-  items: OutlineItem[]
-  userNotes?: string
-}
-
-interface CharacterItem {
-  name: string
-  bio: string
-}
-
-interface CharacterSet {
-  id: string
-  name: string
-  characters: CharacterItem[]
-  userNotes?: string // 用户输入的设定记录
-}
-
-interface WorldviewItem {
-  item: string
-  setting: string
-}
-
-interface WorldviewSet {
-  id: string
-  name: string
-  entries: WorldviewItem[]
-  userNotes?: string
-}
-
-interface Novel {
-  id: string
-  title: string
-  chapters: Chapter[]
-  volumes: NovelVolume[] // 分卷列表
-  systemPrompt: string
-  createdAt: number
-  outline?: OutlineItem[] // Deprecated, use outlineSets
-  outlineSets?: OutlineSet[]
-  characters?: CharacterItem[] // Deprecated, use characterSets
-  characterSets?: CharacterSet[]
-  worldview?: WorldviewItem[] // Deprecated, use worldviewSets
-  worldviewSets?: WorldviewSet[]
-}
-
-interface PromptItem {
-  id: number
-  name: string
-  content: string
-  role: 'system' | 'user' | 'assistant'
-  trigger: string
-  position: 'relative' | 'absolute'
-  active: boolean // 控制开关状态
-  icon?: string
-}
-
-interface GeneratorPrompt {
-  id: string
-  name?: string // Optional name for display
-  role: 'system' | 'user' | 'assistant'
-  content: string
-  enabled: boolean
-}
-
-interface PresetApiConfig {
-  apiKey?: string
-  baseUrl?: string
-  model?: string
-  modelList?: string[]
-}
-
-interface GeneratorPreset {
-  id: string
-  name: string
-  prompts: GeneratorPrompt[]
-  temperature?: number
-  topP?: number
-  topK?: number
-  apiConfig?: PresetApiConfig
-}
-
-interface RegexScript {
-  id: string
-  scriptName: string
-  findRegex: string
-  replaceString: string
-  trimStrings: string[]
-  placement: number[] // 1: User Input (Context), 2: AI Output
-  disabled: boolean
-  markdownOnly: boolean
-  promptOnly: boolean
-  runOnEdit: boolean
-  substituteRegex: number
-  minDepth: number | null
-  maxDepth: number | null
-}
-
-interface CompletionPreset {
-  id: string
-  name: string
-  contextLength: number
-  maxReplyLength: number
-  temperature: number
-  frequencyPenalty: number
-  presencePenalty: number
-  topP: number
-  topK: number
-  stream: boolean
-  candidateCount: number
-  prompts?: PromptItem[]
-  regexScripts?: RegexScript[]
-  apiConfig?: PresetApiConfig
-}
+import {
+  ChapterVersion,
+  Chapter,
+  NovelVolume,
+  OutlineItem,
+  OutlineSet,
+  CharacterItem,
+  CharacterSet,
+  WorldviewItem,
+  WorldviewSet,
+  Novel,
+  PromptItem,
+  GeneratorPrompt,
+  PresetApiConfig,
+  GeneratorPreset,
+  RegexScript,
+  CompletionPreset
+} from './types'
+import { OutlineManager } from './components/OutlineManager'
 
 const defaultOutlinePresets: GeneratorPreset[] = [
   { 
@@ -2430,10 +2300,17 @@ function App() {
             terminal.log('[Outline] Generation aborted.')
             break
         }
-        terminal.error(`[Outline] Attempt ${attempt + 1} failed:`, err)
+        
+        let errorMsg = err.message || String(err)
+        if (err.status) errorMsg += ` (Status: ${err.status})`
+        if (err.error) errorMsg += `\nServer Response: ${JSON.stringify(err.error)}`
+
+        terminal.error(`[Outline] Attempt ${attempt + 1} failed: ${errorMsg}`)
+        console.error('[Outline Error]', err)
+
         attempt++
         if (attempt >= maxAttempts) {
-          setError(err.message || '生成大纲出错 (重试次数已耗尽)')
+          setError(errorMsg || '生成大纲出错 (重试次数已耗尽)')
         } else {
           await new Promise(resolve => setTimeout(resolve, 1000))
         }
@@ -2636,10 +2513,17 @@ function App() {
             terminal.log('[Characters] Generation aborted.')
             break
         }
-        terminal.error(`[Characters] Attempt ${attempt + 1} failed:`, err)
+
+        let errorMsg = err.message || String(err)
+        if (err.status) errorMsg += ` (Status: ${err.status})`
+        if (err.error) errorMsg += `\nServer Response: ${JSON.stringify(err.error)}`
+
+        terminal.error(`[Characters] Attempt ${attempt + 1} failed: ${errorMsg}`)
+        console.error('[Characters Error]', err)
+
         attempt++
         if (attempt >= maxAttempts) {
-          setError(err.message || '生成角色出错 (重试次数已耗尽)')
+          setError(errorMsg || '生成角色出错 (重试次数已耗尽)')
         } else {
           await new Promise(resolve => setTimeout(resolve, 1000))
         }
@@ -2863,10 +2747,17 @@ function App() {
             terminal.log('[Worldview] Generation aborted.')
             break
         }
-        terminal.error(`[Worldview] Attempt ${attempt + 1} failed:`, err)
+
+        let errorMsg = err.message || String(err)
+        if (err.status) errorMsg += ` (Status: ${err.status})`
+        if (err.error) errorMsg += `\nServer Response: ${JSON.stringify(err.error)}`
+
+        terminal.error(`[Worldview] Attempt ${attempt + 1} failed: ${errorMsg}`)
+        console.error('[Worldview Error]', err)
+
         attempt++
         if (attempt >= maxAttempts) {
-          setError(err.message || '生成世界观出错 (重试次数已耗尽)')
+          setError(errorMsg || '生成世界观出错 (重试次数已耗尽)')
         } else {
           await new Promise(resolve => setTimeout(resolve, 1000))
         }
@@ -5760,491 +5651,67 @@ ${taskDescription}`
                  )}
 
                  {/* Outline Module - Redesigned */}
-                 {creationModule === 'outline' && (
+                 {creationModule === 'outline' && activeNovel && (
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
-                       {/* Left Sidebar */}
-                       <div className={`w-full md:w-64 border-r border-gray-700 flex flex-col bg-gray-800 ${activeOutlineSetId ? 'hidden md:flex' : 'flex'}`}>
-                          {/* Header */}
-                          <div className="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
-                             <div className="font-bold flex items-center gap-2">
-                                <Book className="w-5 h-5 text-[var(--theme-color)]" />
-                                <span>故事大纲</span>
-                             </div>
-
-                             <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
-                                <button 
-                                    onClick={() => setCreationModule('worldview')}
-                                    className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
-                                    title="切换到世界观"
-                                >
-                                    <Globe className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={() => setCreationModule('characters')}
-                                    className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
-                                    title="切换到角色集"
-                                >
-                                    <Users className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={() => setCreationModule('outline')}
-                                    className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
-                                    title="切换到大纲"
-                                >
-                                    <Book className="w-4 h-4" />
-                                </button>
-                             </div>
-
-                             <button onClick={() => setCreationModule('menu')} className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors">
-                                <ArrowLeft className="w-4 h-4" />
-                             </button>
-                          </div>
-                          
-                          {/* Outline File List */}
-                          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                             <div className="px-2 py-1 text-xs text-gray-500 font-semibold mb-1">大纲文件列表</div>
-                             {activeNovel?.outlineSets?.map(set => (
-                                <div 
-                                  key={set.id}
-                                  onClick={() => setActiveOutlineSetId(set.id)}
-                                  className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${activeOutlineSetId === set.id ? 'bg-[var(--theme-color)] text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}`}
-                                >
-                                   <Folder className={`w-4 h-4 shrink-0 ${activeOutlineSetId === set.id ? 'text-white' : 'text-gray-500'}`} />
-                                   <span className="flex-1 truncate text-sm font-medium">{set.name}</span>
-                                   
-                                   {/* Actions */}
-                                   <div className={`flex items-center opacity-0 group-hover:opacity-100 transition-opacity ${activeOutlineSetId === set.id ? 'text-white' : 'text-gray-400'}`}>
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); handleRenameOutlineSet(set.id, set.name); }}
-                                        className="bg-transparent p-1 hover:bg-white/20 rounded"
-                                      >
-                                         <Edit3 className="w-3 h-3" />
-                                      </button>
-                                      <button 
-                                        onClick={(e) => handleDeleteOutlineSet(set.id, e)}
-                                        className="bg-transparent p-1 hover:bg-white/20 rounded hover:text-red-300"
-                                      >
-                                         <Trash2 className="w-3 h-3" />
-                                      </button>
-                                   </div>
+                       <OutlineManager
+                          novel={activeNovel}
+                          activeOutlineSetId={activeOutlineSetId}
+                          onSetActiveOutlineSetId={setActiveOutlineSetId}
+                          onUpdateNovel={(updatedNovel) => {
+                             setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n))
+                          }}
+                          onStartAutoWrite={startAutoWriting}
+                          isAutoWriting={isAutoWriting}
+                          autoWriteStatus={autoWriteStatus}
+                          onStopAutoWrite={() => {
+                             setIsAutoWriting(false)
+                             autoWriteAbortControllerRef.current?.abort()
+                          }}
+                          includeFullOutlineInAutoWrite={includeFullOutlineInAutoWrite}
+                          setIncludeFullOutlineInAutoWrite={setIncludeFullOutlineInAutoWrite}
+                          onGenerateOutline={handleGenerateOutline}
+                          isGenerating={isGeneratingOutline}
+                          userPrompt={userPrompt}
+                          setUserPrompt={setUserPrompt}
+                          onShowSettings={() => { setGeneratorSettingsType('outline'); setShowGeneratorSettingsModal(true); }}
+                          modelName={outlinePresets.find(p => p.id === activeOutlinePresetId)?.name || '默认大纲'}
+                          sidebarHeader={
+                             <div className="flex items-center justify-between">
+                                <div className="font-bold flex items-center gap-2">
+                                   <Book className="w-5 h-5 text-[var(--theme-color)]" />
+                                   <span>故事大纲</span>
                                 </div>
-                             ))}
-                             {(!activeNovel?.outlineSets || activeNovel.outlineSets.length === 0) && (
-                                <div className="text-center py-8 text-gray-500 text-xs italic">
-                                   暂无大纲文件
+
+                                <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
+                                   <button 
+                                       onClick={() => setCreationModule('worldview')}
+                                       className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                       title="切换到世界观"
+                                   >
+                                       <Globe className="w-4 h-4" />
+                                   </button>
+                                   <button 
+                                       onClick={() => setCreationModule('characters')}
+                                       className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                       title="切换到角色集"
+                                   >
+                                       <Users className="w-4 h-4" />
+                                   </button>
+                                   <button 
+                                       onClick={() => setCreationModule('outline')}
+                                       className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
+                                       title="切换到大纲"
+                                   >
+                                       <Book className="w-4 h-4" />
+                                   </button>
                                 </div>
-                             )}
-                          </div>
-                          
-                          {/* Bottom Input (Left Input Box) */}
-                          <div className="p-3 pr-20 md:pr-3 border-t border-gray-700 bg-gray-800">
-                             <div className="text-xs text-gray-500 mb-2 font-medium">新建大纲文件</div>
-                             <div className="flex gap-2">
-                                <input 
-                                  value={newOutlineSetName}
-                                  onChange={(e) => setNewOutlineSetName(e.target.value)}
-                                  onKeyDown={(e) => e.key === 'Enter' && handleAddOutlineSet()}
-                                  className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm focus:border-[var(--theme-color)] outline-none"
-                                  placeholder="输入名称..."
-                                />
-                                <button 
-                                  onClick={handleAddOutlineSet}
-                                  disabled={!newOutlineSetName.trim()}
-                                  className="p-1.5 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 text-white rounded transition-colors"
-                                >
-                                   <Plus className="w-4 h-4" />
+
+                                <button onClick={() => setCreationModule('menu')} className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors">
+                                   <ArrowLeft className="w-4 h-4" />
                                 </button>
                              </div>
-                          </div>
-                       </div>
-                       
-                       {/* Right Content */}
-                       <div className={`flex-1 flex flex-col bg-gray-900 ${activeOutlineSetId ? 'flex' : 'hidden md:flex'}`}>
-                          {activeOutlineSetId ? (
-                             <>
-                                {/* Header / Toolbar */}
-                                <div className="p-3 md:p-4 border-b border-gray-700 bg-gray-800 shrink-0">
-                                    <div className="flex items-center justify-between mb-4 gap-2">
-                                       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
-                                          <button 
-                                             onClick={() => setActiveOutlineSetId(null)}
-                                             className="md:hidden p-1.5 -ml-2 mr-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white shrink-0"
-                                          >
-                                             <ArrowLeft className="w-5 h-5" />
-                                          </button>
-                                          <h3 className="font-bold text-lg text-gray-200 truncate">
-                                             {activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.name} 
-                                             <span className="hidden md:inline text-sm font-normal text-gray-500 ml-2">章节大纲</span>
-                                          </h3>
-                                          <button 
-                                             onClick={() => { setGeneratorSettingsType('outline'); setShowGeneratorSettingsModal(true); }}
-                                             className="text-xs flex items-center gap-1.5 text-gray-400 hover:text-[var(--theme-color)] transition-colors bg-gray-900/50 px-2 md:px-3 py-1 rounded-full border border-gray-700 hover:border-[var(--theme-color)] shrink-0 max-w-[80px] md:max-w-none"
-                                          >
-                                             <Settings className="w-3 h-3 shrink-0" />
-                                             <span className="truncate">{outlinePresets.find(p => p.id === activeOutlinePresetId)?.name || '默认大纲'}</span>
-                                          </button>
-                                       </div>
-                                       
-                                       <button 
-                                          onClick={() => {
-                                             if (activeOutlineSetId) {
-                                                const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
-                                                if (currentSet) {
-                                                   updateOutlineItemsInSet(activeOutlineSetId, [...currentSet.items, { title: '新章节', summary: '' }])
-                                                }
-                                             }
-                                          }}
-                                          className="flex items-center justify-center gap-1.5 px-2 md:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors border border-gray-600 shrink-0"
-                                          title="手动添加章节"
-                                       >
-                                          <Plus className="w-4 h-4 md:w-3.5 md:h-3.5" />
-                                          <span className="hidden md:inline">手动添加章节</span>
-                                       </button>
-                                    </div>
-                                    
-                                    {/* AI Input Area */}
-                                    <div className="flex items-center gap-4 mb-2 relative z-20 w-[96%] mx-auto md:w-full">
-                                       <div className="flex items-center gap-2">
-                                          <span className="text-xs text-gray-400">参考：</span>
-                                          
-                                          {/* Worldview Selector */}
-                                          <div className="relative">
-                                             <button
-                                                onClick={() => setShowWorldviewSelectorForOutline(!showWorldviewSelectorForOutline)}
-                                                className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-200 border border-gray-600 transition-colors"
-                                             >
-                                                <Globe className="w-3 h-3 text-[var(--theme-color)]" />
-                                                {selectedWorldviewSetIdForOutlineGen
-                                                   ? activeNovel?.worldviewSets?.find(s => s.id === selectedWorldviewSetIdForOutlineGen)?.name || '世界观已删除'
-                                                   : '选择世界观'}
-                                                <ChevronDown className="w-3 h-3" />
-                                             </button>
-                                             {showWorldviewSelectorForOutline && (
-                                                <>
-                                                   <div className="fixed inset-0 z-10" onClick={() => setShowWorldviewSelectorForOutline(false)}></div>
-                                                   <div 
-                                                      className="absolute top-full left-0 mt-1 w-56 border border-gray-600 rounded-lg shadow-2xl z-20 max-h-60 overflow-y-auto ring-1 ring-black/20"
-                                                      style={{ backgroundColor: '#1f2937' }}
-                                                   >
-                                                      <button
-                                                         onClick={() => { setSelectedWorldviewSetIdForOutlineGen(null); setShowWorldviewSelectorForOutline(false); }}
-                                                         className="w-full text-left px-3 py-2.5 text-xs text-gray-300 hover:text-white border-b border-gray-600 transition-colors bg-transparent hover:bg-gray-700"
-                                                      >
-                                                         不使用世界观
-                                                      </button>
-                                                      {activeNovel?.worldviewSets?.map(ws => (
-                                                         <button
-                                                            key={ws.id}
-                                                            onClick={() => { setSelectedWorldviewSetIdForOutlineGen(ws.id); setShowWorldviewSelectorForOutline(false); }}
-                                                            className={`w-full text-left px-3 py-2.5 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${selectedWorldviewSetIdForOutlineGen === ws.id ? 'text-[var(--theme-color)] font-medium' : 'text-gray-300'}`}
-                                                         >
-                                                            <span className="truncate flex-1">{ws.name}</span>
-                                                            {selectedWorldviewSetIdForOutlineGen === ws.id && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)] shrink-0"></div>}
-                                                         </button>
-                                                      ))}
-                                                      {(!activeNovel?.worldviewSets || activeNovel.worldviewSets.length === 0) && (
-                                                         <div className="px-3 py-4 text-xs text-gray-500 italic text-center">
-                                                            暂无世界观文件
-                                                         </div>
-                                                      )}
-                                                   </div>
-                                                </>
-                                             )}
-                                          </div>
-
-                                          {/* Character Set Selector */}
-                                          <div className="relative">
-                                             <button
-                                                onClick={() => setShowCharacterSetSelector(!showCharacterSetSelector)}
-                                                className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-200 border border-gray-600 transition-colors"
-                                             >
-                                                <Users className="w-3 h-3 text-[var(--theme-color)]" />
-                                                {selectedCharacterSetIdForOutlineGen
-                                                   ? activeNovel?.characterSets?.find(s => s.id === selectedCharacterSetIdForOutlineGen)?.name || '角色集已删除'
-                                                   : '选择角色集'}
-                                                <ChevronDown className="w-3 h-3" />
-                                             </button>
-                                             {showCharacterSetSelector && (
-                                                <>
-                                                   <div className="fixed inset-0 z-10" onClick={() => setShowCharacterSetSelector(false)}></div>
-                                                   <div 
-                                                      className="absolute top-full left-0 mt-1 w-56 border border-gray-600 rounded-lg shadow-2xl z-20 max-h-60 overflow-y-auto ring-1 ring-black/20"
-                                                      style={{ backgroundColor: '#1f2937' }}
-                                                   >
-                                                      <button
-                                                         onClick={() => { setSelectedCharacterSetIdForOutlineGen(null); setShowCharacterSetSelector(false); }}
-                                                         className="w-full text-left px-3 py-2.5 text-xs text-gray-300 hover:text-white border-b border-gray-600 transition-colors bg-transparent hover:bg-gray-700"
-                                                      >
-                                                         不使用角色集
-                                                      </button>
-                                                      {activeNovel?.characterSets?.map(cs => (
-                                                         <button
-                                                            key={cs.id}
-                                                            onClick={() => { setSelectedCharacterSetIdForOutlineGen(cs.id); setShowCharacterSetSelector(false); }}
-                                                            className={`w-full text-left px-3 py-2.5 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${selectedCharacterSetIdForOutlineGen === cs.id ? 'text-[var(--theme-color)] font-medium' : 'text-gray-300'}`}
-                                                         >
-                                                            <span className="truncate flex-1">{cs.name}</span>
-                                                            {selectedCharacterSetIdForOutlineGen === cs.id && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)] shrink-0"></div>}
-                                                         </button>
-                                                      ))}
-                                                      {(!activeNovel?.characterSets || activeNovel.characterSets.length === 0) && (
-                                                         <div className="px-3 py-4 text-xs text-gray-500 italic text-center">
-                                                            暂无角色文件
-                                                         </div>
-                                                      )}
-                                                   </div>
-                                                </>
-                                             )}
-                                          </div>
-                                       </div>
-                                    </div>
-                                    <div className="flex gap-2 w-[96%] mx-auto md:w-full">
-                                       <input 
-                                         type="text" 
-                                         value={userPrompt}
-                                         onChange={(e) => setUserPrompt(e.target.value)}
-                                         className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] outline-none"
-                                         placeholder="AI 辅助生成：描述大纲要求，例如'第一卷主要讲述主角如何获得超能力'..."
-                                         onKeyDown={(e) => e.key === 'Enter' && !isGeneratingOutline && handleGenerateOutline()}
-                                       />
-                                       {isGeneratingOutline ? (
-                                           <button 
-                                             onClick={() => {
-                                                 outlineAbortControllerRef.current?.abort()
-                                                 setIsGeneratingOutline(false)
-                                             }}
-                                             className="px-3 py-1.5 md:px-4 md:py-2 bg-red-600 hover:bg-red-700 text-white text-xs md:text-sm rounded flex items-center gap-2 shadow-lg transition-all"
-                                           >
-                                             <StopCircle className="w-4 h-4" />
-                                             停止
-                                           </button>
-                                       ) : (
-                                           <button 
-                                             onClick={handleGenerateOutline}
-                                             className="px-3 py-1.5 md:px-4 md:py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-xs md:text-sm rounded flex items-center gap-2 shadow-lg transition-all"
-                                           >
-                                             <Wand2 className="w-4 h-4" />
-                                             生成
-                                           </button>
-                                       )}
-                                    </div>
-
-                                    {/* User Notes Area */}
-                                    <div className="mt-4 pt-4 border-t border-gray-700/50">
-                                       <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2 w-[96%] mx-auto md:w-full">
-                                          <FileText className="w-3 h-3" />
-                                          <span>用户输入记录 & 设定上下文 (AI 生成时会参考此内容)</span>
-                                       </div>
-                                       <div className="w-[96%] mx-auto md:w-full">
-                                          <textarea 
-                                             value={activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.userNotes || ''}
-                                             onChange={(e) => updateOutlineSet(activeOutlineSetId!, { userNotes: e.target.value })}
-                                             className="w-full h-20 md:h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-2 md:p-3 text-xs md:text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono"
-                                             placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这份大纲的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
-                                          />
-                                       </div>
-                                    </div>
-                                </div>
-                                
-                                {/* Grid Content */}
-                                <div className="flex-1 p-6 pb-24 overflow-y-auto custom-scrollbar min-w-0">
-                                    {(() => {
-                                       const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
-                                       const items = currentSet?.items || []
-                                       
-                                       if (items.length === 0) {
-                                          return (
-                                             <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                                                <Book className="w-16 h-16 mb-4 opacity-10" />
-                                                <p>此大纲暂无章节</p>
-                                                <p className="text-sm mt-2">使用上方 AI 生成或点击手动添加</p>
-                                             </div>
-                                          )
-                                       }
-
-                                       return (
-                                          <div className="space-y-6">
-                                             <div className="space-y-1 md:space-y-4">
-                                                {items.map((item, idx) => (
-                                                   <div 
-                                                      key={idx}
-                                                      data-outline-index={idx}
-                                                      draggable={isOutlineDragEnabled}
-                                                      onDragStart={(e) => handleOutlineDragStart(e, idx)}
-                                                      onDragOver={(e) => handleOutlineDragOver(e, idx)}
-                                                      onDragEnd={handleOutlineDragEnd}
-                                                      onClick={() => setEditingOutlineItemIndex(idx)}
-                                                      className={`w-[94%] mx-auto md:w-full p-2 pl-8 pr-20 md:p-4 md:pl-10 md:pr-28 bg-gray-800 rounded-lg md:rounded-xl border border-gray-700 shadow-sm hover:border-[var(--theme-color)] transition-colors group cursor-pointer relative ${draggedOutlineIndex === idx ? 'opacity-50' : ''}`}
-                                                   >
-                                                      {/* Drag Handle */}
-                                                      <div 
-                                                         className="absolute left-1 md:left-2 top-1/2 -translate-y-1/2 p-3 cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 z-10 hover:bg-gray-700/50 rounded"
-                                                         onMouseEnter={() => setIsOutlineDragEnabled(true)}
-                                                         onMouseLeave={() => setIsOutlineDragEnabled(false)}
-                                                         onTouchStart={(e) => {
-                                                            e.stopPropagation();
-                                                            setDraggedOutlineIndex(idx);
-                                                         }}
-                                                         onTouchMove={(e) => {
-                                                            e.stopPropagation();
-                                                            // e.preventDefault(); // Might block scrolling, but we need it for drag. 
-                                                            // User wants easy adjust.
-                                                            const touch = e.touches[0];
-                                                            const target = document.elementFromPoint(touch.clientX, touch.clientY);
-                                                            const itemRow = target?.closest('[data-outline-index]');
-                                                            if (itemRow) {
-                                                                const targetIndex = parseInt(itemRow.getAttribute('data-outline-index') || '-1');
-                                                                if (targetIndex !== -1 && targetIndex !== idx) {
-                                                                    // We need to use a ref to track current drag index if we want continuous swap,
-                                                                    // but here we are in a map. 
-                                                                    // Since moveOutlineItemDrag updates state, idx will change.
-                                                                    // But touch tracking might get lost if element re-renders.
-                                                                    // Simple swap is better than nothing.
-                                                                    if (draggedOutlineIndex !== null && draggedOutlineIndex !== targetIndex) {
-                                                                         moveOutlineItemDrag(draggedOutlineIndex, targetIndex);
-                                                                         setDraggedOutlineIndex(targetIndex);
-                                                                    }
-                                                                }
-                                                            }
-                                                         }}
-                                                         onTouchEnd={() => {
-                                                            setDraggedOutlineIndex(null);
-                                                            setIsOutlineDragEnabled(false);
-                                                         }}
-                                                         onClick={(e) => e.stopPropagation()}
-                                                      >
-                                                         <GripVertical className="w-6 h-6 md:w-5 md:h-5" />
-                                                      </div>
-
-                                                      <div className="flex items-center gap-2 mb-2 pointer-events-none">
-                                                         <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-400 shrink-0">
-                                                            {idx + 1}
-                                                         </div>
-                                                         <div className="flex-1 font-bold text-gray-200 text-sm md:text-base truncate">
-                                                            {item.title || '未命名章节'}
-                                                         </div>
-                                                      </div>
-                                                      <div className="pl-6 md:pl-8 pointer-events-none">
-                                                         <div className="w-full bg-gray-900/30 rounded-lg p-2 md:p-3 text-xs md:text-sm text-gray-400 border border-gray-700/30 line-clamp-3 min-h-[2.5rem] md:min-h-[3rem]">
-                                                            {item.summary || <span className="italic opacity-50">点击编辑章节摘要...</span>}
-                                                         </div>
-                                                      </div>
-                                                      
-                                                      {/* Action Buttons */}
-                                                      <div className="absolute top-1 right-1 md:top-4 md:right-4 flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800/90 rounded-lg p-1 border border-gray-700/50 backdrop-blur-sm shadow-sm" onClick={(e) => e.stopPropagation()}>
-                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); handleMoveOutlineItem(idx, 'up'); }}
-                                                            disabled={idx === 0}
-                                                            className="p-1.5 md:p-2 text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 rounded hover:bg-gray-700 transition-colors active:bg-gray-600"
-                                                            title="上移"
-                                                         >
-                                                            <ArrowUp className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                                         </button>
-                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); handleMoveOutlineItem(idx, 'down'); }}
-                                                            disabled={idx === items.length - 1}
-                                                            className="p-1.5 md:p-2 text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 rounded hover:bg-gray-700 transition-colors active:bg-gray-600"
-                                                            title="下移"
-                                                         >
-                                                            <ArrowDown className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                                         </button>
-                                                         <div className="w-px h-4 bg-gray-700 mx-0.5"></div>
-                                                         <button 
-                                                            onClick={(e) => {
-                                                               e.stopPropagation()
-                                                               setDialog({
-                                                                 isOpen: true,
-                                                                 type: 'confirm',
-                                                                 title: '删除章节大纲',
-                                                                 message: `确定要删除章节 "${item.title}" 吗？`,
-                                                                 inputValue: '',
-                                                                 onConfirm: () => {
-                                                                    const newItems = items.filter((_, i) => i !== idx)
-                                                                    updateOutlineItemsInSet(activeOutlineSetId, newItems)
-                                                                    closeDialog()
-                                                                 }
-                                                               })
-                                                            }}
-                                                            className="p-1.5 md:p-2 text-gray-400 hover:text-red-400 rounded hover:bg-gray-700 transition-colors active:bg-gray-600"
-                                                            title="删除章节"
-                                                         >
-                                                            <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                                         </button>
-                                                      </div>
-
-                                                   </div>
-                                                ))}
-                                             </div>
-
-                                             <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 space-y-4 mt-8">
-                                                <h3 className="font-semibold text-lg flex items-center gap-2">
-                                                   <Bot className="w-5 h-5 text-purple-500" />
-                                                   自动化写作
-                                                </h3>
-                                                <p className="text-sm text-gray-400">
-                                                   AI 将会根据上述大纲逐章进行创作。生成的章节将自动添加到左侧章节列表中。
-                                                </p>
-                                                
-                                                <div 
-                                                   className="flex items-center justify-between bg-gray-900/50 p-3 rounded-lg cursor-pointer hover:bg-gray-900/80 transition-colors select-none"
-                                                   onClick={() => setIncludeFullOutlineInAutoWrite(!includeFullOutlineInAutoWrite)}
-                                                >
-                                                    <span className="text-sm text-gray-300">发送完整大纲上下文 (全局参考)</span>
-                                                    <div className={`w-10 h-5 rounded-full relative transition-colors duration-200 ${includeFullOutlineInAutoWrite ? 'bg-[var(--theme-color)]' : 'bg-gray-600'}`}>
-                                                        <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-200 ${includeFullOutlineInAutoWrite ? 'left-6' : 'left-1'}`} />
-                                                    </div>
-                                                </div>
-
-                                                {isAutoWriting && activeOutlineSetId === autoWriteOutlineSetId ? (
-                                                   <div className="flex items-center gap-4 p-4 bg-purple-900/20 border border-purple-500/50 rounded text-purple-200">
-                                                      <Loader2 className="w-5 h-5 animate-spin" />
-                                                      <span className="flex-1">{autoWriteStatus}</span>
-                                                      <button 
-                                                        onClick={() => {
-                                                            setIsAutoWriting(false)
-                                                            autoWriteAbortControllerRef.current?.abort()
-                                                        }} 
-                                                        className="px-4 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm flex items-center gap-1"
-                                                      >
-                                                        <StopCircle className="w-4 h-4" /> 停止
-                                                      </button>
-                                                   </div>
-                                                ) : isAutoWriting ? (
-                                                   <div className="flex items-center gap-4 p-4 bg-gray-800/50 border border-gray-700 rounded text-gray-400">
-                                                      <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
-                                                      <span className="flex-1 text-sm">后台正在其他大纲中进行自动创作...</span>
-                                                      <button 
-                                                        onClick={() => {
-                                                            setIsAutoWriting(false)
-                                                            autoWriteAbortControllerRef.current?.abort()
-                                                        }} 
-                                                        className="px-3 py-1 bg-gray-700 hover:bg-red-700 text-white rounded text-xs"
-                                                      >
-                                                        全局停止
-                                                      </button>
-                                                   </div>
-                                                ) : (
-                                                   <button 
-                                                      onClick={startAutoWriting}
-                                                      className="w-full py-3 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white rounded font-semibold flex justify-center items-center gap-2 shadow-lg transition-all"
-                                                   >
-                                                      <PlayCircle className="w-5 h-5" />
-                                                      开始全自动创作
-                                                   </button>
-                                                )}
-                                             </div>
-                                          </div>
-                                       )
-                                    })()}
-                                </div>
-                             </>
-                          ) : (
-                             <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                                <Book className="w-16 h-16 mb-4 opacity-10" />
-                                <p>请在左侧选择或创建一个大纲文件</p>
-                             </div>
-                          )}
-                       </div>
+                          }
+                       />
                     </div>
                  )}
                  {error && <div className="text-red-400 text-sm mt-2">{error}</div>}
