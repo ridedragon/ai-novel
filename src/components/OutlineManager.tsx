@@ -232,7 +232,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-full bg-gray-900 text-gray-100 overflow-hidden">
+    <div className="w-full flex flex-col md:flex-row h-full bg-gray-900 text-gray-100 overflow-hidden">
       
       {/* Sidebar: Set List */}
       <div className={`w-full md:w-64 bg-gray-800 border-r border-gray-700 flex flex-col shrink-0 transition-all duration-300 ${isMobileListOpen ? 'h-auto max-h-[60vh]' : 'h-auto'} md:h-auto`}>
