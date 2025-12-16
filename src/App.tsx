@@ -347,29 +347,75 @@ const ensureChapterVersions = (chapter: Chapter): Chapter => {
 }
 
 const safeParseJSONArray = (content: string): any[] => {
-  // 1. 尝试直接解析找到的数组 (最快)
-  const arrayMatch = content.match(/\[[\s\S]*\]/)
-  if (arrayMatch) {
-    try {
-      const result = JSON.parse(arrayMatch[0])
-      if (Array.isArray(result)) return result
-    } catch (e) {
-      console.warn('Direct array parse failed, trying object extraction...', e)
-    }
+  // 0. 预处理：尝试提取 Markdown 代码块中的内容
+  const markdownMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
+  if (markdownMatch && markdownMatch[1]) {
+      content = markdownMatch[1] // 使用代码块内部的内容
   }
 
-  // 2. 备选方案：提取所有顶层 JSON 对象 (Robust)
-  const objects: any[] = []
+  // 1. 尝试直接解析整个字符串
+  try {
+    const result = JSON.parse(content)
+    if (Array.isArray(result)) return result
+  } catch (e) {}
+
+  // 2. 尝试提取第一个完整的数组 [...] (使用括号计数，比正则更可靠)
   let braceCount = 0
   let startIndex = -1
   let inString = false
+  let escape = false
+
+  for (let i = 0; i < content.length; i++) {
+      const char = content[i]
+      
+      if (inString) {
+          if (escape) {
+              escape = false
+          } else if (char === '\\') {
+              escape = true
+          } else if (char === '"') {
+              inString = false
+          }
+      } else {
+          if (char === '"') {
+              inString = true
+          } else if (char === '[') {
+              if (braceCount === 0) startIndex = i
+              braceCount++
+          } else if (char === ']') {
+              braceCount--
+              if (braceCount === 0 && startIndex !== -1) {
+                  // Found a potential array
+                  try {
+                      const potentialJson = content.substring(startIndex, i + 1)
+                      const result = JSON.parse(potentialJson)
+                      if (Array.isArray(result)) return result
+                  } catch (e) {
+                      // Continue searching if parsing failed
+                  }
+                  // Reset to search for next array
+                  startIndex = -1 
+              }
+          }
+      }
+  }
+
+  // 3. 备选方案：提取所有顶层 JSON 对象 (Robust)
+  // 处理返回了多个分散对象的情况
+  const objects: any[] = []
+  braceCount = 0
+  startIndex = -1
+  inString = false
+  escape = false
 
   for (let i = 0; i < content.length; i++) {
     const char = content[i]
     
     if (inString) {
-        if (char === '\\') {
-            i++ // Skip next char
+        if (escape) {
+            escape = false
+        } else if (char === '\\') {
+            escape = true
         } else if (char === '"') {
             inString = false
         }
@@ -2245,8 +2291,9 @@ function App() {
           }
         } catch (e: any) {
           console.error('JSON Parse Error. Raw content:', content)
-          terminal.error(`Parse error: ${e.message}`)
-          throw new Error('解析大纲失败，AI 返回格式不正确。请检查 API 响应。')
+          const preview = content.length > 500 ? content.slice(0, 500) + '...' : content
+          terminal.error(`Parse error: ${e.message}\nRaw: ${preview}`)
+          throw new Error(`解析大纲失败，AI 返回格式不正确。\n\n返回内容预览：\n${preview}`)
         }
 
       } catch (err: any) {
@@ -2450,8 +2497,9 @@ function App() {
           }
         } catch (e: any) {
           console.error('JSON Parse Error. Raw content:', content)
-          terminal.error(`Parse error: ${e.message}`)
-          throw new Error('解析角色失败，AI 返回格式不正确')
+          const preview = content.length > 500 ? content.slice(0, 500) + '...' : content
+          terminal.error(`Parse error: ${e.message}\nRaw: ${preview}`)
+          throw new Error(`解析角色失败，AI 返回格式不正确。\n\n返回内容预览：\n${preview}`)
         }
 
       } catch (err: any) {
@@ -2676,8 +2724,9 @@ function App() {
           }
         } catch (e: any) {
           console.error('JSON Parse Error. Raw content:', content)
-          terminal.error(`Parse error: ${e.message}`)
-          throw new Error('解析世界观失败，AI 返回格式不正确')
+          const preview = content.length > 500 ? content.slice(0, 500) + '...' : content
+          terminal.error(`Parse error: ${e.message}\nRaw: ${preview}`)
+          throw new Error(`解析世界观失败，AI 返回格式不正确。\n\n返回内容预览：\n${preview}`)
         }
 
       } catch (err: any) {
