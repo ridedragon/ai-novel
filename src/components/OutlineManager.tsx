@@ -381,10 +381,10 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
             )}
 
             {/* Chapter List (Cards) */}
-            <div className="flex-1 overflow-y-auto p-2 md:p-8 custom-scrollbar">
-              <div className="max-w-4xl mx-auto space-y-3 md:space-y-4 pb-20 md:pb-24">
+            <div className="flex-1 overflow-y-auto p-2 md:p-8 custom-scrollbar flex flex-col">
+              <div className={`max-w-4xl mx-auto w-full space-y-3 md:space-y-4 pb-24 md:pb-24 ${activeSet.items.length === 0 ? 'flex-1 flex flex-col justify-center' : ''}`}>
                 {activeSet.items.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 md:py-20 text-gray-500 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-800/20">
+                  <div className="flex flex-col items-center justify-center py-12 md:py-20 text-gray-500 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-800/20">
                     <Book className="w-12 h-12 md:w-16 md:h-16 mb-3 md:mb-4 opacity-20" />
                     <p className="text-base md:text-lg font-medium text-gray-400">大纲为空</p>
                     <p className="text-xs md:text-sm mt-1">请手动添加章节，或使用上方的 AI 助手生成</p>
