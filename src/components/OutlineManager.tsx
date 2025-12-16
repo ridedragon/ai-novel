@@ -594,7 +594,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                   </div>
 
                   {/* Right: Action */}
-                  <div className="flex-1 md:flex-none md:w-auto flex justify-end">
+                  <div className="flex-1 md:flex-none md:w-auto flex justify-end min-w-0">
                      {isAutoWriting ? (
                         <div className="flex items-center gap-2 md:gap-3 bg-gray-900 border border-purple-500/30 rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 w-full md:w-auto min-w-0">
                            <Loader2 className="w-4 h-4 md:w-5 md:h-5 text-purple-500 animate-spin shrink-0" />
