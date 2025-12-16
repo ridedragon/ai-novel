@@ -320,72 +320,74 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
         {activeSet ? (
           <>
             {/* Toolbar */}
-            <div className="p-4 border-b border-gray-700 bg-gray-800/50 flex flex-wrap items-center justify-between gap-4 shrink-0 z-10 backdrop-blur-sm sticky top-0">
-              <div className="flex items-center gap-3 overflow-hidden">
-                <h2 className="text-xl font-bold text-gray-100 truncate">{activeSet.name}</h2>
-                <span className="bg-gray-700 text-gray-400 text-xs px-2 py-0.5 rounded-full">
+            <div className="p-3 md:p-4 border-b border-gray-700 bg-gray-800/50 flex flex-wrap items-center justify-between gap-3 md:gap-4 shrink-0 z-10 backdrop-blur-sm sticky top-0">
+              <div className="flex items-center gap-2 md:gap-3 overflow-hidden">
+                <h2 className="text-lg md:text-xl font-bold text-gray-100 truncate">{activeSet.name}</h2>
+                <span className="bg-gray-700 text-gray-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full shrink-0">
                   {activeSet.items.length} 章
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="flex items-center bg-gray-700 rounded-lg p-0.5 mr-2">
+              <div className="flex items-center gap-1 md:gap-2">
+                <div className="flex items-center bg-gray-700 rounded-lg p-0.5 mr-1 md:mr-2">
                    {onShowSettings && (
                      <button 
                         onClick={onShowSettings} 
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-300 hover:text-white rounded-md hover:bg-gray-600 transition-colors"
+                        className="flex items-center gap-1 px-2 md:px-3 py-1 md:py-1.5 text-[10px] md:text-xs text-gray-300 hover:text-white rounded-md hover:bg-gray-600 transition-colors"
                      >
-                        <Settings className="w-3.5 h-3.5" />
-                        <span>{modelName || '设置'}</span>
+                        <Settings className="w-3 h-3 md:w-3.5 md:h-3.5" />
+                        <span className="hidden md:inline">{modelName || '设置'}</span>
                      </button>
                    )}
                 </div>
 
                 <button 
                   onClick={handleAddItem}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded-lg transition-colors border border-gray-600 hover:border-gray-500"
+                  className="flex items-center gap-1 px-3 py-1.5 md:px-4 md:py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs md:text-sm rounded-lg transition-colors border border-gray-600 hover:border-gray-500"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
                   <span className="hidden sm:inline">手动添加章节</span>
+                  <span className="md:hidden">添加</span>
                 </button>
               </div>
             </div>
 
             {/* AI Generation Input */}
             {onGenerateOutline && (
-              <div className="p-4 bg-gray-800/30 border-b border-gray-700/50">
-                 <div className="max-w-4xl mx-auto flex gap-3">
+              <div className="p-3 md:p-4 bg-gray-800/30 border-b border-gray-700/50">
+                 <div className="max-w-4xl mx-auto flex gap-2 md:gap-3">
                     <div className="flex-1 relative">
-                       <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--theme-color)]" />
+                       <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 md:w-4 md:h-4 text-[var(--theme-color)]" />
                        <input 
                           type="text" 
                           value={userPrompt || ''}
                           onChange={(e) => setUserPrompt && setUserPrompt(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && !isGenerating && onGenerateOutline()}
-                          className="w-full bg-gray-900 border border-gray-600 rounded-lg pl-10 pr-4 py-2 text-sm focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
-                          placeholder="AI 助手：描述你的大纲需求，例如'第一卷主要讲述主角觉醒的过程'..."
+                          className="w-full bg-gray-900 border border-gray-600 rounded-lg pl-9 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
+                          placeholder="AI 助手：描述你的大纲需求..."
                        />
                     </div>
                     <button 
                        onClick={isGenerating ? undefined : onGenerateOutline}
                        disabled={isGenerating}
-                       className={`px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-lg ${isGenerating ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white'}`}
+                       className={`px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 ${isGenerating ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white'}`}
                     >
-                       {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
-                       {isGenerating ? '生成中...' : '生成大纲'}
+                       {isGenerating ? <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin" /> : <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />}
+                       <span className="hidden md:inline">{isGenerating ? '生成中...' : '生成大纲'}</span>
+                       <span className="md:hidden">生成</span>
                     </button>
                  </div>
               </div>
             )}
 
             {/* Chapter List (Cards) */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
-              <div className="max-w-4xl mx-auto space-y-4 pb-24">
+            <div className="flex-1 overflow-y-auto p-2 md:p-8 custom-scrollbar">
+              <div className="max-w-4xl mx-auto space-y-3 md:space-y-4 pb-20 md:pb-24">
                 {activeSet.items.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-gray-500 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-800/20">
-                    <Book className="w-16 h-16 mb-4 opacity-20" />
-                    <p className="text-lg font-medium text-gray-400">大纲为空</p>
-                    <p className="text-sm mt-2">请手动添加章节，或使用上方的 AI 助手生成</p>
+                  <div className="flex flex-col items-center justify-center py-16 md:py-20 text-gray-500 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-800/20">
+                    <Book className="w-12 h-12 md:w-16 md:h-16 mb-3 md:mb-4 opacity-20" />
+                    <p className="text-base md:text-lg font-medium text-gray-400">大纲为空</p>
+                    <p className="text-xs md:text-sm mt-1">请手动添加章节，或使用上方的 AI 助手生成</p>
                   </div>
                 ) : (
                   activeSet.items.map((item, idx) => (
@@ -396,7 +398,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                       onDragOver={(e) => onDragOver(e, idx)}
                       onDragEnd={onDragEnd}
                       onClick={() => openEditChapter(idx, item)}
-                      className={`relative bg-gray-800 border border-gray-700 rounded-xl p-4 md:p-5 hover:border-[var(--theme-color)] hover:shadow-lg transition-all cursor-pointer group ${draggedItemIndex === idx ? 'opacity-40 ring-2 ring-[var(--theme-color)]' : ''}`}
+                      className={`relative bg-gray-800 border border-gray-700 rounded-lg md:rounded-xl p-3 md:p-5 hover:border-[var(--theme-color)] hover:shadow-lg transition-all cursor-pointer group ${draggedItemIndex === idx ? 'opacity-40 ring-2 ring-[var(--theme-color)]' : ''}`}
                     >
                       {/* Drag Handle */}
                       <div 
@@ -406,46 +408,44 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                         <GripVertical className="w-5 h-5" />
                       </div>
 
-                      <div className="flex items-start gap-4 md:pl-8">
-                        <div className="w-8 h-8 rounded-full bg-gray-900/80 border border-gray-700 flex items-center justify-center text-sm font-bold text-gray-400 shrink-0 mt-0.5">
+                      <div className="flex items-start gap-3 md:gap-4 md:pl-8">
+                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gray-900/80 border border-gray-700 flex items-center justify-center text-xs md:text-sm font-bold text-gray-400 shrink-0 mt-0.5">
                           {idx + 1}
                         </div>
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-start">
-                             <h4 className="text-base md:text-lg font-bold text-gray-200 mb-2 truncate pr-8">{item.title}</h4>
-                             
-                             {/* Mobile Actions Menu could go here, for now using direct buttons */}
+                             <h4 className="text-sm md:text-lg font-bold text-gray-200 mb-1 md:mb-2 truncate pr-6 md:pr-8">{item.title}</h4>
                           </div>
-                          <p className="text-sm text-gray-400 leading-relaxed line-clamp-3 md:line-clamp-2">{item.summary || <span className="italic opacity-50">点击添加摘要...</span>}</p>
+                          <p className="text-xs md:text-sm text-gray-400 leading-relaxed line-clamp-2">{item.summary || <span className="italic opacity-50">点击添加摘要...</span>}</p>
                         </div>
                       </div>
 
-                      {/* Hover Actions */}
-                      <div className="absolute top-3 right-3 flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800/90 rounded-lg shadow-sm border border-gray-700/50 p-1" onClick={e => e.stopPropagation()}>
+                      {/* Hover Actions (Visible on Mobile? Maybe keep as top-right absolute but smaller) */}
+                      <div className="absolute top-2 right-2 md:top-3 md:right-3 flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800/90 rounded-lg shadow-sm border border-gray-700/50 p-0.5 md:p-1" onClick={e => e.stopPropagation()}>
                          <button 
                             onClick={() => handleMoveItem(idx, idx - 1)}
                             disabled={idx === 0}
-                            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded disabled:opacity-30"
+                            className="p-1 md:p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded disabled:opacity-30"
                             title="上移"
                          >
-                            <ArrowUp className="w-4 h-4" />
+                            <ArrowUp className="w-3.5 h-3.5 md:w-4 md:h-4" />
                          </button>
                          <button 
                             onClick={() => handleMoveItem(idx, idx + 1)}
                             disabled={idx === activeSet.items.length - 1}
-                            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded disabled:opacity-30"
+                            className="p-1 md:p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded disabled:opacity-30"
                             title="下移"
                          >
-                            <ArrowDown className="w-4 h-4" />
+                            <ArrowDown className="w-3.5 h-3.5 md:w-4 md:h-4" />
                          </button>
-                         <div className="w-px h-4 bg-gray-600 mx-1"></div>
+                         <div className="w-px h-3 md:h-4 bg-gray-600 mx-0.5 md:mx-1"></div>
                          <button 
                             onClick={() => handleDeleteItem(idx)}
-                            className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded"
+                            className="p-1 md:p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded"
                             title="删除"
                          >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                          </button>
                       </div>
                     </div>
@@ -455,7 +455,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
             </div>
 
             {/* Auto Write Footer Panel */}
-            <div className="border-t border-gray-700 bg-gray-800 p-4 md:p-6 z-20">
+            <div className="border-t border-gray-700 bg-gray-800 p-3 md:p-6 z-20">
                <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-6">
                   <div className="flex-1 space-y-2 w-full">
                      <h3 className="font-bold flex items-center gap-2 text-gray-200">
