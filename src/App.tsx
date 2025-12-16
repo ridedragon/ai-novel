@@ -806,6 +806,33 @@ function App() {
   const [smallSummaryPrompt, setSmallSummaryPrompt] = useState(() => localStorage.getItem('smallSummaryPrompt') || "请把以上小说章节的内容总结成一个简短的剧情摘要（300字以内）。保留关键的人名、地名和事件。")
   const [bigSummaryPrompt, setBigSummaryPrompt] = useState(() => localStorage.getItem('bigSummaryPrompt') || "请根据以上的分段摘要，写一个宏观的剧情大纲（500字以内），概括这段时间内的主要情节发展。")
 
+  // Consecutive Creation & Concurrent Optimization Settings
+  const [consecutiveChapterCount, setConsecutiveChapterCount] = useState<number | ''>(() => {
+    const val = localStorage.getItem('consecutiveChapterCount')
+    return val ? parseInt(val) : ''
+  })
+  const [concurrentOptimizationLimit, setConcurrentOptimizationLimit] = useState<number | ''>(() => {
+    const val = localStorage.getItem('concurrentOptimizationLimit')
+    return val ? parseInt(val) : ''
+  })
+  const consecutiveChapterCountRef = useRef(consecutiveChapterCount)
+  const concurrentOptimizationLimitRef = useRef(concurrentOptimizationLimit)
+
+  // Optimization Queue
+  const [optimizationQueue, setOptimizationQueue] = useState<number[]>([])
+  const optimizationQueueRef = useRef<number[]>([])
+
+  useEffect(() => {
+    optimizationQueueRef.current = optimizationQueue
+  }, [optimizationQueue])
+
+  useEffect(() => {
+    consecutiveChapterCountRef.current = consecutiveChapterCount
+    concurrentOptimizationLimitRef.current = concurrentOptimizationLimit
+    localStorage.setItem('consecutiveChapterCount', String(consecutiveChapterCount))
+    localStorage.setItem('concurrentOptimizationLimit', String(concurrentOptimizationLimit))
+  }, [consecutiveChapterCount, concurrentOptimizationLimit])
+
   useEffect(() => {
     longTextModeRef.current = longTextMode
     contextScopeRef.current = contextScope
@@ -897,6 +924,31 @@ function App() {
   useEffect(() => {
     isAutoWritingRef.current = isAutoWriting
   }, [isAutoWriting])
+
+  // Optimization Queue Processor
+  useEffect(() => {
+     const processQueue = () => {
+         const limit = typeof concurrentOptimizationLimitRef.current === 'number' && concurrentOptimizationLimitRef.current > 0 
+            ? concurrentOptimizationLimitRef.current 
+            : 1
+         
+         if (optimizationQueueRef.current.length > 0 && optimizingChapterIds.size < limit) {
+             const nextId = optimizationQueueRef.current[0]
+             const remaining = optimizationQueueRef.current.slice(1)
+             
+             setOptimizationQueue(remaining)
+             
+             // Double check if already optimizing to be safe
+             if (!optimizingChapterIds.has(nextId)) {
+                 // We don't await here, let it run in background
+                 handleOptimize(nextId).catch(e => console.error(e))
+             }
+         }
+     }
+     
+     const interval = setInterval(processQueue, 1000)
+     return () => clearInterval(interval)
+  }, [optimizationQueue, optimizingChapterIds])
 
 
   // Auto Write Modal State
@@ -3314,65 +3366,95 @@ function App() {
       return
     }
 
-    const chapterInfo = outline[index]
-    setAutoWriteStatus(`正在创作第 ${index + 1} / ${outline.length} 章：${chapterInfo.title}`)
-
-    // 重新获取最新的 Novel 状态，确保拿到后台可能已经更新（优化/总结）的章节内容
-    const currentNovel = novelsRef.current.find(n => n.id === novelId)
-    const existingChapter = currentNovel?.chapters.find(c => c.title === chapterInfo.title)
+    // --- Consecutive Creation Logic ---
+    const maxBatchSize = typeof consecutiveChapterCountRef.current === 'number' && consecutiveChapterCountRef.current > 1 
+        ? consecutiveChapterCountRef.current 
+        : 1
     
-    // 如果当前章节已存在且有内容，跳过（但不传递内容，让下一次循环重新获取最新上下文）
-    if (existingChapter && existingChapter.content && existingChapter.content.trim().length > 0) {
-        terminal.log(`[AutoWrite] Skipping existing chapter: ${chapterInfo.title}`)
-        setTimeout(() => {
-             autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline)
-        }, 50)
-        return
-    }
-
-    let newChapterId: number
-    let newChapter: Chapter
-
-    if (existingChapter) {
-        newChapterId = existingChapter.id
-        newChapter = { ...existingChapter, volumeId: targetVolumeId || existingChapter.volumeId }
+    // Determine actual batch: contiguous non-existing chapters
+    const batchItems: { item: OutlineItem, idx: number }[] = []
+    
+    // Refresh Novel Ref
+    const currentNovel = novelsRef.current.find(n => n.id === novelId)
+    
+    for (let i = 0; i < maxBatchSize; i++) {
+        const currIdx = index + i
+        if (currIdx >= outline.length) break
         
-        setNovels(prev => prev.map(n => {
-           if (n.id === novelId) {
-              return {
-                  ...n,
-                  chapters: n.chapters.map(c => c.id === newChapterId ? { ...c, volumeId: targetVolumeId || c.volumeId } : c)
-              }
-           }
-           return n
-        }))
-    } else {
-        newChapterId = Date.now()
-        newChapter = { 
-          id: newChapterId, 
-          title: chapterInfo.title, 
-          content: '',
-          volumeId: targetVolumeId 
+        const item = outline[currIdx]
+        const existingChapter = currentNovel?.chapters.find(c => c.title === item.title)
+        
+        // If we hit an existing chapter
+        if (existingChapter && existingChapter.content && existingChapter.content.trim().length > 0) {
+            if (batchItems.length === 0) {
+                // If the VERY FIRST item exists, we skip just this one and recurse
+                terminal.log(`[AutoWrite] Skipping existing chapter: ${item.title}`)
+                setTimeout(() => {
+                    autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline)
+                }, 50)
+                return
+            } else {
+                // If we have some items collected but hit an existing one, stop batching here and process what we have
+                break
+            }
         }
         
-        setNovels(prev => prev.map(n => {
-           if (n.id === novelId) {
-              return { ...n, chapters: [...n.chapters, newChapter] }
-           }
-           return n
-        }))
+        batchItems.push({ item, idx: currIdx })
     }
-    
+
+    if (batchItems.length === 0) return // Should not happen given logic above
+
+    // Two-pass to ensure stable IDs locally
+    const preparedBatch = batchItems.map(({ item }) => {
+        const existing = currentNovel?.chapters.find(c => c.title === item.title)
+        return {
+            ...item,
+            id: existing ? existing.id : Date.now() + Math.floor(Math.random() * 100000)
+        }
+    })
+
+    // Apply placeholders
+    setNovels(prev => prev.map(n => {
+       if (n.id === novelId) {
+          const newChapters = [...n.chapters]
+          preparedBatch.forEach(batchItem => {
+              // 检查 ID 是否已存在
+              const existingById = newChapters.find(c => c.id === batchItem.id)
+              // 检查 Title 是否已存在 (双重保险，避免同名章节重复创建)
+              const existingByTitle = newChapters.find(c => c.title === batchItem.title)
+              
+              if (existingById) {
+                  // ID 存在，不做任何操作
+              } else if (existingByTitle) {
+                  // Title 存在但 ID 不同，复用该 ID
+                  batchItem.id = existingByTitle.id
+              } else {
+                  // 都不存在，创建新章节
+                  newChapters.push({
+                      id: batchItem.id,
+                      title: batchItem.title,
+                      content: '',
+                      volumeId: targetVolumeId
+                  })
+              }
+          })
+          return { ...n, chapters: newChapters }
+       }
+       return n
+    }))
+
+    const batchStatusStr = preparedBatch.map(b => b.title).join('、')
+    setAutoWriteStatus(`正在创作：${batchStatusStr}`)
+
     let attempt = 0
     const maxAttempts = maxRetries + 1
     let success = false
-    let finalGeneratedContent = ''
 
     while (attempt < maxAttempts) {
       if (!isAutoWritingRef.current) return
 
       try {
-        terminal.log(`[AutoWrite] Attempt ${attempt + 1}/${maxAttempts} started...`)
+        terminal.log(`[AutoWrite] Batch attempt ${attempt + 1}/${maxAttempts} started...`)
         const config = getApiConfig(presetApiConfig, '')
 
         const openai = new OpenAI({
@@ -3381,25 +3463,25 @@ function App() {
           dangerouslyAllowBrowser: true
         })
         
-        // Build Context
-        // Use dynamic context builder to respect Long Text Mode and Volume settings
-        // Critical: We fetch the novel AGAIN from ref to ensure we have the absolute latest state
-        // including any optimizations that finished in the background.
+        // Context Builder (Use the FIRST chapter in batch as reference point)
+        // We need a temp novel state that includes the placeholders
         const latestNovelState = novelsRef.current.find(n => n.id === novelId)
-        
-        // We need to pass a version of novel that includes the current (placeholder) chapter
         let tempNovel = latestNovelState
         if (tempNovel) {
-             const hasChapter = tempNovel.chapters.some(c => c.id === newChapter.id)
-             if (!hasChapter) {
-                 tempNovel = { ...tempNovel, chapters: [...tempNovel.chapters, newChapter] }
+             // Ensure placeholders exist in this temp copy
+             const missing = preparedBatch.filter(b => !tempNovel?.chapters.some(c => c.id === b.id))
+             if (missing.length > 0) {
+                 tempNovel = { 
+                     ...tempNovel, 
+                     chapters: [...tempNovel.chapters, ...missing.map(m => ({ id: m.id, title: m.title, content: '', volumeId: targetVolumeId } as Chapter))] 
+                 }
              }
         }
 
-        // getChapterContext 会根据 longTextMode 和普通模式逻辑
-        // 自动提取所需的上下文（总结、最新优化后的原文等）
-        const rawContext = getChapterContext(tempNovel, newChapter)
-        
+        const firstChapterInBatch = tempNovel?.chapters.find(c => c.id === preparedBatch[0].id)
+        if (!firstChapterInBatch) throw new Error("Chapter placeholder missing")
+
+        const rawContext = getChapterContext(tempNovel, firstChapterInBatch)
         const scripts = getActiveScripts()
         const processedContext = processTextWithRegex(rawContext, scripts, 'input')
         const contextMsg = processedContext ? `【前文剧情回顾】：\n${processedContext}\n\n` : ""
@@ -3410,122 +3492,226 @@ function App() {
 
         const worldInfo = buildWorldInfoContext(latestNovelState)
 
-        const mainPrompt = `${worldInfo}${contextMsg}${fullOutlineContext}你正在创作小说《${novelTitle}》。
-当前章节：${chapterInfo.title}
-本章大纲：${chapterInfo.summary}
+        // Construct Batch Prompt
+        let taskDescription = ""
+        if (preparedBatch.length > 1) {
+            taskDescription = `请一次性撰写以下 ${preparedBatch.length} 章的内容。
+**重要：请严格使用 "### 章节标题" 作为每一章的分隔符。**
+
+`
+            preparedBatch.forEach((item, idx) => {
+                taskDescription += `第 ${idx + 1} 部分：
+标题：${item.title}
+大纲：${item.summary}
+
+`
+            })
+            taskDescription += `\n请开始撰写，确保内容连贯，不要包含任何多余的解释，直接输出正文。格式示例：
+### ${preparedBatch[0].title}
+(第一章正文...)
+### ${preparedBatch[1].title}
+(第二章正文...)
+`
+        } else {
+            taskDescription = `当前章节：${preparedBatch[0].title}
+本章大纲：${preparedBatch[0].summary}
 
 请根据大纲和前文剧情，撰写本章正文。文笔要生动流畅。`
+        }
 
-        // Construct Messages
+        const mainPrompt = `${worldInfo}${contextMsg}${fullOutlineContext}你正在创作小说《${novelTitle}》。
+${taskDescription}`
+
         const messages: any[] = [
           { role: 'system', content: systemPrompt }
         ]
-        
-        // Add Preset Prompts
         promptsToUse.forEach(p => {
           messages.push({ role: p.role, content: p.content })
         })
-
         messages.push({ role: 'user', content: mainPrompt })
+
+        // Increase max tokens for batch
+        const batchMaxTokens = maxReplyLength * preparedBatch.length > 128000 ? 128000 : maxReplyLength * (preparedBatch.length > 1 ? 1.5 : 1) // Heuristic increase
 
         const response = await openai.chat.completions.create({
           model: config.model,
           messages: messages,
           stream: stream,
           temperature: temperature,
-          max_tokens: maxReplyLength,
+          max_tokens: Math.round(batchMaxTokens),
         }, {
           signal: autoWriteAbortControllerRef.current?.signal
         }) as any
 
-        let generatedContent = ''
+        let fullGeneratedContent = ''
         let hasReceivedContent = false
         
+        // Stream Handler
         if (stream) {
             for await (const chunk of response) {
               if (!isAutoWritingRef.current) throw new Error('Aborted')
               const content = chunk.choices[0]?.delta?.content || ''
               if (content) hasReceivedContent = true
-              generatedContent += content
+              fullGeneratedContent += content
               
-              setNovels(prev => prev.map(n => {
-                  if (n.id === novelId) {
-                      return {
-                          ...n,
-                          chapters: n.chapters.map(c => 
-                              c.id === newChapterId ? { ...c, content: generatedContent } : c
-                          )
+              // Real-time update (Basic: put everything in first chapter or try to split on fly?)
+              // Splitting on fly is hard. Let's just dump into the first chapter temporarily or a status field?
+              // For UX, maybe just show in the first chapter being generated.
+              // Better: Try to split naively.
+              
+              if (preparedBatch.length > 1) {
+                  // Naive split for display
+                  const parts = fullGeneratedContent.split(/###\s*(.*)\n/)
+                  // This regex split is complex during stream.
+                  // Let's just update the FIRST chapter with everything to show liveness, 
+                  // or just not update state until done? 
+                  // Users prefer seeing output.
+                  // Let's update the first chapter with full content for now.
+                  setNovels(prev => prev.map(n => {
+                      if (n.id === novelId) {
+                          return {
+                              ...n,
+                              chapters: n.chapters.map(c => 
+                                  c.id === preparedBatch[0].id ? { ...c, content: fullGeneratedContent } : c
+                              )
+                          }
                       }
-                  }
-                  return n
-              }))
+                      return n
+                  }))
+              } else {
+                  setNovels(prev => prev.map(n => {
+                      if (n.id === novelId) {
+                          return {
+                              ...n,
+                              chapters: n.chapters.map(c => 
+                                  c.id === preparedBatch[0].id ? { ...c, content: fullGeneratedContent } : c
+                              )
+                          }
+                      }
+                      return n
+                  }))
+              }
             }
         } else {
+            // Non-stream
             if (!isAutoWritingRef.current) throw new Error('Aborted')
-            generatedContent = response.choices[0]?.message?.content || ''
-            if (generatedContent) hasReceivedContent = true
+            fullGeneratedContent = response.choices[0]?.message?.content || ''
+            if (fullGeneratedContent) hasReceivedContent = true
+        }
+
+        if (!hasReceivedContent) throw new Error("Empty response received")
+
+        // Final Processing & Splitting
+        let finalContents: string[] = []
+        
+        if (preparedBatch.length > 1) {
+            // Robust Split
+            // Expected format: ### Title \n Content
+            // Sometimes AI misses newline or spacing.
             
-            setNovels(prev => prev.map(n => {
-                  if (n.id === novelId) {
-                      return {
-                          ...n,
-                          chapters: n.chapters.map(c => 
-                              c.id === newChapterId ? { ...c, content: generatedContent } : c
-                          )
-                      }
-                  }
-                  return n
-              }))
-        }
-
-        if (!hasReceivedContent) {
-           throw new Error("Empty response received")
-        }
-
-        // Post-process output
-        finalGeneratedContent = processTextWithRegex(generatedContent, scripts, 'output')
-        if (finalGeneratedContent !== generatedContent) {
-            setNovels(prev => prev.map(n => {
-              if (n.id === novelId) {
-                  return {
-                      ...n,
-                      chapters: n.chapters.map(c => 
-                          c.id === newChapterId ? { ...c, content: finalGeneratedContent } : c
-                      )
-                  }
-              }
-              return n
-          }))
+            // Strategy: Find indices of "### Title"
+            // Since we know the titles, we can search for them explicitly to be safer.
+            
+            const lowerContent = fullGeneratedContent.toLowerCase()
+            const ranges: { start: number, end: number, id: number }[] = []
+            
+            for (let i = 0; i < preparedBatch.length; i++) {
+                const title = preparedBatch[i].title
+                // Relaxed match: ### \s* Title
+                const regex = new RegExp(`###\\s*${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i')
+                const match = fullGeneratedContent.match(regex)
+                
+                if (match && match.index !== undefined) {
+                    ranges.push({ start: match.index, end: -1, id: preparedBatch[i].id })
+                } else {
+                    // Fallback: if titles not found, try generic ### split?
+                    // Or just look for generic ### and map sequentially.
+                }
+            }
+            
+            // If explicit title matching failed for some, fall back to generic splitting
+            if (ranges.length < preparedBatch.length) {
+                // Generic Split: split by line starting with ###
+                const parts = fullGeneratedContent.split(/(?:\r\n|\r|\n|^)###\s*[^\n]*\n/)
+                // remove first empty if starts with split
+                const cleanParts = parts.filter(p => p.trim().length > 0)
+                
+                // If cleanParts match batch length, perfect.
+                // If mismatch, we might dump rest into last?
+                finalContents = cleanParts
+            } else {
+                // Sort ranges
+                ranges.sort((a, b) => a.start - b.start)
+                // Fill ends
+                for (let i = 0; i < ranges.length; i++) {
+                    const nextStart = i < ranges.length - 1 ? ranges[i+1].start : fullGeneratedContent.length
+                    // Content is from (start + title_header_length) to nextStart
+                    // We need to re-match to find header length exactly
+                    const r = ranges[i]
+                    // Find newline after start
+                    const newlineIdx = fullGeneratedContent.indexOf('\n', r.start)
+                    const contentStart = newlineIdx !== -1 ? newlineIdx + 1 : r.start // approximate
+                    finalContents[i] = fullGeneratedContent.substring(contentStart, nextStart).trim()
+                }
+            }
+            
+            // Fill missing with empty string or error message if counts don't match
+            while (finalContents.length < preparedBatch.length) {
+                finalContents.push(`(生成错误：未能解析到此章节内容)\n\n完整原始内容：\n${fullGeneratedContent}`)
+            }
         } else {
-            finalGeneratedContent = generatedContent
+            finalContents = [fullGeneratedContent]
         }
 
-        if (!finalGeneratedContent || finalGeneratedContent.trim().length === 0) {
-             throw new Error("生成内容为空（或被正则完全过滤）")
+        // Apply Regex Scripts to each part
+        finalContents = finalContents.map(c => processTextWithRegex(c, scripts, 'output'))
+
+        // Update State with final separated content
+        setNovels(prev => prev.map(n => {
+            if (n.id === novelId) {
+                return {
+                    ...n,
+                    chapters: n.chapters.map(c => {
+                        const batchIdx = preparedBatch.findIndex(b => b.id === c.id)
+                        if (batchIdx !== -1) {
+                            return { ...c, content: finalContents[batchIdx] || '' }
+                        }
+                        return c
+                    })
+                }
+            }
+            return n
+        }))
+
+        // Post-Generation Actions (Summary, Optimization)
+        for (let i = 0; i < preparedBatch.length; i++) {
+            const chap = preparedBatch[i]
+            const content = finalContents[i]
+            
+            if (content && content.length > 0 && !content.includes("生成错误")) {
+                // Summary
+                if (longTextModeRef.current) {
+                    await checkAndGenerateSummary(chap.id, content, novelId)
+                }
+                
+                // Auto Optimize (Enqueue)
+                if (autoOptimizeRef.current) {
+                    terminal.log(`[AutoWrite] Enqueuing optimization for chapter ${chap.id}...`)
+                    setOptimizationQueue(prev => [...prev, chap.id])
+                }
+            }
         }
 
-        // Trigger Summary
-        if (longTextModeRef.current) {
-             await checkAndGenerateSummary(newChapterId, finalGeneratedContent, novelId)
-        }
-
-        // Trigger Auto Optimize
-        if (autoOptimizeRef.current) {
-             terminal.log(`[AutoWrite] Auto-optimizing chapter ${newChapterId}...`)
-             // 移除 await，让优化在后台并行执行
-             handleOptimize(newChapterId, finalGeneratedContent).catch(e => console.error(e))
-        }
-
-        terminal.log(`[AutoWrite] Attempt ${attempt + 1} successful.`)
+        terminal.log(`[AutoWrite] Batch completed successfully.`)
         success = true
-        break // Success loop break
+        break
 
       } catch (err: any) {
          if (err.name === 'AbortError' || err.message === 'Aborted' || !isAutoWritingRef.current) {
              terminal.log('[AutoWrite] Process aborted.')
              return
          }
-         terminal.error(`[AutoWrite] Attempt ${attempt + 1} failed:`, err)
+         terminal.error(`[AutoWrite] Batch attempt ${attempt + 1} failed:`, err)
          attempt++
          if (attempt < maxAttempts) {
             await new Promise(resolve => setTimeout(resolve, 1000))
@@ -3547,8 +3733,8 @@ function App() {
     
     if (!isAutoWritingRef.current) return
 
-    // Continue to next chapter (without passing content string)
-    await autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline)
+    // Continue to next batch
+    await autoWriteLoop(outline, index + preparedBatch.length, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline)
   }
 
   const startAutoWriting = () => {
@@ -4431,7 +4617,7 @@ function App() {
                                     type="number" 
                                     min="1" 
                                     value={smallSummaryInterval} 
-                                    onChange={(e) => setSmallSummaryInterval(e.target.value === '' ? '' : parseInt(e.target.value))} 
+                                    onChange={(e) => setSmallSummaryInterval(parseInt(e.target.value) || 3)} 
                                     className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none" 
                                 />
                             </div>
@@ -4441,11 +4627,76 @@ function App() {
                                     type="number" 
                                     min="1" 
                                     value={bigSummaryInterval} 
-                                    onChange={(e) => setBigSummaryInterval(e.target.value === '' ? '' : parseInt(e.target.value))} 
+                                    onChange={(e) => setBigSummaryInterval(parseInt(e.target.value) || 6)} 
                                     className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none" 
                                 />
                             </div>
                         </div>
+
+                        <div className="space-y-2 mt-2">
+                           <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-400">小总结提示词</label>
+                                <textarea 
+                                    value={smallSummaryPrompt} 
+                                    onChange={(e) => setSmallSummaryPrompt(e.target.value)} 
+                                    className="bg-gray-900 border border-gray-700 rounded p-2 text-xs focus:border-[var(--theme-color)] outline-none h-20 resize-none"
+                                    placeholder="输入小总结生成的提示词..." 
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-400">大总结提示词</label>
+                                <textarea 
+                                    value={bigSummaryPrompt} 
+                                    onChange={(e) => setBigSummaryPrompt(e.target.value)} 
+                                    className="bg-gray-900 border border-gray-700 rounded p-2 text-xs focus:border-[var(--theme-color)] outline-none h-20 resize-none"
+                                    placeholder="输入大总结生成的提示词..." 
+                                />
+                            </div>
+                        </div>
+
+                        <div className="pt-2">
+                             <button
+                                onClick={handleScanSummaries}
+                                disabled={isLoading}
+                                className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-200 transition-colors flex items-center justify-center gap-2"
+                             >
+                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                                扫描并补充缺失的总结
+                             </button>
+                        </div>
+                  </div>
+
+                  {/* Batch & Concurrent Settings */}
+                  <div className="flex flex-col gap-2 pt-4 border-t border-gray-700">
+                      <label className="text-sm font-medium text-gray-300">自动化与并发设置</label>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="flex flex-col gap-1">
+                              <label className="text-xs text-gray-400">连贯创作章节数</label>
+                              <input 
+                                  type="number" 
+                                  min="1" 
+                                  value={consecutiveChapterCount} 
+                                  onChange={(e) => setConsecutiveChapterCount(e.target.value === '' ? '' : parseInt(e.target.value))} 
+                                  className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none" 
+                                  placeholder="默认不开启"
+                              />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                              <label className="text-xs text-gray-400">自动润色并发限制</label>
+                              <input 
+                                  type="number" 
+                                  min="1" 
+                                  value={concurrentOptimizationLimit} 
+                                  onChange={(e) => setConcurrentOptimizationLimit(e.target.value === '' ? '' : parseInt(e.target.value))} 
+                                  className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none" 
+                                  placeholder="默认串行 (1)"
+                              />
+                          </div>
+                      </div>
+                      <p className="text-[10px] text-gray-500">
+                          连贯创作：设置一次请求生成的章节数，节省API调用。<br/>
+                          并发限制：控制同时进行的润色任务数，防止过载。不填默认为串行。
+                      </p>
                   </div>
               </div>
               </div>
@@ -6273,7 +6524,8 @@ function App() {
                     { label: '大纲生成模型', value: outlineModel, setter: setOutlineModel },
                     { label: '角色生成模型', value: characterModel, setter: setCharacterModel },
                     { label: '世界观生成模型', value: worldviewModel, setter: setWorldviewModel },
-                    { label: '正文优化模型', value: optimizeModel, setter: setOptimizeModel }
+                    { label: '正文优化模型', value: optimizeModel, setter: setOptimizeModel },
+                    { label: '正文分析模型', value: analysisModel, setter: setAnalysisModel }
                   ].map((item, idx) => (
                     <div key={idx} className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-gray-400">{item.label}</label>
@@ -6370,6 +6622,39 @@ function App() {
                                 扫描并补充缺失的总结
                              </button>
                         </div>
+                  </div>
+
+                  {/* Batch & Concurrent Settings */}
+                  <div className="flex flex-col gap-2 pt-4 border-t border-gray-700">
+                      <label className="text-sm font-medium text-gray-300">自动化与并发设置</label>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="flex flex-col gap-1">
+                              <label className="text-xs text-gray-400">连贯创作章节数</label>
+                              <input 
+                                  type="number" 
+                                  min="1" 
+                                  value={consecutiveChapterCount} 
+                                  onChange={(e) => setConsecutiveChapterCount(e.target.value === '' ? '' : parseInt(e.target.value))} 
+                                  className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none" 
+                                  placeholder="默认不开启"
+                              />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                              <label className="text-xs text-gray-400">自动润色并发限制</label>
+                              <input 
+                                  type="number" 
+                                  min="1" 
+                                  value={concurrentOptimizationLimit} 
+                                  onChange={(e) => setConcurrentOptimizationLimit(e.target.value === '' ? '' : parseInt(e.target.value))} 
+                                  className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none" 
+                                  placeholder="默认串行 (1)"
+                              />
+                          </div>
+                      </div>
+                      <p className="text-[10px] text-gray-500">
+                          连贯创作：设置一次请求生成的章节数，节省API调用。<br/>
+                          并发限制：控制同时进行的润色任务数，防止过载。不填默认为串行。
+                      </p>
                   </div>
               </div>
               </div>
