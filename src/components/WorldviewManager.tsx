@@ -14,7 +14,7 @@ import {
   X
 } from 'lucide-react'
 import React, { useState } from 'react'
-import { Novel, WorldviewItem, WorldviewSet } from '../types'
+import { Novel, WorldviewItem, WorldviewSet, CharacterSet, OutlineSet } from '../types'
 
 interface WorldviewManagerProps {
   novel: Novel
@@ -79,30 +79,41 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
 
   const handleAddSet = () => {
     if (!newSetName.trim()) return
-    const newSet: WorldviewSet = {
-      id: crypto.randomUUID(),
-      name: newSetName.trim(),
+    
+    const newId = crypto.randomUUID()
+    const name = newSetName.trim()
+
+    const newWorldviewSet: WorldviewSet = {
+      id: newId,
+      name: name,
       entries: []
     }
-    // Also ensuring corresponding outline/character sets exists is handled in App.tsx usually, 
-    // but here we are just managing the novel object. 
-    // If the requirement implies strictly coupling (like in App.tsx handleAddWorldviewSet), 
-    // we might need to notify parent to create others. 
-    // However, for pure UI separation, we assume onUpdateNovel handles the data persistence.
-    // NOTE: App.tsx's handleAddWorldviewSet created 3 sets (worldview, character, outline).
-    // If we want to maintain that behavior, we should probably expose an "onAddSet" prop instead of doing it locally.
-    // BUT, for now let's just update the worldviewSets. 
-    // Wait, the user prompt asked to separate UI. 
-    // If I just update novel.worldviewSets, the other sets won't be created.
-    // To match App.tsx logic perfectly, maybe I should let App handle the "Add Set" logic entirely?
-    // Or I just update the novel object here. 
-    // Let's stick to updating the novel object here for simplicity, 
-    // assuming the user just wants to add a worldview set here.
     
-    const updatedSets = [...(novel.worldviewSets || []), newSet]
-    onUpdateNovel({ ...novel, worldviewSets: updatedSets })
+    const newCharacterSet: CharacterSet = {
+        id: newId,
+        name: name,
+        characters: []
+    }
+
+    const newOutlineSet: OutlineSet = {
+        id: newId,
+        name: name,
+        items: []
+    }
+
+    const updatedWorldviewSets = [...(novel.worldviewSets || []), newWorldviewSet]
+    const updatedCharacterSets = [...(novel.characterSets || []), newCharacterSet]
+    const updatedOutlineSets = [...(novel.outlineSets || []), newOutlineSet]
+    
+    onUpdateNovel({ 
+        ...novel, 
+        worldviewSets: updatedWorldviewSets,
+        characterSets: updatedCharacterSets,
+        outlineSets: updatedOutlineSets
+    })
+    
     setNewSetName('')
-    onSetActiveWorldviewSetId(newSet.id)
+    onSetActiveWorldviewSetId(newId)
   }
 
   const handleDeleteSet = (id: string, e: React.MouseEvent) => {

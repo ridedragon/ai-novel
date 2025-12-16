@@ -15,7 +15,7 @@ import {
   X
 } from 'lucide-react'
 import React, { useState } from 'react'
-import { CharacterItem, CharacterSet, Novel } from '../types'
+import { CharacterItem, CharacterSet, Novel, WorldviewSet, OutlineSet } from '../types'
 
 interface CharacterManagerProps {
   novel: Novel
@@ -89,15 +89,41 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
 
   const handleAddSet = () => {
     if (!newSetName.trim()) return
-    const newSet: CharacterSet = {
-      id: crypto.randomUUID(),
-      name: newSetName.trim(),
+    
+    const newId = crypto.randomUUID()
+    const name = newSetName.trim()
+
+    const newCharacterSet: CharacterSet = {
+      id: newId,
+      name: name,
       characters: []
     }
-    const updatedSets = [...(novel.characterSets || []), newSet]
-    onUpdateNovel({ ...novel, characterSets: updatedSets })
+    
+    const newWorldviewSet: WorldviewSet = {
+        id: newId,
+        name: name,
+        entries: []
+    }
+    
+    const newOutlineSet: OutlineSet = {
+        id: newId,
+        name: name,
+        items: []
+    }
+
+    const updatedWorldviewSets = [...(novel.worldviewSets || []), newWorldviewSet]
+    const updatedCharacterSets = [...(novel.characterSets || []), newCharacterSet]
+    const updatedOutlineSets = [...(novel.outlineSets || []), newOutlineSet]
+    
+    onUpdateNovel({ 
+        ...novel, 
+        worldviewSets: updatedWorldviewSets,
+        characterSets: updatedCharacterSets,
+        outlineSets: updatedOutlineSets
+    })
+    
     setNewSetName('')
-    onSetActiveCharacterSetId(newSet.id)
+    onSetActiveCharacterSetId(newId)
   }
 
   const handleDeleteSet = (id: string, e: React.MouseEvent) => {
