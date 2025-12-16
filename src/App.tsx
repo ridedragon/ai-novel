@@ -3302,7 +3302,6 @@ function App() {
     novelId: string, 
     novelTitle: string,
     promptsToUse: PromptItem[],
-    previousContent: string,
     contextLimit: number,
     targetVolumeId?: string,
     includeFullOutline: boolean = false
@@ -3318,14 +3317,15 @@ function App() {
     const chapterInfo = outline[index]
     setAutoWriteStatus(`正在创作第 ${index + 1} / ${outline.length} 章：${chapterInfo.title}`)
 
+    // 重新获取最新的 Novel 状态，确保拿到后台可能已经更新（优化/总结）的章节内容
     const currentNovel = novelsRef.current.find(n => n.id === novelId)
     const existingChapter = currentNovel?.chapters.find(c => c.title === chapterInfo.title)
     
+    // 如果当前章节已存在且有内容，跳过（但不传递内容，让下一次循环重新获取最新上下文）
     if (existingChapter && existingChapter.content && existingChapter.content.trim().length > 0) {
         terminal.log(`[AutoWrite] Skipping existing chapter: ${chapterInfo.title}`)
-        const nextContent = previousContent + '\n\n' + existingChapter.content
         setTimeout(() => {
-             autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, nextContent, contextLimit, targetVolumeId, includeFullOutline)
+             autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline)
         }, 50)
         return
     }
@@ -3363,8 +3363,6 @@ function App() {
         }))
     }
     
-    // setActiveChapterId(newChapterId) // 移除自动跳转
-
     let attempt = 0
     const maxAttempts = maxRetries + 1
     let success = false
@@ -3385,15 +3383,12 @@ function App() {
         
         // Build Context
         // Use dynamic context builder to respect Long Text Mode and Volume settings
-        const currentNovel = novelsRef.current.find(n => n.id === novelId)
+        // Critical: We fetch the novel AGAIN from ref to ensure we have the absolute latest state
+        // including any optimizations that finished in the background.
+        const latestNovelState = novelsRef.current.find(n => n.id === novelId)
         
         // We need to pass a version of novel that includes the current (placeholder) chapter
-        // so getChapterContext can resolve volume relations correctly.
-        // Since setNovels might not have reflected in ref yet (or it might have, but safer to be explicit)
-        // Actually, setNovels was called above, but we are in the same tick or microtask? 
-        // We used setNovels with callback. 
-        // Ideally we construct a temp object.
-        let tempNovel = currentNovel
+        let tempNovel = latestNovelState
         if (tempNovel) {
              const hasChapter = tempNovel.chapters.some(c => c.id === newChapter.id)
              if (!hasChapter) {
@@ -3401,6 +3396,8 @@ function App() {
              }
         }
 
+        // getChapterContext 会根据 longTextMode 和普通模式逻辑
+        // 自动提取所需的上下文（总结、最新优化后的原文等）
         const rawContext = getChapterContext(tempNovel, newChapter)
         
         const scripts = getActiveScripts()
@@ -3411,9 +3408,9 @@ function App() {
           ? `【全书大纲参考】：\n${outline.map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`).join('\n')}\n\n` 
           : ''
 
-    const worldInfo = buildWorldInfoContext(currentNovel)
+        const worldInfo = buildWorldInfoContext(latestNovelState)
 
-    const mainPrompt = `${worldInfo}${contextMsg}${fullOutlineContext}你正在创作小说《${novelTitle}》。
+        const mainPrompt = `${worldInfo}${contextMsg}${fullOutlineContext}你正在创作小说《${novelTitle}》。
 当前章节：${chapterInfo.title}
 本章大纲：${chapterInfo.summary}
 
@@ -3550,9 +3547,8 @@ function App() {
     
     if (!isAutoWritingRef.current) return
 
-    // Append new content to previous content for next chapter
-    const nextContent = previousContent + '\n\n' + finalGeneratedContent
-    await autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, nextContent, contextLimit, targetVolumeId, includeFullOutline)
+    // Continue to next chapter (without passing content string)
+    await autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline)
   }
 
   const startAutoWriting = () => {
@@ -3607,18 +3603,15 @@ function App() {
     
     const activePrompts = prompts.filter(p => p.active)
 
-    // Calculate start index and previous content
+    // Calculate start index
     let startIndex = 0
-    let previousContent = ""
     
     // Find the first outline item that does not have a corresponding chapter
     for (let i = 0; i < currentSet.items.length; i++) {
         const item = currentSet.items[i]
         const existingChapter = activeNovel.chapters.find(c => c.title === item.title)
         
-        if (existingChapter && existingChapter.content && existingChapter.content.trim().length > 0) {
-            previousContent += existingChapter.content + "\n\n"
-        } else {
+        if (!existingChapter || !existingChapter.content || existingChapter.content.trim().length === 0) {
             startIndex = i
             break
         }
@@ -3644,7 +3637,8 @@ function App() {
          return
     }
 
-    autoWriteLoop(currentSet.items, startIndex, activeNovel.id, activeNovel.title, activePrompts, previousContent, contextLength, targetVolumeId, includeFullOutlineInAutoWrite)
+    // Pass contextLength directly, remove previousContent parameter
+    autoWriteLoop(currentSet.items, startIndex, activeNovel.id, activeNovel.title, activePrompts, contextLength, targetVolumeId, includeFullOutlineInAutoWrite)
   }
 
   const handleGenerate = async () => {
@@ -5758,7 +5752,7 @@ function App() {
                                          type="text" 
                                          value={userPrompt}
                                          onChange={(e) => setUserPrompt(e.target.value)}
-                                         className="flex-1 bg-gray-900 border border-gray-600 rounded px-4 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                                         className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] outline-none"
                                          placeholder="AI 辅助生成：描述大纲要求，例如'第一卷主要讲述主角如何获得超能力'..."
                                          onKeyDown={(e) => e.key === 'Enter' && !isGeneratingOutline && handleGenerateOutline()}
                                        />
@@ -5768,7 +5762,7 @@ function App() {
                                                  outlineAbortControllerRef.current?.abort()
                                                  setIsGeneratingOutline(false)
                                              }}
-                                             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded flex items-center gap-2 shadow-lg transition-all"
+                                             className="px-3 py-1.5 md:px-4 md:py-2 bg-red-600 hover:bg-red-700 text-white text-xs md:text-sm rounded flex items-center gap-2 shadow-lg transition-all"
                                            >
                                              <StopCircle className="w-4 h-4" />
                                              停止
@@ -5776,7 +5770,7 @@ function App() {
                                        ) : (
                                            <button 
                                              onClick={handleGenerateOutline}
-                                             className="px-4 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-sm rounded flex items-center gap-2 shadow-lg transition-all"
+                                             className="px-3 py-1.5 md:px-4 md:py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-xs md:text-sm rounded flex items-center gap-2 shadow-lg transition-all"
                                            >
                                              <Wand2 className="w-4 h-4" />
                                              生成
@@ -5794,7 +5788,7 @@ function App() {
                                           <textarea 
                                              value={activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.userNotes || ''}
                                              onChange={(e) => updateOutlineSet(activeOutlineSetId!, { userNotes: e.target.value })}
-                                             className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono"
+                                             className="w-full h-20 md:h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-2 md:p-3 text-xs md:text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono"
                                              placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这份大纲的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
                                           />
                                        </div>
@@ -5819,7 +5813,7 @@ function App() {
 
                                        return (
                                           <div className="space-y-6">
-                                             <div className="space-y-4">
+                                             <div className="space-y-1 md:space-y-4">
                                                 {items.map((item, idx) => (
                                                    <div 
                                                       key={idx}
@@ -5829,7 +5823,7 @@ function App() {
                                                       onDragOver={(e) => handleOutlineDragOver(e, idx)}
                                                       onDragEnd={handleOutlineDragEnd}
                                                       onClick={() => setEditingOutlineItemIndex(idx)}
-                                                      className={`w-[96%] mx-auto md:w-full p-3 pl-9 pr-24 md:p-4 md:pl-10 md:pr-28 bg-gray-800 rounded-xl border border-gray-700 shadow-sm hover:border-[var(--theme-color)] transition-colors group cursor-pointer relative ${draggedOutlineIndex === idx ? 'opacity-50' : ''}`}
+                                                      className={`w-[94%] mx-auto md:w-full p-2 pl-8 pr-20 md:p-4 md:pl-10 md:pr-28 bg-gray-800 rounded-lg md:rounded-xl border border-gray-700 shadow-sm hover:border-[var(--theme-color)] transition-colors group cursor-pointer relative ${draggedOutlineIndex === idx ? 'opacity-50' : ''}`}
                                                    >
                                                       {/* Drag Handle */}
                                                       <div 
@@ -5886,22 +5880,22 @@ function App() {
                                                       </div>
                                                       
                                                       {/* Action Buttons */}
-                                                      <div className="absolute top-2 right-2 md:top-4 md:right-4 flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800/90 rounded-lg p-1 border border-gray-700/50 backdrop-blur-sm shadow-sm" onClick={(e) => e.stopPropagation()}>
+                                                      <div className="absolute top-1 right-1 md:top-4 md:right-4 flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800/90 rounded-lg p-1 border border-gray-700/50 backdrop-blur-sm shadow-sm" onClick={(e) => e.stopPropagation()}>
                                                          <button 
                                                             onClick={(e) => { e.stopPropagation(); handleMoveOutlineItem(idx, 'up'); }}
                                                             disabled={idx === 0}
-                                                            className="p-2 text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 rounded hover:bg-gray-700 transition-colors active:bg-gray-600"
+                                                            className="p-1.5 md:p-2 text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 rounded hover:bg-gray-700 transition-colors active:bg-gray-600"
                                                             title="上移"
                                                          >
-                                                            <ArrowUp className="w-4 h-4" />
+                                                            <ArrowUp className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                          </button>
                                                          <button 
                                                             onClick={(e) => { e.stopPropagation(); handleMoveOutlineItem(idx, 'down'); }}
                                                             disabled={idx === items.length - 1}
-                                                            className="p-2 text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 rounded hover:bg-gray-700 transition-colors active:bg-gray-600"
+                                                            className="p-1.5 md:p-2 text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 rounded hover:bg-gray-700 transition-colors active:bg-gray-600"
                                                             title="下移"
                                                          >
-                                                            <ArrowDown className="w-4 h-4" />
+                                                            <ArrowDown className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                          </button>
                                                          <div className="w-px h-4 bg-gray-700 mx-0.5"></div>
                                                          <button 
@@ -5920,10 +5914,10 @@ function App() {
                                                                  }
                                                                })
                                                             }}
-                                                            className="p-2 text-gray-400 hover:text-red-400 rounded hover:bg-gray-700 transition-colors active:bg-gray-600"
+                                                            className="p-1.5 md:p-2 text-gray-400 hover:text-red-400 rounded hover:bg-gray-700 transition-colors active:bg-gray-600"
                                                             title="删除章节"
                                                          >
-                                                            <Trash2 className="w-4 h-4" />
+                                                            <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                          </button>
                                                       </div>
 
