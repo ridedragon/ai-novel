@@ -59,6 +59,9 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
   const [editChapterTitle, setEditChapterTitle] = useState('')
   const [editChapterSummary, setEditChapterSummary] = useState('')
 
+  // Mobile: Toggle Sidebar List
+  const [isMobileListOpen, setIsMobileListOpen] = useState(false)
+
   // Confirmation State
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean
@@ -204,93 +207,110 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
     <div className="flex flex-col md:flex-row h-full bg-gray-900 text-gray-100 overflow-hidden">
       
       {/* Sidebar: Set List */}
-      <div className="w-full md:w-64 bg-gray-800 border-r border-gray-700 flex flex-col shrink-0 h-48 md:h-auto">
-        {sidebarHeader ? (
+      <div className={`w-full md:w-64 bg-gray-800 border-r border-gray-700 flex flex-col shrink-0 transition-all duration-300 ${isMobileListOpen ? 'h-auto max-h-[60vh]' : 'h-auto'} md:h-auto`}>
+        {sidebarHeader && (
           <div className="p-4 border-b border-gray-700 shrink-0">
             {sidebarHeader}
           </div>
-        ) : (
-          <div className="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
-            <h3 className="font-bold flex items-center gap-2 text-gray-200">
-              <Book className="w-5 h-5 text-[var(--theme-color)]" />
-              <span>大纲文件</span>
-            </h3>
-          </div>
         )}
-
-        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-          {novel.outlineSets?.map(set => (
-            <div 
-              key={set.id}
-              onClick={() => onSetActiveOutlineSetId(set.id)}
-              className={`group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
-                activeOutlineSetId === set.id 
-                  ? 'bg-[var(--theme-color)] text-white shadow-md' 
-                  : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200'
-              }`}
-            >
-              {editingSetId === set.id ? (
-                <div className="flex items-center gap-1 w-full" onClick={e => e.stopPropagation()}>
-                  <input 
-                    className="flex-1 bg-gray-900 text-white text-sm rounded px-2 py-1 outline-none border border-[var(--theme-color)]"
-                    value={editSetName}
-                    onChange={e => setEditSetName(e.target.value)}
-                    autoFocus
-                    onKeyDown={e => {
-                      if(e.key === 'Enter') confirmRenameSet()
-                      if(e.key === 'Escape') setEditingSetId(null)
-                    }}
-                    onBlur={confirmRenameSet}
-                  />
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <Folder className={`w-4 h-4 shrink-0 ${activeOutlineSetId === set.id ? 'text-white' : 'text-gray-500'}`} />
-                    <span className="truncate text-sm font-medium">{set.name}</span>
-                  </div>
-                  
-                  <div className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${activeOutlineSetId === set.id ? 'text-white' : 'text-gray-400'}`}>
-                    <button 
-                      onClick={(e) => startRenameSet(set, e)}
-                      className="p-1 hover:bg-white/20 rounded"
-                    >
-                      <Edit3 className="w-3 h-3" />
-                    </button>
-                    <button 
-                      onClick={(e) => handleDeleteSet(set.id, e)}
-                      className="p-1 hover:bg-white/20 rounded hover:text-red-200"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
-          {(!novel.outlineSets || novel.outlineSets.length === 0) && (
-            <div className="text-center py-8 text-gray-500 text-xs italic">
-              暂无大纲文件，请新建
-            </div>
-          )}
+        
+        {/* Title / Mobile Toggle */}
+        <div 
+          className="p-4 border-b border-gray-700 flex items-center justify-between shrink-0 cursor-pointer md:cursor-default hover:bg-gray-700/30 md:hover:bg-transparent transition-colors"
+          onClick={() => setIsMobileListOpen(!isMobileListOpen)}
+        >
+          <h3 className="font-bold flex items-center gap-2 text-gray-200">
+            <Book className="w-5 h-5 text-[var(--theme-color)]" />
+            <span>大纲文件列表</span>
+            <span className="md:hidden text-xs text-gray-500 font-normal ml-2">
+              ({novel.outlineSets?.length || 0})
+            </span>
+          </h3>
+          <div className="md:hidden text-gray-400">
+             {isMobileListOpen ? <ArrowUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </div>
         </div>
 
-        <div className="p-3 border-t border-gray-700 bg-gray-800">
-          <div className="flex gap-2">
-            <input 
-              value={newSetName}
-              onChange={e => setNewSetName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddSet()}
-              placeholder="新大纲名称..."
-              className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 text-sm focus:border-[var(--theme-color)] outline-none transition-colors"
-            />
-            <button 
-              onClick={handleAddSet}
-              disabled={!newSetName.trim()}
-              className="p-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+        {/* List Content - Collapsible on Mobile */}
+        <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isMobileListOpen ? 'max-h-[50vh] opacity-100' : 'max-h-0 opacity-0 md:max-h-none md:opacity-100'}`}>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+            {novel.outlineSets?.map(set => (
+              <div 
+                key={set.id}
+                onClick={() => {
+                   onSetActiveOutlineSetId(set.id)
+                   // Auto close on mobile selection
+                   if (window.innerWidth < 768) setIsMobileListOpen(false)
+                }}
+                className={`group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
+                  activeOutlineSetId === set.id 
+                    ? 'bg-[var(--theme-color)] text-white shadow-md' 
+                    : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                }`}
+              >
+                {editingSetId === set.id ? (
+                  <div className="flex items-center gap-1 w-full" onClick={e => e.stopPropagation()}>
+                    <input 
+                      className="flex-1 bg-gray-900 text-white text-sm rounded px-2 py-1 outline-none border border-[var(--theme-color)]"
+                      value={editSetName}
+                      onChange={e => setEditSetName(e.target.value)}
+                      autoFocus
+                      onKeyDown={e => {
+                        if(e.key === 'Enter') confirmRenameSet()
+                        if(e.key === 'Escape') setEditingSetId(null)
+                      }}
+                      onBlur={confirmRenameSet}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <Folder className={`w-4 h-4 shrink-0 ${activeOutlineSetId === set.id ? 'text-white' : 'text-gray-500'}`} />
+                      <span className="truncate text-sm font-medium">{set.name}</span>
+                    </div>
+                    
+                    <div className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${activeOutlineSetId === set.id ? 'text-white' : 'text-gray-400'}`}>
+                      <button 
+                        onClick={(e) => startRenameSet(set, e)}
+                        className="p-1 hover:bg-white/20 rounded"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </button>
+                      <button 
+                        onClick={(e) => handleDeleteSet(set.id, e)}
+                        className="p-1 hover:bg-white/20 rounded hover:text-red-200"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+            {(!novel.outlineSets || novel.outlineSets.length === 0) && (
+              <div className="text-center py-8 text-gray-500 text-xs italic">
+                暂无大纲文件，请新建
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 border-t border-gray-700 bg-gray-800 shrink-0">
+            <div className="flex gap-2">
+              <input 
+                value={newSetName}
+                onChange={e => setNewSetName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddSet()}
+                placeholder="新大纲名称..."
+                className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 text-sm focus:border-[var(--theme-color)] outline-none transition-colors"
+              />
+              <button 
+                onClick={handleAddSet}
+                disabled={!newSetName.trim()}
+                className="p-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
