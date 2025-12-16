@@ -455,51 +455,54 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
             </div>
 
             {/* Auto Write Footer Panel */}
-            <div className="border-t border-gray-700 bg-gray-800 p-3 md:p-6 z-20">
-               <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-6">
-                  <div className="flex-1 space-y-2 w-full">
-                     <h3 className="font-bold flex items-center gap-2 text-gray-200">
+            <div className="border-t border-gray-700 bg-gray-800 p-3 md:p-6 z-20 shrink-0">
+               <div className="max-w-4xl mx-auto flex flex-row items-center justify-between gap-3 md:gap-6">
+                  {/* Left: Options */}
+                  <div className="flex flex-col md:block md:flex-1 space-y-0 md:space-y-2">
+                     <h3 className="hidden md:flex font-bold items-center gap-2 text-gray-200">
                         <Bot className="w-5 h-5 text-purple-500" />
                         自动化写作
                      </h3>
                      
                      <div 
-                        className="flex items-center gap-3 cursor-pointer group"
+                        className="flex items-center gap-2 md:gap-3 cursor-pointer group"
                         onClick={() => setIncludeFullOutlineInAutoWrite(!includeFullOutlineInAutoWrite)}
                      >
-                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${includeFullOutlineInAutoWrite ? 'bg-[var(--theme-color)] border-[var(--theme-color)]' : 'border-gray-500 bg-transparent'}`}>
-                           {includeFullOutlineInAutoWrite && <Check className="w-3.5 h-3.5 text-white" />}
+                        <div className={`w-4 h-4 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors shrink-0 ${includeFullOutlineInAutoWrite ? 'bg-[var(--theme-color)] border-[var(--theme-color)]' : 'border-gray-500 bg-transparent'}`}>
+                           {includeFullOutlineInAutoWrite && <Check className="w-3 h-3 md:w-3.5 md:h-3.5 text-white" />}
                         </div>
-                        <span className="text-sm text-gray-400 group-hover:text-gray-300 select-none">
-                           在生成时附带完整大纲作为全局参考
+                        <span className="text-xs md:text-sm text-gray-400 group-hover:text-gray-300 select-none whitespace-nowrap">
+                           <span className="md:hidden">全局参考</span>
+                           <span className="hidden md:inline">在生成时附带完整大纲作为全局参考</span>
                         </span>
                      </div>
                   </div>
 
-                  <div className="w-full md:w-auto">
+                  {/* Right: Action */}
+                  <div className="flex-1 md:flex-none md:w-auto flex justify-end">
                      {isAutoWriting ? (
-                        <div className="flex items-center gap-3 bg-gray-900 border border-purple-500/30 rounded-xl px-4 py-3 min-w-[300px]">
-                           <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
-                           <div className="flex-1 min-w-0">
-                              <div className="text-xs text-purple-400 font-medium mb-0.5">正在创作</div>
-                              <div className="text-sm text-gray-200 truncate max-w-[200px]">{autoWriteStatus}</div>
+                        <div className="flex items-center gap-2 md:gap-3 bg-gray-900 border border-purple-500/30 rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 w-full md:w-auto min-w-0">
+                           <Loader2 className="w-4 h-4 md:w-5 md:h-5 text-purple-500 animate-spin shrink-0" />
+                           <div className="flex-1 min-w-0 overflow-hidden">
+                              <div className="hidden md:block text-xs text-purple-400 font-medium mb-0.5">正在创作</div>
+                              <div className="text-xs md:text-sm text-gray-200 truncate">{autoWriteStatus}</div>
                            </div>
                            <button 
                               onClick={onStopAutoWrite}
-                              className="p-2 hover:bg-red-900/30 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+                              className="p-1.5 md:p-2 hover:bg-red-900/30 rounded-lg text-red-400 hover:text-red-300 transition-colors shrink-0"
                               title="停止"
                            >
-                              <StopCircle className="w-5 h-5" />
+                              <StopCircle className="w-4 h-4 md:w-5 md:h-5" />
                            </button>
                         </div>
                      ) : (
                         <button 
                            onClick={onStartAutoWrite}
                            disabled={activeSet.items.length === 0}
-                           className="w-full md:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-purple-500/20"
+                           className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 md:px-8 md:py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold rounded-lg md:rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-purple-500/20 text-xs md:text-base whitespace-nowrap"
                         >
-                           <PlayCircle className="w-5 h-5" />
-                           <span>开始全自动创作</span>
+                           <PlayCircle className="w-4 h-4 md:w-5 md:h-5" />
+                           <span>开始自动创作</span>
                         </button>
                      )}
                   </div>
