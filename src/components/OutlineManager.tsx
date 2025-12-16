@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Edit3,
+  FileText,
   Folder,
   Globe,
   GripVertical,
@@ -191,6 +192,14 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
     if (!activeSet) return
     const updatedSets = (novel.outlineSets || []).map(s => 
       s.id === activeSet.id ? { ...s, items: newItems } : s
+    )
+    onUpdateNovel({ ...novel, outlineSets: updatedSets })
+  }
+
+  const updateUserNotes = (notes: string) => {
+    if (!activeSet) return
+    const updatedSets = (novel.outlineSets || []).map(s => 
+      s.id === activeSet.id ? { ...s, userNotes: notes } : s
     )
     onUpdateNovel({ ...novel, outlineSets: updatedSets })
   }
@@ -553,9 +562,24 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
 
             {/* Chapter List (Cards) */}
             <div className="flex-1 overflow-y-auto p-2 md:p-8 custom-scrollbar flex flex-col min-h-0">
-              <div className={`max-w-4xl mx-auto w-full space-y-3 md:space-y-4 pb-4 md:pb-8 ${activeSet.items.length === 0 ? 'flex-1 flex flex-col justify-center' : ''}`}>
+              <div className="max-w-4xl mx-auto w-full space-y-3 md:space-y-4 pb-4 md:pb-8 flex flex-col min-h-full">
+                
+                {/* User Notes Area */}
+                <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-4 shrink-0">
+                    <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
+                        <FileText className="w-3 h-3" />
+                        <span>用户输入记录 & 设定上下文 (AI 生成时会参考此内容)</span>
+                    </div>
+                    <textarea 
+                        value={activeSet.userNotes || ''}
+                        onChange={(e) => updateUserNotes(e.target.value)}
+                        className="w-full h-24 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-xs md:text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono"
+                        placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于大纲的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
+                    />
+                </div>
+
                 {activeSet.items.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 md:py-20 text-gray-500 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-800/20">
+                  <div className="flex-1 flex flex-col items-center justify-center py-12 md:py-20 text-gray-500 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-800/20">
                     <Book className="w-12 h-12 md:w-16 md:h-16 mb-3 md:mb-4 opacity-20" />
                     <p className="text-base md:text-lg font-medium text-gray-400">大纲为空</p>
                     <p className="text-xs md:text-sm mt-1">请手动添加章节，或使用上方的 AI 助手生成</p>
