@@ -4040,7 +4040,12 @@ ${taskDescription}`
   }
 
   const addNewChapter = (volumeId?: string) => {
-    const newId = Math.max(0, ...chapters.map(c => c.id)) + 1
+    // Generate unique ID using timestamp to avoid conflict with existing large IDs
+    const newId = Date.now() + Math.floor(Math.random() * 1000)
+    
+    // Calculate logical index for the title
+    const storyChaptersCount = chapters.filter(c => !c.subtype || c.subtype === 'story').length
+    const nextIndex = storyChaptersCount + 1
     
     // Determine volumeId
     let targetVolumeId = volumeId
@@ -4048,7 +4053,7 @@ ${taskDescription}`
         targetVolumeId = activeChapter?.volumeId
     }
 
-    setChapters([...chapters, { id: newId, title: `第${newId}章`, content: '', volumeId: targetVolumeId }])
+    setChapters([...chapters, { id: newId, title: `第${nextIndex}章`, content: '', volumeId: targetVolumeId }])
     setActiveChapterId(newId)
   }
 
