@@ -9,6 +9,8 @@ import {
 import ReactMarkdown from 'react-markdown'
 import OpenAI from 'openai'
 import terminal from 'virtual:terminal'
+import { WorldviewManager } from './components/WorldviewManager'
+import { CharacterManager } from './components/CharacterManager'
 import {
   ChapterVersion,
   Chapter,
@@ -5084,569 +5086,124 @@ ${taskDescription}`
                  )}
 
                  {/* Characters Module - Redesigned */}
-                 {creationModule === 'characters' && (
+                 {creationModule === 'characters' && activeNovel && (
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
-                       {/* Left Sidebar */}
-                       <div className={`w-full md:w-64 border-r border-gray-700 flex flex-col bg-gray-800 ${activeCharacterSetId ? 'hidden md:flex' : 'flex'}`}>
-                          {/* Header */}
-                          <div className="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
-                             <div className="font-bold flex items-center gap-2">
-                                <Users className="w-5 h-5 text-[var(--theme-color)]" />
-                                <span>角色集</span>
-                             </div>
-
-                             <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
-                                <button 
-                                    onClick={() => setCreationModule('worldview')}
-                                    className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
-                                    title="切换到世界观"
-                                >
-                                    <Globe className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={() => setCreationModule('characters')}
-                                    className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
-                                    title="切换到角色集"
-                                >
-                                    <Users className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={() => setCreationModule('outline')}
-                                    className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
-                                    title="切换到大纲"
-                                >
-                                    <Book className="w-4 h-4" />
-                                </button>
-                             </div>
-
-                             <button onClick={() => setCreationModule('menu')} className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors">
-                                <ArrowLeft className="w-4 h-4" />
-                             </button>
-                          </div>
-                          
-                          {/* Character File List */}
-                          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                             <div className="px-2 py-1 text-xs text-gray-500 font-semibold mb-1">角色文件列表</div>
-                             {activeNovel?.characterSets?.map(set => (
-                                <div 
-                                  key={set.id}
-                                  onClick={() => setActiveCharacterSetId(set.id)}
-                                  className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${activeCharacterSetId === set.id ? 'bg-[var(--theme-color)] text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}`}
-                                >
-                                   <Folder className={`w-4 h-4 shrink-0 ${activeCharacterSetId === set.id ? 'text-white' : 'text-gray-500'}`} />
-                                   <span className="flex-1 truncate text-sm font-medium">{set.name}</span>
-                                   
-                                   {/* Actions */}
-                                   <div className={`flex items-center opacity-0 group-hover:opacity-100 transition-opacity ${activeCharacterSetId === set.id ? 'text-white' : 'text-gray-400'}`}>
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); handleRenameCharacterSet(set.id, set.name); }}
-                                        className="bg-transparent p-1 hover:bg-white/20 rounded"
-                                      >
-                                         <Edit3 className="w-3 h-3" />
-                                      </button>
-                                      <button 
-                                        onClick={(e) => handleDeleteCharacterSet(set.id, e)}
-                                        className="bg-transparent p-1 hover:bg-white/20 rounded hover:text-red-300"
-                                      >
-                                         <Trash2 className="w-3 h-3" />
-                                      </button>
-                                   </div>
+                       <CharacterManager
+                          novel={activeNovel}
+                          activeCharacterSetId={activeCharacterSetId}
+                          onSetActiveCharacterSetId={setActiveCharacterSetId}
+                          onUpdateNovel={(updatedNovel) => {
+                             setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n))
+                          }}
+                          onGenerateCharacters={handleGenerateCharacters}
+                          isGenerating={isGeneratingCharacters}
+                          userPrompt={userPrompt}
+                          setUserPrompt={setUserPrompt}
+                          onStopGeneration={() => {
+                             characterAbortControllerRef.current?.abort()
+                             setIsGeneratingCharacters(false)
+                          }}
+                          onShowSettings={() => { setGeneratorSettingsType('character'); setShowGeneratorSettingsModal(true); }}
+                          modelName={characterPresets.find(p => p.id === activeCharacterPresetId)?.name || '默认设置'}
+                          sidebarHeader={
+                             <div className="flex items-center justify-between">
+                                <div className="font-bold flex items-center gap-2">
+                                   <Users className="w-5 h-5 text-[var(--theme-color)]" />
+                                   <span>角色集</span>
                                 </div>
-                             ))}
-                             {(!activeNovel?.characterSets || activeNovel.characterSets.length === 0) && (
-                                <div className="text-center py-8 text-gray-500 text-xs italic">
-                                   暂无角色文件
+
+                                <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
+                                   <button 
+                                       onClick={() => setCreationModule('worldview')}
+                                       className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                       title="切换到世界观"
+                                   >
+                                       <Globe className="w-4 h-4" />
+                                   </button>
+                                   <button 
+                                       onClick={() => setCreationModule('characters')}
+                                       className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
+                                       title="切换到角色集"
+                                   >
+                                       <Users className="w-4 h-4" />
+                                   </button>
+                                   <button 
+                                       onClick={() => setCreationModule('outline')}
+                                       className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                       title="切换到大纲"
+                                   >
+                                       <Book className="w-4 h-4" />
+                                   </button>
                                 </div>
-                             )}
-                          </div>
-                          
-                          {/* Bottom Input (Left Input Box) */}
-                          <div className="p-3 pr-20 md:pr-3 border-t border-gray-700 bg-gray-800">
-                             <div className="text-xs text-gray-500 mb-2 font-medium">新建角色文件</div>
-                             <div className="flex gap-2">
-                                <input 
-                                  value={newCharacterSetName}
-                                  onChange={(e) => setNewCharacterSetName(e.target.value)}
-                                  onKeyDown={(e) => e.key === 'Enter' && handleAddCharacterSet()}
-                                  className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm focus:border-[var(--theme-color)] outline-none"
-                                  placeholder="输入名称..."
-                                />
-                                <button 
-                                  onClick={handleAddCharacterSet}
-                                  disabled={!newCharacterSetName.trim()}
-                                  className="p-1.5 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 text-white rounded transition-colors"
-                                >
-                                   <Plus className="w-4 h-4" />
+
+                                <button onClick={() => setCreationModule('menu')} className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors">
+                                   <ArrowLeft className="w-4 h-4" />
                                 </button>
                              </div>
-                          </div>
-                       </div>
-                       
-                       {/* Right Content */}
-                       <div className={`flex-1 flex flex-col bg-gray-900 ${activeCharacterSetId ? 'flex' : 'hidden md:flex'}`}>
-                          {activeCharacterSetId ? (
-                             <>
-                                {/* Header / Toolbar */}
-                                <div className="p-3 md:p-4 border-b border-gray-700 bg-gray-800 shrink-0">
-                                    <div className="flex items-center justify-between mb-4 gap-2">
-                                       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
-                                          <button 
-                                             onClick={() => setActiveCharacterSetId(null)}
-                                             className="md:hidden p-1.5 -ml-2 mr-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white shrink-0"
-                                          >
-                                             <ArrowLeft className="w-5 h-5" />
-                                          </button>
-                                          <h3 className="font-bold text-lg text-gray-200 truncate">
-                                             {activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)?.name} 
-                                             <span className="hidden md:inline text-sm font-normal text-gray-500 ml-2">内的角色卡</span>
-                                          </h3>
-                                          <button 
-                                             onClick={() => { setGeneratorSettingsType('character'); setShowGeneratorSettingsModal(true); }}
-                                             className="text-xs flex items-center gap-1.5 text-gray-400 hover:text-[var(--theme-color)] transition-colors bg-gray-900/50 px-2 md:px-3 py-1 rounded-full border border-gray-700 hover:border-[var(--theme-color)] shrink-0 max-w-[80px] md:max-w-none"
-                                          >
-                                             <Settings className="w-3 h-3 shrink-0" />
-                                             <span className="truncate">{characterPresets.find(p => p.id === activeCharacterPresetId)?.name || '默认设置'}</span>
-                                          </button>
-                                       </div>
-                                       <button 
-                                          onClick={() => {
-                                             if (activeCharacterSetId) {
-                                                const currentSet = activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)
-                                                if (currentSet) {
-                                                   updateCharactersInSet(activeCharacterSetId, [...currentSet.characters, { name: '新角色', bio: '' }])
-                                                }
-                                             }
-                                          }}
-                                          className="flex items-center justify-center gap-1.5 px-2 md:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors border border-gray-600 shrink-0"
-                                          title="手动添加角色"
-                                       >
-                                          <Plus className="w-4 h-4 md:w-3.5 md:h-3.5" />
-                                          <span className="hidden md:inline">手动添加角色</span>
-                                       </button>
-                                    </div>
-                                    
-                                    {/* AI Input Area */}
-                                    <div className="flex items-center gap-2 mb-2 relative z-20">
-                                       <span className="text-xs text-gray-400">参考世界观：</span>
-                                       <div className="relative">
-                                          <button
-                                             onClick={() => setShowWorldviewSelector(!showWorldviewSelector)}
-                                             className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-200 border border-gray-600 transition-colors"
-                                          >
-                                             <Globe className="w-3 h-3 text-[var(--theme-color)]" />
-                                             {selectedWorldviewSetIdForCharGen
-                                                ? activeNovel?.worldviewSets?.find(s => s.id === selectedWorldviewSetIdForCharGen)?.name || '世界观已删除'
-                                                : '选择世界观 (可选)'}
-                                             <ChevronDown className="w-3 h-3" />
-                                          </button>
-                                          {showWorldviewSelector && (
-                                             <>
-                                                <div className="fixed inset-0 z-10" onClick={() => setShowWorldviewSelector(false)}></div>
-                                                <div 
-                                                   className="absolute top-full left-0 mt-1 w-56 border border-gray-600 rounded-lg shadow-2xl z-20 max-h-60 overflow-y-auto ring-1 ring-black/20"
-                                                   style={{ backgroundColor: '#1f2937' }}
-                                                >
-                                                   <button
-                                                      onClick={() => { setSelectedWorldviewSetIdForCharGen(null); setShowWorldviewSelector(false); }}
-                                                      className="w-full text-left px-3 py-2.5 text-xs text-gray-300 hover:text-white border-b border-gray-600 transition-colors bg-transparent hover:bg-gray-700"
-                                                   >
-                                                      不使用世界观
-                                                   </button>
-                                                   {activeNovel?.worldviewSets?.map(ws => (
-                                                      <button
-                                                         key={ws.id}
-                                                         onClick={() => { setSelectedWorldviewSetIdForCharGen(ws.id); setShowWorldviewSelector(false); }}
-                                                         className={`w-full text-left px-3 py-2.5 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${selectedWorldviewSetIdForCharGen === ws.id ? 'text-[var(--theme-color)] font-medium' : 'text-gray-300'}`}
-                                                      >
-                                                         <span className="truncate flex-1">{ws.name}</span>
-                                                         {selectedWorldviewSetIdForCharGen === ws.id && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)] shrink-0"></div>}
-                                                      </button>
-                                                   ))}
-                                                   {(!activeNovel?.worldviewSets || activeNovel.worldviewSets.length === 0) && (
-                                                      <div className="px-3 py-4 text-xs text-gray-500 italic text-center">
-                                                         暂无世界观文件
-                                                      </div>
-                                                   )}
-                                                </div>
-                                             </>
-                                          )}
-                                       </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                       <input 
-                                         type="text" 
-                                         value={userPrompt}
-                                         onChange={(e) => setUserPrompt(e.target.value)}
-                                         className="flex-1 bg-gray-900 border border-gray-600 rounded px-4 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
-                                         placeholder="AI 辅助生成：描述角色特征，例如'一个冷酷的杀手，擅长使用飞刀'..."
-                                         onKeyDown={(e) => e.key === 'Enter' && !isGeneratingCharacters && handleGenerateCharacters()}
-                                       />
-                                       {isGeneratingCharacters ? (
-                                           <button 
-                                             onClick={() => {
-                                                 characterAbortControllerRef.current?.abort()
-                                                 setIsGeneratingCharacters(false)
-                                             }}
-                                             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded flex items-center gap-2 shadow-lg transition-all"
-                                           >
-                                             <StopCircle className="w-4 h-4" />
-                                             停止
-                                           </button>
-                                       ) : (
-                                           <button 
-                                             onClick={handleGenerateCharacters}
-                                             className="px-4 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-sm rounded flex items-center gap-2 shadow-lg transition-all"
-                                           >
-                                             <Bot className="w-4 h-4" />
-                                             生成
-                                           </button>
-                                       )}
-                                    </div>
-
-                                    {/* User Notes Area */}
-                                    <div className="mt-4 pt-4 border-t border-gray-700/50">
-                                       <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
-                                          <FileText className="w-3 h-3" />
-                                          <span>用户输入记录 & 设定上下文 (AI 生成时会参考此内容)</span>
-                                       </div>
-                                       <textarea 
-                                          value={activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)?.userNotes || ''}
-                                          onChange={(e) => updateCharacterSet(activeCharacterSetId!, { userNotes: e.target.value })}
-                                          className="w-full h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono"
-                                          placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这组角色的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
-                                       />
-                                    </div>
-                                </div>
-                                
-                                {/* Grid Content */}
-                                <div className="flex-1 p-6 pb-24 overflow-y-auto custom-scrollbar min-w-0">
-                                    {(() => {
-                                       const currentSet = activeNovel?.characterSets?.find(s => s.id === activeCharacterSetId)
-                                       const characters = currentSet?.characters || []
-                                       
-                                       if (characters.length === 0) {
-                                          return (
-                                             <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                                                <Users className="w-16 h-16 mb-4 opacity-10" />
-                                                <p>此文件夹暂无角色</p>
-                                                <p className="text-sm mt-2">使用上方 AI 生成或点击手动添加</p>
-                                             </div>
-                                          )
-                                       }
-
-                                       return (
-                                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                             {characters.map((char, idx) => (
-                                                <div 
-                                                  key={idx} 
-                                                  onClick={() => setSelectedCharacter({ setId: activeCharacterSetId, index: idx })}
-                                                  className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden hover:border-[var(--theme-color)] hover:shadow-lg transition-all group flex flex-col h-[320px] cursor-pointer relative"
-                                                >
-                                                   {/* Card Header */}
-                                                   <div className="bg-gray-900/50 p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
-                                                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-lg">
-                                                            {char.name.slice(0, 1) || '?'}
-                                                         </div>
-                                                         <div className="flex-1 min-w-0">
-                                                            <h4 className="font-bold text-gray-200 truncate text-base">{char.name || '未命名角色'}</h4>
-                                                         </div>
-                                                      </div>
-                                                      <button 
-                                                         onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            const newChars = characters.filter((_, i) => i !== idx)
-                                                            updateCharactersInSet(activeCharacterSetId, newChars)
-                                                         }}
-                                                         className="bg-transparent p-2 text-gray-500 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                                         title="删除角色"
-                                                      >
-                                                         <Trash2 className="w-4 h-4" />
-                                                      </button>
-                                                   </div>
-                                                   
-                                                   {/* Card Body */}
-                                                   <div className="p-5 flex-1 bg-gray-800 relative overflow-hidden">
-                                                      <div className="h-full text-sm text-gray-400 leading-relaxed line-clamp-[8] whitespace-pre-wrap">
-                                                         {char.bio || <span className="italic opacity-50">暂无角色设定...</span>}
-                                                      </div>
-                                                      
-                                                      {/* Decorative Icon */}
-                                                      <div className="absolute -bottom-4 -right-4 opacity-[0.03] pointer-events-none text-gray-100">
-                                                         <Users className="w-32 h-32" />
-                                                      </div>
-                                                      
-                                                      {/* Hover Overlay Hint */}
-                                                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
-                                                         <span className="bg-black/50 text-white text-xs px-3 py-1 rounded-full backdrop-blur-sm">点击查看详情</span>
-                                                      </div>
-                                                   </div>
-                                                </div>
-                                             ))}
-                                          </div>
-                                       )
-                                    })()}
-                                </div>
-                             </>
-                          ) : (
-                             <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                                <Folder className="w-16 h-16 mb-4 opacity-10" />
-                                <p>请在左侧选择或创建一个角色文件</p>
-                             </div>
-                          )}
-                       </div>
+                          }
+                          selectedWorldviewSetId={selectedWorldviewSetIdForCharGen}
+                          setSelectedWorldviewSetId={setSelectedWorldviewSetIdForCharGen}
+                       />
                     </div>
                  )}
 
                  {/* Worldview Module */}
-                 {creationModule === 'worldview' && (
+                 {creationModule === 'worldview' && activeNovel && (
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
-                       {/* Left Sidebar */}
-                       <div className={`w-full md:w-64 border-r border-gray-700 flex flex-col bg-gray-800 ${activeWorldviewSetId ? 'hidden md:flex' : 'flex'}`}>
-                          {/* Header */}
-                          <div className="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
-                             <div className="font-bold flex items-center gap-2">
-                                <Globe className="w-5 h-5 text-[var(--theme-color)]" />
-                                <span>世界观</span>
-                             </div>
-
-                             <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
-                                <button 
-                                    onClick={() => setCreationModule('worldview')}
-                                    className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
-                                    title="切换到世界观"
-                                >
-                                    <Globe className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={() => setCreationModule('characters')}
-                                    className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
-                                    title="切换到角色集"
-                                >
-                                    <Users className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={() => setCreationModule('outline')}
-                                    className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
-                                    title="切换到大纲"
-                                >
-                                    <Book className="w-4 h-4" />
-                                </button>
-                             </div>
-
-                             <button onClick={() => setCreationModule('menu')} className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors">
-                                <ArrowLeft className="w-4 h-4" />
-                             </button>
-                          </div>
-                          
-                          {/* Worldview File List */}
-                          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                             <div className="px-2 py-1 text-xs text-gray-500 font-semibold mb-1">世界观文件列表</div>
-                             {activeNovel?.worldviewSets?.map(set => (
-                                <div 
-                                  key={set.id}
-                                  onClick={() => setActiveWorldviewSetId(set.id)}
-                                  className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${activeWorldviewSetId === set.id ? 'bg-[var(--theme-color)] text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}`}
-                                >
-                                   <Folder className={`w-4 h-4 shrink-0 ${activeWorldviewSetId === set.id ? 'text-white' : 'text-gray-500'}`} />
-                                   <span className="flex-1 truncate text-sm font-medium">{set.name}</span>
-                                   
-                                   {/* Actions */}
-                                   <div className={`flex items-center opacity-0 group-hover:opacity-100 transition-opacity ${activeWorldviewSetId === set.id ? 'text-white' : 'text-gray-400'}`}>
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); handleRenameWorldviewSet(set.id, set.name); }}
-                                        className="bg-transparent p-1 hover:bg-white/20 rounded"
-                                      >
-                                         <Edit3 className="w-3 h-3" />
-                                      </button>
-                                      <button 
-                                        onClick={(e) => handleDeleteWorldviewSet(set.id, e)}
-                                        className="bg-transparent p-1 hover:bg-white/20 rounded hover:text-red-300"
-                                      >
-                                         <Trash2 className="w-3 h-3" />
-                                      </button>
-                                   </div>
+                       <WorldviewManager
+                          novel={activeNovel}
+                          activeWorldviewSetId={activeWorldviewSetId}
+                          onSetActiveWorldviewSetId={setActiveWorldviewSetId}
+                          onUpdateNovel={(updatedNovel) => {
+                             setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n))
+                          }}
+                          onGenerateWorldview={handleGenerateWorldview}
+                          isGenerating={isGeneratingWorldview}
+                          userPrompt={userPrompt}
+                          setUserPrompt={setUserPrompt}
+                          onStopGeneration={() => {
+                             worldviewAbortControllerRef.current?.abort()
+                             setIsGeneratingWorldview(false)
+                          }}
+                          onShowSettings={() => { setGeneratorSettingsType('worldview'); setShowGeneratorSettingsModal(true); }}
+                          modelName={worldviewPresets.find(p => p.id === activeWorldviewPresetId)?.name || '默认设置'}
+                          sidebarHeader={
+                             <div className="flex items-center justify-between">
+                                <div className="font-bold flex items-center gap-2">
+                                   <Globe className="w-5 h-5 text-[var(--theme-color)]" />
+                                   <span>世界观</span>
                                 </div>
-                             ))}
-                             {(!activeNovel?.worldviewSets || activeNovel.worldviewSets.length === 0) && (
-                                <div className="text-center py-8 text-gray-500 text-xs italic">
-                                   暂无世界观文件
+
+                                <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
+                                   <button 
+                                       onClick={() => setCreationModule('worldview')}
+                                       className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
+                                       title="切换到世界观"
+                                   >
+                                       <Globe className="w-4 h-4" />
+                                   </button>
+                                   <button 
+                                       onClick={() => setCreationModule('characters')}
+                                       className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                       title="切换到角色集"
+                                   >
+                                       <Users className="w-4 h-4" />
+                                   </button>
+                                   <button 
+                                       onClick={() => setCreationModule('outline')}
+                                       className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                       title="切换到大纲"
+                                   >
+                                       <Book className="w-4 h-4" />
+                                   </button>
                                 </div>
-                             )}
-                          </div>
-                          
-                          {/* Bottom Input (Left Input Box) */}
-                          <div className="p-3 pr-20 md:pr-3 border-t border-gray-700 bg-gray-800">
-                             <div className="text-xs text-gray-500 mb-2 font-medium">新建世界观文件</div>
-                             <div className="flex gap-2">
-                                <input 
-                                  value={newWorldviewSetName}
-                                  onChange={(e) => setNewWorldviewSetName(e.target.value)}
-                                  onKeyDown={(e) => e.key === 'Enter' && handleAddWorldviewSet()}
-                                  className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm focus:border-[var(--theme-color)] outline-none"
-                                  placeholder="输入名称..."
-                                />
-                                <button 
-                                  onClick={handleAddWorldviewSet}
-                                  disabled={!newWorldviewSetName.trim()}
-                                  className="p-1.5 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 text-white rounded transition-colors"
-                                >
-                                   <Plus className="w-4 h-4" />
+
+                                <button onClick={() => setCreationModule('menu')} className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors">
+                                   <ArrowLeft className="w-4 h-4" />
                                 </button>
                              </div>
-                          </div>
-                       </div>
-                       
-                       {/* Right Content */}
-                       <div className={`flex-1 flex flex-col bg-gray-900 ${activeWorldviewSetId ? 'flex' : 'hidden md:flex'}`}>
-                          {activeWorldviewSetId ? (
-                             <>
-                                {/* Header / Toolbar */}
-                                <div className="p-3 md:p-4 border-b border-gray-700 bg-gray-800 shrink-0">
-                                    <div className="flex items-center justify-between mb-4 gap-2">
-                                       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
-                                          <button 
-                                             onClick={() => setActiveWorldviewSetId(null)}
-                                             className="md:hidden p-1.5 -ml-2 mr-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white shrink-0"
-                                          >
-                                             <ArrowLeft className="w-5 h-5" />
-                                          </button>
-                                          <h3 className="font-bold text-lg text-gray-200 truncate">
-                                             {activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)?.name} 
-                                             <span className="hidden md:inline text-sm font-normal text-gray-500 ml-2">内的设定</span>
-                                          </h3>
-                                          <button 
-                                             onClick={() => { setGeneratorSettingsType('worldview'); setShowGeneratorSettingsModal(true); }}
-                                             className="text-xs flex items-center gap-1.5 text-gray-400 hover:text-[var(--theme-color)] transition-colors bg-gray-900/50 px-2 md:px-3 py-1 rounded-full border border-gray-700 hover:border-[var(--theme-color)] shrink-0 max-w-[80px] md:max-w-none"
-                                          >
-                                             <Settings className="w-3 h-3 shrink-0" />
-                                             <span className="truncate">{worldviewPresets.find(p => p.id === activeWorldviewPresetId)?.name || '默认设置'}</span>
-                                          </button>
-                                       </div>
-                                       <button 
-                                          onClick={() => {
-                                             if (activeWorldviewSetId) {
-                                                const currentSet = activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)
-                                                if (currentSet) {
-                                                   updateEntriesInSet(activeWorldviewSetId, [...currentSet.entries, { item: '新设定', setting: '' }])
-                                                }
-                                             }
-                                          }}
-                                          className="flex items-center justify-center gap-1.5 px-2 md:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors border border-gray-600 shrink-0"
-                                          title="手动添加设定"
-                                       >
-                                          <Plus className="w-4 h-4 md:w-3.5 md:h-3.5" />
-                                          <span className="hidden md:inline">手动添加设定</span>
-                                       </button>
-                                    </div>
-                                    
-                                    {/* AI Input Area */}
-                                    <div className="flex gap-2 w-[96%] mx-auto md:w-full">
-                                       <input 
-                                         type="text" 
-                                         value={userPrompt}
-                                         onChange={(e) => setUserPrompt(e.target.value)}
-                                         className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] outline-none"
-                                         placeholder="AI 辅助生成：例如'设计一个包含九大元素的魔法体系，以及相应的施法代价'..."
-                                         onKeyDown={(e) => e.key === 'Enter' && !isGeneratingWorldview && handleGenerateWorldview()}
-                                       />
-                                       {isGeneratingWorldview ? (
-                                           <button 
-                                             onClick={() => {
-                                                 worldviewAbortControllerRef.current?.abort()
-                                                 setIsGeneratingWorldview(false)
-                                             }}
-                                             className="px-3 py-1.5 md:px-4 md:py-2 bg-red-600 hover:bg-red-700 text-white text-xs md:text-sm rounded flex items-center gap-2 shadow-lg transition-all"
-                                           >
-                                             <StopCircle className="w-4 h-4" />
-                                             停止
-                                           </button>
-                                       ) : (
-                                           <button 
-                                             onClick={handleGenerateWorldview}
-                                             className="px-3 py-1.5 md:px-4 md:py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-xs md:text-sm rounded flex items-center gap-2 shadow-lg transition-all"
-                                           >
-                                             <Bot className="w-4 h-4" />
-                                             生成
-                                           </button>
-                                       )}
-                                    </div>
-
-                                </div>
-                                
-                                {/* Grid Content */}
-                                <div className="flex-1 p-2 md:p-6 pb-24 overflow-y-auto custom-scrollbar min-w-0">
-                                    {/* User Notes Area */}
-                                    <div className="mb-3 pb-3 md:mb-6 md:pb-6 border-b border-gray-700/50 w-[96%] mx-auto md:w-full">
-                                       <div className="text-[10px] md:text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
-                                          <FileText className="w-3 h-3" />
-                                          <span>用户输入记录 & 设定上下文 (AI 生成时会参考此内容)</span>
-                                       </div>
-                                       <textarea 
-                                          value={activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)?.userNotes || ''}
-                                          onChange={(e) => updateWorldviewSet(activeWorldviewSetId!, { userNotes: e.target.value })}
-                                          className="w-full h-24 md:h-32 bg-gray-900/50 border border-gray-700 rounded-lg p-2 md:p-3 text-xs md:text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono whitespace-pre-wrap break-words"
-                                          placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这组世界观的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
-                                       />
-                                    </div>
-                                    {(() => {
-                                       const currentSet = activeNovel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)
-                                       const entries = currentSet?.entries || []
-                                       
-                                       if (entries.length === 0) {
-                                          return (
-                                             <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                                                <Globe className="w-16 h-16 mb-4 opacity-10" />
-                                                <p>此文件夹暂无设定</p>
-                                                <p className="text-sm mt-2">使用上方 AI 生成或点击手动添加</p>
-                                             </div>
-                                          )
-                                       }
-
-                                       return (
-                                          <div className="flex flex-col gap-2 md:gap-4 w-[96%] mx-auto md:w-full">
-                                             {entries.map((entry, idx) => (
-                                                <div 
-                                                  key={idx} 
-                                                  onClick={() => setSelectedWorldviewEntry({ setId: activeWorldviewSetId, index: idx })}
-                                                  className="bg-gray-800 border border-gray-700 rounded-lg md:rounded-xl overflow-hidden hover:border-[var(--theme-color)] hover:shadow-lg transition-all group flex flex-col cursor-pointer relative"
-                                                >
-                                                   <div className="p-2 md:p-4 flex items-start gap-2 md:gap-4">
-                                                      <div className="p-1.5 md:p-3 bg-gray-900/50 rounded-lg text-[var(--theme-color)] shrink-0">
-                                                         <Globe className="w-4 h-4 md:w-6 md:h-6" />
-                                                      </div>
-                                                      <div className="flex-1 min-w-0">
-                                                         <div className="flex justify-between items-start mb-0.5 md:mb-2">
-                                                            <h4 className="font-bold text-gray-200 text-sm md:text-lg truncate">{entry.item || '未命名设定'}</h4>
-                                                            <button 
-                                                               onClick={(e) => {
-                                                                  e.stopPropagation()
-                                                                  const newEntries = entries.filter((_, i) => i !== idx)
-                                                                  updateEntriesInSet(activeWorldviewSetId, newEntries)
-                                                               }}
-                                                               className="bg-transparent p-1 text-gray-500 hover:text-red-400 hover:bg-gray-700 rounded transition-all opacity-0 group-hover:opacity-100"
-                                                               title="删除设定"
-                                                            >
-                                                               <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                                            </button>
-                                                         </div>
-                                                         <p className="text-xs md:text-sm text-gray-400 line-clamp-2">{entry.setting || '暂无详细内容...'}</p>
-                                                      </div>
-                                                   </div>
-                                                </div>
-                                             ))}
-                                          </div>
-                                       )
-                                    })()}
-                                </div>
-                             </>
-                          ) : (
-                             <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                                <Folder className="w-16 h-16 mb-4 opacity-10" />
-                                <p>请在左侧选择或创建一个世界观文件</p>
-                             </div>
-                          )}
-                       </div>
+                          }
+                       />
                     </div>
                  )}
 
@@ -7361,185 +6918,6 @@ ${taskDescription}`
         </div>
       )}
 
-      {/* Character Detail Modal */}
-      {selectedCharacter && activeNovel && (
-         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div 
-              className="bg-gray-800 w-full md:w-[800px] h-[90vh] md:h-[80vh] rounded-xl shadow-2xl border border-gray-600 flex flex-col md:flex-row overflow-hidden animate-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
-            >
-               {(() => {
-                  const set = activeNovel.characterSets?.find(s => s.id === selectedCharacter.setId)
-                  const character = set?.characters[selectedCharacter.index]
-                  
-                  if (!set || !character) {
-                     setSelectedCharacter(null)
-                     return null
-                  }
-
-                  const updateChar = (updates: Partial<CharacterItem>) => {
-                     const newChars = [...set.characters]
-                     newChars[selectedCharacter.index] = { ...character, ...updates }
-                     updateCharactersInSet(set.id, newChars)
-                  }
-
-                  return (
-                     <>
-                        {/* Sidebar (Visuals) */}
-                        <div className="w-full md:w-64 bg-gray-900 border-b md:border-b-0 md:border-r border-gray-700 flex flex-row md:flex-col items-center p-4 md:p-8 shrink-0 gap-4 md:gap-0">
-                           <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl md:text-4xl shadow-2xl md:mb-6 shrink-0">
-                              {character.name.slice(0, 1) || '?'}
-                           </div>
-                           <div className="flex-1 md:w-full flex flex-col items-start md:items-center min-w-0">
-                             <h2 className="text-lg md:text-xl font-bold text-gray-100 text-left md:text-center md:mb-2 truncate w-full">{character.name || '未命名'}</h2>
-                             <p className="text-xs text-gray-500 text-left md:text-center md:mb-8 truncate w-full">
-                                {set.name}
-                             </p>
-                           </div>
-                           
-                           <div className="w-auto md:w-full space-y-2 mt-0 md:mt-auto shrink-0">
-                              <button 
-                                 onClick={() => setSelectedCharacter(null)}
-                                 className="px-4 md:w-full py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-300 transition-colors"
-                              >
-                                 关闭
-                              </button>
-                           </div>
-                        </div>
-                        
-                        {/* Main Edit Area */}
-                        <div className="flex-1 flex flex-col bg-gray-800 h-full overflow-hidden">
-                           <div className="p-6 border-b border-gray-700 bg-gray-800 flex justify-between items-center shrink-0">
-                              <div className="flex items-center gap-2">
-                                 <FileText className="w-5 h-5 text-[var(--theme-color)]" />
-                                 <span className="font-bold text-lg">角色详情</span>
-                              </div>
-                              <button 
-                                 onClick={() => setSelectedCharacter(null)}
-                                 className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white"
-                              >
-                                 <X className="w-5 h-5" />
-                              </button>
-                           </div>
-                           
-                           <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
-                              <div className="space-y-2">
-                                 <label className="text-sm font-medium text-gray-400">角色名称</label>
-                                 <input 
-                                    value={character.name}
-                                    onChange={(e) => updateChar({ name: e.target.value })}
-                                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-base focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
-                                    placeholder="输入角色名称..."
-                                 />
-                              </div>
-                              
-                              <div className="space-y-2 flex-1 flex flex-col min-h-[300px]">
-                                 <label className="text-sm font-medium text-gray-400">角色设定 (Bio)</label>
-                                 <textarea 
-                                    value={character.bio}
-                                    onChange={(e) => updateChar({ bio: e.target.value })}
-                                    className="w-full flex-1 bg-gray-900 border border-gray-600 rounded-lg p-4 text-base leading-relaxed focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none resize-none transition-all font-mono"
-                                    placeholder="输入详细的角色设定、背景故事、性格特征等..."
-                                 />
-                              </div>
-                           </div>
-                        </div>
-                     </>
-                  )
-               })()}
-            </div>
-         </div>
-      )}
-
-      {/* Worldview Entry Detail Modal */}
-      {selectedWorldviewEntry && activeNovel && (
-         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div 
-              className="bg-gray-800 w-full md:w-[800px] h-[90vh] md:h-[80vh] rounded-xl shadow-2xl border border-gray-600 flex flex-col md:flex-row overflow-hidden animate-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
-            >
-               {(() => {
-                  const set = activeNovel.worldviewSets?.find(s => s.id === selectedWorldviewEntry.setId)
-                  const entry = set?.entries[selectedWorldviewEntry.index]
-                  
-                  if (!set || !entry) {
-                     setSelectedWorldviewEntry(null)
-                     return null
-                  }
-
-                  const updateEntry = (updates: Partial<WorldviewItem>) => {
-                     const newEntries = [...set.entries]
-                     newEntries[selectedWorldviewEntry.index] = { ...entry, ...updates }
-                     updateEntriesInSet(set.id, newEntries)
-                  }
-
-                  return (
-                     <>
-                        {/* Sidebar (Visuals) */}
-                        <div className="w-full md:w-64 bg-gray-900 border-b md:border-b-0 md:border-r border-gray-700 flex flex-row md:flex-col items-center p-4 md:p-8 shrink-0 gap-4 md:gap-0">
-                           <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-blue-600 to-teal-500 flex items-center justify-center text-white font-bold text-xl md:text-4xl shadow-2xl md:mb-6 shrink-0">
-                              <Globe className="w-8 h-8 md:w-16 md:h-16" />
-                           </div>
-                           <div className="flex-1 md:w-full flex flex-col items-start md:items-center min-w-0">
-                             <h2 className="text-lg md:text-xl font-bold text-gray-100 text-left md:text-center md:mb-2 truncate w-full">{entry.item || '未命名'}</h2>
-                             <p className="text-xs text-gray-500 text-left md:text-center md:mb-8 truncate w-full">
-                                {set.name}
-                             </p>
-                           </div>
-                           
-                           <div className="w-auto md:w-full space-y-2 mt-0 md:mt-auto shrink-0">
-                              <button 
-                                 onClick={() => setSelectedWorldviewEntry(null)}
-                                 className="px-4 md:w-full py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-300 transition-colors"
-                              >
-                                 关闭
-                              </button>
-                           </div>
-                        </div>
-                        
-                        {/* Main Edit Area */}
-                        <div className="flex-1 flex flex-col bg-gray-800 h-full overflow-hidden">
-                           <div className="p-6 border-b border-gray-700 bg-gray-800 flex justify-between items-center shrink-0">
-                              <div className="flex items-center gap-2">
-                                 <FileText className="w-5 h-5 text-[var(--theme-color)]" />
-                                 <span className="font-bold text-lg">设定详情</span>
-                              </div>
-                              <button 
-                                 onClick={() => setSelectedWorldviewEntry(null)}
-                                 className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white"
-                              >
-                                 <X className="w-5 h-5" />
-                              </button>
-                           </div>
-                           
-                           <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
-                              <div className="space-y-2">
-                                 <label className="text-sm font-medium text-gray-400">设定项名称</label>
-                                 <input 
-                                    value={entry.item}
-                                    onChange={(e) => updateEntry({ item: e.target.value })}
-                                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-base focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
-                                    placeholder="输入设定项名称 (如：地理环境)..."
-                                 />
-                              </div>
-                              
-                              <div className="space-y-2 flex-1 flex flex-col min-h-[300px]">
-                                 <label className="text-sm font-medium text-gray-400">详细设定内容</label>
-                                 <textarea 
-                                    value={entry.setting}
-                                    onChange={(e) => updateEntry({ setting: e.target.value })}
-                                    className="w-full flex-1 bg-gray-900 border border-gray-600 rounded-lg p-4 text-base leading-relaxed focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none resize-none transition-all font-mono"
-                                    placeholder="输入详细的设定内容..."
-                                 />
-                              </div>
-                           </div>
-                        </div>
-                     </>
-                  )
-               })()}
-            </div>
-         </div>
-      )}
 
       {/* Regex Editor Modal */}
       {showRegexEditor && editingRegexScript && (
