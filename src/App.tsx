@@ -761,6 +761,19 @@ function App() {
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   
+  // Scroll to top when active chapter changes
+  const contentScrollRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (contentScrollRef.current) {
+      contentScrollRef.current.scrollTop = 0
+    }
+    if (textareaRef.current) {
+      textareaRef.current.scrollTop = 0
+    }
+  }, [activeChapterId])
+
   // Auto Write Refs & State
   const isAutoWritingRef = useRef(false)
   const autoWriteAbortControllerRef = useRef<AbortController | null>(null)
@@ -5641,13 +5654,14 @@ ${taskDescription}`
                 <div className="relative flex-1 flex flex-col min-h-0">
                     {isEditingChapter ? (
                         <textarea
+                            ref={textareaRef}
                             value={activeChapter.content || ''}
                             onChange={handleChapterContentChange}
                             className="w-full h-full bg-gray-900 p-4 text-base leading-relaxed text-gray-200 outline-none resize-none font-mono"
                             placeholder="在此处输入章节正文..."
                         />
                     ) : (
-                    <div className="prose prose-invert prose-lg max-w-none overflow-y-auto custom-scrollbar pr-4 md:pr-24 [&_p]:my-0 [&_p]:min-h-[1rem] text-justify">
+                    <div ref={contentScrollRef} className="prose prose-invert prose-lg max-w-none overflow-y-auto custom-scrollbar pr-4 md:pr-24 [&_p]:my-0 [&_p]:min-h-[1rem] text-justify">
                         {activeChapter.content ? (
                         <ReactMarkdown>
                           {activeChapter.content
