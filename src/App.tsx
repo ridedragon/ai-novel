@@ -4839,22 +4839,37 @@ ${taskDescription}`
   }
 
   const handleSwitchModule = (targetModule: 'outline' | 'characters' | 'worldview' | 'inspiration') => {
-      let sourceId: string | null = null;
+      if (!activeNovel) {
+          setCreationModule(targetModule);
+          return;
+      }
+
+      let sourceSet: { id: string, name: string } | undefined;
       
-      if (creationModule === 'outline') sourceId = activeOutlineSetId;
-      else if (creationModule === 'characters') sourceId = activeCharacterSetId;
-      else if (creationModule === 'worldview') sourceId = activeWorldviewSetId;
-      else if (creationModule === 'inspiration') sourceId = activeInspirationSetId;
+      if (creationModule === 'outline') sourceSet = activeNovel.outlineSets?.find(s => s.id === activeOutlineSetId);
+      else if (creationModule === 'characters') sourceSet = activeNovel.characterSets?.find(s => s.id === activeCharacterSetId);
+      else if (creationModule === 'worldview') sourceSet = activeNovel.worldviewSets?.find(s => s.id === activeWorldviewSetId);
+      else if (creationModule === 'inspiration') sourceSet = activeNovel.inspirationSets?.find(s => s.id === activeInspirationSetId);
       
-      if (sourceId && activeNovel) {
-          if (targetModule === 'outline') {
-              if (activeNovel.outlineSets?.some(s => s.id === sourceId)) setActiveOutlineSetId(sourceId);
-          } else if (targetModule === 'characters') {
-              if (activeNovel.characterSets?.some(s => s.id === sourceId)) setActiveCharacterSetId(sourceId);
-          } else if (targetModule === 'worldview') {
-              if (activeNovel.worldviewSets?.some(s => s.id === sourceId)) setActiveWorldviewSetId(sourceId);
-          } else if (targetModule === 'inspiration') {
-              if (activeNovel.inspirationSets?.some(s => s.id === sourceId)) setActiveInspirationSetId(sourceId);
+      if (sourceSet) {
+          // Determine target sets based on target module
+          const targetSets = targetModule === 'outline' ? activeNovel.outlineSets :
+                             targetModule === 'characters' ? activeNovel.characterSets :
+                             targetModule === 'worldview' ? activeNovel.worldviewSets :
+                             activeNovel.inspirationSets;
+
+          if (targetSets) {
+              // Try to find match by ID first, then by Name
+              // This ensures if we created them linked (same ID), it works. 
+              // If created separately but named same, it also works.
+              const match = targetSets.find(s => s.id === sourceSet?.id) || targetSets.find(s => s.name === sourceSet?.name);
+              
+              if (match) {
+                  if (targetModule === 'outline') setActiveOutlineSetId(match.id);
+                  else if (targetModule === 'characters') setActiveCharacterSetId(match.id);
+                  else if (targetModule === 'worldview') setActiveWorldviewSetId(match.id);
+                  else if (targetModule === 'inspiration') setActiveInspirationSetId(match.id);
+              }
           }
       }
       
