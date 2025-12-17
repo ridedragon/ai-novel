@@ -1,16 +1,20 @@
 import {
   ArrowLeft,
+  Book,
   Bot,
   ChevronDown,
   Edit3,
   FileText,
   Folder,
+  Globe,
   Lightbulb,
   Loader2,
   Plus,
+  Send,
   Settings,
   StopCircle,
   Trash2,
+  Users,
   X
 } from 'lucide-react'
 import React, { useState } from 'react'
@@ -31,6 +35,9 @@ interface InspirationManagerProps {
   onShowSettings?: () => void
   modelName?: string
   sidebarHeader?: React.ReactNode
+
+  // Navigation / Integration
+  onSendToModule?: (module: 'worldview' | 'character' | 'outline', content: string) => void
 }
 
 export const InspirationManager: React.FC<InspirationManagerProps> = ({
@@ -45,7 +52,8 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
   onStopGeneration,
   onShowSettings,
   modelName,
-  sidebarHeader
+  sidebarHeader,
+  onSendToModule
 }) => {
   // Local State for Set Management
   const [newSetName, setNewSetName] = useState('')
@@ -59,6 +67,9 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
   const [selectedEntryIndex, setSelectedEntryIndex] = useState<number | null>(null)
   const [editEntryTitle, setEditEntryTitle] = useState('')
   const [editEntryContent, setEditEntryContent] = useState('')
+
+  // Send Menu State
+  const [sendMenuOpenIndex, setSendMenuOpenIndex] = useState<number | null>(null)
 
   // Confirmation State
   const [confirmState, setConfirmState] = useState<{
@@ -89,14 +100,31 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
       items: []
     }
 
-    const updatedInspirationSets = [...(novel.inspirationSets || []), newInspirationSet]
-    
-    // 如果需要同步创建其他集合，可以在这里添加，但灵感通常是独立的
-    // 为了保持一致性，还是只创建灵感集
-    
+    // 同时创建同名的其他集合
+    const newCharacterSet: CharacterSet = {
+      id: crypto.randomUUID(),
+      name: name,
+      characters: []
+    }
+
+    const newWorldviewSet: WorldviewSet = {
+      id: crypto.randomUUID(),
+      name: name,
+      entries: []
+    }
+
+    const newOutlineSet: OutlineSet = {
+      id: crypto.randomUUID(),
+      name: name,
+      items: []
+    }
+
     onUpdateNovel({ 
         ...novel, 
-        inspirationSets: updatedInspirationSets
+        inspirationSets: [...(novel.inspirationSets || []), newInspirationSet],
+        characterSets: [...(novel.characterSets || []), newCharacterSet],
+        worldviewSets: [...(novel.worldviewSets || []), newWorldviewSet],
+        outlineSets: [...(novel.outlineSets || []), newOutlineSet]
     })
     
     setNewSetName('')
@@ -420,13 +448,69 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                                     </div>
                                  </div>
 
-                                 <button 
-                                    onClick={(e) => { e.stopPropagation(); handleDeleteEntry(idx); }}
-                                    className="absolute top-3 right-3 p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                    title="删除灵感"
-                                 >
-                                    <Trash2 className="w-4 h-4" />
-                                 </button>
+                                 <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="relative">
+                                       <button 
+                                          onClick={(e) => { 
+                                             e.stopPropagation(); 
+                                             setSendMenuOpenIndex(sendMenuOpenIndex === idx ? null : idx);
+                                          }}
+                                          className={`p-1.5 rounded-lg transition-all ${sendMenuOpenIndex === idx ? 'bg-[var(--theme-color)] text-white' : 'text-gray-500 hover:text-white hover:bg-gray-700'}`}
+                                          title="发送到..."
+                                       >
+                                          <Send className="w-4 h-4" />
+                                       </button>
+                                       
+                                       {sendMenuOpenIndex === idx && onSendToModule && (
+                                          <>
+                                             <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setSendMenuOpenIndex(null); }} />
+                                             <div className="absolute right-0 top-full mt-2 w-48 bg-gray-800 border border-gray-600 rounded-xl shadow-xl overflow-hidden z-20 flex flex-col animate-in fade-in zoom-in-95 duration-200">
+                                                <button 
+                                                   onClick={(e) => { 
+                                                      e.stopPropagation(); 
+                                                      onSendToModule('worldview', item.content || item.title);
+                                                      setSendMenuOpenIndex(null);
+                                                   }}
+                                                   className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white text-left transition-colors"
+                                                >
+                                                   <Globe className="w-4 h-4 text-blue-400" />
+                                                   <span>发送给世界观 AI</span>
+                                                </button>
+                                                <button 
+                                                   onClick={(e) => { 
+                                                      e.stopPropagation(); 
+                                                      onSendToModule('character', item.content || item.title);
+                                                      setSendMenuOpenIndex(null);
+                                                   }}
+                                                   className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white text-left transition-colors border-t border-gray-700/50"
+                                                >
+                                                   <Users className="w-4 h-4 text-green-400" />
+                                                   <span>发送给角色 AI</span>
+                                                </button>
+                                                <button 
+                                                   onClick={(e) => { 
+                                                      e.stopPropagation(); 
+                                                      onSendToModule('outline', item.content || item.title);
+                                                      setSendMenuOpenIndex(null);
+                                                   }}
+                                                   className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white text-left transition-colors border-t border-gray-700/50"
+                                                >
+                                                   <Book className="w-4 h-4 text-purple-400" />
+                                                   <span>发送给大纲 AI</span>
+                                                </button>
+                                             </div>
+                                          </>
+                                       )}
+                                    </div>
+
+                                    <button 
+                                       onClick={(e) => { e.stopPropagation(); handleDeleteEntry(idx); }}
+                                       className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-all"
+                                       title="删除灵感"
+                                    >
+                                       <Trash2 className="w-4 h-4" />
+                                    </button>
+                                 </div>
                               </div>
                            ))}
                         </div>

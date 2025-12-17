@@ -10,6 +10,7 @@ import {
   Folder,
   Globe,
   GripVertical,
+  Lightbulb,
   Loader2,
   PlayCircle,
   Plus,
@@ -21,7 +22,7 @@ import {
   X
 } from 'lucide-react'
 import React, { useState } from 'react'
-import { Novel, OutlineItem, OutlineSet, WorldviewSet, CharacterSet } from '../types'
+import { Novel, OutlineItem, OutlineSet, WorldviewSet, CharacterSet, InspirationSet } from '../types'
 
 interface OutlineManagerProps {
   novel: Novel
@@ -52,6 +53,8 @@ interface OutlineManagerProps {
   setSelectedCharacterSetId?: (id: string | null) => void
   selectedWorldviewSetId?: string | null
   setSelectedWorldviewSetId?: (id: string | null) => void
+  selectedInspirationEntry?: { setId: string, index: number } | null
+  setSelectedInspirationEntry?: (val: { setId: string, index: number } | null) => void
 }
 
 export const OutlineManager: React.FC<OutlineManagerProps> = ({
@@ -79,7 +82,9 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
   selectedCharacterSetId,
   setSelectedCharacterSetId,
   selectedWorldviewSetId,
-  setSelectedWorldviewSetId
+  setSelectedWorldviewSetId,
+  selectedInspirationEntry,
+  setSelectedInspirationEntry
 }) => {
   const [newSetName, setNewSetName] = useState('')
   const [editingSetId, setEditingSetId] = useState<string | null>(null)
@@ -99,6 +104,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
   // Selectors State
   const [showWorldviewSelector, setShowWorldviewSelector] = useState(false)
   const [showCharacterSelector, setShowCharacterSelector] = useState(false)
+  const [showInspirationSelector, setShowInspirationSelector] = useState(false)
 
   // Confirmation State
   const [confirmState, setConfirmState] = useState<{
@@ -141,15 +147,23 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
         characters: []
     }
 
+    const newInspirationSet: InspirationSet = {
+        id: newId,
+        name: name,
+        items: []
+    }
+
     const updatedWorldviewSets = [...(novel.worldviewSets || []), newWorldviewSet]
     const updatedCharacterSets = [...(novel.characterSets || []), newCharacterSet]
     const updatedOutlineSets = [...(novel.outlineSets || []), newOutlineSet]
+    const updatedInspirationSets = [...(novel.inspirationSets || []), newInspirationSet]
     
     onUpdateNovel({ 
         ...novel, 
         worldviewSets: updatedWorldviewSets,
         characterSets: updatedCharacterSets,
-        outlineSets: updatedOutlineSets
+        outlineSets: updatedOutlineSets,
+        inspirationSets: updatedInspirationSets
     })
 
     setNewSetName('')
@@ -447,7 +461,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                        {/* Worldview Selector */}
                        <div className="relative">
                           <button
-                             onClick={() => setShowWorldviewSelector(!showWorldviewSelector)}
+                             onClick={() => { setShowWorldviewSelector(!showWorldviewSelector); setShowCharacterSelector(false); setShowInspirationSelector(false); }}
                              className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-200 border border-gray-600 transition-colors"
                           >
                              <Globe className="w-3 h-3 text-[var(--theme-color)]" />
@@ -487,7 +501,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                        {/* Character Selector */}
                        <div className="relative">
                           <button
-                             onClick={() => setShowCharacterSelector(!showCharacterSelector)}
+                             onClick={() => { setShowCharacterSelector(!showCharacterSelector); setShowWorldviewSelector(false); setShowInspirationSelector(false); }}
                              className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-200 border border-gray-600 transition-colors"
                           >
                              <Users className="w-3 h-3 text-[var(--theme-color)]" />
@@ -523,6 +537,69 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                              </>
                           )}
                        </div>
+
+                       {/* Inspiration Selector */}
+                       {setSelectedInspirationEntry && (
+                          <div className="relative">
+                             <button
+                                onClick={() => { setShowInspirationSelector(!showInspirationSelector); setShowWorldviewSelector(false); setShowCharacterSelector(false); }}
+                                className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-200 border border-gray-600 transition-colors"
+                             >
+                                <Lightbulb className="w-3 h-3 text-[var(--theme-color)]" />
+                                {selectedInspirationEntry
+                                   ? (() => {
+                                        const set = novel.inspirationSets?.find(s => s.id === selectedInspirationEntry.setId)
+                                        const item = set?.items[selectedInspirationEntry.index]
+                                        return item?.title || '灵感已删除'
+                                     })()
+                                   : '选择灵感'}
+                                <ChevronDown className="w-3 h-3" />
+                             </button>
+                             {showInspirationSelector && (
+                                <>
+                                   <div className="fixed inset-0 z-20" onClick={() => setShowInspirationSelector(false)}></div>
+                                   <div 
+                                      className="absolute top-full left-0 mt-1 w-56 border border-gray-600 rounded-lg shadow-2xl z-30 max-h-80 overflow-y-auto ring-1 ring-black/20"
+                                      style={{ backgroundColor: '#1f2937' }}
+                                   >
+                                      <button
+                                         onClick={() => { setSelectedInspirationEntry(null); setShowInspirationSelector(false); }}
+                                         className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white border-b border-gray-600 transition-colors bg-transparent hover:bg-gray-700"
+                                      >
+                                         不使用灵感
+                                      </button>
+                                      {novel.inspirationSets?.map(is => (
+                                         <div key={is.id} className="border-t border-gray-700/50 first:border-0">
+                                            <div className="px-3 py-1.5 text-[10px] text-gray-500 font-bold uppercase tracking-wider bg-gray-800/50 sticky top-0">
+                                               {is.name}
+                                            </div>
+                                            {is.items.length === 0 ? (
+                                               <div className="px-3 py-2 text-xs text-gray-600 italic">空集</div>
+                                            ) : (
+                                               is.items.map((item, idx) => {
+                                                  const isSelected = selectedInspirationEntry?.setId === is.id && selectedInspirationEntry?.index === idx
+                                                  return (
+                                                     <button
+                                                        key={idx}
+                                                        onClick={() => { setSelectedInspirationEntry({ setId: is.id, index: idx }); setShowInspirationSelector(false); }}
+                                                        className={`w-full text-left px-3 py-2 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${isSelected ? 'text-[var(--theme-color)] font-medium' : 'text-gray-300'}`}
+                                                     >
+                                                        <span className="truncate flex-1">{item.title || '未命名'}</span>
+                                                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)] shrink-0"></div>}
+                                                     </button>
+                                                  )
+                                               })
+                                            )}
+                                         </div>
+                                      ))}
+                                      {(!novel.inspirationSets || novel.inspirationSets.length === 0) && (
+                                         <div className="px-3 py-4 text-center text-xs text-gray-500">暂无灵感集</div>
+                                      )}
+                                   </div>
+                                </>
+                             )}
+                          </div>
+                       )}
                     </div>
 
                     <div className="flex gap-2 md:gap-3">

@@ -592,6 +592,7 @@ function App() {
   const [selectedCharacterSetIdForOutlineGen, setSelectedCharacterSetIdForOutlineGen] = useState<string | null>(null)
   const [showCharacterSetSelector, setShowCharacterSetSelector] = useState(false)
   const [selectedWorldviewSetIdForOutlineGen, setSelectedWorldviewSetIdForOutlineGen] = useState<string | null>(null)
+  const [selectedInspirationEntryForOutline, setSelectedInspirationEntryForOutline] = useState<{setId: string, index: number} | null>(null)
   const [showWorldviewSelectorForOutline, setShowWorldviewSelectorForOutline] = useState(false)
   const [editingOutlineItemIndex, setEditingOutlineItemIndex] = useState<number | null>(null)
   
@@ -871,7 +872,11 @@ function App() {
 
   // Character Generation Settings
   const [selectedWorldviewSetIdForCharGen, setSelectedWorldviewSetIdForCharGen] = useState<string | null>(null)
+  const [selectedInspirationEntryForChar, setSelectedInspirationEntryForChar] = useState<{setId: string, index: number} | null>(null)
   const [showWorldviewSelector, setShowWorldviewSelector] = useState(false)
+
+  // Worldview Generation Settings
+  const [selectedInspirationEntryForWorldview, setSelectedInspirationEntryForWorldview] = useState<{setId: string, index: number} | null>(null)
 
   // Auto Write State
   const [showOutline, setShowOutline] = useState(false)
@@ -2216,13 +2221,20 @@ function App() {
       characters: []
     }
 
+    const newInspirationSet: InspirationSet = {
+      id: newId,
+      name: name,
+      items: []
+    }
+
     setNovels(prev => prev.map(n => {
        if (n.id === activeNovelId) {
           return {
              ...n, 
              outlineSets: [...(n.outlineSets || []), newOutlineSet],
              worldviewSets: [...(n.worldviewSets || []), newWorldviewSet],
-             characterSets: [...(n.characterSets || []), newCharacterSet]
+             characterSets: [...(n.characterSets || []), newCharacterSet],
+             inspirationSets: [...(n.inspirationSets || []), newInspirationSet]
           }
        }
        return n
@@ -2468,6 +2480,15 @@ function App() {
             }
         }
 
+        let inspirationContext = ''
+        if (selectedInspirationEntryForOutline) {
+            const inspSet = activeNovel?.inspirationSets?.find(s => s.id === selectedInspirationEntryForOutline.setId)
+            if (inspSet && inspSet.items[selectedInspirationEntryForOutline.index]) {
+                const item = inspSet.items[selectedInspirationEntryForOutline.index]
+                inspirationContext = `\n【参考灵感 (${item.title})】：\n${item.content}\n`
+            }
+        }
+
         const notes = targetSet?.userNotes || ''
 
         // Build Existing Outline Context (Only relevant if appending or referring to previous)
@@ -2483,7 +2504,7 @@ function App() {
           .filter(p => p.enabled)
           .map(p => {
             let content = p.content
-            content = content.replace('{{context}}', `${worldviewContext}\n${characterContext}\n${outlineContext}`)
+            content = content.replace('{{context}}', `${worldviewContext}\n${characterContext}\n${inspirationContext}\n${outlineContext}`)
             content = content.replace('{{notes}}', notes)
             content = content.replace('{{input}}', userPrompt)
             return { role: p.role, content }
@@ -2617,13 +2638,20 @@ function App() {
       items: []
     }
 
+    const newInspirationSet: InspirationSet = {
+      id: newId,
+      name: name,
+      items: []
+    }
+
     setNovels(prev => prev.map(n => {
        if (n.id === activeNovelId) {
           return {
              ...n, 
              characterSets: [...(n.characterSets || []), newCharacterSet],
              worldviewSets: [...(n.worldviewSets || []), newWorldviewSet],
-             outlineSets: [...(n.outlineSets || []), newOutlineSet]
+             outlineSets: [...(n.outlineSets || []), newOutlineSet],
+             inspirationSets: [...(n.inspirationSets || []), newInspirationSet]
           }
        }
        return n
@@ -2730,7 +2758,16 @@ function App() {
             }
         }
 
-        const contextStr = `${JSON.stringify(existingChars, null, 2)}\n${worldviewContext}`
+        let inspirationContext = ''
+        if (selectedInspirationEntryForChar) {
+            const inspSet = activeNovel?.inspirationSets?.find(s => s.id === selectedInspirationEntryForChar.setId)
+            if (inspSet && inspSet.items[selectedInspirationEntryForChar.index]) {
+                const item = inspSet.items[selectedInspirationEntryForChar.index]
+                inspirationContext = `\n【参考灵感 (${item.title})】：\n${item.content}\n`
+            }
+        }
+
+        const contextStr = `${JSON.stringify(existingChars, null, 2)}\n${worldviewContext}\n${inspirationContext}`
 
         const messages: any[] = activePreset.prompts
           .filter(p => p.enabled)
@@ -2859,13 +2896,20 @@ function App() {
       items: []
     }
 
+    const newInspirationSet: InspirationSet = {
+      id: newId,
+      name: name,
+      items: []
+    }
+
     setNovels(prev => prev.map(n => {
        if (n.id === activeNovelId) {
           return {
              ...n, 
              worldviewSets: [...(n.worldviewSets || []), newWorldviewSet],
              characterSets: [...(n.characterSets || []), newCharacterSet],
-             outlineSets: [...(n.outlineSets || []), newOutlineSet]
+             outlineSets: [...(n.outlineSets || []), newOutlineSet],
+             inspirationSets: [...(n.inspirationSets || []), newInspirationSet]
           }
        }
        return n
@@ -3124,7 +3168,16 @@ function App() {
         const existingEntries = targetSet?.entries || []
         const notes = targetSet?.userNotes || ''
 
-        const contextStr = JSON.stringify(existingEntries, null, 2)
+        let inspirationContext = ''
+        if (selectedInspirationEntryForWorldview) {
+            const inspSet = activeNovel?.inspirationSets?.find(s => s.id === selectedInspirationEntryForWorldview.setId)
+            if (inspSet && inspSet.items[selectedInspirationEntryForWorldview.index]) {
+                const item = inspSet.items[selectedInspirationEntryForWorldview.index]
+                inspirationContext = `\n【参考灵感 (${item.title})】：\n${item.content}\n`
+            }
+        }
+
+        const contextStr = `${JSON.stringify(existingEntries, null, 2)}\n${inspirationContext}`
 
         const messages: any[] = activePreset.prompts
           .filter(p => p.enabled)
@@ -4785,6 +4838,36 @@ ${taskDescription}`
     }
   }
 
+  const handleSwitchModule = (targetModule: 'outline' | 'characters' | 'worldview' | 'inspiration') => {
+      let sourceId: string | null = null;
+      
+      if (creationModule === 'outline') sourceId = activeOutlineSetId;
+      else if (creationModule === 'characters') sourceId = activeCharacterSetId;
+      else if (creationModule === 'worldview') sourceId = activeWorldviewSetId;
+      else if (creationModule === 'inspiration') sourceId = activeInspirationSetId;
+      
+      if (sourceId && activeNovel) {
+          if (targetModule === 'outline') {
+              if (activeNovel.outlineSets?.some(s => s.id === sourceId)) setActiveOutlineSetId(sourceId);
+          } else if (targetModule === 'characters') {
+              if (activeNovel.characterSets?.some(s => s.id === sourceId)) setActiveCharacterSetId(sourceId);
+          } else if (targetModule === 'worldview') {
+              if (activeNovel.worldviewSets?.some(s => s.id === sourceId)) setActiveWorldviewSetId(sourceId);
+          } else if (targetModule === 'inspiration') {
+              if (activeNovel.inspirationSets?.some(s => s.id === sourceId)) setActiveInspirationSetId(sourceId);
+          }
+      }
+      
+      setCreationModule(targetModule);
+  }
+
+  const handleSendInspirationToModule = (module: 'worldview' | 'character' | 'outline', content: string) => {
+    setUserPrompt(`请参考以下灵感生成内容：\n\n${content}`)
+    if (module === 'worldview') handleSwitchModule('worldview')
+    if (module === 'character') handleSwitchModule('characters')
+    if (module === 'outline') handleSwitchModule('outline')
+  }
+
   if (!activeNovelId) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 p-4 md:p-8 font-sans overflow-y-auto">
@@ -5338,7 +5421,7 @@ ${taskDescription}`
                        
                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                           <button 
-                             onClick={() => setCreationModule('inspiration')}
+                             onClick={() => handleSwitchModule('inspiration')}
                              className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
                           >
                              <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors">
@@ -5351,7 +5434,7 @@ ${taskDescription}`
                           </button>
 
                           <button 
-                             onClick={() => setCreationModule('worldview')}
+                             onClick={() => handleSwitchModule('worldview')}
                              className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
                           >
                              <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors">
@@ -5364,7 +5447,7 @@ ${taskDescription}`
                           </button>
 
                           <button 
-                             onClick={() => setCreationModule('characters')}
+                             onClick={() => handleSwitchModule('characters')}
                              className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
                           >
                              <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors">
@@ -5377,7 +5460,7 @@ ${taskDescription}`
                           </button>
 
                           <button 
-                             onClick={() => setCreationModule('outline')}
+                             onClick={() => handleSwitchModule('outline')}
                              className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
                           >
                              <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors">
@@ -5430,6 +5513,7 @@ ${taskDescription}`
                           }}
                           onShowSettings={() => { setGeneratorSettingsType('inspiration'); setShowGeneratorSettingsModal(true); }}
                           modelName={inspirationPresets.find(p => p.id === activeInspirationPresetId)?.name || '默认灵感'}
+                          onSendToModule={handleSendInspirationToModule}
                           sidebarHeader={
                              <div className="flex items-center justify-between">
                                 <div className="font-bold flex items-center gap-2">
@@ -5439,28 +5523,28 @@ ${taskDescription}`
 
                                 <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
                                    <button 
-                                       onClick={() => setCreationModule('inspiration')}
+                                       onClick={() => handleSwitchModule('inspiration')}
                                        className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
                                        title="切换到灵感"
                                    >
                                        <Lightbulb className="w-4 h-4" />
                                    </button>
                                    <button 
-                                       onClick={() => setCreationModule('worldview')}
+                                       onClick={() => handleSwitchModule('worldview')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到世界观"
                                    >
                                        <Globe className="w-4 h-4" />
                                    </button>
                                    <button 
-                                       onClick={() => setCreationModule('characters')}
+                                       onClick={() => handleSwitchModule('characters')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到角色集"
                                    >
                                        <Users className="w-4 h-4" />
                                    </button>
                                    <button 
-                                       onClick={() => setCreationModule('outline')}
+                                       onClick={() => handleSwitchModule('outline')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到大纲"
                                    >
@@ -5506,28 +5590,28 @@ ${taskDescription}`
 
                                 <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
                                    <button 
-                                       onClick={() => setCreationModule('inspiration')}
+                                       onClick={() => handleSwitchModule('inspiration')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到灵感"
                                    >
                                        <Lightbulb className="w-4 h-4" />
                                    </button>
                                    <button 
-                                       onClick={() => setCreationModule('worldview')}
+                                       onClick={() => handleSwitchModule('worldview')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到世界观"
                                    >
                                        <Globe className="w-4 h-4" />
                                    </button>
                                    <button 
-                                       onClick={() => setCreationModule('characters')}
+                                       onClick={() => handleSwitchModule('characters')}
                                        className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
                                        title="切换到角色集"
                                    >
                                        <Users className="w-4 h-4" />
                                    </button>
                                    <button 
-                                       onClick={() => setCreationModule('outline')}
+                                       onClick={() => handleSwitchModule('outline')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到大纲"
                                    >
@@ -5542,6 +5626,8 @@ ${taskDescription}`
                           }
                           selectedWorldviewSetId={selectedWorldviewSetIdForCharGen}
                           setSelectedWorldviewSetId={setSelectedWorldviewSetIdForCharGen}
+                          selectedInspirationEntry={selectedInspirationEntryForChar}
+                          setSelectedInspirationEntry={setSelectedInspirationEntryForChar}
                        />
                     </div>
                  )}
@@ -5551,6 +5637,8 @@ ${taskDescription}`
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
                        <WorldviewManager
                           novel={activeNovel}
+                          selectedInspirationEntry={selectedInspirationEntryForWorldview}
+                          setSelectedInspirationEntry={setSelectedInspirationEntryForWorldview}
                           activeWorldviewSetId={activeWorldviewSetId}
                           onSetActiveWorldviewSetId={setActiveWorldviewSetId}
                           onUpdateNovel={(updatedNovel) => {
@@ -5575,28 +5663,28 @@ ${taskDescription}`
 
                                 <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
                                    <button 
-                                       onClick={() => setCreationModule('inspiration')}
+                                       onClick={() => handleSwitchModule('inspiration')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到灵感"
                                    >
                                        <Lightbulb className="w-4 h-4" />
                                    </button>
                                    <button 
-                                       onClick={() => setCreationModule('worldview')}
+                                       onClick={() => handleSwitchModule('worldview')}
                                        className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
                                        title="切换到世界观"
                                    >
                                        <Globe className="w-4 h-4" />
                                    </button>
                                    <button 
-                                       onClick={() => setCreationModule('characters')}
+                                       onClick={() => handleSwitchModule('characters')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到角色集"
                                    >
                                        <Users className="w-4 h-4" />
                                    </button>
                                    <button 
-                                       onClick={() => setCreationModule('outline')}
+                                       onClick={() => handleSwitchModule('outline')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到大纲"
                                    >
@@ -5649,6 +5737,8 @@ ${taskDescription}`
                           setSelectedCharacterSetId={setSelectedCharacterSetIdForOutlineGen}
                           selectedWorldviewSetId={selectedWorldviewSetIdForOutlineGen}
                           setSelectedWorldviewSetId={setSelectedWorldviewSetIdForOutlineGen}
+                          selectedInspirationEntry={selectedInspirationEntryForOutline}
+                          setSelectedInspirationEntry={setSelectedInspirationEntryForOutline}
                           sidebarHeader={
                              <div className="flex items-center justify-between">
                                 <div className="font-bold flex items-center gap-2">
@@ -5658,28 +5748,28 @@ ${taskDescription}`
 
                                 <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
                                    <button 
-                                       onClick={() => setCreationModule('inspiration')}
+                                       onClick={() => handleSwitchModule('inspiration')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到灵感"
                                    >
                                        <Lightbulb className="w-4 h-4" />
                                    </button>
                                    <button 
-                                       onClick={() => setCreationModule('worldview')}
+                                       onClick={() => handleSwitchModule('worldview')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到世界观"
                                    >
                                        <Globe className="w-4 h-4" />
                                    </button>
                                    <button 
-                                       onClick={() => setCreationModule('characters')}
+                                       onClick={() => handleSwitchModule('characters')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到角色集"
                                    >
                                        <Users className="w-4 h-4" />
                                    </button>
                                    <button 
-                                       onClick={() => setCreationModule('outline')}
+                                       onClick={() => handleSwitchModule('outline')}
                                        className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
                                        title="切换到大纲"
                                    >
