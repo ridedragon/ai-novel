@@ -4142,6 +4142,19 @@ ${taskDescription}`
     // Helper to get story chapters from the snapshot
     const getSnapshotStoryChapters = () => currentChaptersSnapshot.filter(c => !c.subtype || c.subtype === 'story').sort((a, b) => a.id - b.id)
 
+    // Helper to get stable content (fallback to versions if content is empty/optimizing)
+    const getStableContent = (chapter: Chapter) => {
+        if (chapter.content && chapter.content.trim().length > 0) return chapter.content
+        if (chapter.versions && chapter.versions.length > 0) {
+            // Prefer original or last valid version
+            const original = chapter.versions.find(v => v.type === 'original')
+            if (original && original.content) return original.content
+            const valid = [...chapter.versions].reverse().find(v => v.content && v.content.length > 0)
+            if (valid) return valid.content
+        }
+        return chapter.content || ''
+    }
+
     const storyChapters = getSnapshotStoryChapters()
     const globalIndex = storyChapters.findIndex(c => c.id === targetChapterId)
     if (globalIndex === -1) return
@@ -4172,7 +4185,7 @@ ${taskDescription}`
                 .filter(c => c.volumeId === targetVolumeId)
              
              if (targetChapters.length === 0) return
-             sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${c.content}`).join('\n\n')
+             sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${getStableContent(c)}`).join('\n\n')
         } else {
              // For Big Summary, try to use Small Summaries first
              // We filter from currentChaptersSnapshot which includes any just-generated small summaries
@@ -4191,7 +4204,7 @@ ${taskDescription}`
                  sourceText = relevantSmallSummaries.map(c => `Small Summary (${c.summaryRange}):\n${c.content}`).join('\n\n')
              } else {
                  const targetChapters = getSnapshotStoryChapters().slice(start - 1, end)
-                 sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${c.content}`).join('\n\n')
+                 sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${getStableContent(c)}`).join('\n\n')
              }
         }
 
