@@ -72,3 +72,25 @@
 *   `setSelectedCharacterSetId`: `(id: string | null) => void`。
 *   `selectedWorldviewSetId`: `string | null`。用于 AI 生成时参考的选中世界观集 ID。
 *   `setSelectedWorldviewSetId`: `(id: string | null) => void`。
+
+## 5. 新增组件 Props (`InspirationManagerProps`)
+
+*   **核心数据**:
+    *   `novel`: `Novel` 类型。包含当前小说的完整数据，新增了 `inspirationSets`。
+    *   `activeInspirationSetId`: `string | null`。当前选中的灵感集 ID。
+
+*   **核心操作**:
+    *   `onSetActiveInspirationSetId`: `(id: string | null) => void`。切换当前灵感集。
+    *   `onUpdateNovel`: `(updatedNovel: Novel) => void`。更新小说数据。
+
+*   **AI 辅助生成**:
+    *   `onGenerateInspiration`: `() => void`。触发 AI 生成灵感。
+    *   `isGenerating`: `boolean`。
+    *   `userPrompt`: `string`。
+    *   `setUserPrompt`: `(val: string) => void`。
+    *   `onStopGeneration`: `() => void`。
+    *   `onShowSettings`: `() => void`。
+    *   `modelName`: `string`。
+
+*   **UI 配置**:
+    *   `sidebarHeader`: `React.ReactNode`。

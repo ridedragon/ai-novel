@@ -1,35 +1,86 @@
-import { useState, useEffect, useRef } from 'react'
-import { 
-  Settings, Send, Save, Loader2, Plus, FileText, Bot, 
-  SlidersHorizontal, X, Edit2, Copy, RotateCcw, Trash2, 
-  Upload, Download, ChevronDown, GripVertical, ToggleLeft, ToggleRight,
-  FilePlus, Unlink, Home, Book, Edit3, List, PlayCircle, StopCircle, Wand2, Code2,
-  Folder, ChevronRight, ChevronLeft, FolderPlus, FolderInput, Users, Globe, ArrowLeft, Menu, ArrowUp, ArrowDown
-} from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
-import OpenAI from 'openai'
-import terminal from 'virtual:terminal'
-import { WorldviewManager } from './components/WorldviewManager'
-import { CharacterManager } from './components/CharacterManager'
 import {
-  ChapterVersion,
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  Book,
+  Bot,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Code2,
+  Copy,
+  Download,
+  Edit2,
+  Edit3,
+  FilePlus,
+  FileText,
+  Folder,
+  FolderInput,
+  FolderPlus,
+  Globe,
+  GripVertical,
+  Home,
+  Lightbulb,
+  List,
+  Loader2,
+  Menu,
+  PlayCircle,
+  Plus,
+  RotateCcw,
+  Save,
+  Send,
+  Settings,
+  SlidersHorizontal,
+  StopCircle,
+  ToggleLeft, ToggleRight,
+  Trash2,
+  Unlink,
+  Upload,
+  Users,
+  Wand2,
+  X
+} from 'lucide-react'
+import OpenAI from 'openai'
+import { useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import terminal from 'virtual:terminal'
+import { CharacterManager } from './components/CharacterManager'
+import { InspirationManager } from './components/InspirationManager'
+import { OutlineManager } from './components/OutlineManager'
+import { WorldviewManager } from './components/WorldviewManager'
+import {
   Chapter,
+  ChapterVersion,
+  CharacterItem,
+  CharacterSet,
+  CompletionPreset,
+  GeneratorPreset,
+  GeneratorPrompt,
+  Novel,
   NovelVolume,
   OutlineItem,
   OutlineSet,
-  CharacterItem,
-  CharacterSet,
+  PresetApiConfig,
+  PromptItem,
+  RegexScript,
   WorldviewItem,
   WorldviewSet,
-  Novel,
-  PromptItem,
-  GeneratorPrompt,
-  PresetApiConfig,
-  GeneratorPreset,
-  RegexScript,
-  CompletionPreset
+  InspirationSet
 } from './types'
-import { OutlineManager } from './components/OutlineManager'
+
+const defaultInspirationPresets: GeneratorPreset[] = [
+  {
+    id: 'default',
+    name: '默认灵感助手',
+    temperature: 0.8,
+    topP: 0.95,
+    topK: 1,
+    prompts: [
+      { id: '1', role: 'system', content: '你是一个创意丰富的灵感激发助手。', enabled: true },
+      { id: '2', role: 'user', content: '请根据用户的模糊想法提供创作灵感。\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的灵感条目。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "灵感关键词/标题", "content": "详细的灵感描述、创意点子..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
+    ]
+  }
+]
 
 const defaultOutlinePresets: GeneratorPreset[] = [
   { 
@@ -470,6 +521,7 @@ function App() {
   const [outlineModel, setOutlineModel] = useState(() => localStorage.getItem('outlineModel') || '')
   const [characterModel, setCharacterModel] = useState(() => localStorage.getItem('characterModel') || '')
   const [worldviewModel, setWorldviewModel] = useState(() => localStorage.getItem('worldviewModel') || '')
+  const [inspirationModel, setInspirationModel] = useState(() => localStorage.getItem('inspirationModel') || '')
   const [optimizeModel, setOptimizeModel] = useState(() => localStorage.getItem('optimizeModel') || '')
   const [analysisModel, setAnalysisModel] = useState(() => localStorage.getItem('analysisModel') || '')
   
@@ -490,10 +542,11 @@ function App() {
     localStorage.setItem('outlineModel', outlineModel)
     localStorage.setItem('characterModel', characterModel)
     localStorage.setItem('worldviewModel', worldviewModel)
+    localStorage.setItem('inspirationModel', inspirationModel)
     localStorage.setItem('optimizeModel', optimizeModel)
     localStorage.setItem('analysisModel', analysisModel)
     localStorage.setItem('modelList', JSON.stringify(modelList))
-  }, [apiKey, baseUrl, model, outlineModel, characterModel, worldviewModel, optimizeModel, analysisModel, modelList])
+  }, [apiKey, baseUrl, model, outlineModel, characterModel, worldviewModel, inspirationModel, optimizeModel, analysisModel, modelList])
 
   const handleAddModel = () => {
     if (newModelInput.trim()) {
@@ -594,6 +647,17 @@ function App() {
   })
   const [activeWorldviewPresetId, setActiveWorldviewPresetId] = useState<string>(() => localStorage.getItem('activeWorldviewPresetId') || 'default')
 
+  // Inspiration Presets State
+  const [inspirationPresets, setInspirationPresets] = useState<GeneratorPreset[]>(() => {
+    try {
+      const saved = localStorage.getItem('inspirationPresets')
+      return saved ? JSON.parse(saved) : defaultInspirationPresets
+    } catch (e) {
+      return defaultInspirationPresets
+    }
+  })
+  const [activeInspirationPresetId, setActiveInspirationPresetId] = useState<string>(() => localStorage.getItem('activeInspirationPresetId') || 'default')
+
   // Optimize Presets State
   const [optimizePresets, setOptimizePresets] = useState<GeneratorPreset[]>(() => {
     try {
@@ -645,7 +709,7 @@ function App() {
   // Common Generator Settings Modal
   const [showGeneratorSettingsModal, setShowGeneratorSettingsModal] = useState(false)
   const [showGeneratorApiConfig, setShowGeneratorApiConfig] = useState(false)
-  const [generatorSettingsType, setGeneratorSettingsType] = useState<'outline' | 'character' | 'worldview' | 'optimize' | 'analysis'>('outline')
+  const [generatorSettingsType, setGeneratorSettingsType] = useState<'outline' | 'character' | 'worldview' | 'inspiration' | 'optimize' | 'analysis'>('outline')
   
   // Generator Prompt Edit Modal State
   const [showGeneratorPromptEditModal, setShowGeneratorPromptEditModal] = useState(false)
@@ -746,6 +810,14 @@ function App() {
   }, [activeWorldviewPresetId])
 
   useEffect(() => {
+    localStorage.setItem('inspirationPresets', JSON.stringify(inspirationPresets))
+  }, [inspirationPresets])
+
+  useEffect(() => {
+    localStorage.setItem('activeInspirationPresetId', activeInspirationPresetId)
+  }, [activeInspirationPresetId])
+
+  useEffect(() => {
     localStorage.setItem('optimizePresets', JSON.stringify(optimizePresets))
   }, [optimizePresets])
 
@@ -780,6 +852,7 @@ function App() {
   const outlineAbortControllerRef = useRef<AbortController | null>(null)
   const characterAbortControllerRef = useRef<AbortController | null>(null)
   const worldviewAbortControllerRef = useRef<AbortController | null>(null)
+  const inspirationAbortControllerRef = useRef<AbortController | null>(null)
   const optimizeAbortControllersRef = useRef<Map<number, AbortController>>(new Map())
   const generateAbortControllerRef = useRef<AbortController | null>(null)
   const [autoWriteOutlineSetId, setAutoWriteOutlineSetId] = useState<string | null>(null)
@@ -792,17 +865,21 @@ function App() {
   const [newWorldviewSetName, setNewWorldviewSetName] = useState('')
   const [selectedWorldviewEntry, setSelectedWorldviewEntry] = useState<{setId: string, index: number} | null>(null)
 
+  const [activeInspirationSetId, setActiveInspirationSetId] = useState<string | null>(null)
+  const [newInspirationSetName, setNewInspirationSetName] = useState('')
+
   // Character Generation Settings
   const [selectedWorldviewSetIdForCharGen, setSelectedWorldviewSetIdForCharGen] = useState<string | null>(null)
   const [showWorldviewSelector, setShowWorldviewSelector] = useState(false)
 
   // Auto Write State
   const [showOutline, setShowOutline] = useState(false)
-  const [creationModule, setCreationModule] = useState<'menu' | 'outline' | 'characters' | 'worldview'>('menu')
+  const [creationModule, setCreationModule] = useState<'menu' | 'outline' | 'characters' | 'worldview' | 'inspiration'>('menu')
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false)
   const [regeneratingOutlineItemIndices, setRegeneratingOutlineItemIndices] = useState<Set<number>>(new Set())
   const [isGeneratingCharacters, setIsGeneratingCharacters] = useState(false)
   const [isGeneratingWorldview, setIsGeneratingWorldview] = useState(false)
+  const [isGeneratingInspiration, setIsGeneratingInspiration] = useState(false)
   const [optimizingChapterIds, setOptimizingChapterIds] = useState<Set<number>>(new Set())
   const [isAutoWriting, setIsAutoWriting] = useState(false)
   const [autoWriteStatus, setAutoWriteStatus] = useState('')
@@ -2000,6 +2077,7 @@ function App() {
      switch (generatorSettingsType) {
         case 'character': return characterPresets
         case 'worldview': return worldviewPresets
+        case 'inspiration': return inspirationPresets
         case 'optimize': return optimizePresets
         case 'analysis': return analysisPresets
         default: return outlinePresets
@@ -2010,6 +2088,7 @@ function App() {
      switch (generatorSettingsType) {
         case 'character': setCharacterPresets(newPresets); break;
         case 'worldview': setWorldviewPresets(newPresets); break;
+        case 'inspiration': setInspirationPresets(newPresets); break;
         case 'optimize': setOptimizePresets(newPresets); break;
         case 'analysis': setAnalysisPresets(newPresets); break;
         default: setOutlinePresets(newPresets); break;
@@ -2020,6 +2099,7 @@ function App() {
      switch (generatorSettingsType) {
         case 'character': return activeCharacterPresetId
         case 'worldview': return activeWorldviewPresetId
+        case 'inspiration': return activeInspirationPresetId
         case 'optimize': return activeOptimizePresetId
         case 'analysis': return activeAnalysisPresetId
         default: return activeOutlinePresetId
@@ -2030,6 +2110,7 @@ function App() {
      switch (generatorSettingsType) {
         case 'character': setActiveCharacterPresetId(id); break;
         case 'worldview': setActiveWorldviewPresetId(id); break;
+        case 'inspiration': setActiveInspirationPresetId(id); break;
         case 'optimize': setActiveOptimizePresetId(id); break;
         case 'analysis': setActiveAnalysisPresetId(id); break;
         default: setActiveOutlinePresetId(id); break;
@@ -2041,6 +2122,7 @@ function App() {
     const typeName = generatorSettingsType === 'outline' ? '大纲' : 
                      generatorSettingsType === 'character' ? '角色' : 
                      generatorSettingsType === 'worldview' ? '世界观' : 
+                     generatorSettingsType === 'inspiration' ? '灵感' : 
                      generatorSettingsType === 'analysis' ? '分析' : '优化'
     const newPreset: GeneratorPreset = {
       id: newId,
@@ -2830,6 +2912,165 @@ function App() {
            }
         }
       })
+  }
+
+  // Inspiration Generation
+  const handleGenerateInspiration = async () => {
+    const activePreset = inspirationPresets.find(p => p.id === activeInspirationPresetId) || inspirationPresets[0]
+    const apiConfig = getApiConfig(activePreset.apiConfig, inspirationModel)
+
+    if (!apiConfig.apiKey) {
+      setError('请先配置 API Key')
+      setShowSettings(true)
+      return
+    }
+    
+    setIsGeneratingInspiration(true)
+    setError('')
+    inspirationAbortControllerRef.current = new AbortController()
+
+    let targetSetId = activeInspirationSetId;
+    let targetSet = activeNovel?.inspirationSets?.find(s => s.id === targetSetId);
+
+    if (!targetSetId || !targetSet) {
+        const newSet: InspirationSet = {
+            id: crypto.randomUUID(),
+            name: '默认灵感集',
+            items: []
+        };
+        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, inspirationSets: [...(n.inspirationSets || []), newSet] } : n));
+        setActiveInspirationSetId(newSet.id);
+        
+        targetSetId = newSet.id;
+        targetSet = newSet;
+    }
+
+    let attempt = 0
+    const maxAttempts = maxRetries + 1
+
+    while (attempt < maxAttempts) {
+      try {
+        if (inspirationAbortControllerRef.current?.signal.aborted) break
+        terminal.log(`[Inspiration] Attempt ${attempt + 1}/${maxAttempts} started...`)
+        const activePreset = inspirationPresets.find(p => p.id === activeInspirationPresetId) || inspirationPresets[0]
+        const apiConfig = getApiConfig(activePreset.apiConfig, inspirationModel)
+
+        const openai = new OpenAI({
+          apiKey: apiConfig.apiKey,
+          baseURL: apiConfig.baseUrl,
+          dangerouslyAllowBrowser: true
+        })
+
+        const existingItems = targetSet?.items || []
+        const notes = targetSet?.userNotes || ''
+
+        const contextStr = JSON.stringify(existingItems, null, 2)
+
+        const messages: any[] = activePreset.prompts
+          .filter(p => p.enabled)
+          .map(p => {
+            let content = p.content
+            content = content.replace('{{context}}', contextStr)
+            content = content.replace('{{notes}}', notes)
+            content = content.replace('{{input}}', userPrompt)
+            return { role: p.role, content }
+          })
+
+        // Add Global Prompt if exists
+        if (globalCreationPrompt.trim()) {
+            messages.unshift({ role: 'system', content: globalCreationPrompt })
+        }
+
+        const completion = await openai.chat.completions.create({
+          model: apiConfig.model,
+          messages: messages,
+          temperature: activePreset.temperature ?? 0.8,
+          top_p: activePreset.topP ?? 0.95,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
+        } as any, {
+          signal: inspirationAbortControllerRef.current.signal
+        })
+
+        const content = completion.choices[0]?.message?.content || ''
+        
+        if (!content) throw new Error("Empty response received")
+
+        try {
+          const rawData = safeParseJSONArray(content)
+          // Reusing outline normalization logic: title->title, summary->content
+          // normalizeGeneratorResult('outline') returns { title, summary }
+          let inspirationData = normalizeGeneratorResult(rawData, 'outline') 
+          
+          const finalData = inspirationData.map(item => ({
+              title: item.title,
+              content: item.summary
+          }))
+
+          if (Array.isArray(finalData) && finalData.length > 0) {
+            setNovels(prev => prev.map(n => {
+                if (n.id === activeNovelId) {
+                   const currentSets = n.inspirationSets || []
+                   const existingSetIndex = currentSets.findIndex(s => s.id === targetSetId)
+                   
+                   if (existingSetIndex !== -1) {
+                        const existingSet = currentSets[existingSetIndex]
+                        
+                        const timestamp = new Date().toLocaleTimeString()
+                        const newRecord = `[${timestamp}] ${userPrompt}`
+                        const updatedNotes = existingSet.userNotes 
+                            ? `${existingSet.userNotes}\n${newRecord}` 
+                            : newRecord
+
+                        const updatedSet = {
+                             ...existingSet,
+                             items: [...existingSet.items, ...finalData],
+                             userNotes: updatedNotes
+                        }
+                        
+                        const newInspirationSets = [...currentSets]
+                        newInspirationSets[existingSetIndex] = updatedSet
+                        return { ...n, inspirationSets: newInspirationSets }
+                   }
+                }
+                return n
+            }))
+
+            setUserPrompt('')
+            terminal.log(`[Inspiration] Attempt ${attempt + 1} successful.`)
+            break // Success
+          } else {
+            throw new Error('Format error: Not an array')
+          }
+        } catch (e: any) {
+          console.error('JSON Parse Error. Raw content:', content)
+          const preview = content.length > 1000 ? content.slice(0, 1000) + '... (内容过长已截断)' : content
+          terminal.error(`Parse error: ${e.message}\nRaw Content:\n${content}`)
+          throw new Error(`解析灵感失败，AI 返回格式不正确。\n\n返回内容预览(前1000字)：\n${preview}`)
+        }
+
+      } catch (err: any) {
+        if (err.name === 'AbortError' || err.message === 'Aborted') {
+            terminal.log('[Inspiration] Generation aborted.')
+            break
+        }
+
+        let errorMsg = err.message || String(err)
+        if (err.status) errorMsg += ` (Status: ${err.status})`
+        if (err.error) errorMsg += `\nServer Response: ${JSON.stringify(err.error)}`
+
+        terminal.error(`[Inspiration] Attempt ${attempt + 1} failed: ${errorMsg}`)
+        console.error('[Inspiration Error]', err)
+
+        attempt++
+        if (attempt >= maxAttempts) {
+          setError(errorMsg || '生成灵感出错 (重试次数已耗尽)')
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      }
+    }
+    
+    setIsGeneratingInspiration(false)
   }
 
   // Worldview Generation
@@ -4692,6 +4933,7 @@ ${taskDescription}`
                     { label: '大纲生成模型', value: outlineModel, setter: setOutlineModel },
                     { label: '角色生成模型', value: characterModel, setter: setCharacterModel },
                     { label: '世界观生成模型', value: worldviewModel, setter: setWorldviewModel },
+                    { label: '灵感生成模型', value: inspirationModel, setter: setInspirationModel },
                     { label: '正文优化模型', value: optimizeModel, setter: setOptimizeModel },
                     { label: '正文分析模型', value: analysisModel, setter: setAnalysisModel }
                   ].map((item, idx) => (
@@ -5247,8 +5489,8 @@ ${taskDescription}`
         </div>
 
         {showOutline ? (
-           <div className={`flex-1 bg-gray-900 flex flex-col ${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline') ? 'p-0 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
-              <div className={`${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline') ? 'w-full h-full' : 'max-w-4xl mx-auto w-full space-y-6'}`}>
+           <div className={`flex-1 bg-gray-900 flex flex-col ${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration') ? 'p-0 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
+              <div className={`${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration') ? 'w-full h-full' : 'max-w-4xl mx-auto w-full space-y-6'}`}>
                  {/* Dashboard Menu */}
                  {creationModule === 'menu' && (
                     <div className="space-y-8 animate-in fade-in zoom-in-95 duration-200">
@@ -5257,7 +5499,20 @@ ${taskDescription}`
                           自动化创作中心
                        </h2>
                        
-                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                          <button 
+                             onClick={() => setCreationModule('inspiration')}
+                             className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
+                          >
+                             <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors">
+                                <Lightbulb className="w-10 h-10" />
+                             </div>
+                             <div>
+                                <h3 className="text-xl font-bold text-gray-100 mb-2">灵感</h3>
+                                <p className="text-sm text-gray-400">捕捉稍纵即逝的创意，AI 辅助发散思维</p>
+                             </div>
+                          </button>
+
                           <button 
                              onClick={() => setCreationModule('worldview')}
                              className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
@@ -5318,6 +5573,73 @@ ${taskDescription}`
                     </div>
                  )}
 
+                 {/* Inspiration Module */}
+                 {creationModule === 'inspiration' && activeNovel && (
+                    <div className="flex h-full animate-in slide-in-from-right duration-200">
+                       <InspirationManager
+                          novel={activeNovel}
+                          activeInspirationSetId={activeInspirationSetId}
+                          onSetActiveInspirationSetId={setActiveInspirationSetId}
+                          onUpdateNovel={(updatedNovel) => {
+                             setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n))
+                          }}
+                          onGenerateInspiration={handleGenerateInspiration}
+                          isGenerating={isGeneratingInspiration}
+                          userPrompt={userPrompt}
+                          setUserPrompt={setUserPrompt}
+                          onStopGeneration={() => {
+                             inspirationAbortControllerRef.current?.abort()
+                             setIsGeneratingInspiration(false)
+                          }}
+                          onShowSettings={() => { setGeneratorSettingsType('inspiration'); setShowGeneratorSettingsModal(true); }}
+                          modelName={inspirationPresets.find(p => p.id === activeInspirationPresetId)?.name || '默认灵感'}
+                          sidebarHeader={
+                             <div className="flex items-center justify-between">
+                                <div className="font-bold flex items-center gap-2">
+                                   <Lightbulb className="w-5 h-5 text-[var(--theme-color)]" />
+                                   <span>灵感集</span>
+                                </div>
+
+                                <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
+                                   <button 
+                                       onClick={() => setCreationModule('inspiration')}
+                                       className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
+                                       title="切换到灵感"
+                                   >
+                                       <Lightbulb className="w-4 h-4" />
+                                   </button>
+                                   <button 
+                                       onClick={() => setCreationModule('worldview')}
+                                       className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                       title="切换到世界观"
+                                   >
+                                       <Globe className="w-4 h-4" />
+                                   </button>
+                                   <button 
+                                       onClick={() => setCreationModule('characters')}
+                                       className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                       title="切换到角色集"
+                                   >
+                                       <Users className="w-4 h-4" />
+                                   </button>
+                                   <button 
+                                       onClick={() => setCreationModule('outline')}
+                                       className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                       title="切换到大纲"
+                                   >
+                                       <Book className="w-4 h-4" />
+                                   </button>
+                                </div>
+
+                                <button onClick={() => setCreationModule('menu')} className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors">
+                                   <ArrowLeft className="w-4 h-4" />
+                                </button>
+                             </div>
+                          }
+                       />
+                    </div>
+                 )}
+
                  {/* Characters Module - Redesigned */}
                  {creationModule === 'characters' && activeNovel && (
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
@@ -5346,6 +5668,13 @@ ${taskDescription}`
                                 </div>
 
                                 <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
+                                   <button 
+                                       onClick={() => setCreationModule('inspiration')}
+                                       className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                       title="切换到灵感"
+                                   >
+                                       <Lightbulb className="w-4 h-4" />
+                                   </button>
                                    <button 
                                        onClick={() => setCreationModule('worldview')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
@@ -5408,6 +5737,13 @@ ${taskDescription}`
                                 </div>
 
                                 <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
+                                   <button 
+                                       onClick={() => setCreationModule('inspiration')}
+                                       className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                       title="切换到灵感"
+                                   >
+                                       <Lightbulb className="w-4 h-4" />
+                                   </button>
                                    <button 
                                        onClick={() => setCreationModule('worldview')}
                                        className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
@@ -5484,6 +5820,13 @@ ${taskDescription}`
                                 </div>
 
                                 <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
+                                   <button 
+                                       onClick={() => setCreationModule('inspiration')}
+                                       className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
+                                       title="切换到灵感"
+                                   >
+                                       <Lightbulb className="w-4 h-4" />
+                                   </button>
                                    <button 
                                        onClick={() => setCreationModule('worldview')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"

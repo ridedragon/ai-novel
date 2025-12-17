@@ -63,6 +63,18 @@ export interface WorldviewSet {
   userNotes?: string
 }
 
+export interface InspirationItem {
+  title: string
+  content: string
+}
+
+export interface InspirationSet {
+  id: string
+  name: string
+  items: InspirationItem[]
+  userNotes?: string
+}
+
 export interface Novel {
   id: string
   title: string
@@ -76,6 +88,7 @@ export interface Novel {
   characterSets?: CharacterSet[]
   worldview?: WorldviewItem[] // Deprecated, use worldviewSets
   worldviewSets?: WorldviewSet[]
+  inspirationSets?: InspirationSet[]
 }
 
 export interface PromptItem {
