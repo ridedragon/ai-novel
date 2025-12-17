@@ -2098,15 +2098,42 @@ function App() {
   // Outline Actions
   const handleAddOutlineSet = () => {
     if (!newOutlineSetName.trim() || !activeNovelId) return
-    const newSet: OutlineSet = {
-      id: crypto.randomUUID(),
-      name: newOutlineSetName.trim(),
+    
+    const newId = crypto.randomUUID()
+    const name = newOutlineSetName.trim()
+
+    const newOutlineSet: OutlineSet = {
+      id: newId,
+      name: name,
       items: []
     }
-    const currentSets = activeNovel?.outlineSets || []
-    updateOutlineSets([...currentSets, newSet])
+    
+    const newWorldviewSet: WorldviewSet = {
+      id: newId,
+      name: name,
+      entries: []
+    }
+    
+    const newCharacterSet: CharacterSet = {
+      id: newId,
+      name: name,
+      characters: []
+    }
+
+    setNovels(prev => prev.map(n => {
+       if (n.id === activeNovelId) {
+          return {
+             ...n, 
+             outlineSets: [...(n.outlineSets || []), newOutlineSet],
+             worldviewSets: [...(n.worldviewSets || []), newWorldviewSet],
+             characterSets: [...(n.characterSets || []), newCharacterSet]
+          }
+       }
+       return n
+    }))
+
     setNewOutlineSetName('')
-    setActiveOutlineSetId(newSet.id)
+    setActiveOutlineSetId(newId)
   }
 
   const handleDeleteOutlineSet = (id: string, e: React.MouseEvent) => {
@@ -2472,15 +2499,42 @@ function App() {
   // Character Generation
   const handleAddCharacterSet = () => {
     if (!newCharacterSetName.trim() || !activeNovelId) return
-    const newSet: CharacterSet = {
-      id: crypto.randomUUID(),
-      name: newCharacterSetName.trim(),
+    
+    const newId = crypto.randomUUID()
+    const name = newCharacterSetName.trim()
+
+    const newCharacterSet: CharacterSet = {
+      id: newId,
+      name: name,
       characters: []
     }
-    const currentSets = activeNovel?.characterSets || []
-    updateCharacterSets([...currentSets, newSet])
+    
+    const newWorldviewSet: WorldviewSet = {
+      id: newId,
+      name: name,
+      entries: []
+    }
+    
+    const newOutlineSet: OutlineSet = {
+      id: newId,
+      name: name,
+      items: []
+    }
+
+    setNovels(prev => prev.map(n => {
+       if (n.id === activeNovelId) {
+          return {
+             ...n, 
+             characterSets: [...(n.characterSets || []), newCharacterSet],
+             worldviewSets: [...(n.worldviewSets || []), newWorldviewSet],
+             outlineSets: [...(n.outlineSets || []), newOutlineSet]
+          }
+       }
+       return n
+    }))
+
     setNewCharacterSetName('')
-    setActiveCharacterSetId(newSet.id)
+    setActiveCharacterSetId(newId)
   }
 
   const handleDeleteCharacterSet = (id: string, e: React.MouseEvent) => {
@@ -2686,24 +2740,25 @@ function App() {
   const handleAddWorldviewSet = () => {
     if (!newWorldviewSetName.trim() || !activeNovelId) return
 
+    const newId = crypto.randomUUID()
     const name = newWorldviewSetName.trim()
 
     const newWorldviewSet: WorldviewSet = {
-      id: crypto.randomUUID(),
+      id: newId,
       name: name,
       entries: []
     }
     
     // 同时创建对应的角色集
     const newCharacterSet: CharacterSet = {
-      id: crypto.randomUUID(),
+      id: newId,
       name: name,
       characters: []
     }
 
     // 同时创建对应的大纲
     const newOutlineSet: OutlineSet = {
-      id: crypto.randomUUID(),
+      id: newId,
       name: name,
       items: []
     }
@@ -2721,7 +2776,7 @@ function App() {
     }))
 
     setNewWorldviewSetName('')
-    setActiveWorldviewSetId(newWorldviewSet.id)
+    setActiveWorldviewSetId(newId)
   }
 
   const handleDeleteWorldviewSet = (id: string, e: React.MouseEvent) => {
