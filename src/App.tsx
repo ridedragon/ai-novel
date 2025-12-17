@@ -846,6 +846,48 @@ function App() {
     if (textareaRef.current) {
       textareaRef.current.scrollTop = 0
     }
+    
+    // Load Chapter-specific Settings
+    if (activeChapterId) {
+        // Use novelsRef to find the chapter to avoid dependency issues if needed, 
+        // but activeChapterId change should be enough to trigger this.
+        // We need to find the chapter object from the current state.
+        const currentNovel = novels.find(n => n.id === activeNovelId)
+        const chapter = currentNovel?.chapters.find(c => c.id === activeChapterId)
+        
+        if (chapter) {
+            // Load Optimize Preset
+            const savedOptId = chapter.activeOptimizePresetId
+            // Fallback to global last used if chapter doesn't have one (optional, or 'default')
+            // To ensure isolation, maybe better to default to 'default' if not set? 
+            // Or use the current global value as a starting point? 
+            // User requirement: "Seeing different settings". So if I haven't set it for this chapter, what should I see?
+            // Probably the default or the global one. Let's use the global variable which is initialized from localStorage.
+            // But if chapter HAS a setting, we MUST use it.
+            if (savedOptId && savedOptId !== activeOptimizePresetId) {
+                setActiveOptimizePresetId(savedOptId)
+            } else if (!savedOptId) {
+                // If chapter has NO setting, we might want to reset to default or keep global.
+                // Keeping global means "inheritance". Resetting means "isolation".
+                // User said "won't be overwritten by other analysis optimization returned content". 
+                // Let's try to restore what was saved, or default.
+                // Actually, if we want strict isolation, we should load 'default' if nothing saved.
+                // But that might be annoying. Let's stick to: if saved, use saved.
+            }
+
+            // Load Analysis Preset
+            const savedAnaId = chapter.activeAnalysisPresetId
+            if (savedAnaId && savedAnaId !== activeAnalysisPresetId) {
+                setActiveAnalysisPresetId(savedAnaId)
+            }
+
+            // Load Analysis Result
+            // Always load, even if empty, to clear previous chapter's result
+            setAnalysisResult(chapter.analysisResult || '')
+        }
+    } else {
+        setAnalysisResult('')
+    }
   }, [activeChapterId])
 
   // Auto Write Refs & State
@@ -2117,8 +2159,18 @@ function App() {
         case 'character': setActiveCharacterPresetId(id); break;
         case 'worldview': setActiveWorldviewPresetId(id); break;
         case 'inspiration': setActiveInspirationPresetId(id); break;
-        case 'optimize': setActiveOptimizePresetId(id); break;
-        case 'analysis': setActiveAnalysisPresetId(id); break;
+        case 'optimize': 
+            setActiveOptimizePresetId(id);
+            if (activeChapterId) {
+                setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, activeOptimizePresetId: id } : c))
+            }
+            break;
+        case 'analysis': 
+            setActiveAnalysisPresetId(id); 
+            if (activeChapterId) {
+                setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, activeAnalysisPresetId: id } : c))
+            }
+            break;
         default: setActiveOutlinePresetId(id); break;
      }
   }
@@ -3617,6 +3669,10 @@ function App() {
 
             currentAnalysisResult = completion.choices[0]?.message?.content || ''
             setAnalysisResult(currentAnalysisResult)
+            
+            // Save analysis result to chapter
+            setChapters(prev => prev.map(c => c.id === idToUse ? { ...c, analysisResult: currentAnalysisResult } : c))
+            
             terminal.log(`[Optimize] Analysis complete.`)
 
         } catch (err: any) {

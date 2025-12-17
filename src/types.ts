@@ -16,6 +16,11 @@ export interface Chapter {
   
   versions?: ChapterVersion[]
   activeVersionId?: string
+  
+  // Chapter-specific settings
+  activeOptimizePresetId?: string
+  activeAnalysisPresetId?: string
+  analysisResult?: string // 存储该章节上次的分析结果
 
   subtype?: 'story' | 'small_summary' | 'big_summary'
   summaryRange?: string
