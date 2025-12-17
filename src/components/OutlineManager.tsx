@@ -568,7 +568,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                                       >
                                          不使用灵感
                                       </button>
-                                      {novel.inspirationSets?.map(is => (
+                                      {novel.inspirationSets?.filter(is => is.name === activeSet?.name).map(is => (
                                          <div key={is.id} className="border-t border-gray-700/50 first:border-0">
                                             <div className="px-3 py-1.5 text-[10px] text-gray-500 font-bold uppercase tracking-wider bg-gray-800/50 sticky top-0">
                                                {is.name}
@@ -592,8 +592,8 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                                             )}
                                          </div>
                                       ))}
-                                      {(!novel.inspirationSets || novel.inspirationSets.length === 0) && (
-                                         <div className="px-3 py-4 text-center text-xs text-gray-500">暂无灵感集</div>
+                                      {(!novel.inspirationSets || novel.inspirationSets.filter(is => is.name === activeSet?.name).length === 0) && (
+                                         <div className="px-3 py-4 text-center text-xs text-gray-500">暂无同名灵感集</div>
                                       )}
                                    </div>
                                 </>

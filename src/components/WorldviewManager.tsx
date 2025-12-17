@@ -402,33 +402,33 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                                           >
                                              不使用灵感
                                           </button>
-                                          {novel.inspirationSets?.map(is => (
-                                             <div key={is.id} className="border-t border-gray-700/50 first:border-0">
-                                                <div className="px-3 py-1.5 text-[10px] text-gray-500 font-bold uppercase tracking-wider bg-gray-800/50 sticky top-0">
-                                                   {is.name}
-                                                </div>
-                                                {is.items.length === 0 ? (
-                                                   <div className="px-3 py-2 text-xs text-gray-600 italic">空集</div>
-                                                ) : (
-                                                   is.items.map((item, idx) => {
-                                                      const isSelected = selectedInspirationEntry?.setId === is.id && selectedInspirationEntry?.index === idx
-                                                      return (
-                                                         <button
-                                                            key={idx}
-                                                            onClick={() => { setSelectedInspirationEntry({ setId: is.id, index: idx }); setShowInspirationSelector(false); }}
-                                                            className={`w-full text-left px-3 py-2 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${isSelected ? 'text-[var(--theme-color)] font-medium' : 'text-gray-300'}`}
-                                                         >
-                                                            <span className="truncate flex-1">{item.title || '未命名'}</span>
-                                                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)] shrink-0"></div>}
-                                                         </button>
-                                                      )
-                                                   })
-                                                )}
-                                             </div>
-                                          ))}
-                                          {(!novel.inspirationSets || novel.inspirationSets.length === 0) && (
-                                             <div className="px-3 py-4 text-center text-xs text-gray-500">暂无灵感集</div>
-                                          )}
+                                      {novel.inspirationSets?.filter(is => is.name === activeSet?.name).map(is => (
+                                         <div key={is.id} className="border-t border-gray-700/50 first:border-0">
+                                            <div className="px-3 py-1.5 text-[10px] text-gray-500 font-bold uppercase tracking-wider bg-gray-800/50 sticky top-0">
+                                               {is.name}
+                                            </div>
+                                            {is.items.length === 0 ? (
+                                               <div className="px-3 py-2 text-xs text-gray-600 italic">空集</div>
+                                            ) : (
+                                               is.items.map((item, idx) => {
+                                                  const isSelected = selectedInspirationEntry?.setId === is.id && selectedInspirationEntry?.index === idx
+                                                  return (
+                                                     <button
+                                                        key={idx}
+                                                        onClick={() => { setSelectedInspirationEntry({ setId: is.id, index: idx }); setShowInspirationSelector(false); }}
+                                                        className={`w-full text-left px-3 py-2 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${isSelected ? 'text-[var(--theme-color)] font-medium' : 'text-gray-300'}`}
+                                                     >
+                                                        <span className="truncate flex-1">{item.title || '未命名'}</span>
+                                                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)] shrink-0"></div>}
+                                                     </button>
+                                                  )
+                                               })
+                                            )}
+                                         </div>
+                                      ))}
+                                      {(!novel.inspirationSets || novel.inspirationSets.filter(is => is.name === activeSet?.name).length === 0) && (
+                                         <div className="px-3 py-4 text-center text-xs text-gray-500">暂无同名灵感集</div>
+                                      )}
                                        </div>
                                     </>
                                  )}
