@@ -3564,14 +3564,15 @@ function App() {
     }
 
     let sourceContentToUse = initialContent
+    let currentChapter = chapters.find(c => c.id === idToUse)
+
     if (sourceContentToUse === undefined) {
-         const chap = chapters.find(c => c.id === idToUse)
-         if (chap) {
-             sourceContentToUse = chap.content
+         if (currentChapter) {
+             sourceContentToUse = currentChapter.content
          } else if (activeNovelId) {
              const currentNovel = novelsRef.current.find(n => n.id === activeNovelId)
-             const refChap = currentNovel?.chapters.find(c => c.id === idToUse)
-             sourceContentToUse = refChap?.content
+             currentChapter = currentNovel?.chapters.find(c => c.id === idToUse)
+             sourceContentToUse = currentChapter?.content
          }
     }
 
@@ -3589,7 +3590,17 @@ function App() {
 
     const baseTime = Date.now()
 
-    const newVersionId = `opt_${baseTime}`
+    // 检查是否有空的优化版本可复用
+    let reusableVersionId: string | null = null
+    if (currentChapter && currentChapter.versions && currentChapter.versions.length > 0) {
+        const lastVer = currentChapter.versions[currentChapter.versions.length - 1]
+        // 如果最后一个版本是 optimized 类型且内容为空 (可能是上次失败或中断)
+        if (lastVer.type === 'optimized' && !lastVer.content.trim()) {
+            reusableVersionId = lastVer.id
+        }
+    }
+
+    const newVersionId = reusableVersionId || `opt_${baseTime}`
 
     // 辅助函数：构建版本历史
     // 确保无论当前状态如何，都能正确保留原文并添加/更新新版本
@@ -3613,7 +3624,8 @@ function App() {
             // 更新现有优化版本 (流式传输中)
             versions[existingOptIndex] = {
                 ...versions[existingOptIndex],
-                content: newContent
+                content: newContent,
+                timestamp: baseTime // 复用时更新时间戳
             }
         } else {
             // 添加新优化版本
@@ -3648,53 +3660,76 @@ function App() {
 
     // Phase 1: Analysis (if enabled)
     if (twoStepOptimizationRef.current) {
-        try {
-            if (abortController.signal.aborted) return
-            terminal.log(`[Optimize] Starting Phase 1: Analysis...`)
-            const analysisPreset = analysisPresets.find(p => p.id === activeAnalysisPresetId) || analysisPresets[0]
-            const apiConfig = getApiConfig(analysisPreset.apiConfig, analysisModel)
+        let analysisAttempt = 0
+        const maxAnalysisAttempts = maxRetries + 1
+        let analysisSuccess = false
 
-            const openai = new OpenAI({
-                apiKey: apiConfig.apiKey,
-                baseURL: apiConfig.baseUrl,
-                dangerouslyAllowBrowser: true
-            })
-            
-            const analysisMessages: any[] = analysisPreset.prompts
-                .filter(p => p.enabled)
-                .map(p => {
-                    let content = p.content
-                    content = content.replace('{{content}}', sourceContentToUse)
-                    content = content.replace('{{input}}', userPrompt)
-                    return { role: p.role, content }
+        while (analysisAttempt < maxAnalysisAttempts) {
+            try {
+                if (abortController.signal.aborted) break
+                terminal.log(`[Optimize] Starting Phase 1: Analysis (Attempt ${analysisAttempt + 1}/${maxAnalysisAttempts})...`)
+                const analysisPreset = analysisPresets.find(p => p.id === activeAnalysisPresetId) || analysisPresets[0]
+                const apiConfig = getApiConfig(analysisPreset.apiConfig, analysisModel)
+
+                const openai = new OpenAI({
+                    apiKey: apiConfig.apiKey,
+                    baseURL: apiConfig.baseUrl,
+                    dangerouslyAllowBrowser: true
+                })
+                
+                const analysisMessages: any[] = analysisPreset.prompts
+                    .filter(p => p.enabled)
+                    .map(p => {
+                        let content = p.content
+                        content = content.replace('{{content}}', sourceContentToUse)
+                        content = content.replace('{{input}}', userPrompt)
+                        return { role: p.role, content }
+                    })
+
+                const completion = await openai.chat.completions.create({
+                    model: apiConfig.model,
+                    messages: analysisMessages,
+                    temperature: analysisPreset.temperature ?? 0.7,
+                    top_p: analysisPreset.topP ?? 0.95,
+                    top_k: analysisPreset.topK && analysisPreset.topK > 0 ? analysisPreset.topK : 1,
+                } as any, {
+                    signal: abortController.signal
                 })
 
-            const completion = await openai.chat.completions.create({
-                model: apiConfig.model,
-                messages: analysisMessages,
-                temperature: analysisPreset.temperature ?? 0.7,
-                top_p: analysisPreset.topP ?? 0.95,
-                top_k: analysisPreset.topK && analysisPreset.topK > 0 ? analysisPreset.topK : 1,
-            } as any, {
-                signal: abortController.signal
-            })
+                currentAnalysisResult = completion.choices[0]?.message?.content || ''
+                setAnalysisResult(currentAnalysisResult)
+                
+                // Save analysis result to chapter
+                setChapters(prev => prev.map(c => c.id === idToUse ? { ...c, analysisResult: currentAnalysisResult } : c))
+                
+                terminal.log(`[Optimize] Analysis complete.`)
+                analysisSuccess = true
+                break
 
-            currentAnalysisResult = completion.choices[0]?.message?.content || ''
-            setAnalysisResult(currentAnalysisResult)
-            
-            // Save analysis result to chapter
-            setChapters(prev => prev.map(c => c.id === idToUse ? { ...c, analysisResult: currentAnalysisResult } : c))
-            
-            terminal.log(`[Optimize] Analysis complete.`)
-
-        } catch (err: any) {
-            if (err.name === 'AbortError' || err.message === 'Aborted') {
-                terminal.log('[Optimize] Analysis aborted.')
-                handleStopOptimize(idToUse) // Clean up
-                return
+            } catch (err: any) {
+                if (err.name === 'AbortError' || err.message === 'Aborted') {
+                    terminal.log('[Optimize] Analysis aborted.')
+                    break
+                }
+                
+                const errorMsg = err instanceof Error ? err.message : JSON.stringify(err)
+                terminal.error(`[Optimize] Analysis attempt ${analysisAttempt + 1} failed: ${errorMsg}`)
+                
+                analysisAttempt++
+                if (analysisAttempt >= maxAnalysisAttempts) {
+                    setError('分析阶段失败 (重试次数已耗尽): ' + errorMsg)
+                } else {
+                    await new Promise(resolve => setTimeout(resolve, 1000))
+                }
             }
-            terminal.error(`[Optimize] Analysis failed: ${err.message}`)
-            setError('分析阶段失败: ' + err.message)
+        }
+        
+        if (abortController.signal.aborted) {
+             handleStopOptimize(idToUse)
+             return
+        }
+        
+        if (!analysisSuccess) {
             handleStopOptimize(idToUse)
             return
         }
