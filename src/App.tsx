@@ -2213,6 +2213,18 @@ function App() {
     }
   }
 
+  const handleExportGeneratorPreset = (preset: GeneratorPreset) => {
+    const exportData = {
+        name: preset.name,
+        prompts: preset.prompts,
+        temperature: preset.temperature,
+        topP: preset.topP,
+        topK: preset.topK,
+        apiConfig: preset.apiConfig
+    }
+    downloadFile(JSON.stringify(exportData, null, 2), `${preset.name}_preset.json`, 'application/json')
+  }
+
   const handleSaveGeneratorPrompt = () => {
     if (!tempEditingPrompt || editingGeneratorPromptIndex === null) return
 
@@ -6955,13 +6967,22 @@ ${taskDescription}`
                            }`}
                          >
                             <span className="truncate flex-1">{preset.name}</span>
-                            <button 
-                               onClick={(e) => { e.stopPropagation(); handleDeleteGeneratorPreset(preset.id); }}
-                               className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-opacity"
-                               title="删除"
-                            >
-                               <Trash2 className="w-3 h-3" />
-                            </button>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                   onClick={(e) => { e.stopPropagation(); handleExportGeneratorPreset(preset); }}
+                                   className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-gray-600 rounded transition-colors"
+                                   title="导出预设"
+                                >
+                                   <Download className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                   onClick={(e) => { e.stopPropagation(); handleDeleteGeneratorPreset(preset.id); }}
+                                   className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-600 rounded transition-colors"
+                                   title="删除"
+                                >
+                                   <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
                          </div>
                       ))}
                    </div>
