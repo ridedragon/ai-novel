@@ -94,3 +94,10 @@
 
 *   **UI 配置**:
     *   `sidebarHeader`: `React.ReactNode`。
+
+## 6. UI 调整记录 (App.tsx)
+
+*   **手机端预设选择**: 
+    *   为了解决手机端预设选择框太小的问题，将下拉菜单 (`Dropdown`) 改为展开的列表 (`List`) 形式。
+    *   利用 `md:hidden` 和 `hidden md:block` 类实现响应式切换。
+    *   复用现有的 `completionPresets`, `activePresetId`, `handlePresetChange` 状态。

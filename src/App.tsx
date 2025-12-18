@@ -4,6 +4,7 @@ import {
   ArrowUp,
   Book,
   Bot,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -6268,8 +6269,10 @@ ${taskDescription}`
                           </div>
                        </div>
                        
-                       <div className="flex gap-2 relative">
-                          <div className="flex-1 relative">
+                       <div className="flex flex-col md:flex-row gap-2 relative">
+                          
+                          {/* Desktop: Dropdown */}
+                          <div className="hidden md:block flex-1 relative">
                              <button 
                                onClick={() => setShowPresetDropdown(!showPresetDropdown)}
                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm flex items-center justify-between hover:border-gray-500 transition-colors"
@@ -6293,8 +6296,28 @@ ${taskDescription}`
                                </div>
                              )}
                           </div>
+
+                          {/* Mobile: List */}
+                          <div className="md:hidden w-full space-y-2 max-h-60 overflow-y-auto border border-gray-700 rounded-lg p-2 bg-gray-900/30 custom-scrollbar">
+                             {completionPresets.map(preset => (
+                               <button
+                                 key={preset.id}
+                                 onClick={() => handlePresetChange(preset.id)}
+                                 className={`w-full text-left px-4 py-3 text-sm rounded-lg transition-colors border ${
+                                     activePresetId === preset.id 
+                                     ? 'bg-[var(--theme-color)]/20 border-[var(--theme-color)] text-[var(--theme-color-light)]' 
+                                     : 'bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700'
+                                 }`}
+                               >
+                                 <div className="flex items-center justify-between">
+                                     <span className="font-medium">{preset.name}</span>
+                                     {activePresetId === preset.id && <Check className="w-4 h-4" />}
+                                 </div>
+                               </button>
+                             ))}
+                          </div>
                           
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 justify-end md:justify-start">
                              <button onClick={handleSavePreset} className="p-2 bg-gray-800 border border-gray-600 rounded hover:bg-gray-700 text-gray-400" title="保存预设"><Save className="w-4 h-4" /></button>
                              <button onClick={handleOpenRenameModal} className="p-2 bg-gray-800 border border-gray-600 rounded hover:bg-gray-700 text-gray-400" title="重命名预设"><Edit2 className="w-4 h-4" /></button>
                              <button onClick={handleOpenSaveAsModal} className="p-2 bg-gray-800 border border-gray-600 rounded hover:bg-gray-700 text-gray-400" title="另存为新预设"><FilePlus className="w-4 h-4" /></button>
