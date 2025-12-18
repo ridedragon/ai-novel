@@ -742,6 +742,9 @@ function App() {
     const val = localStorage.getItem('bigSummaryInterval')
     return val ? parseInt(val) : 6
   })
+
+  const smallSummaryIntervalRef = useRef(smallSummaryInterval)
+  const bigSummaryIntervalRef = useRef(bigSummaryInterval)
   
   const [smallSummaryPrompt, setSmallSummaryPrompt] = useState(() => localStorage.getItem('smallSummaryPrompt') || "请把以上小说章节的内容总结成一个简短的剧情摘要（300字以内）。保留关键的人名、地名和事件。")
   const [bigSummaryPrompt, setBigSummaryPrompt] = useState(() => localStorage.getItem('bigSummaryPrompt') || "请根据以上的分段摘要，写一个宏观的剧情大纲（500字以内），概括这段时间内的主要情节发展。")
@@ -776,6 +779,8 @@ function App() {
   useEffect(() => {
     longTextModeRef.current = longTextMode
     contextScopeRef.current = contextScope
+    smallSummaryIntervalRef.current = smallSummaryInterval
+    bigSummaryIntervalRef.current = bigSummaryInterval
     localStorage.setItem('longTextMode', String(longTextMode))
     localStorage.setItem('contextScope', contextScope)
     localStorage.setItem('smallSummaryInterval', String(smallSummaryInterval))
@@ -4642,8 +4647,8 @@ ${taskDescription}`
     const indexInVolume = volumeStoryChapters.findIndex(c => c.id === targetChapterId)
     const currentCountInVolume = indexInVolume + 1
 
-    const sInterval = Number(smallSummaryInterval) || 3
-    const bInterval = Number(bigSummaryInterval) || 6
+    const sInterval = Number(smallSummaryIntervalRef.current) || 3
+    const bInterval = Number(bigSummaryIntervalRef.current) || 6
 
     const generate = async (type: 'small' | 'big', start: number, end: number) => {
         const rangeStr = `${start}-${end}`
@@ -4809,8 +4814,8 @@ ${taskDescription}`
     const storyChapters = getStoryChapters(allChapters)
     storyChapters.sort((a, b) => a.id - b.id)
 
-    const sInterval = Number(smallSummaryInterval) || 3
-    const bInterval = Number(bigSummaryInterval) || 6
+    const sInterval = Number(smallSummaryIntervalRef.current) || 3
+    const bInterval = Number(bigSummaryIntervalRef.current) || 6
 
     // Local copy to track progress during scan
     let localChapters = [...allChapters]
