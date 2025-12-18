@@ -2229,6 +2229,64 @@ function App() {
     downloadFile(JSON.stringify(exportData, null, 2), `${preset.name}_preset.json`, 'application/json')
   }
 
+  const handleImportGeneratorPreset = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (file) {
+        const reader = new FileReader()
+        reader.onload = (event) => {
+          try {
+            const imported = JSON.parse(event.target?.result as string)
+            
+            // Basic validation
+            if (!imported.prompts || !Array.isArray(imported.prompts)) {
+                throw new Error('Invalid preset format: missing prompts')
+            }
+
+            const newId = `${generatorSettingsType}_imported_${Date.now()}`
+            const newPreset: GeneratorPreset = {
+                id: newId,
+                name: imported.name || file.name.replace('.json', ''),
+                prompts: imported.prompts,
+                temperature: imported.temperature,
+                topP: imported.topP,
+                topK: imported.topK,
+                apiConfig: imported.apiConfig
+            }
+            
+            const currentPresets = getGeneratorPresets()
+            setGeneratorPresets([...currentPresets, newPreset])
+            setActiveGeneratorPresetId(newId)
+            
+            setDialog({
+              isOpen: true,
+              type: 'alert',
+              title: '导入成功',
+              message: '预设导入成功',
+              inputValue: '',
+              onConfirm: closeDialog
+            })
+          } catch (err) {
+            console.error(err)
+            setDialog({
+              isOpen: true,
+              type: 'alert',
+              title: '导入失败',
+              message: '导入失败: 格式错误',
+              inputValue: '',
+              onConfirm: closeDialog
+            })
+          }
+        }
+        reader.readAsText(file)
+      }
+    }
+    input.click()
+  }
+
   const handleSaveGeneratorPrompt = () => {
     if (!tempEditingPrompt || editingGeneratorPromptIndex === null) return
 
@@ -6968,10 +7026,11 @@ ${taskDescription}`
           <div className="bg-gray-800 w-full md:w-[900px] h-[700px] max-h-[90vh] rounded-lg shadow-2xl border border-gray-600 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
              <div className="p-4 bg-gray-900 border-b border-gray-700 flex justify-between items-center">
                  <h3 className="text-lg font-bold text-gray-200">
-                    {generatorSettingsType === 'outline' ? '大纲助手设置' : 
-                     generatorSettingsType === 'character' ? '角色生成设置' : 
-                     generatorSettingsType === 'worldview' ? '世界观生成设置' : 
-                     generatorSettingsType === 'analysis' ? '分析阶段设置' : '优化助手设置'}
+                    {generatorSettingsType === 'outline' ? '大纲预设界面' : 
+                     generatorSettingsType === 'character' ? '角色集预设界面' : 
+                     generatorSettingsType === 'worldview' ? '世界观预设界面' : 
+                     generatorSettingsType === 'inspiration' ? '灵感预设界面' :
+                     generatorSettingsType === 'analysis' ? '分析预设界面' : '优化预设界面'}
                  </h3>
                  <button onClick={() => setShowGeneratorSettingsModal(false)} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
              </div>
@@ -7014,6 +7073,13 @@ ${taskDescription}`
                               </button>
                           </div>
                       )}
+
+                      <button 
+                        onClick={handleImportGeneratorPreset}
+                        className="w-full py-1.5 mb-2 flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs rounded transition-colors"
+                      >
+                        <Upload className="w-3.5 h-3.5" /> 导入预设
+                      </button>
 
                       <button 
                         onClick={handleAddNewGeneratorPreset}
