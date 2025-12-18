@@ -4583,8 +4583,8 @@ ${taskDescription}`
     const indexInVolume = volumeStoryChapters.findIndex(c => c.id === targetChapterId)
     const currentCountInVolume = indexInVolume + 1
 
-    const sInterval = typeof smallSummaryInterval === 'number' ? smallSummaryInterval : 3
-    const bInterval = typeof bigSummaryInterval === 'number' ? bigSummaryInterval : 6
+    const sInterval = Number(smallSummaryInterval) || 3
+    const bInterval = Number(bigSummaryInterval) || 6
 
     const generate = async (type: 'small' | 'big', start: number, end: number) => {
         const rangeStr = `${start}-${end}`
@@ -4750,8 +4750,8 @@ ${taskDescription}`
     const storyChapters = getStoryChapters(allChapters)
     storyChapters.sort((a, b) => a.id - b.id)
 
-    const sInterval = typeof smallSummaryInterval === 'number' ? smallSummaryInterval : 3
-    const bInterval = typeof bigSummaryInterval === 'number' ? bigSummaryInterval : 6
+    const sInterval = Number(smallSummaryInterval) || 3
+    const bInterval = Number(bigSummaryInterval) || 6
 
     // Local copy to track progress during scan
     let localChapters = [...allChapters]
