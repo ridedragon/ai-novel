@@ -7065,7 +7065,7 @@ ${taskDescription}`
              
              <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
                 {/* Sidebar: Preset List */}
-                <div className="w-full md:w-48 h-48 md:h-auto border-b md:border-r md:border-b-0 border-gray-700 bg-gray-900/50 flex flex-col shrink-0">
+                <div className={`w-full md:w-48 md:h-auto border-b md:border-r md:border-b-0 border-gray-700 bg-gray-900/50 flex flex-col shrink-0 ${generatorSettingsType === 'optimize' ? 'h-80' : 'h-48'}`}>
                    <div className="p-2 border-b border-gray-700">
                       
                       {generatorSettingsType === 'optimize' && (
