@@ -219,6 +219,19 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
     onUpdateNovel({ ...novel, worldviewSets: updatedSets })
   }
 
+  const handleClearAll = () => {
+    if (!activeSet) return
+    setConfirmState({
+      isOpen: true,
+      title: '清空世界观',
+      message: '确定要清空当前世界观的所有设定吗？此操作无法撤销。',
+      onConfirm: () => {
+        updateEntries([])
+        setConfirmState(prev => ({ ...prev, isOpen: false }))
+      }
+    })
+  }
+
   return (
     <div className="w-full flex flex-col md:flex-row h-full bg-gray-900 text-gray-100 overflow-hidden">
       {/* Sidebar: Set List */}
@@ -354,6 +367,16 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                            </button>
                         )}
                      </div>
+
+                     <button 
+                        onClick={handleClearAll}
+                        disabled={activeSet.entries.length === 0}
+                        className="flex items-center gap-1 px-3 py-1.5 md:px-4 md:py-2 bg-red-900/30 hover:bg-red-900/60 text-red-200 text-xs md:text-sm rounded-lg transition-colors border border-red-900/50 hover:border-red-700/50 disabled:opacity-30 disabled:cursor-not-allowed mr-2"
+                        title="清空当前世界观的所有设定"
+                     >
+                        <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                        <span className="hidden sm:inline">清空</span>
+                     </button>
 
                      <button 
                         onClick={handleAddEntry}
