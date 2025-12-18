@@ -7244,7 +7244,7 @@ ${taskDescription}`
                                                   <td className="px-4 py-3 text-center">
                                                       <button 
                                                           onClick={() => togglePromptEnabled(idx)}
-                                                          className={`transition-colors ${prompt.enabled ? 'text-[var(--theme-color)]' : 'text-gray-600'}`}
+                                                          className={`bg-transparent transition-colors ${prompt.enabled ? 'text-[var(--theme-color)]' : 'text-gray-600'}`}
                                                       >
                                                           {prompt.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
                                                       </button>
@@ -7253,14 +7253,14 @@ ${taskDescription}`
                                                       <div className="flex items-center justify-center gap-2">
                                                           <button 
                                                               onClick={() => handleEditPrompt(idx, prompt)}
-                                                              className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors"
+                                                              className="bg-transparent p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors"
                                                               title="编辑"
                                                           >
                                                               <Edit2 className="w-3.5 h-3.5" />
                                                           </button>
                                                           <button 
                                                               onClick={() => removePrompt(idx)}
-                                                              className="p-1.5 hover:bg-gray-700 rounded text-gray-500 hover:text-red-400 transition-colors"
+                                                              className="bg-transparent p-1.5 hover:bg-gray-700 rounded text-gray-500 hover:text-red-400 transition-colors"
                                                               title="删除"
                                                           >
                                                               <Trash2 className="w-3.5 h-3.5" />
