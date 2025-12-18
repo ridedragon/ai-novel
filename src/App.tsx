@@ -40,12 +40,14 @@ import {
   Users,
   Wand2,
   X,
-  Eye
+  Eye,
+  Zap
 } from 'lucide-react'
 import OpenAI from 'openai'
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import terminal from 'virtual:terminal'
+import { keepAliveManager } from './utils/KeepAliveManager'
 import { CharacterManager } from './components/CharacterManager'
 import { GlobalSettingsModal } from './components/GlobalSettingsModal'
 import { InspirationManager } from './components/InspirationManager'
@@ -587,6 +589,9 @@ function App() {
   }, [novels])
 
   const [activeNovelId, setActiveNovelId] = useState<string | null>(null)
+
+  // Keep Alive Mode
+  const [keepAliveMode, setKeepAliveMode] = useState(false)
 
   // Outline Sets State
   const [activeOutlineSetId, setActiveOutlineSetId] = useState<string | null>(null)
@@ -5542,6 +5547,30 @@ ${taskDescription}`
              <span className="text-sm font-semibold text-gray-400 whitespace-nowrap hidden md:block">自定义添加栏</span>
              <div className="flex flex-wrap items-center gap-2 shrink-0">
                <div className="flex bg-gray-700 rounded-lg p-0.5 items-center gap-0.5 shrink-0">
+                   <button 
+                     onClick={async () => {
+                        if (keepAliveMode) {
+                            keepAliveManager.disable()
+                            setKeepAliveMode(false)
+                        } else {
+                            try {
+                                await keepAliveManager.enable()
+                                setKeepAliveMode(true)
+                            } catch (e) {
+                                console.error(e)
+                                setError('无法开启后台保活：请确保您已与页面交互（点击）')
+                            }
+                        }
+                     }}
+                     className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-md text-xs transition-colors whitespace-nowrap ${keepAliveMode ? 'bg-green-600 text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
+                     title="后台防中断模式 (静音音频保活)"
+                   >
+                     <Zap className={`w-3.5 h-3.5 ${keepAliveMode ? 'fill-current' : ''}`} />
+                     <span className="hidden sm:inline">防断连</span>
+                   </button>
+
+                   <div className="w-px h-3 bg-gray-600 mx-0.5"></div>
+
                    <button 
                      onClick={() => setLongTextMode(!longTextMode)}
                      className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-md text-xs transition-colors whitespace-nowrap ${longTextMode ? 'bg-[var(--theme-color)] text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
