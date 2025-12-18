@@ -35,6 +35,7 @@ export interface NovelVolume {
 export interface OutlineItem {
   title: string
   summary: string
+  chapterAnalysis?: string
 }
 
 export interface OutlineSet {

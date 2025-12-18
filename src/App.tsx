@@ -38,7 +38,8 @@ import {
   Upload,
   Users,
   Wand2,
-  X
+  X,
+  Eye
 } from 'lucide-react'
 import OpenAI from 'openai'
 import { useEffect, useRef, useState } from 'react'
@@ -967,6 +968,9 @@ function App() {
   const [autoWriteMode, setAutoWriteMode] = useState<'existing' | 'new'>('existing')
   const [autoWriteSelectedVolumeId, setAutoWriteSelectedVolumeId] = useState('')
   const [autoWriteNewVolumeName, setAutoWriteNewVolumeName] = useState('')
+
+  // Analysis Result Modal
+  const [showAnalysisResultModal, setShowAnalysisResultModal] = useState(false)
 
   // Helpers for Novel Management
   const getActiveScripts = () => {
@@ -6028,6 +6032,13 @@ ${taskDescription}`
                     >
                         <Settings className="w-5 h-5" />
                     </button>
+                    <button 
+                        onClick={() => setShowAnalysisResultModal(true)}
+                        className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
+                        title="查看本章分析"
+                    >
+                        <Eye className="w-5 h-5" />
+                    </button>
                     <div className="w-px h-4 bg-gray-700 mx-1"></div>
                     <button
                         onClick={handleToggleEdit}
@@ -6678,6 +6689,25 @@ ${taskDescription}`
                </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Analysis Result Modal */}
+      {showAnalysisResultModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200">
+           <div className="bg-gray-800 w-full max-w-2xl max-h-[80vh] rounded-xl shadow-2xl border border-gray-600 flex flex-col animate-in zoom-in-95 duration-200">
+              <div className="p-5 border-b border-gray-700 flex justify-between items-center">
+                 <h3 className="font-bold text-lg text-gray-100">本章分析结果</h3>
+                 <button onClick={() => setShowAnalysisResultModal(false)} className="text-gray-400 hover:text-white">
+                    <X className="w-6 h-6" />
+                 </button>
+              </div>
+              <div className="p-6 overflow-y-auto custom-scrollbar">
+                 <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap font-mono">
+                    {activeChapter?.analysisResult ? activeChapter.analysisResult : <span className="text-gray-500 italic">暂无分析内容，请先运行“两阶段优化”或单独的分析任务。</span>}
+                 </div>
+              </div>
+           </div>
         </div>
       )}
 

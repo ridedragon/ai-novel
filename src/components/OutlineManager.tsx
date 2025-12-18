@@ -19,7 +19,8 @@ import {
   StopCircle,
   Trash2,
   Users,
-  X
+  X,
+  Eye
 } from 'lucide-react'
 import React, { useState } from 'react'
 import { Novel, OutlineItem, OutlineSet, WorldviewSet, CharacterSet, InspirationSet } from '../types'
@@ -97,6 +98,9 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
   const [editingChapterIndex, setEditingChapterIndex] = useState<number | null>(null)
   const [editChapterTitle, setEditChapterTitle] = useState('')
   const [editChapterSummary, setEditChapterSummary] = useState('')
+
+  // Chapter Analysis Viewing
+  const [viewingAnalysisIndex, setViewingAnalysisIndex] = useState<number | null>(null)
 
   // Mobile: Toggle Sidebar List
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
