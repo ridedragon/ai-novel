@@ -13,6 +13,7 @@ import {
   Download,
   Edit2,
   Edit3,
+  Eye,
   FilePlus,
   FileText,
   Folder,
@@ -23,7 +24,6 @@ import {
   Home,
   Lightbulb,
   List,
-  Loader2,
   Menu,
   PlayCircle,
   Plus,
@@ -40,14 +40,12 @@ import {
   Users,
   Wand2,
   X,
-  Eye,
   Zap
 } from 'lucide-react'
 import OpenAI from 'openai'
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import terminal from 'virtual:terminal'
-import { keepAliveManager } from './utils/KeepAliveManager'
 import { CharacterManager } from './components/CharacterManager'
 import { GlobalSettingsModal } from './components/GlobalSettingsModal'
 import { InspirationManager } from './components/InspirationManager'
@@ -61,6 +59,7 @@ import {
   CompletionPreset,
   GeneratorPreset,
   GeneratorPrompt,
+  InspirationSet,
   Novel,
   NovelVolume,
   OutlineItem,
@@ -69,9 +68,10 @@ import {
   PromptItem,
   RegexScript,
   WorldviewItem,
-  WorldviewSet,
-  InspirationSet
+  WorldviewSet
 } from './types'
+import { keepAliveManager } from './utils/KeepAliveManager'
+import { checkAndGenerateSummary as checkAndGenerateSummaryUtil } from './utils/SummaryManager'
 
 const defaultInspirationPresets: GeneratorPreset[] = [
   {
@@ -4620,187 +4620,26 @@ ${taskDescription}`
 
   // Summary Generation Helper
   const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string, targetNovelId: string = activeNovelId || '') => {
-    if (!longTextModeRef.current || !apiKey || !targetNovelId) return
+    if (!longTextModeRef.current) return
 
-    // Get latest chapters from Ref to ensure we have up-to-date data even inside closures/loops
-    const currentNovel = novelsRef.current.find(n => n.id === targetNovelId)
-    if (!currentNovel) return
-
-    // Snapshot of chapters for this generation session
-    // This snapshot will be updated locally as we generate new summaries,
-    // ensuring that subsequent generations (e.g. Big Summary) can see the Small Summary generated just before it.
-    let currentChaptersSnapshot = currentNovel.chapters.map(c => c.id === targetChapterId ? { ...c, content: currentContent } : c)
-    
-    // Helper to get story chapters from the snapshot
-    const getSnapshotStoryChapters = () => currentChaptersSnapshot.filter(c => !c.subtype || c.subtype === 'story').sort((a, b) => a.id - b.id)
-
-    // Helper to get stable content (fallback to versions if content is empty/optimizing)
-    const getStableContent = (chapter: Chapter) => {
-        if (chapter.content && chapter.content.trim().length > 0) return chapter.content
-        if (chapter.versions && chapter.versions.length > 0) {
-            // Prefer original or last valid version
-            const original = chapter.versions.find(v => v.type === 'original')
-            if (original && original.content) return original.content
-            const valid = [...chapter.versions].reverse().find(v => v.content && v.content.length > 0)
-            if (valid) return valid.content
-        }
-        return chapter.content || ''
-    }
-
-    const storyChapters = getSnapshotStoryChapters()
-    const globalIndex = storyChapters.findIndex(c => c.id === targetChapterId)
-    if (globalIndex === -1) return
-    
-    // Determine the volume ID of the current chapter to place summary in the same volume
-    const targetChapterObj = storyChapters[globalIndex]
-    const targetVolumeId = targetChapterObj.volumeId
-
-    // Calculate Volume-based Count
-    const volumeStoryChapters = storyChapters.filter(c => c.volumeId === targetChapterObj.volumeId)
-    const indexInVolume = volumeStoryChapters.findIndex(c => c.id === targetChapterId)
-    const currentCountInVolume = indexInVolume + 1
-
-    const sInterval = Number(smallSummaryIntervalRef.current) || 3
-    const bInterval = Number(bigSummaryIntervalRef.current) || 6
-
-    const generate = async (type: 'small' | 'big', start: number, end: number) => {
-        const rangeStr = `${start}-${end}`
-        const subtype = type === 'small' ? 'small_summary' : 'big_summary' as const
-        
-        terminal.log(`[Summary] Checking ${type} summary for range ${rangeStr}...`)
-
-        // Prepare Context using the Snapshot
-        let sourceText = ""
-        if (type === 'small') {
-             // Ensure we only include chapters from the target volume
-             const targetChapters = getSnapshotStoryChapters().slice(start - 1, end)
-                .filter(c => c.volumeId === targetVolumeId)
-             
-             if (targetChapters.length === 0) return
-             sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${getStableContent(c)}`).join('\n\n')
-        } else {
-             // For Big Summary, try to use Small Summaries first
-             // We filter from currentChaptersSnapshot which includes any just-generated small summaries
-             const relevantSmallSummaries = currentChaptersSnapshot.filter(c => {
-                 if (c.subtype !== 'small_summary' || !c.summaryRange) return false
-                 const [s, e] = c.summaryRange.split('-').map(Number)
-                 return s >= start && e <= end
-             }).sort((a, b) => {
-                 // Sort by start range to keep order
-                 const startA = parseInt(a.summaryRange!.split('-')[0])
-                 const startB = parseInt(b.summaryRange!.split('-')[0])
-                 return startA - startB
-             })
-             
-             if (relevantSmallSummaries.length > 0) {
-                 sourceText = relevantSmallSummaries.map(c => `Small Summary (${c.summaryRange}):\n${c.content}`).join('\n\n')
-             } else {
-                 const targetChapters = getSnapshotStoryChapters().slice(start - 1, end)
-                 sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${getStableContent(c)}`).join('\n\n')
-             }
-        }
-
-        if (!sourceText) return
-
-        try {
-            const openai = new OpenAI({ apiKey, baseURL: baseUrl, dangerouslyAllowBrowser: true })
-            const prompt = type === 'small' ? smallSummaryPrompt : bigSummaryPrompt
-
-            const completion = await openai.chat.completions.create({
-                model: outlineModel || model,
-                messages: [
-                    { role: 'system', content: 'You are a professional editor helper.' },
-                    { role: 'user', content: `${sourceText}\n\n${prompt}` }
-                ],
-                temperature: 0.5
-            })
-            
-            const summaryContent = completion.choices[0]?.message?.content || ''
-            if (summaryContent) {
-                // Check if exists in Snapshot
-                const existingIndex = currentChaptersSnapshot.findIndex(c => c.subtype === subtype && c.summaryRange === rangeStr)
-                
-                // Helper to update chapters for specific novel
-                const updateNovelChapters = (updater: (chapters: Chapter[]) => Chapter[]) => {
-                    setNovels(prevNovels => prevNovels.map(n => {
-                        if (n.id === targetNovelId) {
-                            return { ...n, chapters: updater(n.chapters) }
-                        }
-                        return n
-                    }))
-                }
-
-                if (existingIndex !== -1) {
-                    // Update existing
-                    const existingChapter = currentChaptersSnapshot[existingIndex]
-                    const updatedChapter = { ...existingChapter, content: summaryContent }
-                    
-                    // Update Snapshot
-                    currentChaptersSnapshot[existingIndex] = updatedChapter
-                    
-                    // Update React State
-                    updateNovelChapters(prev => prev.map(c => c.id === existingChapter.id ? updatedChapter : c))
-                    
-                    terminal.log(`[Summary] Updated ${type} summary for ${rangeStr}.`)
-                } else {
-                    // Create new
-                    const newChapter: Chapter = {
-                        id: Date.now() + Math.floor(Math.random() * 10000), // Random padding to avoid ID collision
-                        title: `${type === 'small' ? '🔹小总结' : '🔸大总结'} (${rangeStr})`,
-                        content: summaryContent,
-                        subtype: subtype,
-                        summaryRange: rangeStr,
-                        volumeId: targetVolumeId // Use same volume as current chapter
-                    }
-                    
-                    // Update Snapshot
-                    currentChaptersSnapshot = [...currentChaptersSnapshot, newChapter]
-                    
-                    // Update React State: Insert AFTER the target chapter
-                    updateNovelChapters(prev => {
-                        const idx = prev.findIndex(c => c.id === targetChapterId)
-                        if (idx !== -1) {
-                            const newArr = [...prev]
-                            newArr.splice(idx + 1, 0, newChapter)
-                            return newArr
-                        }
-                        return [...prev, newChapter]
-                    })
-                    
-                    terminal.log(`[Summary] Created ${type} summary for ${rangeStr}.`)
-                }
-            }
-        } catch (e) {
-            console.error(e)
-            terminal.error(`[Summary] Failed to generate ${type} summary: ${(e as any).message}`)
-        }
-    }
-
-    // Check Small Summary Trigger (Volume Based)
-    if (currentCountInVolume % sInterval === 0) {
-        // Map back to Global Range for Labeling
-        const batchStartVolIndex = indexInVolume - sInterval + 1
-        const batchChapters = volumeStoryChapters.slice(batchStartVolIndex, indexInVolume + 1)
-        
-        if (batchChapters.length > 0) {
-             const globalStart = storyChapters.findIndex(c => c.id === batchChapters[0].id) + 1
-             const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1
-             await generate('small', globalStart, globalEnd)
-        }
-    }
-
-    // Check Big Summary Trigger (Volume Based)
-    if (currentCountInVolume % bInterval === 0) {
-        const batchStartVolIndex = indexInVolume - bInterval + 1
-        const batchChapters = volumeStoryChapters.slice(batchStartVolIndex, indexInVolume + 1)
-        
-        if (batchChapters.length > 0) {
-             const globalStart = storyChapters.findIndex(c => c.id === batchChapters[0].id) + 1
-             const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1
-             await generate('big', globalStart, globalEnd)
-        }
-    }
-
+    await checkAndGenerateSummaryUtil(
+      targetChapterId,
+      currentContent,
+      targetNovelId,
+      novelsRef.current,
+      setNovels,
+      {
+        apiKey,
+        baseUrl,
+        model: outlineModel || model,
+        smallSummaryInterval: Number(smallSummaryIntervalRef.current),
+        bigSummaryInterval: Number(bigSummaryIntervalRef.current),
+        smallSummaryPrompt,
+        bigSummaryPrompt
+      },
+      (msg) => terminal.log(msg),
+      (msg) => terminal.error(msg)
+    )
   }
 
   const handleScanSummaries = async () => {
