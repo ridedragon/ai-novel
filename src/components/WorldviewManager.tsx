@@ -34,8 +34,8 @@ interface WorldviewManagerProps {
   sidebarHeader?: React.ReactNode
 
   // Context Selection
-  selectedInspirationEntry?: { setId: string, index: number } | null
-  setSelectedInspirationEntry?: (val: { setId: string, index: number } | null) => void
+  selectedInspirationEntries?: { setId: string, index: number }[]
+  setSelectedInspirationEntries?: (val: { setId: string, index: number }[]) => void
 }
 
 export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
@@ -51,8 +51,8 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
   onShowSettings,
   modelName,
   sidebarHeader,
-  selectedInspirationEntry,
-  setSelectedInspirationEntry
+  selectedInspirationEntries,
+  setSelectedInspirationEntries
 }) => {
   // Local State for Set Management
   const [newSetName, setNewSetName] = useState('')
@@ -396,19 +396,15 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                         <div className="flex flex-wrap items-center gap-2">
                            <span className="text-xs text-gray-400 shrink-0">参考:</span>
                            {/* Inspiration Selector */}
-                           {setSelectedInspirationEntry && (
+                           {setSelectedInspirationEntries && (
                               <div className="relative">
                                  <button
                                     onClick={() => setShowInspirationSelector(!showInspirationSelector)}
                                     className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-200 border border-gray-600 transition-colors"
                                  >
                                     <Lightbulb className="w-3 h-3 text-[var(--theme-color)]" />
-                                    {selectedInspirationEntry
-                                       ? (() => {
-                                            const set = novel.inspirationSets?.find(s => s.id === selectedInspirationEntry.setId)
-                                            const item = set?.items[selectedInspirationEntry.index]
-                                            return item?.title || '灵感已删除'
-                                         })()
+                                    {selectedInspirationEntries && selectedInspirationEntries.length > 0
+                                       ? `已选 ${selectedInspirationEntries.length} 条灵感`
                                        : '选择灵感'}
                                     <ChevronDown className="w-3 h-3" />
                                  </button>
@@ -416,16 +412,16 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                                     <>
                                        <div className="fixed inset-0 z-20" onClick={() => setShowInspirationSelector(false)}></div>
                                        <div 
-                                          className="absolute top-full left-0 mt-1 w-56 border border-gray-600 rounded-lg shadow-2xl z-30 max-h-80 overflow-y-auto ring-1 ring-black/20"
+                                          className="absolute top-full left-0 mt-1 w-64 border border-gray-600 rounded-lg shadow-2xl z-30 max-h-80 overflow-y-auto ring-1 ring-black/20"
                                           style={{ backgroundColor: '#1f2937' }}
                                        >
                                           <button
-                                             onClick={() => { setSelectedInspirationEntry(null); setShowInspirationSelector(false); }}
+                                             onClick={() => { setSelectedInspirationEntries([]); setShowInspirationSelector(false); }}
                                              className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white border-b border-gray-600 transition-colors bg-transparent hover:bg-gray-700"
                                           >
-                                             不使用灵感
+                                             清空选择
                                           </button>
-                                      {novel.inspirationSets?.filter(is => is.name === activeSet?.name).map(is => (
+                                      {novel.inspirationSets?.map(is => (
                                          <div key={is.id} className="border-t border-gray-700/50 first:border-0">
                                             <div className="px-3 py-1.5 text-[10px] text-gray-500 font-bold uppercase tracking-wider bg-gray-800/50 sticky top-0">
                                                {is.name}
@@ -434,15 +430,27 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                                                <div className="px-3 py-2 text-xs text-gray-600 italic">空集</div>
                                             ) : (
                                                is.items.map((item, idx) => {
-                                                  const isSelected = selectedInspirationEntry?.setId === is.id && selectedInspirationEntry?.index === idx
+                                                  const isSelected = selectedInspirationEntries?.some(e => e.setId === is.id && e.index === idx)
                                                   return (
                                                      <button
                                                         key={idx}
-                                                        onClick={() => { setSelectedInspirationEntry({ setId: is.id, index: idx }); setShowInspirationSelector(false); }}
-                                                        className={`w-full text-left px-3 py-2 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${isSelected ? 'text-[var(--theme-color)] font-medium' : 'text-gray-300'}`}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            const newEntries = [...(selectedInspirationEntries || [])]
+                                                            if (isSelected) {
+                                                                const filterIndex = newEntries.findIndex(e => e.setId === is.id && e.index === idx)
+                                                                if (filterIndex !== -1) newEntries.splice(filterIndex, 1)
+                                                            } else {
+                                                                newEntries.push({ setId: is.id, index: idx })
+                                                            }
+                                                            setSelectedInspirationEntries(newEntries)
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${isSelected ? 'text-[var(--theme-color)] font-medium bg-gray-700/50' : 'text-gray-300'}`}
                                                      >
+                                                        <div className={`w-3 h-3 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-[var(--theme-color)] border-[var(--theme-color)]' : 'border-gray-500'}`}>
+                                                            {isSelected && <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                                        </div>
                                                         <span className="truncate flex-1">{item.title || '未命名'}</span>
-                                                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)] shrink-0"></div>}
                                                      </button>
                                                   )
                                                })

@@ -82,7 +82,7 @@ const defaultInspirationPresets: GeneratorPreset[] = [
     topK: 1,
     prompts: [
       { id: '1', role: 'system', content: '你是一个创意丰富的灵感激发助手。', enabled: true },
-      { id: '2', role: 'user', content: '请根据用户的模糊想法提供创作灵感。\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的灵感条目。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "灵感关键词/标题", "content": "详细的灵感描述、创意点子..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
+      { id: '2', role: 'user', content: '请根据用户的模糊想法提供创作灵感。\n\n【现有灵感列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的灵感条目。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "灵感关键词/标题", "content": "详细的灵感描述、创意点子..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
     ]
   }
 ]
@@ -599,7 +599,7 @@ function App() {
   const [selectedCharacterSetIdForOutlineGen, setSelectedCharacterSetIdForOutlineGen] = useState<string | null>(null)
   const [showCharacterSetSelector, setShowCharacterSetSelector] = useState(false)
   const [selectedWorldviewSetIdForOutlineGen, setSelectedWorldviewSetIdForOutlineGen] = useState<string | null>(null)
-  const [selectedInspirationEntryForOutline, setSelectedInspirationEntryForOutline] = useState<{setId: string, index: number} | null>(null)
+  const [selectedInspirationEntries, setSelectedInspirationEntries] = useState<{setId: string, index: number}[]>([])
   const [showWorldviewSelectorForOutline, setShowWorldviewSelectorForOutline] = useState(false)
   const [editingOutlineItemIndex, setEditingOutlineItemIndex] = useState<number | null>(null)
   
@@ -926,11 +926,7 @@ function App() {
 
   // Character Generation Settings
   const [selectedWorldviewSetIdForCharGen, setSelectedWorldviewSetIdForCharGen] = useState<string | null>(null)
-  const [selectedInspirationEntryForChar, setSelectedInspirationEntryForChar] = useState<{setId: string, index: number} | null>(null)
   const [showWorldviewSelector, setShowWorldviewSelector] = useState(false)
-
-  // Worldview Generation Settings
-  const [selectedInspirationEntryForWorldview, setSelectedInspirationEntryForWorldview] = useState<{setId: string, index: number} | null>(null)
 
   // Auto Write State
   const [showOutline, setShowOutline] = useState(false)
@@ -2618,11 +2614,15 @@ function App() {
         }
 
         let inspirationContext = ''
-        if (selectedInspirationEntryForOutline) {
-            const inspSet = activeNovel?.inspirationSets?.find(s => s.id === selectedInspirationEntryForOutline.setId)
-            if (inspSet && inspSet.items[selectedInspirationEntryForOutline.index]) {
-                const item = inspSet.items[selectedInspirationEntryForOutline.index]
-                inspirationContext = `\n【参考灵感 (${item.title})】：\n${item.content}\n`
+        if (selectedInspirationEntries.length > 0) {
+            const inspList = selectedInspirationEntries.map(entry => {
+                const inspSet = activeNovel?.inspirationSets?.find(s => s.id === entry.setId)
+                const item = inspSet?.items[entry.index]
+                return item ? `· ${item.title}: ${item.content}` : null
+            }).filter(Boolean).join('\n')
+            
+            if (inspList) {
+                inspirationContext = `\n【参考灵感】：\n${inspList}\n`
             }
         }
 
@@ -2896,11 +2896,15 @@ function App() {
         }
 
         let inspirationContext = ''
-        if (selectedInspirationEntryForChar) {
-            const inspSet = activeNovel?.inspirationSets?.find(s => s.id === selectedInspirationEntryForChar.setId)
-            if (inspSet && inspSet.items[selectedInspirationEntryForChar.index]) {
-                const item = inspSet.items[selectedInspirationEntryForChar.index]
-                inspirationContext = `\n【参考灵感 (${item.title})】：\n${item.content}\n`
+        if (selectedInspirationEntries.length > 0) {
+            const inspList = selectedInspirationEntries.map(entry => {
+                const inspSet = activeNovel?.inspirationSets?.find(s => s.id === entry.setId)
+                const item = inspSet?.items[entry.index]
+                return item ? `· ${item.title}: ${item.content}` : null
+            }).filter(Boolean).join('\n')
+            
+            if (inspList) {
+                inspirationContext = `\n【参考灵感】：\n${inspList}\n`
             }
         }
 
@@ -3306,11 +3310,15 @@ function App() {
         const notes = targetSet?.userNotes || ''
 
         let inspirationContext = ''
-        if (selectedInspirationEntryForWorldview) {
-            const inspSet = activeNovel?.inspirationSets?.find(s => s.id === selectedInspirationEntryForWorldview.setId)
-            if (inspSet && inspSet.items[selectedInspirationEntryForWorldview.index]) {
-                const item = inspSet.items[selectedInspirationEntryForWorldview.index]
-                inspirationContext = `\n【参考灵感 (${item.title})】：\n${item.content}\n`
+        if (selectedInspirationEntries.length > 0) {
+            const inspList = selectedInspirationEntries.map(entry => {
+                const inspSet = activeNovel?.inspirationSets?.find(s => s.id === entry.setId)
+                const item = inspSet?.items[entry.index]
+                return item ? `· ${item.title}: ${item.content}` : null
+            }).filter(Boolean).join('\n')
+            
+            if (inspList) {
+                inspirationContext = `\n【参考灵感】：\n${inspList}\n`
             }
         }
 
@@ -5841,8 +5849,8 @@ ${taskDescription}`
                           }
                           selectedWorldviewSetId={selectedWorldviewSetIdForCharGen}
                           setSelectedWorldviewSetId={setSelectedWorldviewSetIdForCharGen}
-                          selectedInspirationEntry={selectedInspirationEntryForChar}
-                          setSelectedInspirationEntry={setSelectedInspirationEntryForChar}
+                          selectedInspirationEntries={selectedInspirationEntries}
+                          setSelectedInspirationEntries={setSelectedInspirationEntries}
                        />
                     </div>
                  )}
@@ -5852,8 +5860,8 @@ ${taskDescription}`
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
                        <WorldviewManager
                           novel={activeNovel}
-                          selectedInspirationEntry={selectedInspirationEntryForWorldview}
-                          setSelectedInspirationEntry={setSelectedInspirationEntryForWorldview}
+                          selectedInspirationEntries={selectedInspirationEntries}
+                          setSelectedInspirationEntries={setSelectedInspirationEntries}
                           activeWorldviewSetId={activeWorldviewSetId}
                           onSetActiveWorldviewSetId={setActiveWorldviewSetId}
                           onUpdateNovel={(updatedNovel) => {
@@ -5952,8 +5960,8 @@ ${taskDescription}`
                           setSelectedCharacterSetId={setSelectedCharacterSetIdForOutlineGen}
                           selectedWorldviewSetId={selectedWorldviewSetIdForOutlineGen}
                           setSelectedWorldviewSetId={setSelectedWorldviewSetIdForOutlineGen}
-                          selectedInspirationEntry={selectedInspirationEntryForOutline}
-                          setSelectedInspirationEntry={setSelectedInspirationEntryForOutline}
+                          selectedInspirationEntries={selectedInspirationEntries}
+                          setSelectedInspirationEntries={setSelectedInspirationEntries}
                           sidebarHeader={
                              <div className="flex items-center justify-between">
                                 <div className="font-bold flex items-center gap-2">
