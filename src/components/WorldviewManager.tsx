@@ -35,7 +35,7 @@ interface WorldviewManagerProps {
 
   // Context Selection
   selectedInspirationEntries?: { setId: string, index: number }[]
-  setSelectedInspirationEntries?: (val: { setId: string, index: number }[]) => void
+  setSelectedInspirationEntries?: React.Dispatch<React.SetStateAction<{ setId: string, index: number }[]>>
 }
 
 export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
@@ -436,14 +436,19 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                                                         key={idx}
                                                         onClick={(e) => {
                                                             e.stopPropagation()
-                                                            const newEntries = [...(selectedInspirationEntries || [])]
-                                                            if (isSelected) {
-                                                                const filterIndex = newEntries.findIndex(e => e.setId === is.id && e.index === idx)
-                                                                if (filterIndex !== -1) newEntries.splice(filterIndex, 1)
-                                                            } else {
-                                                                newEntries.push({ setId: is.id, index: idx })
+                                                            if (setSelectedInspirationEntries) {
+                                                                setSelectedInspirationEntries(prev => {
+                                                                    const newEntries = [...prev]
+                                                                    const currentIsSelected = newEntries.some(e => e.setId === is.id && e.index === idx)
+                                                                    if (currentIsSelected) {
+                                                                        const filterIndex = newEntries.findIndex(e => e.setId === is.id && e.index === idx)
+                                                                        if (filterIndex !== -1) newEntries.splice(filterIndex, 1)
+                                                                    } else {
+                                                                        newEntries.push({ setId: is.id, index: idx })
+                                                                    }
+                                                                    return newEntries
+                                                                })
                                                             }
-                                                            setSelectedInspirationEntries(newEntries)
                                                         }}
                                                         className={`w-full text-left px-3 py-2 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${isSelected ? 'text-[var(--theme-color)] font-medium bg-gray-700/50' : 'text-gray-300'}`}
                                                      >
