@@ -72,6 +72,7 @@ import {
 } from './types'
 import { keepAliveManager } from './utils/KeepAliveManager'
 import { checkAndGenerateSummary as checkAndGenerateSummaryUtil } from './utils/SummaryManager'
+import { storage } from './utils/storage'
 
 const defaultInspirationPresets: GeneratorPreset[] = [
   {
@@ -574,15 +575,17 @@ function App() {
   }
   
   // Novel State
-  const [novels, setNovels] = useState<Novel[]>(() => {
-    try {
-      const saved = localStorage.getItem('novels')
-      return saved ? JSON.parse(saved) : []
-    } catch (e) {
-      console.error('Failed to load novels', e)
-      return []
+  const [novels, setNovels] = useState<Novel[]>([])
+  
+  // Load novels async
+  useEffect(() => {
+    const loadNovels = async () => {
+      const loaded = await storage.getNovels()
+      setNovels(loaded)
     }
-  })
+    loadNovels()
+  }, [])
+
   const novelsRef = useRef(novels)
   useEffect(() => {
       novelsRef.current = novels
@@ -796,7 +799,9 @@ function App() {
 
   // Persistence
   useEffect(() => {
-    localStorage.setItem('novels', JSON.stringify(novels))
+    if (novels.length > 0) {
+      storage.saveNovels(novels).catch(e => console.error('Failed to save novels', e))
+    }
   }, [novels])
 
   useEffect(() => {
@@ -1318,7 +1323,11 @@ function App() {
         createdAt: Date.now()
      }
      
-     setNovels([newNovel, ...novels])
+     const updatedNovels = [newNovel, ...novels]
+     setNovels(updatedNovels)
+     // Immediate save for new novel to avoid losing it if refresh happens before effect triggers
+     storage.saveNovels(updatedNovels).catch(e => console.error('Failed to save newly created novel', e))
+
      setActiveNovelId(newNovel.id)
      setActiveChapterId(null)
      setIsEditingChapter(false)
