@@ -439,7 +439,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
               <div className="flex items-center gap-2 md:gap-3 overflow-hidden">
                 <h2 className="text-lg md:text-xl font-bold text-gray-100 truncate">{activeSet.name}</h2>
                 <span className="bg-gray-700 text-gray-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full shrink-0">
-                  {activeSet.items.length} 章
+                  {(activeSet.items || []).length} 章
                 </span>
               </div>
 
@@ -458,7 +458,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
 
                 <button 
                   onClick={handleClearAll}
-                  disabled={activeSet.items.length === 0}
+                  disabled={(activeSet.items || []).length === 0}
                   className="flex items-center gap-1 px-3 py-1.5 md:px-4 md:py-2 bg-red-900/30 hover:bg-red-900/60 text-red-200 text-xs md:text-sm rounded-lg transition-colors border border-red-900/50 hover:border-red-700/50 disabled:opacity-30 disabled:cursor-not-allowed mr-2"
                   title="清空当前大纲的所有章节"
                 >
@@ -672,7 +672,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                               <span className="md:hidden">生成</span>
                            </button>
                         )}
-                        {onRegenerateAll && activeSet.items.length > 0 && (
+                        {onRegenerateAll && (activeSet.items || []).length > 0 && (
                            <button 
                               onClick={isGenerating ? undefined : handleRegenerateAllClick}
                               disabled={isGenerating}
@@ -706,14 +706,14 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                     />
                 </div>
 
-                {activeSet.items.length === 0 ? (
+                {(activeSet.items || []).length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center py-12 md:py-20 text-gray-500 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-800/20">
                     <Book className="w-12 h-12 md:w-16 md:h-16 mb-3 md:mb-4 opacity-20" />
                     <p className="text-base md:text-lg font-medium text-gray-400">大纲为空</p>
                     <p className="text-xs md:text-sm mt-1">请手动添加章节，或使用上方的 AI 助手生成</p>
                   </div>
                 ) : (
-                  activeSet.items.map((item, idx) => (
+                  (activeSet.items || []).map((item, idx) => (
                     <div 
                       key={idx}
                       draggable
@@ -756,7 +756,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                          </button>
                          <button 
                             onClick={() => handleMoveItem(idx, idx + 1)}
-                            disabled={idx === activeSet.items.length - 1}
+                            disabled={idx === (activeSet.items || []).length - 1}
                             className="p-1 md:p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded disabled:opacity-30"
                             title="下移"
                          >
@@ -841,7 +841,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                      ) : (
                         <button 
                            onClick={onStartAutoWrite}
-                           disabled={activeSet.items.length === 0}
+                           disabled={(activeSet.items || []).length === 0}
                            className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 md:px-8 md:py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold rounded-lg md:rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-purple-500/20 text-xs md:text-base whitespace-nowrap"
                         >
                            <PlayCircle className="w-4 h-4 md:w-5 md:h-5" />
