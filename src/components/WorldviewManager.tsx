@@ -421,7 +421,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                                           >
                                              清空选择
                                           </button>
-                                      {novel.inspirationSets?.map(is => (
+                                      {novel.inspirationSets?.filter(is => is.name === activeSet?.name).map(is => (
                                          <div key={is.id} className="border-t border-gray-700/50 first:border-0">
                                             <div className="px-3 py-1.5 text-[10px] text-gray-500 font-bold uppercase tracking-wider bg-gray-800/50 sticky top-0">
                                                {is.name}

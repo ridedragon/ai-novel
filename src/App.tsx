@@ -4870,6 +4870,31 @@ ${taskDescription}`
     }
   }
 
+  const handleSetActiveOutlineSetId = (id: string | null) => {
+      setActiveOutlineSetId(id)
+      if (id && activeNovel) {
+          const set = activeNovel.outlineSets?.find(s => s.id === id)
+          if (set) {
+              const matchChar = activeNovel.characterSets?.find(s => s.name === set.name)
+              if (matchChar) setSelectedCharacterSetIdForOutlineGen(matchChar.id)
+              
+              const matchWorld = activeNovel.worldviewSets?.find(s => s.name === set.name)
+              if (matchWorld) setSelectedWorldviewSetIdForOutlineGen(matchWorld.id)
+          }
+      }
+  }
+
+  const handleSetActiveCharacterSetId = (id: string | null) => {
+      setActiveCharacterSetId(id)
+      if (id && activeNovel) {
+          const set = activeNovel.characterSets?.find(s => s.id === id)
+          if (set) {
+              const matchWorld = activeNovel.worldviewSets?.find(s => s.name === set.name)
+              if (matchWorld) setSelectedWorldviewSetIdForCharGen(matchWorld.id)
+          }
+      }
+  }
+
   const handleSwitchModule = (targetModule: 'outline' | 'characters' | 'worldview' | 'inspiration') => {
       if (!activeNovel) {
           setCreationModule(targetModule);
@@ -4897,8 +4922,8 @@ ${taskDescription}`
               const match = targetSets.find(s => s.id === sourceSet?.id) || targetSets.find(s => s.name === sourceSet?.name);
               
               if (match) {
-                  if (targetModule === 'outline') setActiveOutlineSetId(match.id);
-                  else if (targetModule === 'characters') setActiveCharacterSetId(match.id);
+                  if (targetModule === 'outline') handleSetActiveOutlineSetId(match.id);
+                  else if (targetModule === 'characters') handleSetActiveCharacterSetId(match.id);
                   else if (targetModule === 'worldview') setActiveWorldviewSetId(match.id);
                   else if (targetModule === 'inspiration') setActiveInspirationSetId(match.id);
               }
@@ -5638,7 +5663,7 @@ ${taskDescription}`
                        <CharacterManager
                           novel={activeNovel}
                           activeCharacterSetId={activeCharacterSetId}
-                          onSetActiveCharacterSetId={setActiveCharacterSetId}
+                          onSetActiveCharacterSetId={handleSetActiveCharacterSetId}
                           onUpdateNovel={(updatedNovel) => {
                              setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n))
                           }}
@@ -5778,7 +5803,7 @@ ${taskDescription}`
                        <OutlineManager
                           novel={activeNovel}
                           activeOutlineSetId={activeOutlineSetId}
-                          onSetActiveOutlineSetId={setActiveOutlineSetId}
+                          onSetActiveOutlineSetId={handleSetActiveOutlineSetId}
                           onUpdateNovel={(updatedNovel) => {
                              setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n))
                           }}
