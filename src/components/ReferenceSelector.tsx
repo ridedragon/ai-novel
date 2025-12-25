@@ -30,6 +30,26 @@ export const ReferenceSelector: React.FC<ReferenceSelectorProps> = ({
   isOpen,
   onToggleOpen
 }) => {
+  const [direction, setDirection] = React.useState<'up' | 'down'>('down')
+  const [maxHeight, setMaxHeight] = React.useState<number>(320)
+  const containerRef = React.useRef<HTMLDivElement>(null)
+
+  React.useLayoutEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      const spaceBelow = window.innerHeight - rect.bottom - 20
+      const spaceAbove = rect.top - 20
+      
+      if (spaceBelow < 300 && spaceAbove > spaceBelow) {
+        setDirection('up')
+        setMaxHeight(Math.min(spaceAbove, 400))
+      } else {
+        setDirection('down')
+        setMaxHeight(Math.min(spaceBelow, 400))
+      }
+    }
+  }, [isOpen])
+
   if (!novel) return null
 
   const getIcon = () => {
@@ -59,7 +79,7 @@ export const ReferenceSelector: React.FC<ReferenceSelectorProps> = ({
       const set = (sets[type] as any[])?.find(s => s.id === selectedSetId)
       if (set) {
         let text = set.name
-        if (selectedItemIndices.length > 0) {
+        if (type === 'inspiration' && selectedItemIndices.length > 0) {
           text += ` (${selectedItemIndices.length})`
         }
         return text
@@ -80,7 +100,7 @@ export const ReferenceSelector: React.FC<ReferenceSelectorProps> = ({
   const sets = getSets()
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
         onClick={() => onToggleOpen(!isOpen)}
         className={`flex items-center gap-1 text-[10px] md:text-xs px-2 py-1 rounded border transition-colors ${
@@ -95,7 +115,10 @@ export const ReferenceSelector: React.FC<ReferenceSelectorProps> = ({
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => onToggleOpen(false)}></div>
-          <div className="absolute bottom-full left-0 mb-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl z-50 max-h-80 overflow-y-auto custom-scrollbar">
+          <div
+            className={`absolute ${direction === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'} left-0 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl z-50 overflow-y-auto custom-scrollbar`}
+            style={{ maxHeight: `${maxHeight}px` }}
+          >
             <button
               onClick={() => { onSelectSet(null); onToggleOpen(false); }}
               className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:bg-gray-700 border-b border-gray-700"
@@ -111,33 +134,35 @@ export const ReferenceSelector: React.FC<ReferenceSelectorProps> = ({
                   }`}
                 >
                   <span className="truncate">{set.name}</span>
-                  {selectedSetId === set.id && selectedItemIndices.length === 0 && <Check className="w-3 h-3" />}
+                  {selectedSetId === set.id && (type !== 'inspiration' || selectedItemIndices.length === 0) && <Check className="w-3 h-3" />}
                 </button>
                 
                 {/* Items */}
-                <div className="bg-gray-900/30">
-                  {(set.entries || set.characters || set.items || []).map((item: any, idx: number) => {
-                    const isSelected = selectedSetId === set.id && selectedItemIndices.includes(idx)
-                    const title = item.item || item.name || item.title || `条目 ${idx + 1}`
-                    
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => onToggleItem(set.id, idx)}
-                        className={`w-full text-left px-6 py-1.5 text-[10px] md:text-xs hover:bg-gray-700 flex items-center gap-2 transition-colors ${
-                          isSelected ? 'text-[var(--theme-color-light)] bg-gray-700/30' : 'text-gray-500'
-                        }`}
-                      >
-                        <div className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 ${
-                          isSelected ? 'bg-[var(--theme-color)] border-[var(--theme-color)]' : 'border-gray-600'
-                        }`}>
-                          {isSelected && <Check className="w-2 h-2 text-white" />}
-                        </div>
-                        <span className="truncate">{title}</span>
-                      </button>
-                    )
-                  })}
-                </div>
+                {type === 'inspiration' && (
+                  <div className="bg-gray-900/30">
+                    {(set.entries || set.characters || set.items || []).map((item: any, idx: number) => {
+                      const isSelected = selectedSetId === set.id && selectedItemIndices.includes(idx)
+                      const title = item.item || item.name || item.title || `条目 ${idx + 1}`
+                      
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => onToggleItem(set.id, idx)}
+                          className={`w-full text-left px-6 py-1.5 text-[10px] md:text-xs hover:bg-gray-700 flex items-center gap-2 transition-colors ${
+                            isSelected ? 'text-[var(--theme-color-light)] bg-gray-700/30' : 'text-gray-500'
+                          }`}
+                        >
+                          <div className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 ${
+                            isSelected ? 'bg-[var(--theme-color)] border-[var(--theme-color)]' : 'border-gray-600'
+                          }`}>
+                            {isSelected && <Check className="w-2 h-2 text-white" />}
+                          </div>
+                          <span className="truncate">{title}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             ))}
           </div>
