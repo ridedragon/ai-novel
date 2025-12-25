@@ -5,18 +5,17 @@ import {
   Edit3,
   FileText,
   Folder,
-  Globe,
-  Lightbulb,
-  Loader2,
   Plus,
+  Send,
   Settings,
   StopCircle,
   Trash2,
   Users,
   X
 } from 'lucide-react'
-import React, { useState } from 'react'
-import { CharacterItem, CharacterSet, Novel, WorldviewSet, OutlineSet, InspirationSet } from '../types'
+import React, { useEffect, useRef, useState } from 'react'
+import { CharacterItem, CharacterSet, InspirationSet, Novel, OutlineSet, WorldviewSet } from '../types'
+import { ReferenceSelector } from './ReferenceSelector'
 
 interface CharacterManagerProps {
   novel: Novel
@@ -25,7 +24,7 @@ interface CharacterManagerProps {
   onUpdateNovel: (updatedNovel: Novel) => void
   
   // AI Generation Props
-  onGenerateCharacters?: () => void
+  onGenerateCharacters?: (mode?: 'generate' | 'chat') => void
   isGenerating?: boolean
   userPrompt?: string
   setUserPrompt?: (val: string) => void
@@ -34,11 +33,37 @@ interface CharacterManagerProps {
   modelName?: string
   sidebarHeader?: React.ReactNode
 
-  // Context Selection
-  selectedWorldviewSetId?: string | null
-  setSelectedWorldviewSetId?: (id: string | null) => void
-  selectedInspirationEntries?: { setId: string, index: number }[]
-  setSelectedInspirationEntries?: React.Dispatch<React.SetStateAction<{ setId: string, index: number }[]>>
+  activePresetId?: string
+  onSetActivePresetId?: (id: string) => void
+
+  // Reference Selection Props
+  selectedWorldviewSetId: string | null
+  selectedWorldviewIndices: number[]
+  onSelectWorldviewSet: (id: string | null) => void
+  onToggleWorldviewItem: (setId: string, index: number) => void
+  showWorldviewSelector: boolean
+  onToggleWorldviewSelector: (open: boolean) => void
+
+  selectedCharacterSetId: string | null
+  selectedCharacterIndices: number[]
+  onSelectCharacterSet: (id: string | null) => void
+  onToggleCharacterItem: (setId: string, index: number) => void
+  showCharacterSelector: boolean
+  onToggleCharacterSelector: (open: boolean) => void
+
+  selectedInspirationSetId: string | null
+  selectedInspirationIndices: number[]
+  onSelectInspirationSet: (id: string | null) => void
+  onToggleInspirationItem: (setId: string, index: number) => void
+  showInspirationSelector: boolean
+  onToggleInspirationSelector: (open: boolean) => void
+
+  selectedOutlineSetId: string | null
+  selectedOutlineIndices: number[]
+  onSelectOutlineSet: (id: string | null) => void
+  onToggleOutlineItem: (setId: string, index: number) => void
+  showOutlineSelector: boolean
+  onToggleOutlineSelector: (open: boolean) => void
 }
 
 export const CharacterManager: React.FC<CharacterManagerProps> = ({
@@ -54,12 +79,35 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
   onShowSettings,
   modelName,
   sidebarHeader,
+  activePresetId,
+  onSetActivePresetId,
   selectedWorldviewSetId,
-  setSelectedWorldviewSetId,
-  selectedInspirationEntries,
-  setSelectedInspirationEntries
+  selectedWorldviewIndices,
+  onSelectWorldviewSet,
+  onToggleWorldviewItem,
+  showWorldviewSelector,
+  onToggleWorldviewSelector,
+  selectedCharacterSetId,
+  selectedCharacterIndices,
+  onSelectCharacterSet,
+  onToggleCharacterItem,
+  showCharacterSelector,
+  onToggleCharacterSelector,
+  selectedInspirationSetId,
+  selectedInspirationIndices,
+  onSelectInspirationSet,
+  onToggleInspirationItem,
+  showInspirationSelector,
+  onToggleInspirationSelector,
+  selectedOutlineSetId,
+  selectedOutlineIndices,
+  onSelectOutlineSet,
+  onToggleOutlineItem,
+  showOutlineSelector,
+  onToggleOutlineSelector
 }) => {
   // Local State for Set Management
+  const [showChat, setShowChat] = useState(false)
   const [newSetName, setNewSetName] = useState('')
   const [editingSetId, setEditingSetId] = useState<string | null>(null)
   const [editSetName, setEditSetName] = useState('')
@@ -73,8 +121,6 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
   const [editCharBio, setEditCharBio] = useState('')
 
   // Local State for Selectors
-  const [showWorldviewSelector, setShowWorldviewSelector] = useState(false)
-  const [showInspirationSelector, setShowInspirationSelector] = useState(false)
 
   // Confirmation State
   const [confirmState, setConfirmState] = useState<{
@@ -90,6 +136,14 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
   })
 
   const activeSet = novel.characterSets?.find(s => s.id === activeCharacterSetId)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom of chat
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [activeSet?.chatHistory, showChat])
 
   // --- Set Management Helpers ---
 
@@ -238,6 +292,24 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
     })
   }
 
+  const handleClearChat = () => {
+    if (!activeSet) return
+    const updatedSets = (novel.characterSets || []).map(s =>
+      s.id === activeSet.id ? { ...s, chatHistory: [] } : s
+    )
+    onUpdateNovel({ ...novel, characterSets: updatedSets })
+  }
+
+  const handleDeleteChatMessage = (index: number) => {
+    if (!activeSet || !activeSet.chatHistory) return
+    const newChatHistory = [...activeSet.chatHistory]
+    newChatHistory.splice(index, 1)
+    const updatedSets = (novel.characterSets || []).map(s =>
+      s.id === activeSet.id ? { ...s, chatHistory: newChatHistory } : s
+    )
+    onUpdateNovel({ ...novel, characterSets: updatedSets })
+  }
+
   return (
     <div className="w-full flex flex-col md:flex-row h-full bg-gray-900 text-gray-100 overflow-hidden">
       {/* Sidebar: Set List */}
@@ -374,6 +446,21 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                         )}
                      </div>
 
+                     <button
+                        onClick={() => {
+                           if (showChat) {
+                              setShowChat(false);
+                           } else {
+                              setShowChat(true);
+                              if (onSetActivePresetId) onSetActivePresetId('chat');
+                           }
+                        }}
+                        className={`flex items-center gap-1 px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-colors border mr-2 ${showChat ? 'bg-[var(--theme-color)] text-white border-[var(--theme-color)]' : 'bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600'}`}
+                     >
+                        {showChat ? <ArrowLeft className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Send className="w-3.5 h-3.5 md:w-4 md:h-4" />}
+                        <span className="hidden sm:inline">{showChat ? '返回' : '聊天'}</span>
+                     </button>
+
                      <button 
                         onClick={handleClearAll}
                         disabled={activeSet.characters.length === 0}
@@ -395,143 +482,88 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                   </div>
                </div>
 
-               {/* AI Generation Input */}
-               {onGenerateCharacters && (
+               {/* AI Generation Input (Only shown when NOT in independent chat view) */}
+               {onGenerateCharacters && !showChat && (
                   <div className="p-3 md:p-4 bg-gray-800/30 border-b border-gray-700/50">
                      <div className="max-w-4xl mx-auto space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                            <span className="text-xs text-gray-400 shrink-0">参考:</span>
-                           {/* Worldview Selector */}
-                           <div className="relative">
-                              <button
-                                 onClick={() => { setShowWorldviewSelector(!showWorldviewSelector); setShowInspirationSelector(false); }}
-                                 className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-200 border border-gray-600 transition-colors"
-                              >
-                                 <Globe className="w-3 h-3 text-[var(--theme-color)]" />
-                                 {selectedWorldviewSetId
-                                    ? novel.worldviewSets?.find(s => s.id === selectedWorldviewSetId)?.name || '世界观已删除'
-                                    : '选择世界观'}
-                                 <ChevronDown className="w-3 h-3" />
-                              </button>
-                              {showWorldviewSelector && (
-                                 <>
-                                    <div className="fixed inset-0 z-20" onClick={() => setShowWorldviewSelector(false)}></div>
-                                    <div 
-                                       className="absolute top-full left-0 mt-1 w-48 border border-gray-600 rounded-lg shadow-2xl z-30 max-h-60 overflow-y-auto ring-1 ring-black/20"
-                                       style={{ backgroundColor: '#1f2937' }}
-                                    >
-                                       <button
-                                          onClick={() => { setSelectedWorldviewSetId && setSelectedWorldviewSetId(null); setShowWorldviewSelector(false); }}
-                                          className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white border-b border-gray-600 transition-colors bg-transparent hover:bg-gray-700"
-                                       >
-                                          不使用世界观
-                                       </button>
-                                       {novel.worldviewSets?.map(ws => (
-                                          <button
-                                             key={ws.id}
-                                             onClick={() => { setSelectedWorldviewSetId && setSelectedWorldviewSetId(ws.id); setShowWorldviewSelector(false); }}
-                                             className={`w-full text-left px-3 py-2 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${selectedWorldviewSetId === ws.id ? 'text-[var(--theme-color)] font-medium' : 'text-gray-300'}`}
-                                          >
-                                             <span className="truncate flex-1">{ws.name}</span>
-                                             {selectedWorldviewSetId === ws.id && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)] shrink-0"></div>}
-                                          </button>
-                                       ))}
-                                    </div>
-                                 </>
-                              )}
-                           </div>
+                           
+                           <ReferenceSelector
+                              novel={novel}
+                              type="worldview"
+                              selectedSetId={selectedWorldviewSetId}
+                              selectedItemIndices={selectedWorldviewIndices}
+                              onSelectSet={onSelectWorldviewSet}
+                              onToggleItem={onToggleWorldviewItem}
+                              isOpen={showWorldviewSelector}
+                              onToggleOpen={(open) => {
+                                 onToggleWorldviewSelector(open);
+                                 if (open) { onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
+                              }}
+                           />
 
-                           {/* Inspiration Selector */}
-                           {setSelectedInspirationEntries && (
-                              <div className="relative">
-                                 <button
-                                    onClick={() => { setShowInspirationSelector(!showInspirationSelector); setShowWorldviewSelector(false); }}
-                                    className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-200 border border-gray-600 transition-colors"
-                                 >
-                                    <Lightbulb className="w-3 h-3 text-[var(--theme-color)]" />
-                                    {selectedInspirationEntries && selectedInspirationEntries.length > 0
-                                       ? `已选 ${selectedInspirationEntries.length} 条灵感`
-                                       : '选择灵感'}
-                                    <ChevronDown className="w-3 h-3" />
-                                 </button>
-                                 {showInspirationSelector && (
-                                    <>
-                                       <div className="fixed inset-0 z-20" onClick={() => setShowInspirationSelector(false)}></div>
-                                       <div 
-                                          className="absolute top-full left-0 mt-1 w-64 border border-gray-600 rounded-lg shadow-2xl z-30 max-h-80 overflow-y-auto ring-1 ring-black/20"
-                                          style={{ backgroundColor: '#1f2937' }}
-                                       >
-                                          <button
-                                             onClick={() => { setSelectedInspirationEntries([]); setShowInspirationSelector(false); }}
-                                             className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white border-b border-gray-600 transition-colors bg-transparent hover:bg-gray-700"
-                                          >
-                                             清空选择
-                                          </button>
-                                      {novel.inspirationSets?.filter(is => is.name === activeSet?.name).map(is => (
-                                         <div key={is.id} className="border-t border-gray-700/50 first:border-0">
-                                            <div className="px-3 py-1.5 text-[10px] text-gray-500 font-bold uppercase tracking-wider bg-gray-800/50 sticky top-0">
-                                               {is.name}
-                                            </div>
-                                            {is.items.length === 0 ? (
-                                               <div className="px-3 py-2 text-xs text-gray-600 italic">空集</div>
-                                            ) : (
-                                               is.items.map((item, idx) => {
-                                                  const isSelected = selectedInspirationEntries?.some(e => e.setId === is.id && e.index === idx)
-                                                  return (
-                                                     <button
-                                                        key={idx}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            if (setSelectedInspirationEntries) {
-                                                                setSelectedInspirationEntries(prev => {
-                                                                    const newEntries = [...prev]
-                                                                    const currentIsSelected = newEntries.some(e => e.setId === is.id && e.index === idx)
-                                                                    if (currentIsSelected) {
-                                                                        const filterIndex = newEntries.findIndex(e => e.setId === is.id && e.index === idx)
-                                                                        if (filterIndex !== -1) newEntries.splice(filterIndex, 1)
-                                                                    } else {
-                                                                        newEntries.push({ setId: is.id, index: idx })
-                                                                    }
-                                                                    return newEntries
-                                                                })
-                                                            }
-                                                        }}
-                                                        className={`w-full text-left px-3 py-2 text-xs hover:text-white flex items-center gap-2 transition-colors bg-transparent hover:bg-gray-700 ${isSelected ? 'text-[var(--theme-color)] font-medium bg-gray-700/50' : 'text-gray-300'}`}
-                                                     >
-                                                        <div className={`w-3 h-3 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-[var(--theme-color)] border-[var(--theme-color)]' : 'border-gray-500'}`}>
-                                                            {isSelected && <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                                        </div>
-                                                        <span className="truncate flex-1">{item.title || '未命名'}</span>
-                                                     </button>
-                                                  )
-                                               })
-                                            )}
-                                         </div>
-                                      ))}
-                                      {(!novel.inspirationSets || novel.inspirationSets.filter(is => is.name === activeSet?.name).length === 0) && (
-                                         <div className="px-3 py-4 text-center text-xs text-gray-500">暂无同名灵感集</div>
-                                      )}
-                                       </div>
-                                    </>
-                                 )}
-                              </div>
-                           )}
+                           <ReferenceSelector
+                              novel={novel}
+                              type="character"
+                              selectedSetId={selectedCharacterSetId}
+                              selectedItemIndices={selectedCharacterIndices}
+                              onSelectSet={onSelectCharacterSet}
+                              onToggleItem={onToggleCharacterItem}
+                              isOpen={showCharacterSelector}
+                              onToggleOpen={(open) => {
+                                 onToggleCharacterSelector(open);
+                                 if (open) { onToggleWorldviewSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
+                              }}
+                           />
+
+                           <ReferenceSelector
+                              novel={novel}
+                              type="inspiration"
+                              selectedSetId={selectedInspirationSetId}
+                              selectedItemIndices={selectedInspirationIndices}
+                              onSelectSet={onSelectInspirationSet}
+                              onToggleItem={onToggleInspirationItem}
+                              isOpen={showInspirationSelector}
+                              onToggleOpen={(open) => {
+                                 onToggleInspirationSelector(open);
+                                 if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleOutlineSelector(false); }
+                              }}
+                           />
+
+                           <ReferenceSelector
+                              novel={novel}
+                              type="outline"
+                              selectedSetId={selectedOutlineSetId}
+                              selectedItemIndices={selectedOutlineIndices}
+                              onSelectSet={onSelectOutlineSet}
+                              onToggleItem={onToggleOutlineItem}
+                              isOpen={showOutlineSelector}
+                              onToggleOpen={(open) => {
+                                 onToggleOutlineSelector(open);
+                                 if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); }
+                              }}
+                           />
                         </div>
 
                         <div className="flex gap-2 md:gap-3">
                            <div className="flex-1 relative">
                               <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 md:w-4 md:h-4 text-[var(--theme-color)]" />
-                              <input 
-                                 type="text" 
+                              <input
+                                 type="text"
                                  value={userPrompt || ''}
                                  onChange={(e) => setUserPrompt && setUserPrompt(e.target.value)}
-                                 onKeyDown={(e) => e.key === 'Enter' && !isGenerating && onGenerateCharacters()}
+                                 onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !isGenerating) {
+                                       onGenerateCharacters('generate')
+                                    }
+                                 }}
                                  className="w-full bg-gray-900 border border-gray-600 rounded-lg pl-9 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
                                  placeholder="AI 助手：描述角色特征 (如：一个冷酷的杀手，擅长使用飞刀)..."
                               />
                            </div>
                            {isGenerating ? (
-                              <button 
+                              <button
                                  onClick={onStopGeneration}
                                  className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-red-600 hover:bg-red-700 text-white"
                               >
@@ -539,8 +571,8 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                                  <span className="hidden md:inline">停止</span>
                               </button>
                            ) : (
-                              <button 
-                                 onClick={onGenerateCharacters}
+                              <button
+                                 onClick={() => onGenerateCharacters('generate')}
                                  className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white"
                               >
                                  <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -555,6 +587,168 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
 
                {/* Content Area */}
                <div className="flex-1 overflow-y-auto p-2 md:p-8 custom-scrollbar flex flex-col min-h-0">
+                  {showChat ? (
+                     <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full h-full">
+                        <div className="flex items-center justify-between mb-4 shrink-0">
+                           <div className="flex items-center gap-2 text-gray-400">
+                              <Bot className="w-4 h-4" />
+                              <span className="text-sm font-medium">角色讨论对话</span>
+                           </div>
+                           <div className="flex items-center gap-3">
+                              <button
+                                 onClick={handleClearChat}
+                                 className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+                              >
+                                 清空对话
+                              </button>
+                              <button
+                                 onClick={() => setShowChat(false)}
+                                 className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors"
+                                 title="返回列表"
+                              >
+                                 <ArrowLeft className="w-5 h-5" />
+                              </button>
+                           </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6 pb-4">
+                           {activeSet.chatHistory?.map((msg, i) => (
+                              <div key={i} className={`flex flex-col group/msg ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                                 <div className={`flex items-center gap-2 mb-1 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
+                                       {msg.role === 'user' ? 'U' : 'AI'}
+                                    </div>
+                                    <span className="text-xs text-gray-500">
+                                       {msg.role === 'user' ? '用户' : '角色助手'}
+                                    </span>
+                                    <button
+                                       onClick={() => handleDeleteChatMessage(i)}
+                                       className="opacity-0 group-hover/msg:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-all"
+                                       title="删除此消息"
+                                    >
+                                       <Trash2 className="w-3 h-3" />
+                                    </button>
+                                 </div>
+                                 <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm leading-relaxed ${
+                                    msg.role === 'user'
+                                       ? 'bg-[var(--theme-color)] text-white rounded-tr-none'
+                                       : 'bg-gray-800 text-gray-200 rounded-tl-none border border-gray-700'
+                                 }`}>
+                                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                                 </div>
+                              </div>
+                           ))}
+                           <div ref={chatEndRef} />
+                           {(!activeSet.chatHistory || activeSet.chatHistory.length === 0) && (
+                              <div className="flex-1 flex flex-col items-center justify-center text-gray-500 py-20">
+                                 <Bot className="w-16 h-16 mb-4 opacity-10" />
+                                 <p>开始与 AI 讨论你的角色吧...</p>
+                              </div>
+                           )}
+                        </div>
+
+                        {/* Chat Input at Bottom */}
+                        <div className="pt-4 border-t border-gray-700 shrink-0 space-y-3">
+                           {/* Reference Selectors */}
+                           <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-gray-500 shrink-0">参考:</span>
+                              
+                              <ReferenceSelector
+                                 novel={novel}
+                                 type="worldview"
+                                 selectedSetId={selectedWorldviewSetId}
+                                 selectedItemIndices={selectedWorldviewIndices}
+                                 onSelectSet={onSelectWorldviewSet}
+                                 onToggleItem={onToggleWorldviewItem}
+                                 isOpen={showWorldviewSelector}
+                                 onToggleOpen={(open) => {
+                                    onToggleWorldviewSelector(open);
+                                    if (open) { onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
+                                 }}
+                              />
+
+                              <ReferenceSelector
+                                 novel={novel}
+                                 type="character"
+                                 selectedSetId={selectedCharacterSetId}
+                                 selectedItemIndices={selectedCharacterIndices}
+                                 onSelectSet={onSelectCharacterSet}
+                                 onToggleItem={onToggleCharacterItem}
+                                 isOpen={showCharacterSelector}
+                                 onToggleOpen={(open) => {
+                                    onToggleCharacterSelector(open);
+                                    if (open) { onToggleWorldviewSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
+                                 }}
+                              />
+
+                              <ReferenceSelector
+                                 novel={novel}
+                                 type="inspiration"
+                                 selectedSetId={selectedInspirationSetId}
+                                 selectedItemIndices={selectedInspirationIndices}
+                                 onSelectSet={onSelectInspirationSet}
+                                 onToggleItem={onToggleInspirationItem}
+                                 isOpen={showInspirationSelector}
+                                 onToggleOpen={(open) => {
+                                    onToggleInspirationSelector(open);
+                                    if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleOutlineSelector(false); }
+                                 }}
+                              />
+
+                              <ReferenceSelector
+                                 novel={novel}
+                                 type="outline"
+                                 selectedSetId={selectedOutlineSetId}
+                                 selectedItemIndices={selectedOutlineIndices}
+                                 onSelectSet={onSelectOutlineSet}
+                                 onToggleItem={onToggleOutlineItem}
+                                 isOpen={showOutlineSelector}
+                                 onToggleOpen={(open) => {
+                                    onToggleOutlineSelector(open);
+                                    if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); }
+                                 }}
+                              />
+                           </div>
+
+                           <div className="flex gap-2 md:gap-3">
+                              <div className="flex-1 relative">
+                                 <textarea
+                                    value={userPrompt || ''}
+                                    onChange={(e) => setUserPrompt && setUserPrompt(e.target.value)}
+                                    onKeyDown={(e) => {
+                                       if (e.key === 'Enter' && !e.shiftKey && !isGenerating) {
+                                          e.preventDefault();
+                                          onGenerateCharacters && onGenerateCharacters('chat');
+                                       }
+                                    }}
+                                    className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-3 text-sm focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all resize-none h-24 custom-scrollbar"
+                                    placeholder="输入你的想法，与 AI 讨论..."
+                                 />
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                 {isGenerating ? (
+                                    <button
+                                       onClick={onStopGeneration}
+                                       className="p-3 rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-lg transition-all"
+                                       title="停止生成"
+                                    >
+                                       <StopCircle className="w-6 h-6" />
+                                    </button>
+                                 ) : (
+                                    <button
+                                       onClick={() => onGenerateCharacters && onGenerateCharacters('chat')}
+                                       disabled={!userPrompt?.trim()}
+                                       className="p-3 rounded-xl bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 text-white shadow-lg transition-all"
+                                       title="发送"
+                                    >
+                                       <Send className="w-6 h-6" />
+                                    </button>
+                                 )}
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+                  ) : (
                   <div className="max-w-6xl mx-auto w-full space-y-4 pb-8">
                      {/* User Notes Area */}
                      <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-4">
@@ -621,6 +815,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                         </div>
                      )}
                   </div>
+                  )}
                </div>
             </>
          ) : (

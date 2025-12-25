@@ -50,12 +50,14 @@ import { CharacterManager } from './components/CharacterManager'
 import { GlobalSettingsModal } from './components/GlobalSettingsModal'
 import { InspirationManager } from './components/InspirationManager'
 import { OutlineManager } from './components/OutlineManager'
+import { ReferenceSelector } from './components/ReferenceSelector'
 import { WorldviewManager } from './components/WorldviewManager'
 import {
   Chapter,
   ChapterVersion,
   CharacterItem,
   CharacterSet,
+  ChatMessage,
   CompletionPreset,
   GeneratorPreset,
   GeneratorPrompt,
@@ -84,6 +86,17 @@ const defaultInspirationPresets: GeneratorPreset[] = [
     prompts: [
       { id: '1', role: 'system', content: '你是一个创意丰富的灵感激发助手。', enabled: true },
       { id: '2', role: 'user', content: '请根据用户的模糊想法提供创作灵感。\n\n【现有灵感列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的灵感条目。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "灵感关键词/标题", "content": "详细的灵感描述、创意点子..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
+    ]
+  },
+  {
+    id: 'chat',
+    name: '灵感聊天助手',
+    temperature: 0.8,
+    topP: 0.95,
+    topK: 1,
+    prompts: [
+      { id: '1', role: 'system', content: '你是一个创意丰富的灵感激发助手。你可以和用户讨论小说创意，提供建议，并帮助完善想法。', enabled: true },
+      { id: '2', role: 'user', content: '【现有灵感列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户说：{{input}}', enabled: true }
     ]
   }
 ]
@@ -121,6 +134,17 @@ const defaultOutlinePresets: GeneratorPreset[] = [
       { id: '1', role: 'system', content: '你是一个硬核科幻小说作家。请侧重于世界观设定、技术细节和社会影响，生成一份严谨的科幻小说大纲。', enabled: true },
       { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户的要求是：{{input}}\n\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "第一章：标题", "summary": "本章的详细剧情摘要..." },\n  { "title": "第二章：标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
     ]
+  },
+  {
+    id: 'chat',
+    name: '大纲聊天助手',
+    temperature: 0.7,
+    topP: 0.95,
+    topK: 1,
+    prompts: [
+      { id: '1', role: 'system', content: '你是一个专业的小说大纲生成助手。你可以和用户讨论故事情节、章节安排和剧情走向。', enabled: true },
+      { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户说：{{input}}', enabled: true }
+    ]
   }
 ]
 
@@ -135,6 +159,17 @@ const defaultCharacterPresets: GeneratorPreset[] = [
       { id: '1', role: 'system', content: '你是一个专业的小说角色设计专家。', enabled: true },
       { id: '2', role: 'user', content: '请根据用户的要求生成或补充角色列表。\n\n【现有角色列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的角色（如果是修改现有角色，请返回修改后的完整信息）。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "name": "角色名", "bio": "角色的详细设定、性格、外貌等..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
     ]
+  },
+  {
+    id: 'chat',
+    name: '角色聊天助手',
+    temperature: 0.7,
+    topP: 0.95,
+    topK: 1,
+    prompts: [
+      { id: '1', role: 'system', content: '你是一个专业的小说角色设计专家。你可以和用户讨论角色性格、背景、动机和人际关系。', enabled: true },
+      { id: '2', role: 'user', content: '请根据用户的要求生成或补充角色列表。\n\n【现有角色列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户说：{{input}}', enabled: true }
+    ]
   }
 ]
 
@@ -148,6 +183,17 @@ const defaultWorldviewPresets: GeneratorPreset[] = [
     prompts: [
       { id: '1', role: 'system', content: '你是一个专业的小说世界观架构师。', enabled: true },
       { id: '2', role: 'user', content: '请根据用户的要求生成或补充世界观设定。\n\n【现有设定列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的世界观设定项（如果是修改现有设定，请返回修改后的完整信息）。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "item": "设定项名称（如：地理环境、魔法体系）", "setting": "详细的设定内容..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
+    ]
+  },
+  {
+    id: 'chat',
+    name: '世界观聊天助手',
+    temperature: 0.7,
+    topP: 0.95,
+    topK: 1,
+    prompts: [
+      { id: '1', role: 'system', content: '你是一个专业的小说世界观架构师。你可以和用户讨论地理环境、魔法体系、社会结构等设定。', enabled: true },
+      { id: '2', role: 'user', content: '请根据用户的要求生成或补充世界观设定。\n\n【现有设定列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户说：{{input}}', enabled: true }
     ]
   }
 ]
@@ -237,6 +283,83 @@ const buildWorldInfoContext = (novel: Novel | undefined) => {
       context += '\n'
   }
   
+  return context
+}
+
+const buildReferenceContext = (
+  novel: Novel | undefined,
+  worldviewSetId: string | null,
+  worldviewIndices: number[],
+  characterSetId: string | null,
+  characterIndices: number[],
+  inspirationSetId: string | null,
+  inspirationIndices: number[],
+  outlineSetId: string | null,
+  outlineIndices: number[]
+) => {
+  if (!novel) return ''
+  let context = ''
+
+  // Worldview
+  if (worldviewSetId) {
+    const set = novel.worldviewSets?.find(s => s.id === worldviewSetId)
+    if (set) {
+      context += `【参考世界观 (${set.name})】：\n`
+      set.entries.forEach((entry, idx) => {
+        if (worldviewIndices.length === 0 || worldviewIndices.includes(idx)) {
+          context += `· ${entry.item}: ${entry.setting}\n`
+        }
+      })
+      if (set.userNotes) context += `备注：${set.userNotes}\n`
+      context += '\n'
+    }
+  }
+
+  // Characters
+  if (characterSetId) {
+    const set = novel.characterSets?.find(s => s.id === characterSetId)
+    if (set) {
+      context += `【参考角色档案 (${set.name})】：\n`
+      set.characters.forEach((char, idx) => {
+        if (characterIndices.length === 0 || characterIndices.includes(idx)) {
+          context += `· ${char.name}: ${char.bio}\n`
+        }
+      })
+      if (set.userNotes) context += `备注：${set.userNotes}\n`
+      context += '\n'
+    }
+  }
+
+  // Inspiration
+  if (inspirationSetId) {
+    const set = novel.inspirationSets?.find(s => s.id === inspirationSetId)
+    if (set) {
+      context += `【参考灵感 (${set.name})】：\n`
+      set.items.forEach((item, idx) => {
+        if (inspirationIndices.length === 0 || inspirationIndices.includes(idx)) {
+          context += `· ${item.title}: ${item.content}\n`
+        }
+      })
+      if (set.userNotes) context += `备注：${set.userNotes}\n`
+      context += '\n'
+    }
+  }
+
+  // Outline
+  if (outlineSetId) {
+    const set = novel.outlineSets?.find(s => s.id === outlineSetId)
+    if (set) {
+      context += `【参考大纲 (${set.name})】：\n`
+      set.items.forEach((item, idx) => {
+        if (outlineIndices.length === 0 || outlineIndices.includes(idx)) {
+          context += `${idx + 1}. ${item.title}: ${item.summary}\n`
+        }
+      })
+      if (set.userNotes) context += `备注：${set.userNotes}\n`
+      context += '\n'
+    }
+  }
+
   return context
 }
 
@@ -616,8 +739,8 @@ function App() {
       const saved = localStorage.getItem('outlinePresets')
       if (saved) {
         const parsed = JSON.parse(saved)
-        // Migration: Ensure prompts exist
-        return parsed.map((p: any) => {
+        // Migration: Ensure prompts exist and chat preset exists
+        let presets = parsed.map((p: any) => {
           if (!p.prompts && p.content) {
              return {
                 ...p,
@@ -629,6 +752,10 @@ function App() {
           }
           return p
         })
+        if (!presets.some((p: any) => p.id === 'chat')) {
+          presets.push(defaultOutlinePresets.find(p => p.id === 'chat')!)
+        }
+        return presets
       }
       return defaultOutlinePresets
     } catch (e) {
@@ -641,7 +768,14 @@ function App() {
   const [characterPresets, setCharacterPresets] = useState<GeneratorPreset[]>(() => {
     try {
       const saved = localStorage.getItem('characterPresets')
-      return saved ? JSON.parse(saved) : defaultCharacterPresets
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (!parsed.some((p: any) => p.id === 'chat')) {
+          parsed.push(defaultCharacterPresets.find(p => p.id === 'chat')!)
+        }
+        return parsed
+      }
+      return defaultCharacterPresets
     } catch (e) {
       return defaultCharacterPresets
     }
@@ -652,7 +786,14 @@ function App() {
   const [worldviewPresets, setWorldviewPresets] = useState<GeneratorPreset[]>(() => {
     try {
       const saved = localStorage.getItem('worldviewPresets')
-      return saved ? JSON.parse(saved) : defaultWorldviewPresets
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (!parsed.some((p: any) => p.id === 'chat')) {
+          parsed.push(defaultWorldviewPresets.find(p => p.id === 'chat')!)
+        }
+        return parsed
+      }
+      return defaultWorldviewPresets
     } catch (e) {
       return defaultWorldviewPresets
     }
@@ -663,7 +804,14 @@ function App() {
   const [inspirationPresets, setInspirationPresets] = useState<GeneratorPreset[]>(() => {
     try {
       const saved = localStorage.getItem('inspirationPresets')
-      return saved ? JSON.parse(saved) : defaultInspirationPresets
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (!parsed.some((p: any) => p.id === 'chat')) {
+          parsed.push(defaultInspirationPresets.find(p => p.id === 'chat')!)
+        }
+        return parsed
+      }
+      return defaultInspirationPresets
     } catch (e) {
       return defaultInspirationPresets
     }
@@ -699,6 +847,24 @@ function App() {
   useEffect(() => {
     localStorage.setItem('activeAnalysisPresetId', activeAnalysisPresetId)
   }, [activeAnalysisPresetId])
+
+  // Track last used non-chat presets for automatic switching back
+  const [lastNonChatOutlinePresetId, setLastNonChatOutlinePresetId] = useState(() => {
+    const saved = localStorage.getItem('activeOutlinePresetId')
+    return (saved && saved !== 'chat') ? saved : 'default'
+  })
+  const [lastNonChatCharacterPresetId, setLastNonChatCharacterPresetId] = useState(() => {
+    const saved = localStorage.getItem('activeCharacterPresetId')
+    return (saved && saved !== 'chat') ? saved : 'default'
+  })
+  const [lastNonChatWorldviewPresetId, setLastNonChatWorldviewPresetId] = useState(() => {
+    const saved = localStorage.getItem('activeWorldviewPresetId')
+    return (saved && saved !== 'chat') ? saved : 'default'
+  })
+  const [lastNonChatInspirationPresetId, setLastNonChatInspirationPresetId] = useState(() => {
+    const saved = localStorage.getItem('activeInspirationPresetId')
+    return (saved && saved !== 'chat') ? saved : 'default'
+  })
 
   // Two Step Optimization State
   const [twoStepOptimization, setTwoStepOptimization] = useState(() => localStorage.getItem('twoStepOptimization') === 'true')
@@ -851,6 +1017,81 @@ function App() {
   const [userPrompt, setUserPrompt] = useState('')
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
+
+  // Main Chat Reference Selection State
+  const [selectedWorldviewSetIdForChat, setSelectedWorldviewSetIdForChat] = useState<string | null>(null)
+  const [selectedWorldviewIndicesForChat, setSelectedWorldviewIndicesForChat] = useState<number[]>([])
+  
+  const [selectedCharacterSetIdForChat, setSelectedCharacterSetIdForChat] = useState<string | null>(null)
+  const [selectedCharacterIndicesForChat, setSelectedCharacterIndicesForChat] = useState<number[]>([])
+  
+  const [selectedInspirationSetIdForChat, setSelectedInspirationSetIdForChat] = useState<string | null>(null)
+  const [selectedInspirationIndicesForChat, setSelectedInspirationIndicesForChat] = useState<number[]>([])
+  
+  const [selectedOutlineSetIdForChat, setSelectedOutlineSetIdForChat] = useState<string | null>(null)
+  const [selectedOutlineIndicesForChat, setSelectedOutlineIndicesForChat] = useState<number[]>([])
+
+  const [showWorldviewSelectorForChat, setShowWorldviewSelectorForChat] = useState(false)
+  const [showCharacterSelectorForChat, setShowCharacterSelectorForChat] = useState(false)
+  const [showInspirationSelectorForChat, setShowInspirationSelectorForChat] = useState(false)
+  const [showOutlineSelectorForChat, setShowOutlineSelectorForChat] = useState(false)
+
+  // Module Reference Selection State (Shared by all managers)
+  const [selectedWorldviewSetIdForModules, setSelectedWorldviewSetIdForModules] = useState<string | null>(null)
+  const [selectedWorldviewIndicesForModules, setSelectedWorldviewIndicesForModules] = useState<number[]>([])
+  const [selectedCharacterSetIdForModules, setSelectedCharacterSetIdForModules] = useState<string | null>(null)
+  const [selectedCharacterIndicesForModules, setSelectedCharacterIndicesForModules] = useState<number[]>([])
+  const [selectedInspirationSetIdForModules, setSelectedInspirationSetIdForModules] = useState<string | null>(null)
+  const [selectedInspirationIndicesForModules, setSelectedInspirationIndicesForModules] = useState<number[]>([])
+  const [selectedOutlineSetIdForModules, setSelectedOutlineSetIdForModules] = useState<string | null>(null)
+  const [selectedOutlineIndicesForModules, setSelectedOutlineIndicesForModules] = useState<number[]>([])
+
+  const [showWorldviewSelectorForModules, setShowWorldviewSelectorForModules] = useState(false)
+  const [showCharacterSelectorForModules, setShowCharacterSelectorForModules] = useState(false)
+  const [showInspirationSelectorForModules, setShowInspirationSelectorForModules] = useState(false)
+  const [showOutlineSelectorForModules, setShowOutlineSelectorForModules] = useState(false)
+
+  const handleToggleModuleReferenceItem = (type: 'worldview' | 'character' | 'inspiration' | 'outline', setId: string, index: number) => {
+    const setters = {
+      worldview: { id: setSelectedWorldviewSetIdForModules, indices: setSelectedWorldviewIndicesForModules, currentId: selectedWorldviewSetIdForModules, currentIndices: selectedWorldviewIndicesForModules },
+      character: { id: setSelectedCharacterSetIdForModules, indices: setSelectedCharacterIndicesForModules, currentId: selectedCharacterSetIdForModules, currentIndices: selectedCharacterIndicesForModules },
+      inspiration: { id: setSelectedInspirationSetIdForModules, indices: setSelectedInspirationIndicesForModules, currentId: selectedInspirationSetIdForModules, currentIndices: selectedInspirationIndicesForModules },
+      outline: { id: setSelectedOutlineSetIdForModules, indices: setSelectedOutlineIndicesForModules, currentId: selectedOutlineSetIdForModules, currentIndices: selectedOutlineIndicesForModules }
+    }
+
+    const s = setters[type]
+    if (s.currentId !== setId) {
+      s.id(setId)
+      s.indices([index])
+    } else {
+      if (s.currentIndices.includes(index)) {
+        s.indices(s.currentIndices.filter(i => i !== index))
+      } else {
+        s.indices([...s.currentIndices, index])
+      }
+    }
+  }
+
+  const handleToggleReferenceItem = (type: 'worldview' | 'character' | 'inspiration' | 'outline', setId: string, index: number) => {
+    const setters = {
+      worldview: { id: setSelectedWorldviewSetIdForChat, indices: setSelectedWorldviewIndicesForChat, currentId: selectedWorldviewSetIdForChat, currentIndices: selectedWorldviewIndicesForChat },
+      character: { id: setSelectedCharacterSetIdForChat, indices: setSelectedCharacterIndicesForChat, currentId: selectedCharacterSetIdForChat, currentIndices: selectedCharacterIndicesForChat },
+      inspiration: { id: setSelectedInspirationSetIdForChat, indices: setSelectedInspirationIndicesForChat, currentId: selectedInspirationSetIdForChat, currentIndices: selectedInspirationIndicesForChat },
+      outline: { id: setSelectedOutlineSetIdForChat, indices: setSelectedOutlineIndicesForChat, currentId: selectedOutlineSetIdForChat, currentIndices: selectedOutlineIndicesForChat }
+    }
+
+    const s = setters[type]
+    if (s.currentId !== setId) {
+      s.id(setId)
+      s.indices([index])
+    } else {
+      if (s.currentIndices.includes(index)) {
+        s.indices(s.currentIndices.filter(i => i !== index))
+      } else {
+        s.indices([...s.currentIndices, index])
+      }
+    }
+  }
   
   // Scroll to top when active chapter changes
   const contentScrollRef = useRef<HTMLDivElement>(null)
@@ -2176,22 +2417,34 @@ function App() {
 
   const setActiveGeneratorPresetId = (id: string) => {
      switch (generatorSettingsType) {
-        case 'character': setActiveCharacterPresetId(id); break;
-        case 'worldview': setActiveWorldviewPresetId(id); break;
-        case 'inspiration': setActiveInspirationPresetId(id); break;
-        case 'optimize': 
+        case 'character':
+            setActiveCharacterPresetId(id);
+            if (id !== 'chat') setLastNonChatCharacterPresetId(id);
+            break;
+        case 'worldview':
+            setActiveWorldviewPresetId(id);
+            if (id !== 'chat') setLastNonChatWorldviewPresetId(id);
+            break;
+        case 'inspiration':
+            setActiveInspirationPresetId(id);
+            if (id !== 'chat') setLastNonChatInspirationPresetId(id);
+            break;
+        case 'optimize':
             setActiveOptimizePresetId(id);
             if (activeChapterId) {
                 setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, activeOptimizePresetId: id } : c))
             }
             break;
-        case 'analysis': 
-            setActiveAnalysisPresetId(id); 
+        case 'analysis':
+            setActiveAnalysisPresetId(id);
             if (activeChapterId) {
                 setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, activeAnalysisPresetId: id } : c))
             }
             break;
-        default: setActiveOutlinePresetId(id); break;
+        default:
+            setActiveOutlinePresetId(id);
+            if (id !== 'chat') setLastNonChatOutlinePresetId(id);
+            break;
      }
   }
 
@@ -2458,22 +2711,18 @@ function App() {
           dangerouslyAllowBrowser: true
         })
 
-        // Build Context (similar to main generator but focused)
-        let characterContext = ''
-        if (selectedCharacterSetIdForOutlineGen) {
-            const charSet = activeNovel?.characterSets?.find(s => s.id === selectedCharacterSetIdForOutlineGen)
-            if (charSet) {
-                characterContext = `\n【参考角色列表 (${charSet.name})】：\n${JSON.stringify(charSet.characters, null, 2)}\n角色备注：${charSet.userNotes || '无'}\n`
-            }
-        }
-
-        let worldviewContext = ''
-        if (selectedWorldviewSetIdForOutlineGen) {
-            const wvSet = activeNovel?.worldviewSets?.find(s => s.id === selectedWorldviewSetIdForOutlineGen)
-            if (wvSet) {
-                worldviewContext = `\n【参考世界观 (${wvSet.name})】：\n${JSON.stringify(wvSet.entries, null, 2)}\n世界观备注：${wvSet.userNotes || '无'}\n`
-            }
-        }
+        // Build Reference Context
+        const referenceContext = buildReferenceContext(
+          activeNovel,
+          selectedWorldviewSetIdForModules,
+          selectedWorldviewIndicesForModules,
+          selectedCharacterSetIdForModules,
+          selectedCharacterIndicesForModules,
+          selectedInspirationSetIdForModules,
+          selectedInspirationIndicesForModules,
+          selectedOutlineSetIdForModules,
+          selectedOutlineIndicesForModules
+        )
 
         const notes = currentSet.userNotes || ''
 
@@ -2495,7 +2744,7 @@ function App() {
           .filter(p => p.enabled)
           .map(p => {
             let content = p.content
-            content = content.replace('{{context}}', `${worldviewContext}\n${characterContext}\n${outlineContext}`)
+            content = content.replace('{{context}}', `${referenceContext}\n${outlineContext}`)
             content = content.replace('{{notes}}', notes)
             content = content.replace('{{input}}', specificInstruction)
             return { role: p.role, content }
@@ -2559,8 +2808,14 @@ function App() {
     }
   }
 
-  const handleGenerateOutline = async (mode: 'append' | 'replace' = 'append') => {
-    const activePreset = outlinePresets.find(p => p.id === activeOutlinePresetId) || outlinePresets[0]
+  const handleGenerateOutline = async (mode: 'append' | 'replace' | 'chat' = 'append') => {
+    let currentPresetId = activeOutlinePresetId
+    if (mode !== 'chat' && currentPresetId === 'chat') {
+        currentPresetId = lastNonChatOutlinePresetId
+        setActiveOutlinePresetId(lastNonChatOutlinePresetId)
+    }
+
+    const activePreset = outlinePresets.find(p => p.id === currentPresetId) || outlinePresets[0]
     const apiConfig = getApiConfig(activePreset.apiConfig, outlineModel)
 
     if (!apiConfig.apiKey) {
@@ -2605,43 +2860,34 @@ function App() {
           dangerouslyAllowBrowser: true
         })
 
-        // Build Character Context
-        let characterContext = ''
-        if (selectedCharacterSetIdForOutlineGen) {
-            const charSet = activeNovel?.characterSets?.find(s => s.id === selectedCharacterSetIdForOutlineGen)
-            if (charSet) {
-                characterContext = `\n【参考角色列表 (${charSet.name})】：\n${JSON.stringify(charSet.characters, null, 2)}\n角色备注：${charSet.userNotes || '无'}\n`
-            }
-        }
-
-        let worldviewContext = ''
-        if (selectedWorldviewSetIdForOutlineGen) {
-            const wvSet = activeNovel?.worldviewSets?.find(s => s.id === selectedWorldviewSetIdForOutlineGen)
-            if (wvSet) {
-                worldviewContext = `\n【参考世界观 (${wvSet.name})】：\n${JSON.stringify(wvSet.entries, null, 2)}\n世界观备注：${wvSet.userNotes || '无'}\n`
-            }
-        }
-
-        let inspirationContext = ''
-        if (selectedInspirationEntries.length > 0) {
-            const inspList = selectedInspirationEntries.map(entry => {
-                const inspSet = activeNovel?.inspirationSets?.find(s => s.id === entry.setId)
-                const item = inspSet?.items[entry.index]
-                return item ? `· ${item.title}: ${item.content}` : null
-            }).filter(Boolean).join('\n')
-            
-            if (inspList) {
-                inspirationContext = `\n【参考灵感】：\n${inspList}\n`
-            }
-        }
+        // Build Reference Context
+        const referenceContext = buildReferenceContext(
+          activeNovel,
+          selectedWorldviewSetIdForModules,
+          selectedWorldviewIndicesForModules,
+          selectedCharacterSetIdForModules,
+          selectedCharacterIndicesForModules,
+          selectedInspirationSetIdForModules,
+          selectedInspirationIndicesForModules,
+          selectedOutlineSetIdForModules,
+          selectedOutlineIndicesForModules
+        )
 
         const notes = targetSet?.userNotes || ''
 
         // Build Existing Outline Context (Only relevant if appending or referring to previous)
         let outlineContext = ''
         if (mode === 'append' && targetSet && targetSet.items && targetSet.items.length > 0) {
-            outlineContext = '\n【现有大纲】：\n' + targetSet.items.map((item, index) => 
+            outlineContext = '\n【现有大纲】：\n' + targetSet.items.map((item, index) =>
                 `${index + 1}. ${item.title}\n   ${item.summary}`
+            ).join('\n') + '\n'
+        }
+
+        // Build Chat History Context
+        let chatContext = ''
+        if (targetSet && targetSet.chatHistory && targetSet.chatHistory.length > 0) {
+            chatContext = '\n【对话历史】：\n' + targetSet.chatHistory.map(msg =>
+                `${msg.role === 'user' ? 'user' as const : 'assistant' as const}: ${msg.content}`
             ).join('\n') + '\n'
         }
 
@@ -2650,7 +2896,7 @@ function App() {
           .filter(p => p.enabled)
           .map(p => {
             let content = p.content
-            content = content.replace('{{context}}', `${worldviewContext}\n${characterContext}\n${inspirationContext}\n${outlineContext}`)
+            content = content.replace('{{context}}', `${referenceContext}\n${outlineContext}\n${chatContext}`)
             content = content.replace('{{notes}}', notes)
             content = content.replace('{{input}}', userPrompt)
             return { role: p.role, content }
@@ -2681,6 +2927,29 @@ function App() {
         if (!content) throw new Error("Empty response received")
 
         try {
+          if (mode === 'chat') {
+              setNovels(prev => prev.map(n => {
+                if (n.id === activeNovelId) {
+                   const currentSets = n.outlineSets || []
+                   const existingSetIndex = currentSets.findIndex(s => s.id === targetSetId)
+                   if (existingSetIndex !== -1) {
+                        const existingSet = currentSets[existingSetIndex]
+                        const updatedChat: ChatMessage[] = [...(existingSet.chatHistory || []),
+                            { role: 'user' as const, content: userPrompt },
+                            { role: 'assistant' as const, content: content as string }
+                        ]
+                        const newOutlineSets = [...currentSets]
+                        newOutlineSets[existingSetIndex] = { ...existingSet, chatHistory: updatedChat }
+                        return { ...n, outlineSets: newOutlineSets }
+                   }
+                }
+                return n
+              }))
+              setUserPrompt('')
+              terminal.log(`[Outline Chat] Attempt ${attempt + 1} successful.`)
+              break
+          }
+
           const rawData = safeParseJSONArray(content)
           const outlineData = normalizeGeneratorResult(rawData, 'outline')
           
@@ -2696,8 +2965,8 @@ function App() {
                         // 自动记录用户输入到备注中
                         const timestamp = new Date().toLocaleTimeString()
                         const newRecord = `[${timestamp}] (${mode === 'replace' ? '重新生成' : '追加'}) ${userPrompt}`
-                        const updatedNotes = existingSet.userNotes 
-                            ? `${existingSet.userNotes}\n${newRecord}` 
+                        const updatedNotes = existingSet.userNotes
+                            ? `${existingSet.userNotes}\n${newRecord}`
                             : newRecord
 
                         const updatedItems = mode === 'replace' ? outlineData : [...existingSet.items, ...outlineData]
@@ -2847,8 +3116,14 @@ function App() {
       })
   }
 
-  const handleGenerateCharacters = async () => {
-    const activePreset = characterPresets.find(p => p.id === activeCharacterPresetId) || characterPresets[0]
+  const handleGenerateCharacters = async (mode: 'generate' | 'chat' = 'generate') => {
+    let currentPresetId = activeCharacterPresetId
+    if (mode !== 'chat' && currentPresetId === 'chat') {
+        currentPresetId = lastNonChatCharacterPresetId
+        setActiveCharacterPresetId(lastNonChatCharacterPresetId)
+    }
+
+    const activePreset = characterPresets.find(p => p.id === currentPresetId) || characterPresets[0]
     const apiConfig = getApiConfig(activePreset.apiConfig, characterModel)
 
     if (!apiConfig.apiKey) {
@@ -2896,28 +3171,28 @@ function App() {
         const existingChars = targetSet?.characters || []
         const notes = targetSet?.userNotes || ''
 
-        let worldviewContext = ''
-        if (selectedWorldviewSetIdForCharGen) {
-            const wvSet = activeNovel?.worldviewSets?.find(s => s.id === selectedWorldviewSetIdForCharGen)
-            if (wvSet) {
-                worldviewContext = `\n【参考世界观 (${wvSet.name})】：\n${JSON.stringify(wvSet.entries, null, 2)}\n世界观备注：${wvSet.userNotes || '无'}\n`
-            }
+        // Build Reference Context
+        const referenceContext = buildReferenceContext(
+          activeNovel,
+          selectedWorldviewSetIdForModules,
+          selectedWorldviewIndicesForModules,
+          selectedCharacterSetIdForModules,
+          selectedCharacterIndicesForModules,
+          selectedInspirationSetIdForModules,
+          selectedInspirationIndicesForModules,
+          selectedOutlineSetIdForModules,
+          selectedOutlineIndicesForModules
+        )
+
+        // Build Chat History Context
+        let chatContext = ''
+        if (targetSet && targetSet.chatHistory && targetSet.chatHistory.length > 0) {
+            chatContext = '\n【对话历史】：\n' + targetSet.chatHistory.map(msg =>
+                `${msg.role === 'user' ? 'user' as const : 'assistant' as const}: ${msg.content}`
+            ).join('\n') + '\n'
         }
 
-        let inspirationContext = ''
-        if (selectedInspirationEntries.length > 0) {
-            const inspList = selectedInspirationEntries.map(entry => {
-                const inspSet = activeNovel?.inspirationSets?.find(s => s.id === entry.setId)
-                const item = inspSet?.items[entry.index]
-                return item ? `· ${item.title}: ${item.content}` : null
-            }).filter(Boolean).join('\n')
-            
-            if (inspList) {
-                inspirationContext = `\n【参考灵感】：\n${inspList}\n`
-            }
-        }
-
-        const contextStr = `${JSON.stringify(existingChars, null, 2)}\n${worldviewContext}\n${inspirationContext}`
+        const contextStr = `${JSON.stringify(existingChars, null, 2)}\n${referenceContext}\n${chatContext}`
 
         const messages: any[] = activePreset.prompts
           .filter(p => p.enabled)
@@ -2949,6 +3224,29 @@ function App() {
         if (!content) throw new Error("Empty response received")
 
         try {
+          if (mode === 'chat') {
+              setNovels(prev => prev.map(n => {
+                if (n.id === activeNovelId) {
+                   const currentSets = n.characterSets || []
+                   const existingSetIndex = currentSets.findIndex(s => s.id === targetSetId)
+                   if (existingSetIndex !== -1) {
+                        const existingSet = currentSets[existingSetIndex]
+                        const updatedChat: ChatMessage[] = [...(existingSet.chatHistory || []),
+                            { role: 'user', content: userPrompt },
+                            { role: 'assistant', content: content }
+                        ]
+                        const newCharacterSets = [...currentSets]
+                        newCharacterSets[existingSetIndex] = { ...existingSet, chatHistory: updatedChat }
+                        return { ...n, characterSets: newCharacterSets }
+                   }
+                }
+                return n
+              }))
+              setUserPrompt('')
+              terminal.log(`[Characters Chat] Attempt ${attempt + 1} successful.`)
+              break
+          }
+
           const rawData = safeParseJSONArray(content)
           const charData = normalizeGeneratorResult(rawData, 'character')
 
@@ -2963,8 +3261,8 @@ function App() {
                         
                         const timestamp = new Date().toLocaleTimeString()
                         const newRecord = `[${timestamp}] ${userPrompt}`
-                        const updatedNotes = existingSet.userNotes 
-                            ? `${existingSet.userNotes}\n${newRecord}` 
+                        const updatedNotes = existingSet.userNotes
+                            ? `${existingSet.userNotes}\n${newRecord}`
                             : newRecord
 
                         const updatedSet = {
@@ -3110,8 +3408,14 @@ function App() {
   }
 
   // Inspiration Generation
-  const handleGenerateInspiration = async () => {
-    const activePreset = inspirationPresets.find(p => p.id === activeInspirationPresetId) || inspirationPresets[0]
+  const handleGenerateInspiration = async (mode: 'generate' | 'chat' = 'generate') => {
+    let currentPresetId = activeInspirationPresetId
+    if (mode !== 'chat' && currentPresetId === 'chat') {
+        currentPresetId = lastNonChatInspirationPresetId
+        setActiveInspirationPresetId(lastNonChatInspirationPresetId)
+    }
+
+    const activePreset = inspirationPresets.find(p => p.id === currentPresetId) || inspirationPresets[0]
     const apiConfig = getApiConfig(activePreset.apiConfig, inspirationModel)
 
     if (!apiConfig.apiKey) {
@@ -3159,7 +3463,28 @@ function App() {
         const existingItems = targetSet?.items || []
         const notes = targetSet?.userNotes || ''
 
-        const contextStr = JSON.stringify(existingItems, null, 2)
+        // Build Reference Context
+        const referenceContext = buildReferenceContext(
+          activeNovel,
+          selectedWorldviewSetIdForModules,
+          selectedWorldviewIndicesForModules,
+          selectedCharacterSetIdForModules,
+          selectedCharacterIndicesForModules,
+          selectedInspirationSetIdForModules,
+          selectedInspirationIndicesForModules,
+          selectedOutlineSetIdForModules,
+          selectedOutlineIndicesForModules
+        )
+
+        // Build Chat History Context
+        let chatContext = ''
+        if (targetSet && targetSet.chatHistory && targetSet.chatHistory.length > 0) {
+            chatContext = '\n【对话历史】：\n' + targetSet.chatHistory.map(msg =>
+                `${msg.role === 'user' ? 'user' as const : 'assistant' as const}: ${msg.content}`
+            ).join('\n') + '\n'
+        }
+
+        const contextStr = JSON.stringify(existingItems, null, 2) + '\n' + referenceContext + chatContext
 
         const messages: any[] = activePreset.prompts
           .filter(p => p.enabled)
@@ -3191,10 +3516,33 @@ function App() {
         if (!content) throw new Error("Empty response received")
 
         try {
+          if (mode === 'chat') {
+              setNovels(prev => prev.map(n => {
+                if (n.id === activeNovelId) {
+                   const currentSets = n.inspirationSets || []
+                   const existingSetIndex = currentSets.findIndex(s => s.id === targetSetId)
+                   if (existingSetIndex !== -1) {
+                        const existingSet = currentSets[existingSetIndex]
+                        const updatedChat: ChatMessage[] = [...(existingSet.chatHistory || []),
+                            { role: 'user', content: userPrompt },
+                            { role: 'assistant', content: content }
+                        ]
+                        const newInspirationSets = [...currentSets]
+                        newInspirationSets[existingSetIndex] = { ...existingSet, chatHistory: updatedChat }
+                        return { ...n, inspirationSets: newInspirationSets }
+                   }
+                }
+                return n
+              }))
+              setUserPrompt('')
+              terminal.log(`[Inspiration Chat] Attempt ${attempt + 1} successful.`)
+              break
+          }
+
           const rawData = safeParseJSONArray(content)
           // Reusing outline normalization logic: title->title, summary->content
           // normalizeGeneratorResult('outline') returns { title, summary }
-          let inspirationData = normalizeGeneratorResult(rawData, 'outline') 
+          let inspirationData = normalizeGeneratorResult(rawData, 'outline')
           
           const finalData = inspirationData.map(item => ({
               title: item.title,
@@ -3212,8 +3560,8 @@ function App() {
                         
                         const timestamp = new Date().toLocaleTimeString()
                         const newRecord = `[${timestamp}] ${userPrompt}`
-                        const updatedNotes = existingSet.userNotes 
-                            ? `${existingSet.userNotes}\n${newRecord}` 
+                        const updatedNotes = existingSet.userNotes
+                            ? `${existingSet.userNotes}\n${newRecord}`
                             : newRecord
 
                         const updatedSet = {
@@ -3269,8 +3617,14 @@ function App() {
   }
 
   // Worldview Generation
-  const handleGenerateWorldview = async () => {
-    const activePreset = worldviewPresets.find(p => p.id === activeWorldviewPresetId) || worldviewPresets[0]
+  const handleGenerateWorldview = async (mode: 'generate' | 'chat' = 'generate') => {
+    let currentPresetId = activeWorldviewPresetId
+    if (mode !== 'chat' && currentPresetId === 'chat') {
+        currentPresetId = 'default'
+        setActiveWorldviewSetId('default')
+    }
+
+    const activePreset = worldviewPresets.find(p => p.id === currentPresetId) || worldviewPresets[0]
     const apiConfig = getApiConfig(activePreset.apiConfig, worldviewModel)
 
     if (!apiConfig.apiKey) {
@@ -3318,20 +3672,28 @@ function App() {
         const existingEntries = targetSet?.entries || []
         const notes = targetSet?.userNotes || ''
 
-        let inspirationContext = ''
-        if (selectedInspirationEntries.length > 0) {
-            const inspList = selectedInspirationEntries.map(entry => {
-                const inspSet = activeNovel?.inspirationSets?.find(s => s.id === entry.setId)
-                const item = inspSet?.items[entry.index]
-                return item ? `· ${item.title}: ${item.content}` : null
-            }).filter(Boolean).join('\n')
-            
-            if (inspList) {
-                inspirationContext = `\n【参考灵感】：\n${inspList}\n`
-            }
+        // Build Reference Context
+        const referenceContext = buildReferenceContext(
+          activeNovel,
+          selectedWorldviewSetIdForModules,
+          selectedWorldviewIndicesForModules,
+          selectedCharacterSetIdForModules,
+          selectedCharacterIndicesForModules,
+          selectedInspirationSetIdForModules,
+          selectedInspirationIndicesForModules,
+          selectedOutlineSetIdForModules,
+          selectedOutlineIndicesForModules
+        )
+
+        // Build Chat History Context
+        let chatContext = ''
+        if (targetSet && targetSet.chatHistory && targetSet.chatHistory.length > 0) {
+            chatContext = '\n【对话历史】：\n' + targetSet.chatHistory.map(msg =>
+                `${msg.role === 'user' ? 'user' as const : 'assistant' as const}: ${msg.content}`
+            ).join('\n') + '\n'
         }
 
-        const contextStr = `${JSON.stringify(existingEntries, null, 2)}\n${inspirationContext}`
+        const contextStr = `${JSON.stringify(existingEntries, null, 2)}\n${referenceContext}\n${chatContext}`
 
         const messages: any[] = activePreset.prompts
           .filter(p => p.enabled)
@@ -3363,6 +3725,29 @@ function App() {
         if (!content) throw new Error("Empty response received")
 
         try {
+          if (mode === 'chat') {
+              setNovels(prev => prev.map(n => {
+                if (n.id === activeNovelId) {
+                   const currentSets = n.worldviewSets || []
+                   const existingSetIndex = currentSets.findIndex(s => s.id === targetSetId)
+                   if (existingSetIndex !== -1) {
+                        const existingSet = currentSets[existingSetIndex]
+                        const updatedChat: ChatMessage[] = [...(existingSet.chatHistory || []),
+                            { role: 'user' as const, content: userPrompt },
+                            { role: 'assistant' as const, content: content as string }
+                        ]
+                        const newWorldviewSets = [...currentSets]
+                        newWorldviewSets[existingSetIndex] = { ...existingSet, chatHistory: updatedChat }
+                        return { ...n, worldviewSets: newWorldviewSets }
+                   }
+                }
+                return n
+              }))
+              setUserPrompt('')
+              terminal.log(`[Worldview Chat] Attempt ${attempt + 1} successful.`)
+              break
+          }
+
           const rawData = safeParseJSONArray(content)
           const worldData = normalizeGeneratorResult(rawData, 'worldview')
 
@@ -3377,8 +3762,8 @@ function App() {
                         
                         const timestamp = new Date().toLocaleTimeString()
                         const newRecord = `[${timestamp}] ${userPrompt}`
-                        const updatedNotes = existingSet.userNotes 
-                            ? `${existingSet.userNotes}\n${newRecord}` 
+                        const updatedNotes = existingSet.userNotes
+                            ? `${existingSet.userNotes}\n${newRecord}`
                             : newRecord
 
                         const updatedSet = {
@@ -4481,7 +4866,21 @@ ${taskDescription}`
         const processedUserPrompt = processTextWithRegex(userPrompt, scripts, 'input')
         
         // Combine Context and User Prompt
-        const worldInfo = buildWorldInfoContext(activeNovel || undefined)
+        const referenceContext = buildReferenceContext(
+          activeNovel,
+          selectedWorldviewSetIdForChat,
+          selectedWorldviewIndicesForChat,
+          selectedCharacterSetIdForChat,
+          selectedCharacterIndicesForChat,
+          selectedInspirationSetIdForChat,
+          selectedInspirationIndicesForChat,
+          selectedOutlineSetIdForChat,
+          selectedOutlineIndicesForChat
+        )
+        
+        // If no specific references selected, fallback to legacy world info (optional, but keeps behavior consistent)
+        const worldInfo = referenceContext || buildWorldInfoContext(activeNovel || undefined)
+        
         messages.push({ role: 'user', content: worldInfo + contextMsg + processedUserPrompt })
 
         const response = await openai.chat.completions.create({
@@ -5610,6 +6009,32 @@ ${taskDescription}`
                           onShowSettings={() => { setGeneratorSettingsType('inspiration'); setShowGeneratorSettingsModal(true); }}
                           modelName={inspirationPresets.find(p => p.id === activeInspirationPresetId)?.name || '默认灵感'}
                           onSendToModule={handleSendInspirationToModule}
+                          activePresetId={activeInspirationPresetId}
+                          onSetActivePresetId={setActiveInspirationPresetId}
+                          selectedWorldviewSetId={selectedWorldviewSetIdForModules}
+                          selectedWorldviewIndices={selectedWorldviewIndicesForModules}
+                          onSelectWorldviewSet={setSelectedWorldviewSetIdForModules}
+                          onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
+                          showWorldviewSelector={showWorldviewSelectorForModules}
+                          onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
+                          selectedCharacterSetId={selectedCharacterSetIdForModules}
+                          selectedCharacterIndices={selectedCharacterIndicesForModules}
+                          onSelectCharacterSet={setSelectedCharacterSetIdForModules}
+                          onToggleCharacterItem={(setId, idx) => handleToggleModuleReferenceItem('character', setId, idx)}
+                          showCharacterSelector={showCharacterSelectorForModules}
+                          onToggleCharacterSelector={setShowCharacterSelectorForModules}
+                          selectedInspirationSetId={selectedInspirationSetIdForModules}
+                          selectedInspirationIndices={selectedInspirationIndicesForModules}
+                          onSelectInspirationSet={setSelectedInspirationSetIdForModules}
+                          onToggleInspirationItem={(setId, idx) => handleToggleModuleReferenceItem('inspiration', setId, idx)}
+                          showInspirationSelector={showInspirationSelectorForModules}
+                          onToggleInspirationSelector={setShowInspirationSelectorForModules}
+                          selectedOutlineSetId={selectedOutlineSetIdForModules}
+                          selectedOutlineIndices={selectedOutlineIndicesForModules}
+                          onSelectOutlineSet={setSelectedOutlineSetIdForModules}
+                          onToggleOutlineItem={(setId, idx) => handleToggleModuleReferenceItem('outline', setId, idx)}
+                          showOutlineSelector={showOutlineSelectorForModules}
+                          onToggleOutlineSelector={setShowOutlineSelectorForModules}
                           sidebarHeader={
                              <div className="flex items-center justify-between">
                                 <div className="font-bold flex items-center gap-2">
@@ -5677,6 +6102,8 @@ ${taskDescription}`
                           }}
                           onShowSettings={() => { setGeneratorSettingsType('character'); setShowGeneratorSettingsModal(true); }}
                           modelName={characterPresets.find(p => p.id === activeCharacterPresetId)?.name || '默认设置'}
+                          activePresetId={activeCharacterPresetId}
+                          onSetActivePresetId={setActiveCharacterPresetId}
                           sidebarHeader={
                              <div className="flex items-center justify-between">
                                 <div className="font-bold flex items-center gap-2">
@@ -5685,28 +6112,28 @@ ${taskDescription}`
                                 </div>
 
                                 <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
-                                   <button 
+                                   <button
                                        onClick={() => handleSwitchModule('inspiration')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到灵感"
                                    >
                                        <Lightbulb className="w-4 h-4" />
                                    </button>
-                                   <button 
+                                   <button
                                        onClick={() => handleSwitchModule('worldview')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到世界观"
                                    >
                                        <Globe className="w-4 h-4" />
                                    </button>
-                                   <button 
+                                   <button
                                        onClick={() => handleSwitchModule('characters')}
                                        className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
                                        title="切换到角色集"
                                    >
                                        <Users className="w-4 h-4" />
                                    </button>
-                                   <button 
+                                   <button
                                        onClick={() => handleSwitchModule('outline')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到大纲"
@@ -5720,10 +6147,30 @@ ${taskDescription}`
                                 </button>
                              </div>
                           }
-                          selectedWorldviewSetId={selectedWorldviewSetIdForCharGen}
-                          setSelectedWorldviewSetId={setSelectedWorldviewSetIdForCharGen}
-                          selectedInspirationEntries={selectedInspirationEntries}
-                          setSelectedInspirationEntries={setSelectedInspirationEntries}
+                          selectedWorldviewSetId={selectedWorldviewSetIdForModules}
+                          selectedWorldviewIndices={selectedWorldviewIndicesForModules}
+                          onSelectWorldviewSet={setSelectedWorldviewSetIdForModules}
+                          onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
+                          showWorldviewSelector={showWorldviewSelectorForModules}
+                          onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
+                          selectedCharacterSetId={selectedCharacterSetIdForModules}
+                          selectedCharacterIndices={selectedCharacterIndicesForModules}
+                          onSelectCharacterSet={setSelectedCharacterSetIdForModules}
+                          onToggleCharacterItem={(setId, idx) => handleToggleModuleReferenceItem('character', setId, idx)}
+                          showCharacterSelector={showCharacterSelectorForModules}
+                          onToggleCharacterSelector={setShowCharacterSelectorForModules}
+                          selectedInspirationSetId={selectedInspirationSetIdForModules}
+                          selectedInspirationIndices={selectedInspirationIndicesForModules}
+                          onSelectInspirationSet={setSelectedInspirationSetIdForModules}
+                          onToggleInspirationItem={(setId, idx) => handleToggleModuleReferenceItem('inspiration', setId, idx)}
+                          showInspirationSelector={showInspirationSelectorForModules}
+                          onToggleInspirationSelector={setShowInspirationSelectorForModules}
+                          selectedOutlineSetId={selectedOutlineSetIdForModules}
+                          selectedOutlineIndices={selectedOutlineIndicesForModules}
+                          onSelectOutlineSet={setSelectedOutlineSetIdForModules}
+                          onToggleOutlineItem={(setId, idx) => handleToggleModuleReferenceItem('outline', setId, idx)}
+                          showOutlineSelector={showOutlineSelectorForModules}
+                          onToggleOutlineSelector={setShowOutlineSelectorForModules}
                        />
                     </div>
                  )}
@@ -5733,8 +6180,6 @@ ${taskDescription}`
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
                        <WorldviewManager
                           novel={activeNovel}
-                          selectedInspirationEntries={selectedInspirationEntries}
-                          setSelectedInspirationEntries={setSelectedInspirationEntries}
                           activeWorldviewSetId={activeWorldviewSetId}
                           onSetActiveWorldviewSetId={setActiveWorldviewSetId}
                           onUpdateNovel={(updatedNovel) => {
@@ -5750,6 +6195,32 @@ ${taskDescription}`
                           }}
                           onShowSettings={() => { setGeneratorSettingsType('worldview'); setShowGeneratorSettingsModal(true); }}
                           modelName={worldviewPresets.find(p => p.id === activeWorldviewPresetId)?.name || '默认设置'}
+                          activePresetId={activeWorldviewPresetId}
+                          onSetActivePresetId={setActiveWorldviewPresetId}
+                          selectedWorldviewSetId={selectedWorldviewSetIdForModules}
+                          selectedWorldviewIndices={selectedWorldviewIndicesForModules}
+                          onSelectWorldviewSet={setSelectedWorldviewSetIdForModules}
+                          onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
+                          showWorldviewSelector={showWorldviewSelectorForModules}
+                          onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
+                          selectedCharacterSetId={selectedCharacterSetIdForModules}
+                          selectedCharacterIndices={selectedCharacterIndicesForModules}
+                          onSelectCharacterSet={setSelectedCharacterSetIdForModules}
+                          onToggleCharacterItem={(setId, idx) => handleToggleModuleReferenceItem('character', setId, idx)}
+                          showCharacterSelector={showCharacterSelectorForModules}
+                          onToggleCharacterSelector={setShowCharacterSelectorForModules}
+                          selectedInspirationSetId={selectedInspirationSetIdForModules}
+                          selectedInspirationIndices={selectedInspirationIndicesForModules}
+                          onSelectInspirationSet={setSelectedInspirationSetIdForModules}
+                          onToggleInspirationItem={(setId, idx) => handleToggleModuleReferenceItem('inspiration', setId, idx)}
+                          showInspirationSelector={showInspirationSelectorForModules}
+                          onToggleInspirationSelector={setShowInspirationSelectorForModules}
+                          selectedOutlineSetId={selectedOutlineSetIdForModules}
+                          selectedOutlineIndices={selectedOutlineIndicesForModules}
+                          onSelectOutlineSet={setSelectedOutlineSetIdForModules}
+                          onToggleOutlineItem={(setId, idx) => handleToggleModuleReferenceItem('outline', setId, idx)}
+                          showOutlineSelector={showOutlineSelectorForModules}
+                          onToggleOutlineSelector={setShowOutlineSelectorForModules}
                           sidebarHeader={
                              <div className="flex items-center justify-between">
                                 <div className="font-bold flex items-center gap-2">
@@ -5758,28 +6229,28 @@ ${taskDescription}`
                                 </div>
 
                                 <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
-                                   <button 
+                                   <button
                                        onClick={() => handleSwitchModule('inspiration')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到灵感"
                                    >
                                        <Lightbulb className="w-4 h-4" />
                                    </button>
-                                   <button 
+                                   <button
                                        onClick={() => handleSwitchModule('worldview')}
                                        className="p-1.5 rounded transition-all bg-[var(--theme-color)] text-white shadow-sm"
                                        title="切换到世界观"
                                    >
                                        <Globe className="w-4 h-4" />
                                    </button>
-                                   <button 
+                                   <button
                                        onClick={() => handleSwitchModule('characters')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到角色集"
                                    >
                                        <Users className="w-4 h-4" />
                                    </button>
-                                   <button 
+                                   <button
                                        onClick={() => handleSwitchModule('outline')}
                                        className="p-1.5 rounded transition-all text-gray-400 hover:text-white hover:bg-gray-700"
                                        title="切换到大纲"
@@ -5816,7 +6287,7 @@ ${taskDescription}`
                           }}
                           includeFullOutlineInAutoWrite={includeFullOutlineInAutoWrite}
                           setIncludeFullOutlineInAutoWrite={setIncludeFullOutlineInAutoWrite}
-                          onGenerateOutline={() => handleGenerateOutline('append')}
+                          onGenerateOutline={(mode) => handleGenerateOutline(mode === 'chat' ? 'chat' : 'append')}
                           onRegenerateAll={handleRegenerateAllOutline}
                           onRegenerateItem={handleRegenerateOutlineItem}
                           isGenerating={isGeneratingOutline}
@@ -5829,12 +6300,32 @@ ${taskDescription}`
                           setUserPrompt={setUserPrompt}
                           onShowSettings={() => { setGeneratorSettingsType('outline'); setShowGeneratorSettingsModal(true); }}
                           modelName={outlinePresets.find(p => p.id === activeOutlinePresetId)?.name || '默认大纲'}
-                          selectedCharacterSetId={selectedCharacterSetIdForOutlineGen}
-                          setSelectedCharacterSetId={setSelectedCharacterSetIdForOutlineGen}
-                          selectedWorldviewSetId={selectedWorldviewSetIdForOutlineGen}
-                          setSelectedWorldviewSetId={setSelectedWorldviewSetIdForOutlineGen}
-                          selectedInspirationEntries={selectedInspirationEntries}
-                          setSelectedInspirationEntries={setSelectedInspirationEntries}
+                          activePresetId={activeOutlinePresetId}
+                          onSetActivePresetId={setActiveOutlinePresetId}
+                          selectedWorldviewSetId={selectedWorldviewSetIdForModules}
+                          selectedWorldviewIndices={selectedWorldviewIndicesForModules}
+                          onSelectWorldviewSet={setSelectedWorldviewSetIdForModules}
+                          onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
+                          showWorldviewSelector={showWorldviewSelectorForModules}
+                          onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
+                          selectedCharacterSetId={selectedCharacterSetIdForModules}
+                          selectedCharacterIndices={selectedCharacterIndicesForModules}
+                          onSelectCharacterSet={setSelectedCharacterSetIdForModules}
+                          onToggleCharacterItem={(setId, idx) => handleToggleModuleReferenceItem('character', setId, idx)}
+                          showCharacterSelector={showCharacterSelectorForModules}
+                          onToggleCharacterSelector={setShowCharacterSelectorForModules}
+                          selectedInspirationSetId={selectedInspirationSetIdForModules}
+                          selectedInspirationIndices={selectedInspirationIndicesForModules}
+                          onSelectInspirationSet={setSelectedInspirationSetIdForModules}
+                          onToggleInspirationItem={(setId, idx) => handleToggleModuleReferenceItem('inspiration', setId, idx)}
+                          showInspirationSelector={showInspirationSelectorForModules}
+                          onToggleInspirationSelector={setShowInspirationSelectorForModules}
+                          selectedOutlineSetId={selectedOutlineSetIdForModules}
+                          selectedOutlineIndices={selectedOutlineIndicesForModules}
+                          onSelectOutlineSet={setSelectedOutlineSetIdForModules}
+                          onToggleOutlineItem={(setId, idx) => handleToggleModuleReferenceItem('outline', setId, idx)}
+                          showOutlineSelector={showOutlineSelectorForModules}
+                          onToggleOutlineSelector={setShowOutlineSelectorForModules}
                           sidebarHeader={
                              <div className="flex items-center justify-between">
                                 <div className="font-bold flex items-center gap-2">
@@ -6059,8 +6550,70 @@ ${taskDescription}`
 
         {!showOutline && (
         <div className="bg-gray-800 border-t border-gray-700 p-4 shrink-0">
-          <div className="max-w-4xl mx-auto flex gap-4">
-            <div className="flex-1 relative">
+          <div className="max-w-4xl mx-auto space-y-3">
+            {/* Reference Selectors */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-500 shrink-0">参考:</span>
+              
+              <ReferenceSelector
+                novel={activeNovel}
+                type="worldview"
+                selectedSetId={selectedWorldviewSetIdForChat}
+                selectedItemIndices={selectedWorldviewIndicesForChat}
+                onSelectSet={(id) => { setSelectedWorldviewSetIdForChat(id); setSelectedWorldviewIndicesForChat([]); }}
+                onToggleItem={(setId, idx) => handleToggleReferenceItem('worldview', setId, idx)}
+                isOpen={showWorldviewSelectorForChat}
+                onToggleOpen={(open) => {
+                  setShowWorldviewSelectorForChat(open);
+                  if (open) { setShowCharacterSelectorForChat(false); setShowInspirationSelectorForChat(false); setShowOutlineSelectorForChat(false); }
+                }}
+              />
+
+              <ReferenceSelector
+                novel={activeNovel}
+                type="character"
+                selectedSetId={selectedCharacterSetIdForChat}
+                selectedItemIndices={selectedCharacterIndicesForChat}
+                onSelectSet={(id) => { setSelectedCharacterSetIdForChat(id); setSelectedCharacterIndicesForChat([]); }}
+                onToggleItem={(setId, idx) => handleToggleReferenceItem('character', setId, idx)}
+                isOpen={showCharacterSelectorForChat}
+                onToggleOpen={(open) => {
+                  setShowCharacterSelectorForChat(open);
+                  if (open) { setShowWorldviewSelectorForChat(false); setShowInspirationSelectorForChat(false); setShowOutlineSelectorForChat(false); }
+                }}
+              />
+
+              <ReferenceSelector
+                novel={activeNovel}
+                type="inspiration"
+                selectedSetId={selectedInspirationSetIdForChat}
+                selectedItemIndices={selectedInspirationIndicesForChat}
+                onSelectSet={(id) => { setSelectedInspirationSetIdForChat(id); setSelectedInspirationIndicesForChat([]); }}
+                onToggleItem={(setId, idx) => handleToggleReferenceItem('inspiration', setId, idx)}
+                isOpen={showInspirationSelectorForChat}
+                onToggleOpen={(open) => {
+                  setShowInspirationSelectorForChat(open);
+                  if (open) { setShowWorldviewSelectorForChat(false); setShowCharacterSelectorForChat(false); setShowOutlineSelectorForChat(false); }
+                }}
+              />
+
+              <ReferenceSelector
+                novel={activeNovel}
+                type="outline"
+                selectedSetId={selectedOutlineSetIdForChat}
+                selectedItemIndices={selectedOutlineIndicesForChat}
+                onSelectSet={(id) => { setSelectedOutlineSetIdForChat(id); setSelectedOutlineIndicesForChat([]); }}
+                onToggleItem={(setId, idx) => handleToggleReferenceItem('outline', setId, idx)}
+                isOpen={showOutlineSelectorForChat}
+                onToggleOpen={(open) => {
+                  setShowOutlineSelectorForChat(open);
+                  if (open) { setShowWorldviewSelectorForChat(false); setShowCharacterSelectorForChat(false); setShowInspirationSelectorForChat(false); }
+                }}
+              />
+            </div>
+
+            <div className="flex gap-4">
+              <div className="flex-1 relative">
               <textarea
                 value={userPrompt}
                 onChange={(e) => setUserPrompt(e.target.value)}
@@ -6094,6 +6647,7 @@ ${taskDescription}`
                   </button>
               )}
             </div>
+          </div>
           </div>
           {error && <div className="max-w-4xl mx-auto mt-2 text-xs text-red-400">{error}</div>}
         </div>
