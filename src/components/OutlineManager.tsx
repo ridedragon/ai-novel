@@ -18,6 +18,7 @@ import {
   Settings,
   StopCircle,
   Trash2,
+  Wand2,
   X
 } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
@@ -824,14 +825,25 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                                     <StopCircle className="w-6 h-6" />
                                  </button>
                               ) : (
-                                 <button
-                                    onClick={() => onGenerateOutline && onGenerateOutline('chat')}
-                                    disabled={!userPrompt?.trim()}
-                                    className="p-3 rounded-xl bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 text-white shadow-lg transition-all"
-                                    title="发送"
-                                 >
-                                    <Send className="w-6 h-6" />
-                                 </button>
+                                 <div className="flex flex-col gap-2">
+                                    <button
+                                       onClick={() => onGenerateOutline && onGenerateOutline('chat')}
+                                       disabled={!userPrompt?.trim()}
+                                       className="p-3 rounded-xl bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white shadow-lg transition-all"
+                                       title="发送对话"
+                                    >
+                                       <Send className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                       onClick={() => onGenerateOutline && onGenerateOutline('generate')}
+                                       disabled={!userPrompt?.trim()}
+                                       className="p-3 rounded-xl bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 text-white shadow-lg transition-all flex items-center justify-center gap-1"
+                                       title="立即生成大纲章节"
+                                    >
+                                       <Wand2 className="w-5 h-5" />
+                                       <span className="text-[10px] font-bold">生成</span>
+                                    </button>
+                                 </div>
                               )}
                            </div>
                         </div>

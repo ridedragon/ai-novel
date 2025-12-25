@@ -3620,8 +3620,8 @@ function App() {
   const handleGenerateWorldview = async (mode: 'generate' | 'chat' = 'generate') => {
     let currentPresetId = activeWorldviewPresetId
     if (mode !== 'chat' && currentPresetId === 'chat') {
-        currentPresetId = 'default'
-        setActiveWorldviewSetId('default')
+        currentPresetId = lastNonChatWorldviewPresetId
+        setActiveWorldviewPresetId(lastNonChatWorldviewPresetId)
     }
 
     const activePreset = worldviewPresets.find(p => p.id === currentPresetId) || worldviewPresets[0]
