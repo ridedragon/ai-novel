@@ -39,7 +39,9 @@ interface InspirationManagerProps {
 
   // Navigation / Integration
   onSendToModule?: (module: 'worldview' | 'character' | 'outline', content: string) => void
+  onReturnToMainWithContent?: (content: string) => void
   activePresetId?: string
+  lastNonChatPresetId?: string
   onSetActivePresetId?: (id: string) => void
 
   // Reference Selection Props
@@ -86,7 +88,9 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
   modelName,
   sidebarHeader,
   onSendToModule,
+  onReturnToMainWithContent,
   activePresetId,
+  lastNonChatPresetId,
   onSetActivePresetId,
   selectedWorldviewSetId,
   selectedWorldviewIndices,
@@ -152,6 +156,17 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
   }, [activeSet?.chatHistory, showChat])
+
+  // Sync preset with view mode on mount
+  useEffect(() => {
+    if (onSetActivePresetId) {
+      if (showChat) {
+        onSetActivePresetId('chat')
+      } else if (lastNonChatPresetId) {
+        onSetActivePresetId(lastNonChatPresetId)
+      }
+    }
+  }, [])
 
   // --- Set Management Helpers ---
 
@@ -454,6 +469,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                         onClick={() => {
                            if (showChat) {
                               setShowChat(false);
+                              if (onSetActivePresetId && lastNonChatPresetId) onSetActivePresetId(lastNonChatPresetId);
                            } else {
                               setShowChat(true);
                               if (onSetActivePresetId) onSetActivePresetId('chat');
@@ -546,7 +562,10 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                                  清空对话
                               </button>
                               <button
-                                 onClick={() => setShowChat(false)}
+                                 onClick={() => {
+                                    setShowChat(false);
+                                    if (onSetActivePresetId && lastNonChatPresetId) onSetActivePresetId(lastNonChatPresetId);
+                                 }}
                                  className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors"
                                  title="返回列表"
                               >
@@ -682,17 +701,41 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                                     <div className="flex flex-col gap-2">
                                        <button
                                           onClick={() => onGenerateInspiration && onGenerateInspiration('chat')}
-                                          disabled={!userPrompt?.trim()}
-                                          className="p-3 rounded-xl bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white shadow-lg transition-all"
+                                          className={`p-3 rounded-xl bg-gray-700 hover:bg-gray-600 text-white shadow-lg transition-all ${!userPrompt?.trim() ? 'text-white/50' : ''}`}
                                           title="发送对话"
                                        >
                                           <Send className="w-5 h-5" />
                                        </button>
                                        <button
-                                          onClick={() => onGenerateInspiration && onGenerateInspiration('generate')}
-                                          disabled={!userPrompt?.trim()}
-                                          className="p-3 rounded-xl bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 text-white shadow-lg transition-all flex items-center justify-center gap-1"
-                                          title="立即生成灵感条目"
+                                          onClick={() => {
+                                             if (onReturnToMainWithContent) {
+                                                // 1. 格式化所有聊天记录
+                                                const history = activeSet.chatHistory || [];
+                                                const formattedHistory = history.map(m =>
+                                                   `${m.role === 'user' ? '用户' : '灵感助手'}: ${m.content}`
+                                                ).join('\n\n');
+                                                
+                                                // 2. 如果当前输入框有内容且未发送，也一并带上
+                                                const finalContent = userPrompt?.trim()
+                                                   ? `${formattedHistory}\n\n用户最新想法: ${userPrompt}`
+                                                   : formattedHistory;
+
+                                                // 3. 发送给主界面的 AI 助手
+                                                onReturnToMainWithContent(finalContent);
+                                                
+                                                // 4. 返回到列表界面（图二）
+                                                setShowChat(false);
+                                                
+                                                // 5. 恢复非聊天的预设
+                                                if (onSetActivePresetId && lastNonChatPresetId) {
+                                                   onSetActivePresetId(lastNonChatPresetId);
+                                                }
+                                             } else if (onGenerateInspiration) {
+                                                onGenerateInspiration('generate');
+                                             }
+                                          }}
+                                          className={`p-3 rounded-xl bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white shadow-lg transition-all flex items-center justify-center gap-1 ${!userPrompt?.trim() && (!activeSet.chatHistory || activeSet.chatHistory.length === 0) ? 'text-white/70' : ''}`}
+                                          title="将对话发送给 AI 助手并返回"
                                        >
                                           <Wand2 className="w-5 h-5" />
                                           <span className="text-[10px] font-bold">生成</span>

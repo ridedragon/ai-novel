@@ -311,6 +311,9 @@ const buildReferenceContext = (
         }
       })
       if (set.userNotes) context += `备注：${set.userNotes}\n`
+      if (set.chatHistory && set.chatHistory.length > 0) {
+        context += `讨论历史：\n${set.chatHistory.map(m => `${m.role === 'user' ? '用户' : '助手'}: ${m.content}`).join('\n')}\n`
+      }
       context += '\n'
     }
   }
@@ -326,6 +329,9 @@ const buildReferenceContext = (
         }
       })
       if (set.userNotes) context += `备注：${set.userNotes}\n`
+      if (set.chatHistory && set.chatHistory.length > 0) {
+        context += `讨论历史：\n${set.chatHistory.map(m => `${m.role === 'user' ? '用户' : '助手'}: ${m.content}`).join('\n')}\n`
+      }
       context += '\n'
     }
   }
@@ -341,6 +347,9 @@ const buildReferenceContext = (
         }
       })
       if (set.userNotes) context += `备注：${set.userNotes}\n`
+      if (set.chatHistory && set.chatHistory.length > 0) {
+        context += `讨论历史：\n${set.chatHistory.map(m => `${m.role === 'user' ? '用户' : '助手'}: ${m.content}`).join('\n')}\n`
+      }
       context += '\n'
     }
   }
@@ -356,6 +365,9 @@ const buildReferenceContext = (
         }
       })
       if (set.userNotes) context += `备注：${set.userNotes}\n`
+      if (set.chatHistory && set.chatHistory.length > 0) {
+        context += `讨论历史：\n${set.chatHistory.map(m => `${m.role === 'user' ? '用户' : '助手'}: ${m.content}`).join('\n')}\n`
+      }
       context += '\n'
     }
   }
@@ -2808,11 +2820,12 @@ function App() {
     }
   }
 
-  const handleGenerateOutline = async (mode: 'append' | 'replace' | 'chat' = 'append') => {
+  const handleGenerateOutline = async (mode: 'append' | 'replace' | 'chat' = 'append', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
     let currentPresetId = activeOutlinePresetId
-    if (mode !== 'chat' && currentPresetId === 'chat') {
+    if (mode === 'chat') {
+        currentPresetId = 'chat'
+    } else if (currentPresetId === 'chat') {
         currentPresetId = lastNonChatOutlinePresetId
-        setActiveOutlinePresetId(lastNonChatOutlinePresetId)
     }
 
     const activePreset = outlinePresets.find(p => p.id === currentPresetId) || outlinePresets[0]
@@ -2828,7 +2841,7 @@ function App() {
     setError('')
     outlineAbortControllerRef.current = new AbortController()
 
-    let targetSetId = activeOutlineSetId;
+    let targetSetId = overrideSetId !== undefined ? overrideSetId : activeOutlineSetId;
     let targetSet = activeNovel?.outlineSets?.find(s => s.id === targetSetId);
 
     if (!targetSetId || !targetSet) {
@@ -2851,7 +2864,6 @@ function App() {
       try {
         if (outlineAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Outline] Attempt ${attempt + 1}/${maxAttempts} started...`)
-        const activePreset = outlinePresets.find(p => p.id === activeOutlinePresetId) || outlinePresets[0]
         const apiConfig = getApiConfig(activePreset.apiConfig, outlineModel)
 
         const openai = new OpenAI({
@@ -2861,17 +2873,29 @@ function App() {
         })
 
         // Build Reference Context
-        const referenceContext = buildReferenceContext(
-          activeNovel,
-          selectedWorldviewSetIdForModules,
-          selectedWorldviewIndicesForModules,
-          selectedCharacterSetIdForModules,
-          selectedCharacterIndicesForModules,
-          selectedInspirationSetIdForModules,
-          selectedInspirationIndicesForModules,
-          selectedOutlineSetIdForModules,
-          selectedOutlineIndicesForModules
-        )
+        const referenceContext = source === 'chat'
+          ? buildReferenceContext(
+              activeNovel,
+              selectedWorldviewSetIdForChat,
+              selectedWorldviewIndicesForChat,
+              selectedCharacterSetIdForChat,
+              selectedCharacterIndicesForChat,
+              selectedInspirationSetIdForChat,
+              selectedInspirationIndicesForChat,
+              selectedOutlineSetIdForChat,
+              selectedOutlineIndicesForChat
+            )
+          : buildReferenceContext(
+              activeNovel,
+              selectedWorldviewSetIdForModules,
+              selectedWorldviewIndicesForModules,
+              selectedCharacterSetIdForModules,
+              selectedCharacterIndicesForModules,
+              selectedInspirationSetIdForModules,
+              selectedInspirationIndicesForModules,
+              selectedOutlineSetIdForModules,
+              selectedOutlineIndicesForModules
+            )
 
         const notes = targetSet?.userNotes || ''
 
@@ -2891,14 +2915,21 @@ function App() {
             ).join('\n') + '\n'
         }
 
+        // Add main chat history if source is chat
+        let mainChatContext = ''
+        if (source === 'chat' && activeChapter?.content) {
+            const safeLimit = Math.max(1000, contextLength - 5000)
+            mainChatContext = `\n【当前聊天记录】：\n${activeChapter.content.slice(-safeLimit)}\n`
+        }
+
         // Build Messages from Preset
         const messages: any[] = activePreset.prompts
           .filter(p => p.enabled)
           .map(p => {
             let content = p.content
-            content = content.replace('{{context}}', `${referenceContext}\n${outlineContext}\n${chatContext}`)
+            content = content.replace('{{context}}', `${referenceContext}\n${outlineContext}\n${chatContext}\n${mainChatContext}`)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt)
+            content = content.replace('{{input}}', userPrompt || (mode === 'chat' ? '请根据以上对话内容和设定，继续与我讨论。' : '请根据以上对话内容和设定，生成新的大纲章节。'))
             return { role: p.role, content }
           })
 
@@ -2909,7 +2940,7 @@ function App() {
 
         // Fallback if no user prompt is found (shouldn't happen with default presets)
         if (!messages.some(m => m.role === 'user')) {
-            messages.push({ role: 'user', content: userPrompt })
+            messages.push({ role: 'user', content: userPrompt || (mode !== 'chat' ? '请根据以上对话内容和设定，生成新的大纲章节。' : '') })
         }
 
         const completion = await openai.chat.completions.create({
@@ -2964,17 +2995,26 @@ function App() {
                         
                         // 自动记录用户输入到备注中
                         const timestamp = new Date().toLocaleTimeString()
-                        const newRecord = `[${timestamp}] (${mode === 'replace' ? '重新生成' : '追加'}) ${userPrompt}`
+                        const finalUserPrompt = source === 'chat' && activeChapter?.content ? `${userPrompt}\n\n【聊天内容参考】：\n${activeChapter.content}` : userPrompt
+                        const newRecord = `[${timestamp}] (${mode === 'replace' ? '重新生成' : '追加'}) ${finalUserPrompt}`
                         const updatedNotes = existingSet.userNotes
                             ? `${existingSet.userNotes}\n${newRecord}`
                             : newRecord
 
                         const updatedItems = mode === 'replace' ? outlineData : [...existingSet.items, ...outlineData]
 
+                        // 同时将 AI 的回复加入对话历史，方便用户查看上下文
+                        const updatedChat: ChatMessage[] = [...(existingSet.chatHistory || [])]
+                        if (userPrompt.trim()) {
+                            updatedChat.push({ role: 'user', content: finalUserPrompt })
+                        }
+                        updatedChat.push({ role: 'assistant', content: content })
+
                         const updatedSet = {
                              ...existingSet,
                              items: updatedItems,
-                             userNotes: updatedNotes
+                             userNotes: updatedNotes,
+                             chatHistory: updatedChat
                         }
                         
                         const newOutlineSets = [...currentSets]
@@ -3116,11 +3156,12 @@ function App() {
       })
   }
 
-  const handleGenerateCharacters = async (mode: 'generate' | 'chat' = 'generate') => {
+  const handleGenerateCharacters = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
     let currentPresetId = activeCharacterPresetId
-    if (mode !== 'chat' && currentPresetId === 'chat') {
+    if (mode === 'chat') {
+        currentPresetId = 'chat'
+    } else if (currentPresetId === 'chat') {
         currentPresetId = lastNonChatCharacterPresetId
-        setActiveCharacterPresetId(lastNonChatCharacterPresetId)
     }
 
     const activePreset = characterPresets.find(p => p.id === currentPresetId) || characterPresets[0]
@@ -3136,7 +3177,7 @@ function App() {
     setError('')
     characterAbortControllerRef.current = new AbortController()
 
-    let targetSetId = activeCharacterSetId;
+    let targetSetId = overrideSetId !== undefined ? overrideSetId : activeCharacterSetId;
     let targetSet = activeNovel?.characterSets?.find(s => s.id === targetSetId);
 
     if (!targetSetId || !targetSet) {
@@ -3159,7 +3200,7 @@ function App() {
       try {
         if (characterAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Characters] Attempt ${attempt + 1}/${maxAttempts} started...`)
-        const activePreset = characterPresets.find(p => p.id === activeCharacterPresetId) || characterPresets[0]
+        const activePreset = characterPresets.find(p => p.id === currentPresetId) || characterPresets[0]
         const apiConfig = getApiConfig(activePreset.apiConfig, characterModel)
 
         const openai = new OpenAI({
@@ -3172,17 +3213,29 @@ function App() {
         const notes = targetSet?.userNotes || ''
 
         // Build Reference Context
-        const referenceContext = buildReferenceContext(
-          activeNovel,
-          selectedWorldviewSetIdForModules,
-          selectedWorldviewIndicesForModules,
-          selectedCharacterSetIdForModules,
-          selectedCharacterIndicesForModules,
-          selectedInspirationSetIdForModules,
-          selectedInspirationIndicesForModules,
-          selectedOutlineSetIdForModules,
-          selectedOutlineIndicesForModules
-        )
+        const referenceContext = source === 'chat'
+          ? buildReferenceContext(
+              activeNovel,
+              selectedWorldviewSetIdForChat,
+              selectedWorldviewIndicesForChat,
+              selectedCharacterSetIdForChat,
+              selectedCharacterIndicesForChat,
+              selectedInspirationSetIdForChat,
+              selectedInspirationIndicesForChat,
+              selectedOutlineSetIdForChat,
+              selectedOutlineIndicesForChat
+            )
+          : buildReferenceContext(
+              activeNovel,
+              selectedWorldviewSetIdForModules,
+              selectedWorldviewIndicesForModules,
+              selectedCharacterSetIdForModules,
+              selectedCharacterIndicesForModules,
+              selectedInspirationSetIdForModules,
+              selectedInspirationIndicesForModules,
+              selectedOutlineSetIdForModules,
+              selectedOutlineIndicesForModules
+            )
 
         // Build Chat History Context
         let chatContext = ''
@@ -3192,7 +3245,14 @@ function App() {
             ).join('\n') + '\n'
         }
 
-        const contextStr = `${JSON.stringify(existingChars, null, 2)}\n${referenceContext}\n${chatContext}`
+        // Add main chat history if source is chat
+        let mainChatContext = ''
+        if (source === 'chat' && activeChapter?.content) {
+            const safeLimit = Math.max(1000, contextLength - 5000)
+            mainChatContext = `\n【当前聊天记录】：\n${activeChapter.content.slice(-safeLimit)}\n`
+        }
+
+        const contextStr = `${JSON.stringify(existingChars, null, 2)}\n${referenceContext}\n${chatContext}\n${mainChatContext}`
 
         const messages: any[] = activePreset.prompts
           .filter(p => p.enabled)
@@ -3200,13 +3260,17 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', contextStr)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt)
+            content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的角色卡。' : ''))
             return { role: p.role, content }
           })
 
         // Add Global Prompt if exists
         if (globalCreationPrompt.trim()) {
             messages.unshift({ role: 'system', content: globalCreationPrompt })
+        }
+
+        if (!messages.some(m => m.role === 'user')) {
+            messages.push({ role: 'user', content: userPrompt || (mode !== 'chat' ? '请根据以上对话内容和设定，生成新的角色卡。' : '') })
         }
 
         const completion = await openai.chat.completions.create({
@@ -3260,15 +3324,23 @@ function App() {
                         const existingSet = currentSets[existingSetIndex]
                         
                         const timestamp = new Date().toLocaleTimeString()
-                        const newRecord = `[${timestamp}] ${userPrompt}`
+                        const finalUserPrompt = source === 'chat' && activeChapter?.content ? `${userPrompt}\n\n【聊天内容参考】：\n${activeChapter.content}` : userPrompt
+                        const newRecord = `[${timestamp}] ${finalUserPrompt}`
                         const updatedNotes = existingSet.userNotes
                             ? `${existingSet.userNotes}\n${newRecord}`
                             : newRecord
 
+                        const updatedChat: ChatMessage[] = [...(existingSet.chatHistory || [])]
+                        if (userPrompt.trim()) {
+                            updatedChat.push({ role: 'user', content: finalUserPrompt })
+                        }
+                        updatedChat.push({ role: 'assistant', content: content })
+
                         const updatedSet = {
                              ...existingSet,
                              characters: [...existingSet.characters, ...charData],
-                             userNotes: updatedNotes
+                             userNotes: updatedNotes,
+                             chatHistory: updatedChat
                         }
                         
                         const newCharacterSets = [...currentSets]
@@ -3408,11 +3480,12 @@ function App() {
   }
 
   // Inspiration Generation
-  const handleGenerateInspiration = async (mode: 'generate' | 'chat' = 'generate') => {
+  const handleGenerateInspiration = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
     let currentPresetId = activeInspirationPresetId
-    if (mode !== 'chat' && currentPresetId === 'chat') {
+    if (mode === 'chat') {
+        currentPresetId = 'chat'
+    } else if (currentPresetId === 'chat') {
         currentPresetId = lastNonChatInspirationPresetId
-        setActiveInspirationPresetId(lastNonChatInspirationPresetId)
     }
 
     const activePreset = inspirationPresets.find(p => p.id === currentPresetId) || inspirationPresets[0]
@@ -3428,7 +3501,7 @@ function App() {
     setError('')
     inspirationAbortControllerRef.current = new AbortController()
 
-    let targetSetId = activeInspirationSetId;
+    let targetSetId = overrideSetId !== undefined ? overrideSetId : activeInspirationSetId;
     let targetSet = activeNovel?.inspirationSets?.find(s => s.id === targetSetId);
 
     if (!targetSetId || !targetSet) {
@@ -3451,7 +3524,7 @@ function App() {
       try {
         if (inspirationAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Inspiration] Attempt ${attempt + 1}/${maxAttempts} started...`)
-        const activePreset = inspirationPresets.find(p => p.id === activeInspirationPresetId) || inspirationPresets[0]
+        const activePreset = inspirationPresets.find(p => p.id === currentPresetId) || inspirationPresets[0]
         const apiConfig = getApiConfig(activePreset.apiConfig, inspirationModel)
 
         const openai = new OpenAI({
@@ -3464,17 +3537,29 @@ function App() {
         const notes = targetSet?.userNotes || ''
 
         // Build Reference Context
-        const referenceContext = buildReferenceContext(
-          activeNovel,
-          selectedWorldviewSetIdForModules,
-          selectedWorldviewIndicesForModules,
-          selectedCharacterSetIdForModules,
-          selectedCharacterIndicesForModules,
-          selectedInspirationSetIdForModules,
-          selectedInspirationIndicesForModules,
-          selectedOutlineSetIdForModules,
-          selectedOutlineIndicesForModules
-        )
+        const referenceContext = source === 'chat'
+          ? buildReferenceContext(
+              activeNovel,
+              selectedWorldviewSetIdForChat,
+              selectedWorldviewIndicesForChat,
+              selectedCharacterSetIdForChat,
+              selectedCharacterIndicesForChat,
+              selectedInspirationSetIdForChat,
+              selectedInspirationIndicesForChat,
+              selectedOutlineSetIdForChat,
+              selectedOutlineIndicesForChat
+            )
+          : buildReferenceContext(
+              activeNovel,
+              selectedWorldviewSetIdForModules,
+              selectedWorldviewIndicesForModules,
+              selectedCharacterSetIdForModules,
+              selectedCharacterIndicesForModules,
+              selectedInspirationSetIdForModules,
+              selectedInspirationIndicesForModules,
+              selectedOutlineSetIdForModules,
+              selectedOutlineIndicesForModules
+            )
 
         // Build Chat History Context
         let chatContext = ''
@@ -3484,7 +3569,14 @@ function App() {
             ).join('\n') + '\n'
         }
 
-        const contextStr = JSON.stringify(existingItems, null, 2) + '\n' + referenceContext + chatContext
+        // Add main chat history if source is chat
+        let mainChatContext = ''
+        if (source === 'chat' && activeChapter?.content) {
+            const safeLimit = Math.max(1000, contextLength - 5000)
+            mainChatContext = `\n【当前聊天记录】：\n${activeChapter.content.slice(-safeLimit)}\n`
+        }
+
+        const contextStr = JSON.stringify(existingItems, null, 2) + '\n' + referenceContext + chatContext + mainChatContext
 
         const messages: any[] = activePreset.prompts
           .filter(p => p.enabled)
@@ -3492,13 +3584,17 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', contextStr)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt)
+            content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的灵感条目。' : ''))
             return { role: p.role, content }
           })
 
         // Add Global Prompt if exists
         if (globalCreationPrompt.trim()) {
             messages.unshift({ role: 'system', content: globalCreationPrompt })
+        }
+
+        if (!messages.some(m => m.role === 'user')) {
+            messages.push({ role: 'user', content: userPrompt || (mode !== 'chat' ? '请根据以上对话内容和设定，生成新的灵感条目。' : '') })
         }
 
         const completion = await openai.chat.completions.create({
@@ -3559,15 +3655,23 @@ function App() {
                         const existingSet = currentSets[existingSetIndex]
                         
                         const timestamp = new Date().toLocaleTimeString()
-                        const newRecord = `[${timestamp}] ${userPrompt}`
+                        const finalUserPrompt = source === 'chat' && activeChapter?.content ? `${userPrompt}\n\n【聊天内容参考】：\n${activeChapter.content}` : userPrompt
+                        const newRecord = `[${timestamp}] ${finalUserPrompt}`
                         const updatedNotes = existingSet.userNotes
                             ? `${existingSet.userNotes}\n${newRecord}`
                             : newRecord
 
+                        const updatedChat: ChatMessage[] = [...(existingSet.chatHistory || [])]
+                        if (userPrompt.trim()) {
+                            updatedChat.push({ role: 'user', content: finalUserPrompt })
+                        }
+                        updatedChat.push({ role: 'assistant', content: content })
+
                         const updatedSet = {
                              ...existingSet,
                              items: [...existingSet.items, ...finalData],
-                             userNotes: updatedNotes
+                             userNotes: updatedNotes,
+                             chatHistory: updatedChat
                         }
                         
                         const newInspirationSets = [...currentSets]
@@ -3617,11 +3721,12 @@ function App() {
   }
 
   // Worldview Generation
-  const handleGenerateWorldview = async (mode: 'generate' | 'chat' = 'generate') => {
+  const handleGenerateWorldview = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
     let currentPresetId = activeWorldviewPresetId
-    if (mode !== 'chat' && currentPresetId === 'chat') {
+    if (mode === 'chat') {
+        currentPresetId = 'chat'
+    } else if (currentPresetId === 'chat') {
         currentPresetId = lastNonChatWorldviewPresetId
-        setActiveWorldviewPresetId(lastNonChatWorldviewPresetId)
     }
 
     const activePreset = worldviewPresets.find(p => p.id === currentPresetId) || worldviewPresets[0]
@@ -3637,7 +3742,7 @@ function App() {
     setError('')
     worldviewAbortControllerRef.current = new AbortController()
 
-    let targetSetId = activeWorldviewSetId;
+    let targetSetId = overrideSetId !== undefined ? overrideSetId : activeWorldviewSetId;
     let targetSet = activeNovel?.worldviewSets?.find(s => s.id === targetSetId);
 
     if (!targetSetId || !targetSet) {
@@ -3660,7 +3765,7 @@ function App() {
       try {
         if (worldviewAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Worldview] Attempt ${attempt + 1}/${maxAttempts} started...`)
-        const activePreset = worldviewPresets.find(p => p.id === activeWorldviewPresetId) || worldviewPresets[0]
+        const activePreset = worldviewPresets.find(p => p.id === currentPresetId) || worldviewPresets[0]
         const apiConfig = getApiConfig(activePreset.apiConfig, worldviewModel)
 
         const openai = new OpenAI({
@@ -3673,17 +3778,29 @@ function App() {
         const notes = targetSet?.userNotes || ''
 
         // Build Reference Context
-        const referenceContext = buildReferenceContext(
-          activeNovel,
-          selectedWorldviewSetIdForModules,
-          selectedWorldviewIndicesForModules,
-          selectedCharacterSetIdForModules,
-          selectedCharacterIndicesForModules,
-          selectedInspirationSetIdForModules,
-          selectedInspirationIndicesForModules,
-          selectedOutlineSetIdForModules,
-          selectedOutlineIndicesForModules
-        )
+        const referenceContext = source === 'chat'
+          ? buildReferenceContext(
+              activeNovel,
+              selectedWorldviewSetIdForChat,
+              selectedWorldviewIndicesForChat,
+              selectedCharacterSetIdForChat,
+              selectedCharacterIndicesForChat,
+              selectedInspirationSetIdForChat,
+              selectedInspirationIndicesForChat,
+              selectedOutlineSetIdForChat,
+              selectedOutlineIndicesForChat
+            )
+          : buildReferenceContext(
+              activeNovel,
+              selectedWorldviewSetIdForModules,
+              selectedWorldviewIndicesForModules,
+              selectedCharacterSetIdForModules,
+              selectedCharacterIndicesForModules,
+              selectedInspirationSetIdForModules,
+              selectedInspirationIndicesForModules,
+              selectedOutlineSetIdForModules,
+              selectedOutlineIndicesForModules
+            )
 
         // Build Chat History Context
         let chatContext = ''
@@ -3693,7 +3810,14 @@ function App() {
             ).join('\n') + '\n'
         }
 
-        const contextStr = `${JSON.stringify(existingEntries, null, 2)}\n${referenceContext}\n${chatContext}`
+        // Add main chat history if source is chat
+        let mainChatContext = ''
+        if (source === 'chat' && activeChapter?.content) {
+            const safeLimit = Math.max(1000, contextLength - 5000)
+            mainChatContext = `\n【当前聊天记录】：\n${activeChapter.content.slice(-safeLimit)}\n`
+        }
+
+        const contextStr = `${JSON.stringify(existingEntries, null, 2)}\n${referenceContext}\n${chatContext}\n${mainChatContext}`
 
         const messages: any[] = activePreset.prompts
           .filter(p => p.enabled)
@@ -3701,13 +3825,17 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', contextStr)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt)
+            content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的世界观设定项。' : ''))
             return { role: p.role, content }
           })
 
         // Add Global Prompt if exists
         if (globalCreationPrompt.trim()) {
             messages.unshift({ role: 'system', content: globalCreationPrompt })
+        }
+
+        if (!messages.some(m => m.role === 'user')) {
+            messages.push({ role: 'user', content: userPrompt || (mode !== 'chat' ? '请根据以上对话内容和设定，生成新的世界观设定项。' : '') })
         }
 
         const completion = await openai.chat.completions.create({
@@ -3761,15 +3889,23 @@ function App() {
                         const existingSet = currentSets[existingSetIndex]
                         
                         const timestamp = new Date().toLocaleTimeString()
-                        const newRecord = `[${timestamp}] ${userPrompt}`
+                        const finalUserPrompt = source === 'chat' && activeChapter?.content ? `${userPrompt}\n\n【聊天内容参考】：\n${activeChapter.content}` : userPrompt
+                        const newRecord = `[${timestamp}] ${finalUserPrompt}`
                         const updatedNotes = existingSet.userNotes
                             ? `${existingSet.userNotes}\n${newRecord}`
                             : newRecord
 
+                        const updatedChat: ChatMessage[] = [...(existingSet.chatHistory || [])]
+                        if (userPrompt.trim()) {
+                            updatedChat.push({ role: 'user', content: finalUserPrompt })
+                        }
+                        updatedChat.push({ role: 'assistant', content: content })
+
                         const updatedSet = {
                              ...existingSet,
                              entries: [...existingSet.entries, ...worldData],
-                             userNotes: updatedNotes
+                             userNotes: updatedNotes,
+                             chatHistory: updatedChat
                         }
                         
                         const newWorldviewSets = [...currentSets]
@@ -4808,6 +4944,28 @@ ${taskDescription}`
     autoWriteLoop(currentSet.items, startIndex, activeNovel.id, activeNovel.title, activePrompts, contextLength, targetVolumeId, includeFullOutlineInAutoWrite)
   }
 
+  const handleQuickGenerate = async () => {
+    // 优先级：大纲 > 角色 > 世界观 > 灵感
+    if (selectedOutlineSetIdForChat) {
+      handleSwitchModule('outline');
+      setShowOutline(true);
+      handleGenerateOutline('append', selectedOutlineSetIdForChat, 'chat');
+    } else if (selectedCharacterSetIdForChat) {
+      handleSwitchModule('characters');
+      setShowOutline(true);
+      handleGenerateCharacters('generate', selectedCharacterSetIdForChat, 'chat');
+    } else if (selectedWorldviewSetIdForChat) {
+      handleSwitchModule('worldview');
+      setShowOutline(true);
+      handleGenerateWorldview('generate', selectedWorldviewSetIdForChat, 'chat');
+    } else {
+      // 默认切换到灵感界面并根据聊天内容生成，如果没有选中参考，则使用当前选中的灵感集或创建新集
+      handleSwitchModule('inspiration');
+      setShowOutline(true);
+      handleGenerateInspiration('generate', selectedInspirationSetIdForChat, 'chat');
+    }
+  };
+
   const handleGenerate = async () => {
     if (!apiKey) {
       setError('请先在设置中配置 API Key')
@@ -4881,7 +5039,8 @@ ${taskDescription}`
         // If no specific references selected, fallback to legacy world info (optional, but keeps behavior consistent)
         const worldInfo = referenceContext || buildWorldInfoContext(activeNovel || undefined)
         
-        messages.push({ role: 'user', content: worldInfo + contextMsg + processedUserPrompt })
+        const finalUserPrompt = processedUserPrompt || "请继续生成后续剧情。"
+        messages.push({ role: 'user', content: worldInfo + contextMsg + finalUserPrompt })
 
         const response = await openai.chat.completions.create({
           model: config.model,
@@ -6009,7 +6168,11 @@ ${taskDescription}`
                           onShowSettings={() => { setGeneratorSettingsType('inspiration'); setShowGeneratorSettingsModal(true); }}
                           modelName={inspirationPresets.find(p => p.id === activeInspirationPresetId)?.name || '默认灵感'}
                           onSendToModule={handleSendInspirationToModule}
+                          onReturnToMainWithContent={(content) => {
+                             setUserPrompt(content);
+                          }}
                           activePresetId={activeInspirationPresetId}
+                          lastNonChatPresetId={lastNonChatInspirationPresetId}
                           onSetActivePresetId={setActiveInspirationPresetId}
                           selectedWorldviewSetId={selectedWorldviewSetIdForModules}
                           selectedWorldviewIndices={selectedWorldviewIndicesForModules}
@@ -6103,6 +6266,10 @@ ${taskDescription}`
                           onShowSettings={() => { setGeneratorSettingsType('character'); setShowGeneratorSettingsModal(true); }}
                           modelName={characterPresets.find(p => p.id === activeCharacterPresetId)?.name || '默认设置'}
                           activePresetId={activeCharacterPresetId}
+                          lastNonChatPresetId={lastNonChatCharacterPresetId}
+                          onReturnToMainWithContent={(content) => {
+                             setUserPrompt(content);
+                          }}
                           onSetActivePresetId={setActiveCharacterPresetId}
                           sidebarHeader={
                              <div className="flex items-center justify-between">
@@ -6196,6 +6363,10 @@ ${taskDescription}`
                           onShowSettings={() => { setGeneratorSettingsType('worldview'); setShowGeneratorSettingsModal(true); }}
                           modelName={worldviewPresets.find(p => p.id === activeWorldviewPresetId)?.name || '默认设置'}
                           activePresetId={activeWorldviewPresetId}
+                          lastNonChatPresetId={lastNonChatWorldviewPresetId}
+                          onReturnToMainWithContent={(content) => {
+                             setUserPrompt(content);
+                          }}
                           onSetActivePresetId={setActiveWorldviewPresetId}
                           selectedWorldviewSetId={selectedWorldviewSetIdForModules}
                           selectedWorldviewIndices={selectedWorldviewIndicesForModules}
@@ -6301,6 +6472,10 @@ ${taskDescription}`
                           onShowSettings={() => { setGeneratorSettingsType('outline'); setShowGeneratorSettingsModal(true); }}
                           modelName={outlinePresets.find(p => p.id === activeOutlinePresetId)?.name || '默认大纲'}
                           activePresetId={activeOutlinePresetId}
+                          lastNonChatPresetId={lastNonChatOutlinePresetId}
+                          onReturnToMainWithContent={(content) => {
+                             setUserPrompt(content);
+                          }}
                           onSetActivePresetId={setActiveOutlinePresetId}
                           selectedWorldviewSetId={selectedWorldviewSetIdForModules}
                           selectedWorldviewIndices={selectedWorldviewIndicesForModules}
@@ -6626,26 +6801,42 @@ ${taskDescription}`
                   }
                 }}
               />
-              {isLoading ? (
-                  <button
-                    onClick={() => {
-                        generateAbortControllerRef.current?.abort()
-                        setIsLoading(false)
-                    }}
-                    className="absolute right-3 bottom-3 p-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
-                    title="停止生成"
-                  >
-                    <StopCircle className="w-4 h-4" />
-                  </button>
-              ) : (
-                  <button
-                    onClick={handleGenerate}
-                    disabled={!userPrompt.trim()}
-                    className="absolute right-3 bottom-3 p-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 text-white rounded-md transition-colors"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-              )}
+              <div className="absolute right-2 bottom-2 flex flex-col gap-2">
+                {isLoading ? (
+                    <button
+                      onClick={() => {
+                          generateAbortControllerRef.current?.abort()
+                          setIsLoading(false)
+                      }}
+                      className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors shadow-lg"
+                      title="停止生成"
+                    >
+                      <StopCircle className="w-4 h-4" />
+                    </button>
+                ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          handleGenerate();
+                        }}
+                        className={`p-2 rounded-md transition-all shadow-sm z-10 ${!userPrompt.trim() ? 'bg-gray-700 hover:bg-gray-600 text-white/50' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
+                        title="发送到聊天"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleQuickGenerate();
+                        }}
+                        className={`p-2 rounded-md transition-all shadow-lg flex items-center gap-1 z-10 ${!userPrompt.trim() ? 'bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white/70' : 'bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white'}`}
+                        title="立即生成内容"
+                      >
+                        <Wand2 className="w-4 h-4" />
+                        <span className="text-[10px] font-bold">生成</span>
+                      </button>
+                    </>
+                )}
+              </div>
             </div>
           </div>
           </div>

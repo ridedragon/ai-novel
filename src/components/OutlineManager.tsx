@@ -49,6 +49,8 @@ interface OutlineManagerProps {
   modelName?: string
   sidebarHeader?: React.ReactNode
   activePresetId?: string
+  lastNonChatPresetId?: string
+  onReturnToMainWithContent?: (content: string) => void
   onSetActivePresetId?: (id: string) => void
   
   // Reference Selection Props
@@ -104,6 +106,8 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
   modelName,
   sidebarHeader,
   activePresetId,
+  lastNonChatPresetId,
+  onReturnToMainWithContent,
   onSetActivePresetId,
   selectedWorldviewSetId,
   selectedWorldviewIndices,
@@ -174,6 +178,17 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
   }, [activeSet?.chatHistory, showChat])
+
+  // Sync preset with view mode on mount
+  useEffect(() => {
+    if (onSetActivePresetId) {
+      if (showChat) {
+        onSetActivePresetId('chat')
+      } else if (lastNonChatPresetId) {
+        onSetActivePresetId(lastNonChatPresetId)
+      }
+    }
+  }, [])
 
   // --- Set Management ---
 
@@ -528,6 +543,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                    onClick={() => {
                       if (showChat) {
                          setShowChat(false);
+                         if (onSetActivePresetId && lastNonChatPresetId) onSetActivePresetId(lastNonChatPresetId);
                       } else {
                          setShowChat(true);
                          if (onSetActivePresetId) onSetActivePresetId('chat');
@@ -638,7 +654,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                                  }
                               }}
                               className="w-full bg-gray-900 border border-gray-600 rounded-lg pl-9 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
-                              placeholder="AI 助手：描述你的大纲需求..."
+                              placeholder="AI 助手：请给我一些关于..."
                            />
                         </div>
                         {isGenerating ? (
@@ -692,7 +708,10 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                               清空对话
                            </button>
                            <button
-                              onClick={() => setShowChat(false)}
+                              onClick={() => {
+                                 setShowChat(false);
+                                 if (onSetActivePresetId && lastNonChatPresetId) onSetActivePresetId(lastNonChatPresetId);
+                              }}
                               className="p-1.5 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors"
                               title="返回列表"
                            >
@@ -828,21 +847,36 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                                  <div className="flex flex-col gap-2">
                                     <button
                                        onClick={() => onGenerateOutline && onGenerateOutline('chat')}
-                                       disabled={!userPrompt?.trim()}
-                                       className="p-3 rounded-xl bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white shadow-lg transition-all"
+                                       className={`p-3 rounded-xl bg-gray-700 hover:bg-gray-600 text-white shadow-lg transition-all ${!userPrompt?.trim() ? 'text-white/50' : ''}`}
                                        title="发送对话"
                                     >
                                        <Send className="w-5 h-5" />
                                     </button>
-                                    <button
-                                       onClick={() => onGenerateOutline && onGenerateOutline('generate')}
-                                       disabled={!userPrompt?.trim()}
-                                       className="p-3 rounded-xl bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 text-white shadow-lg transition-all flex items-center justify-center gap-1"
-                                       title="立即生成大纲章节"
-                                    >
-                                       <Wand2 className="w-5 h-5" />
-                                       <span className="text-[10px] font-bold">生成</span>
-                                    </button>
+                                      <button
+                                         onClick={() => {
+                                            if (onReturnToMainWithContent) {
+                                               const history = activeSet.chatHistory || [];
+                                               const formattedHistory = history.map(m =>
+                                                  `${m.role === 'user' ? '用户' : '大纲助手'}: ${m.content}`
+                                               ).join('\n\n');
+                                               const finalContent = userPrompt?.trim()
+                                                  ? `${formattedHistory}\n\n用户最新想法: ${userPrompt}`
+                                                  : formattedHistory;
+                                               onReturnToMainWithContent(finalContent);
+                                               setShowChat(false);
+                                               if (onSetActivePresetId && lastNonChatPresetId) {
+                                                  onSetActivePresetId(lastNonChatPresetId);
+                                               }
+                                            } else if (onGenerateOutline) {
+                                               onGenerateOutline('generate');
+                                            }
+                                         }}
+                                         className={`p-3 rounded-xl bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white shadow-lg transition-all flex items-center justify-center gap-1 ${!userPrompt?.trim() && (!activeSet.chatHistory || activeSet.chatHistory.length === 0) ? 'text-white/70' : ''}`}
+                                         title="将对话发送给 AI 助手并返回"
+                                      >
+                                         <Wand2 className="w-5 h-5" />
+                                         <span className="text-[10px] font-bold">生成</span>
+                                      </button>
                                  </div>
                               )}
                            </div>
