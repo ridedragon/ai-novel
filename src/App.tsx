@@ -25,11 +25,11 @@ import {
   Lightbulb,
   List,
   Menu,
+  MessageSquare,
   PlayCircle,
   Plus,
   RotateCcw,
   Save,
-  Send,
   Settings,
   SlidersHorizontal,
   StopCircle,
@@ -46,11 +46,11 @@ import OpenAI from 'openai'
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import terminal from 'virtual:terminal'
+import { AIChatModal } from './components/AIChatModal'
 import { CharacterManager } from './components/CharacterManager'
 import { GlobalSettingsModal } from './components/GlobalSettingsModal'
 import { InspirationManager } from './components/InspirationManager'
 import { OutlineManager } from './components/OutlineManager'
-import { ReferenceSelector } from './components/ReferenceSelector'
 import { WorldviewManager } from './components/WorldviewManager'
 import {
   Chapter,
@@ -1236,6 +1236,9 @@ function App() {
 
   // Analysis Result Modal
   const [showAnalysisResultModal, setShowAnalysisResultModal] = useState(false)
+
+  // AI Chat Modal State
+  const [showAIChatModal, setShowAIChatModal] = useState(false)
 
   // Helpers for Novel Management
   const getActiveScripts = () => {
@@ -6042,7 +6045,15 @@ ${taskDescription}`
                    )}
                </div>
 
-               <button 
+               <button
+                 onClick={() => setShowAIChatModal(true)}
+                 className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] rounded text-xs text-white transition-colors whitespace-nowrap shrink-0 shadow-lg shadow-blue-900/20"
+                 title="AI 创作助手"
+               >
+                 <MessageSquare className="w-3.5 h-3.5" />
+                 <span className="hidden sm:inline">AI 助手</span>
+               </button>
+               <button
                  onClick={() => setShowRegexModal(true)}
                  className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors whitespace-nowrap shrink-0"
                  title="正则"
@@ -6050,7 +6061,7 @@ ${taskDescription}`
                  <Code2 className="w-3.5 h-3.5" />
                  <span className="hidden sm:inline">正则</span>
                </button>
-               <button 
+               <button
                  onClick={() => setShowSettings(true)}
                  className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors whitespace-nowrap shrink-0"
                  title="设置"
@@ -6061,6 +6072,18 @@ ${taskDescription}`
              </div>
           </div>
         </div>
+
+        {error && (
+          <div className="bg-red-900/20 border-b border-red-900/50 px-4 py-2 text-xs text-red-400 flex items-center justify-between shrink-0 animate-in slide-in-from-top duration-200">
+            <div className="flex items-center gap-2 truncate">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+              <span className="truncate">{error}</span>
+            </div>
+            <button onClick={() => setError('')} className="p-1 hover:bg-red-900/30 rounded transition-colors">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
 
         {showOutline ? (
            <div className={`flex-1 bg-gray-900 flex flex-col ${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration') ? 'p-0 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
@@ -6547,7 +6570,6 @@ ${taskDescription}`
                        />
                     </div>
                  )}
-                 {error && <div className="text-red-400 text-sm mt-2">{error}</div>}
               </div>
            </div>
         ) : (
@@ -6723,126 +6745,6 @@ ${taskDescription}`
         </div>
         )}
 
-        {!showOutline && (
-        <div className="bg-gray-800 border-t border-gray-700 p-4 shrink-0">
-          <div className="max-w-4xl mx-auto space-y-3">
-            {/* Reference Selectors */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-gray-500 shrink-0">参考:</span>
-              
-              <ReferenceSelector
-                novel={activeNovel}
-                type="worldview"
-                selectedSetId={selectedWorldviewSetIdForChat}
-                selectedItemIndices={selectedWorldviewIndicesForChat}
-                onSelectSet={(id) => { setSelectedWorldviewSetIdForChat(id); setSelectedWorldviewIndicesForChat([]); }}
-                onToggleItem={(setId, idx) => handleToggleReferenceItem('worldview', setId, idx)}
-                isOpen={showWorldviewSelectorForChat}
-                onToggleOpen={(open) => {
-                  setShowWorldviewSelectorForChat(open);
-                  if (open) { setShowCharacterSelectorForChat(false); setShowInspirationSelectorForChat(false); setShowOutlineSelectorForChat(false); }
-                }}
-              />
-
-              <ReferenceSelector
-                novel={activeNovel}
-                type="character"
-                selectedSetId={selectedCharacterSetIdForChat}
-                selectedItemIndices={selectedCharacterIndicesForChat}
-                onSelectSet={(id) => { setSelectedCharacterSetIdForChat(id); setSelectedCharacterIndicesForChat([]); }}
-                onToggleItem={(setId, idx) => handleToggleReferenceItem('character', setId, idx)}
-                isOpen={showCharacterSelectorForChat}
-                onToggleOpen={(open) => {
-                  setShowCharacterSelectorForChat(open);
-                  if (open) { setShowWorldviewSelectorForChat(false); setShowInspirationSelectorForChat(false); setShowOutlineSelectorForChat(false); }
-                }}
-              />
-
-              <ReferenceSelector
-                novel={activeNovel}
-                type="inspiration"
-                selectedSetId={selectedInspirationSetIdForChat}
-                selectedItemIndices={selectedInspirationIndicesForChat}
-                onSelectSet={(id) => { setSelectedInspirationSetIdForChat(id); setSelectedInspirationIndicesForChat([]); }}
-                onToggleItem={(setId, idx) => handleToggleReferenceItem('inspiration', setId, idx)}
-                isOpen={showInspirationSelectorForChat}
-                onToggleOpen={(open) => {
-                  setShowInspirationSelectorForChat(open);
-                  if (open) { setShowWorldviewSelectorForChat(false); setShowCharacterSelectorForChat(false); setShowOutlineSelectorForChat(false); }
-                }}
-              />
-
-              <ReferenceSelector
-                novel={activeNovel}
-                type="outline"
-                selectedSetId={selectedOutlineSetIdForChat}
-                selectedItemIndices={selectedOutlineIndicesForChat}
-                onSelectSet={(id) => { setSelectedOutlineSetIdForChat(id); setSelectedOutlineIndicesForChat([]); }}
-                onToggleItem={(setId, idx) => handleToggleReferenceItem('outline', setId, idx)}
-                isOpen={showOutlineSelectorForChat}
-                onToggleOpen={(open) => {
-                  setShowOutlineSelectorForChat(open);
-                  if (open) { setShowWorldviewSelectorForChat(false); setShowCharacterSelectorForChat(false); setShowInspirationSelectorForChat(false); }
-                }}
-              />
-            </div>
-
-            <div className="flex gap-4">
-              <div className="flex-1 relative">
-              <textarea
-                value={userPrompt}
-                onChange={(e) => setUserPrompt(e.target.value)}
-                placeholder="在此输入您的创作要求、大纲或情节..."
-                className="w-full h-24 bg-gray-900 border border-gray-600 rounded-lg p-3 pr-12 text-sm focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none resize-none"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    if (!isLoading && userPrompt.trim()) handleGenerate()
-                  }
-                }}
-              />
-              <div className="absolute right-2 bottom-2 flex flex-col gap-2">
-                {isLoading ? (
-                    <button
-                      onClick={() => {
-                          generateAbortControllerRef.current?.abort()
-                          setIsLoading(false)
-                      }}
-                      className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors shadow-lg"
-                      title="停止生成"
-                    >
-                      <StopCircle className="w-4 h-4" />
-                    </button>
-                ) : (
-                    <>
-                      <button
-                        onClick={() => {
-                          handleGenerate();
-                        }}
-                        className={`p-2 rounded-md transition-all shadow-sm z-10 ${!userPrompt.trim() ? 'bg-gray-700 hover:bg-gray-600 text-white/50' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
-                        title="发送到聊天"
-                      >
-                        <Send className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleQuickGenerate();
-                        }}
-                        className={`p-2 rounded-md transition-all shadow-lg flex items-center gap-1 z-10 ${!userPrompt.trim() ? 'bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white/70' : 'bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white'}`}
-                        title="立即生成内容"
-                      >
-                        <Wand2 className="w-4 h-4" />
-                        <span className="text-[10px] font-bold">生成</span>
-                      </button>
-                    </>
-                )}
-              </div>
-            </div>
-          </div>
-          </div>
-          {error && <div className="max-w-4xl mx-auto mt-2 text-xs text-red-400">{error}</div>}
-        </div>
-        )}
 
       </div>
 
@@ -8374,6 +8276,26 @@ ${taskDescription}`
           </div>
         </div>
       )}
+
+      {/* AI Chat Modal */}
+      <AIChatModal
+        isOpen={showAIChatModal}
+        onClose={() => setShowAIChatModal(false)}
+        novel={activeNovel}
+        activeChapter={activeChapter}
+        apiKey={apiKey}
+        baseUrl={baseUrl}
+        model={model}
+        systemPrompt={systemPrompt}
+        onAttach={(content) => {
+          // 附加到正文优化界面 (即 activeChapter.content)
+          // 用户要求以优化版本形式附加
+          if (activeChapterId) {
+            handleOptimize(activeChapterId, content)
+          }
+          setShowAIChatModal(false)
+        }}
+      />
 
     </div>
   )
