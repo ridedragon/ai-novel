@@ -115,6 +115,8 @@ export interface PromptItem {
   position: 'relative' | 'absolute';
   active: boolean; // 控制开关状态
   icon?: string;
+  isFixed?: boolean;
+  fixedType?: 'chat_history' | 'world_info' | 'outline';
 }
 
 export interface GeneratorPrompt {

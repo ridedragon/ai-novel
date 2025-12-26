@@ -233,12 +233,28 @@ const defaultPrompts: PromptItem[] = [
   { id: 4, name: "Enhance Definitions", role: "system", content: "If you have more knowledge of {{char}}, add to the character's lore and personality to enhance them but keep the Character Sheet's definitions absolute.", trigger: "All types (default)", position: "relative", active: true, icon: "✨" }
 ]
 
+const fixedPromptItems: PromptItem[] = [
+  { id: -1, name: "Chat History", role: "user", content: "", trigger: "All types (default)", position: "relative", active: true, icon: "📜", isFixed: true, fixedType: "chat_history" },
+  { id: -2, name: "World Info", role: "user", content: "", trigger: "All types (default)", position: "relative", active: true, icon: "🌍", isFixed: true, fixedType: "world_info" },
+  { id: -3, name: "Outline", role: "user", content: "", trigger: "All types (default)", position: "relative", active: true, icon: "📋", isFixed: true, fixedType: "outline" }
+]
+
 const defaultPresets: CompletionPreset[] = [
   { id: 'default', name: 'Default', contextLength: 200000, maxReplyLength: 64000, temperature: 1.30, frequencyPenalty: 0.00, presencePenalty: 0.00, topP: 0.97, topK: 1, stream: true, candidateCount: 1, prompts: defaultPrompts },
   { id: '3.0', name: '3.0', contextLength: 100000, maxReplyLength: 32000, temperature: 1.10, frequencyPenalty: 0, presencePenalty: 0, topP: 0.95, topK: 1, stream: true, candidateCount: 1 },
   { id: '3.1', name: '3.1(1)', contextLength: 128000, maxReplyLength: 32000, temperature: 1.20, frequencyPenalty: 0, presencePenalty: 0, topP: 0.98, topK: 1, stream: true, candidateCount: 1 },
   { id: 'flower', name: 'FlowerDuet 🌸 V1.7', contextLength: 200000, maxReplyLength: 64000, temperature: 1.30, frequencyPenalty: 0, presencePenalty: 0, topP: 0.97, topK: 1, stream: true, candidateCount: 1 },
 ]
+
+const ensureFixedItems = (items: PromptItem[]): PromptItem[] => {
+  const newItems = [...items]
+  fixedPromptItems.forEach(fixed => {
+    if (!newItems.some(p => p.fixedType === fixed.fixedType)) {
+      newItems.push(fixed)
+    }
+  })
+  return newItems
+}
 
 const adjustColor = (hex: string, lum: number) => {
   hex = String(hex).replace(/[^0-9a-f]/gi, '')
@@ -1874,19 +1890,19 @@ function App() {
       const draftJson = localStorage.getItem(`completion_settings_draft_${activeId}`)
       if (draftJson) {
         const draft = JSON.parse(draftJson)
-        if (draft.prompts && Array.isArray(draft.prompts)) return draft.prompts
+        if (draft.prompts && Array.isArray(draft.prompts)) return ensureFixedItems(draft.prompts)
       }
       // 2. Try Preset
       const presetsJson = localStorage.getItem('completionPresets')
       if (presetsJson) {
         const presets = JSON.parse(presetsJson)
         const preset = presets.find((p: any) => p.id === activeId)
-        if (preset && preset.prompts) return preset.prompts
+        if (preset && preset.prompts) return ensureFixedItems(preset.prompts)
       }
     } catch (e) {
       console.error('Failed to initialize prompts', e)
     }
-    return defaultPrompts
+    return ensureFixedItems(defaultPrompts)
   })
 
   const prevActivePresetIdRef = useRef(activePresetId)
@@ -1929,7 +1945,7 @@ function App() {
               setTopK(draft.topK)
               setStream(draft.stream)
               setCandidateCount(draft.candidateCount)
-              if (draft.prompts) setPrompts(draft.prompts)
+              if (draft.prompts) setPrompts(ensureFixedItems(draft.prompts))
               setPresetApiConfig(draft.apiConfig)
               loadedFromDraft = true
           }
@@ -1950,7 +1966,7 @@ function App() {
             setStream(preset.stream)
             setCandidateCount(preset.candidateCount)
             if (preset.prompts) {
-              setPrompts(preset.prompts)
+              setPrompts(ensureFixedItems(preset.prompts))
             }
             setPresetApiConfig(preset.apiConfig)
           }
@@ -2010,7 +2026,7 @@ function App() {
       setStream(preset.stream)
       setCandidateCount(preset.candidateCount)
       if (preset.prompts) {
-        setPrompts(preset.prompts)
+        setPrompts(ensureFixedItems(preset.prompts))
       }
       setPresetApiConfig(preset.apiConfig)
       setShowPresetDropdown(false)
@@ -2052,7 +2068,7 @@ function App() {
                  active: p.enabled !== undefined ? p.enabled : true,
                  icon: '📝'
                }))
-               setPrompts(newPrompts)
+               setPrompts(ensureFixedItems(newPrompts))
             }
             
             // Add to preset list
@@ -2231,7 +2247,7 @@ function App() {
                   setStream(preset.stream)
                   setCandidateCount(preset.candidateCount)
                   if (preset.prompts) {
-                    setPrompts(preset.prompts)
+                    setPrompts(ensureFixedItems(preset.prompts))
                   }
                   setPresetApiConfig(preset.apiConfig)
                   closeDialog()
@@ -4128,14 +4144,15 @@ function App() {
                })
           }
       } else {
-          // Standard Context Logic
-          if (targetChapter.volumeId) {
-              const volumeChapters = chapters.filter(c => c.volumeId === targetChapter.volumeId)
-              const currentIdx = volumeChapters.findIndex(c => c.id === targetChapter.id)
-              if (currentIdx > 0) {
-                  const previousChapters = volumeChapters.slice(0, currentIdx)
-                  contextContent = previousChapters.map(c => c.content).join('\n\n') + '\n\n'
-              }
+          // Standard Context Logic: All previous chapters in the same volume (or uncategorized)
+          const volumeId = targetChapter.volumeId
+          const volumeChapters = chapters.filter(c => c.volumeId === volumeId && (!c.subtype || c.subtype === 'story'))
+          const currentIdx = volumeChapters.findIndex(c => c.id === targetChapter.id)
+          
+          if (currentIdx !== -1) {
+              const previousChapters = volumeChapters.slice(0, currentIdx)
+              contextContent = previousChapters.map(c => `### ${c.title}\n${c.content}`).join('\n\n')
+              if (contextContent) contextContent += '\n\n'
           }
       }
       
@@ -5008,26 +5025,15 @@ ${taskDescription}`
           dangerouslyAllowBrowser: true
         })
 
-        const messages: any[] = [
-          { role: 'system', content: systemPrompt }
-        ]
-        
-        prompts.filter(p => p.active).forEach(p => {
-          messages.push({ role: p.role, content: p.content })
-        })
-
         const scripts = getActiveScripts()
         
-        // Build Context
-        const safeLimit = Math.max(1000, contextLength - 2000)
-        const contextWindow = contextContent.slice(-safeLimit)
-        const processedContext = processTextWithRegex(contextWindow, scripts, 'input')
-        const contextMsg = processedContext ? `【前文剧情回顾】：\n${processedContext}\n\n` : ""
+        // 1. Prepare dynamic content
+        const contextContent = getChapterContext(activeNovel || undefined, activeChapter)
+        const fullHistory = activeChapter ? `${contextContent}### ${activeChapter.title}\n${activeChapter.content}` : ""
+        // Respect contextLength setting
+        const chatHistoryContent = fullHistory.length > contextLength ? fullHistory.slice(-contextLength) : fullHistory
 
-        const processedUserPrompt = processTextWithRegex(userPrompt, scripts, 'input')
-        
-        // Combine Context and User Prompt
-        const referenceContext = buildReferenceContext(
+        const worldInfoContent = buildReferenceContext(
           activeNovel,
           selectedWorldviewSetIdForChat,
           selectedWorldviewIndicesForChat,
@@ -5037,13 +5043,37 @@ ${taskDescription}`
           selectedInspirationIndicesForChat,
           selectedOutlineSetIdForChat,
           selectedOutlineIndicesForChat
-        )
+        ) || buildWorldInfoContext(activeNovel || undefined)
         
-        // If no specific references selected, fallback to legacy world info (optional, but keeps behavior consistent)
-        const worldInfo = referenceContext || buildWorldInfoContext(activeNovel || undefined)
+        const outlineContent = getChapterContext(activeNovel || undefined, activeChapter)
+
+        // 2. Build messages based on prompts order
+        const messages: any[] = [
+          { role: 'system', content: systemPrompt }
+        ]
         
+        prompts.filter(p => p.active).forEach(p => {
+          if (p.isFixed) {
+            let content = ""
+            if (p.fixedType === 'chat_history') content = chatHistoryContent ? `【前文剧情回顾】：\n${chatHistoryContent}` : ""
+            else if (p.fixedType === 'world_info') content = worldInfoContent ? `【世界观与角色设定】：\n${worldInfoContent}` : ""
+            else if (p.fixedType === 'outline') content = outlineContent ? `【剧情大纲参考】：\n${outlineContent}` : ""
+            
+            if (content) {
+              messages.push({ role: p.role, content: processTextWithRegex(content, scripts, 'input') })
+            }
+          } else {
+            messages.push({ role: p.role, content: p.content })
+          }
+        })
+
+        const processedUserPrompt = processTextWithRegex(userPrompt, scripts, 'input')
         const finalUserPrompt = processedUserPrompt || "请继续生成后续剧情。"
-        messages.push({ role: 'user', content: worldInfo + contextMsg + finalUserPrompt })
+        
+        // Ensure there's at least one user message at the end if not already present
+        if (messages.length === 0 || messages[messages.length - 1].role !== 'user' || userPrompt.trim()) {
+          messages.push({ role: 'user', content: finalUserPrompt })
+        }
 
         const response = await openai.chat.completions.create({
           model: config.model,
@@ -6806,7 +6836,13 @@ ${taskDescription}`
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={handleSavePreset} className="p-1.5 hover:bg-gray-700 rounded transition-colors" title="保存"><Save className="w-4 h-4 text-gray-400" /></button>
-                <button className="p-1.5 hover:bg-gray-700 rounded transition-colors" title="编辑" onClick={() => handleEditClick()}><Edit2 className="w-4 h-4 text-gray-400" /></button>
+                <button
+                  className="p-1.5 hover:bg-gray-700 rounded transition-colors"
+                  title={selectedPrompt.isFixed ? "查看内容" : "编辑"}
+                  onClick={() => handleEditClick()}
+                >
+                  {selectedPrompt.isFixed ? <Eye className="w-4 h-4 text-gray-400" /> : <Edit2 className="w-4 h-4 text-gray-400" />}
+                </button>
                 <button className="p-1.5 hover:bg-gray-700 rounded transition-colors" title="复制"><Copy className="w-4 h-4 text-gray-400" /></button>
                 <button onClick={() => setShowAdvancedSettings(false)} className="p-1.5 hover:bg-gray-700 rounded transition-colors text-red-400"><X className="w-4 h-4" /></button>
               </div>
@@ -6989,9 +7025,9 @@ ${taskDescription}`
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleEditClick(p); }}
                               className="bg-transparent p-1 rounded hover:bg-gray-600 text-gray-400"
-                              title="编辑"
+                              title={p.isFixed ? "查看内容" : "编辑"}
                             >
-                               <Edit2 className="w-3 h-3" />
+                               {p.isFixed ? <Eye className="w-3 h-3" /> : <Edit2 className="w-3 h-3" />}
                             </button>
 
                             {/* Toggle Switch */}
@@ -7005,20 +7041,22 @@ ${taskDescription}`
 
                             {/* Delete Button */}
                             <button 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (p.isFixed) return;
                                 if (prompts.length <= 1) {
                                   alert("至少保留一个提示词条目");
                                   return;
                                 }
-                                const newPrompts = prompts.filter(item => item.id !== p.id); 
-                                setPrompts(newPrompts); 
+                                const newPrompts = prompts.filter(item => item.id !== p.id);
+                                setPrompts(newPrompts);
                                 if (selectedPromptId === p.id) {
                                   setSelectedPromptId(newPrompts[0]?.id || 0);
                                 }
                               }}
-                              className="bg-transparent p-1 rounded hover:bg-gray-600 text-gray-500 hover:text-red-400"
-                              title="删除此条目"
+                              className={`bg-transparent p-1 rounded hover:bg-gray-600 text-gray-500 hover:text-red-400 ${p.isFixed ? 'opacity-30 cursor-not-allowed' : ''}`}
+                              title={p.isFixed ? "固定条目不可删除" : "删除此条目"}
+                              disabled={p.isFixed}
                             >
                                <Trash2 className="w-3 h-3" />
                             </button>
@@ -7060,8 +7098,9 @@ ${taskDescription}`
                 {/* 3. Delete (X) */}
                 <button 
                   onClick={handleDeletePrompt}
-                  className="p-2 bg-gray-900 border border-gray-700 rounded text-red-400 hover:text-red-300 hover:border-red-800 transition-colors"
-                  title="删除当前条目"
+                  disabled={selectedPrompt.isFixed}
+                  className="p-2 bg-gray-900 border border-gray-700 rounded text-red-400 hover:text-red-300 hover:border-red-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  title={selectedPrompt.isFixed ? "固定条目不可删除" : "删除当前条目"}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -7106,10 +7145,10 @@ ${taskDescription}`
                  <button 
                   onClick={() => handleEditClick()}
                   className="absolute right-0 bottom-12 p-1.5 bg-gray-700 hover:bg-gray-600 rounded-full shadow text-white transition-colors"
-                  style={{ right: '-0.5rem', top: '-2.5rem' }} 
-                  title="编辑详情"
+                  style={{ right: '-0.5rem', top: '-2.5rem' }}
+                  title={selectedPrompt.isFixed ? "查看详情" : "编辑详情"}
                 >
-                  <Edit2 className="w-3 h-3" />
+                  {selectedPrompt.isFixed ? <Eye className="w-3 h-3" /> : <Edit2 className="w-3 h-3" />}
                 </button>
 
               </div>
@@ -7124,10 +7163,10 @@ ${taskDescription}`
           <div className="bg-gray-800 w-full md:w-[600px] rounded-lg shadow-2xl border border-gray-600 flex flex-col max-h-[90vh]">
             <div className="p-4 border-b border-gray-700 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                 <div className="w-12 h-16 bg-gray-700 rounded overflow-hidden relative">
-                    <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500">编辑</div>
-                 </div>
-                 <h2 className="text-xl font-bold text-gray-100">编辑</h2>
+                <div className="w-12 h-16 bg-gray-700 rounded overflow-hidden relative">
+                  <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500">{editingPrompt.isFixed ? '查看' : '编辑'}</div>
+                </div>
+                <h2 className="text-xl font-bold text-gray-100">{editingPrompt.isFixed ? '查看内容' : '编辑'}</h2>
               </div>
               <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -7135,6 +7174,12 @@ ${taskDescription}`
             </div>
             
             <div className="p-6 space-y-6 overflow-y-auto">
+              {editingPrompt.isFixed && (
+                <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-3 text-xs text-blue-300 leading-relaxed">
+                  <p className="font-bold mb-1">💡 固定条目说明：</p>
+                  <p>此条目的内容是根据当前小说状态动态生成的，不可手动修改。下方显示的是当前将要发送给 AI 的内容预览。</p>
+                </div>
+              )}
                <div className="grid grid-cols-2 gap-4">
                  {/* Name */}
                  <div className="space-y-1">
@@ -7143,8 +7188,9 @@ ${taskDescription}`
                      type="text" 
                      value={editingPrompt.name}
                      onChange={(e) => setEditingPrompt({...editingPrompt, name: e.target.value})}
-                     className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                     className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none disabled:opacity-50"
                      placeholder="此提示词的名称"
+                     disabled={editingPrompt.isFixed}
                    />
                  </div>
                  {/* Role */}
@@ -7153,7 +7199,8 @@ ${taskDescription}`
                    <select 
                       value={editingPrompt.role}
                       onChange={(e) => setEditingPrompt({...editingPrompt, role: e.target.value as any})}
-                      className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                      className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none disabled:opacity-50"
+                      disabled={editingPrompt.isFixed}
                    >
                      <option value="system">系统</option>
                      <option value="user">用户</option>
@@ -7170,7 +7217,8 @@ ${taskDescription}`
                    <select 
                       value={editingPrompt.position}
                       onChange={(e) => setEditingPrompt({...editingPrompt, position: e.target.value as any})}
-                      className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                      className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none disabled:opacity-50"
+                      disabled={editingPrompt.isFixed}
                    >
                      <option value="relative">相对</option>
                      <option value="absolute">绝对</option>
@@ -7183,7 +7231,8 @@ ${taskDescription}`
                    <select 
                       value={editingPrompt.trigger}
                       onChange={(e) => setEditingPrompt({...editingPrompt, trigger: e.target.value})}
-                      className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                      className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none disabled:opacity-50"
+                      disabled={editingPrompt.isFixed}
                    >
                      <option value="All types (default)">All types (default)</option>
                    </select>
@@ -7194,20 +7243,32 @@ ${taskDescription}`
                {/* Prompt Content */}
                <div className="space-y-1">
                  <label className="text-sm font-medium text-gray-300">提示词</label>
-                 <textarea 
-                   value={editingPrompt.content}
-                   onChange={(e) => setEditingPrompt({...editingPrompt, content: e.target.value})}
-                   className="w-full h-48 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none font-mono"
+                 <textarea
+                   value={editingPrompt.isFixed ? (() => {
+                     if (editingPrompt.fixedType === 'chat_history') {
+                       const context = getChapterContext(activeNovel || undefined, activeChapter)
+                       const fullHistory = activeChapter ? `${context}### ${activeChapter.title}\n${activeChapter.content}` : "(暂无历史记录)"
+                       return fullHistory.length > contextLength ? "... (内容过长已截断)\n" + fullHistory.slice(-contextLength) : fullHistory
+                     }
+                     if (editingPrompt.fixedType === 'world_info') return buildReferenceContext(activeNovel, selectedWorldviewSetIdForChat, selectedWorldviewIndicesForChat, selectedCharacterSetIdForChat, selectedCharacterIndicesForChat, selectedInspirationSetIdForChat, selectedInspirationIndicesForChat, selectedOutlineSetIdForChat, selectedOutlineIndicesForChat) || buildWorldInfoContext(activeNovel || undefined) || "(暂无设定内容)"
+                     if (editingPrompt.fixedType === 'outline') return getChapterContext(activeNovel || undefined, activeChapter) || "(暂无大纲内容)"
+                     return ""
+                   })() : editingPrompt.content}
+                   onChange={(e) => !editingPrompt.isFixed && setEditingPrompt({...editingPrompt, content: e.target.value})}
+                   className="w-full h-48 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none font-mono disabled:text-gray-400"
                    placeholder="要发送的提示词..."
+                   readOnly={editingPrompt.isFixed}
                  />
                </div>
             </div>
 
             <div className="p-4 border-t border-gray-700 flex justify-end gap-3 bg-gray-800 rounded-b-lg">
                <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-sm text-gray-300 hover:text-white transition-colors">取消</button>
-               <button onClick={saveEditedPrompt} className="px-4 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-sm rounded transition-colors flex items-center gap-2">
-                 <Save className="w-4 h-4" /> 保存
-               </button>
+               {!editingPrompt.isFixed && (
+                 <button onClick={saveEditedPrompt} className="px-4 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-sm rounded transition-colors flex items-center gap-2">
+                   <Save className="w-4 h-4" /> 保存
+                 </button>
+               )}
             </div>
           </div>
         </div>
@@ -8287,6 +8348,7 @@ ${taskDescription}`
         baseUrl={baseUrl}
         model={model}
         systemPrompt={systemPrompt}
+        context={getChapterContext(activeNovel || undefined, activeChapter)}
         onAttach={(content) => {
           // 附加到正文优化界面 (即 activeChapter.content)
           // 用户要求以优化版本形式附加

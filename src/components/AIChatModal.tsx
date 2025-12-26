@@ -21,6 +21,7 @@ interface AIChatModalProps {
   baseUrl: string
   model: string
   systemPrompt: string
+  context?: string
   onAttach: (content: string) => void
 }
 
@@ -33,6 +34,7 @@ export function AIChatModal({
   baseUrl,
   model,
   systemPrompt,
+  context,
   onAttach
 }: AIChatModalProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -73,10 +75,14 @@ export function AIChatModal({
       ]
 
       // Add context if available
-      if (activeChapter?.content) {
-        chatMessages.splice(1, 0, { 
-          role: 'system', 
-          content: `当前正在处理的章节内容：\n\n${activeChapter.content}` 
+      if (context || activeChapter?.content) {
+        let fullContext = context || ''
+        if (activeChapter?.content) {
+          fullContext += `### ${activeChapter.title}\n${activeChapter.content}`
+        }
+        chatMessages.splice(1, 0, {
+          role: 'system',
+          content: `当前创作上下文：\n\n${fullContext}`
         })
       }
 
