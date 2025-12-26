@@ -4082,21 +4082,20 @@ function App() {
                    return true
                })
   
-               let bestBig = null
                let bigEnd = 0
-               bigSummaries.forEach(bs => {
-                   if (bs.summaryRange) {
-                       const { end } = parseRange(bs.summaryRange)
-                       if (end < currentNum && end > bigEnd) {
-                           bigEnd = end
-                           bestBig = bs
-                       }
-                   }
+               const relevantBig = bigSummaries.filter(bs => {
+                   if (!bs.summaryRange) return false
+                   const { end } = parseRange(bs.summaryRange)
+                   return end < currentNum
+               }).sort((a, b) => {
+                   return parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start
                })
-               
-               if (bestBig) {
-                   contextContent += `【剧情大纲 (${(bestBig as Chapter).title})】：\n${(bestBig as Chapter).content}\n\n`
-               }
+
+               relevantBig.forEach(bs => {
+                   contextContent += `【剧情大纲 (${bs.title})】：\n${bs.content}\n\n`
+                   const { end } = parseRange(bs.summaryRange!)
+                   if (end > bigEnd) bigEnd = end
+               })
                
                // 2. Find Small Summaries after Big Summary
                let smallSummaries = chapters.filter(c => c.subtype === 'small_summary')
@@ -4814,7 +4813,7 @@ ${taskDescription}`
         finalContents = finalContents.map(c => processTextWithRegex(c, scripts, 'output'))
 
         // Update State with final separated content
-        setNovels(prev => prev.map(n => {
+        const updatedNovels = novelsRef.current.map(n => {
             if (n.id === novelId) {
                 return {
                     ...n,
@@ -4828,7 +4827,11 @@ ${taskDescription}`
                 }
             }
             return n
-        }))
+        })
+        
+        setNovels(updatedNovels)
+        // CRITICAL: Manually sync ref to ensure immediate summary generation has access to new content
+        novelsRef.current = updatedNovels
 
         // Post-Generation Actions (Summary, Optimization)
         for (let i = 0; i < preparedBatch.length; i++) {

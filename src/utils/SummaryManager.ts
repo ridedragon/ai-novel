@@ -44,9 +44,16 @@ export const checkAndGenerateSummary = async (
 
   // Snapshot of chapters for this generation session
   // This snapshot will be updated locally as we generate new summaries
-  let currentChaptersSnapshot = currentNovel.chapters.map(c =>
-    c.id === targetChapterId ? { ...c, content: currentContent } : c,
-  );
+  let currentChaptersSnapshot = currentNovel.chapters.map(c => {
+    // Ensure the snapshot has the latest content for the target chapter,
+    // and also ensure other chapters in this batch (which might have been updated in Ref but not yet in this function's 'novels' parameter) are captured.
+    if (c.id === targetChapterId) return { ...c, content: currentContent };
+
+    // Check if the chapter content in novelsRef is newer (relevant for batch mode)
+    // Note: Since we don't have access to novelsRef here, we trust the 'novels' passed in
+    // BUT we must make sure the caller in App.tsx passes the most recent data.
+    return c;
+  });
 
   // Helper to get story chapters from the snapshot
   // We rely on array order as the "truth" for story sequence, especially if user reordered chapters.
