@@ -4030,6 +4030,16 @@ function App() {
     }))
   }
 
+  // Helper to get effective content (fallback to original if current is empty/optimizing)
+  const getEffectiveChapterContent = (chapter: Chapter | undefined) => {
+      if (!chapter) return ''
+      if (chapter.content && chapter.content.trim()) return chapter.content
+      
+      // If content is empty, try to find the original version
+      const originalVersion = chapter.versions?.find(v => v.type === 'original')
+      return originalVersion?.content || ''
+  }
+
   // Context Builder Helper
   const getChapterContext = (targetNovel: Novel | undefined, targetChapter: Chapter) => {
       if (!targetNovel) return ''
@@ -4123,7 +4133,7 @@ function App() {
                    if (filterUncategorized && c.volumeId) return false
   
                    const cNum = idx + 1
-                   if (cNum >= currentNum) return false 
+                   if (cNum >= currentNum) return false
                    if (cNum > smallEnd) return true
                    if (cNum === currentNum - 1) return true // Always include immediate previous chapter
                    return false
@@ -4140,7 +4150,7 @@ function App() {
                   })
   
                uniqueChapters.forEach(c => {
-                   contextContent += `### ${c.title}\n${c.content}\n\n`
+                   contextContent += `### ${c.title}\n${getEffectiveChapterContent(c)}\n\n`
                })
           }
       } else {
@@ -4151,7 +4161,7 @@ function App() {
           
           if (currentIdx !== -1) {
               const previousChapters = volumeChapters.slice(0, currentIdx)
-              contextContent = previousChapters.map(c => `### ${c.title}\n${c.content}`).join('\n\n')
+              contextContent = previousChapters.map(c => `### ${c.title}\n${getEffectiveChapterContent(c)}`).join('\n\n')
               if (contextContent) contextContent += '\n\n'
           }
       }
@@ -5029,7 +5039,8 @@ ${taskDescription}`
         
         // 1. Prepare dynamic content
         const contextContent = getChapterContext(activeNovel || undefined, activeChapter)
-        const fullHistory = activeChapter ? `${contextContent}### ${activeChapter.title}\n${activeChapter.content}` : ""
+        const currentContent = getEffectiveChapterContent(activeChapter)
+        const fullHistory = activeChapter ? `${contextContent}### ${activeChapter.title}\n${currentContent}` : ""
         // Respect contextLength setting
         const chatHistoryContent = fullHistory.length > contextLength ? fullHistory.slice(-contextLength) : fullHistory
 
@@ -7247,7 +7258,8 @@ ${taskDescription}`
                    value={editingPrompt.isFixed ? (() => {
                      if (editingPrompt.fixedType === 'chat_history') {
                        const context = getChapterContext(activeNovel || undefined, activeChapter)
-                       const fullHistory = activeChapter ? `${context}### ${activeChapter.title}\n${activeChapter.content}` : "(暂无历史记录)"
+                       const currentContent = getEffectiveChapterContent(activeChapter)
+                       const fullHistory = activeChapter ? `${context}### ${activeChapter.title}\n${currentContent}` : "(暂无历史记录)"
                        return fullHistory.length > contextLength ? "... (内容过长已截断)\n" + fullHistory.slice(-contextLength) : fullHistory
                      }
                      if (editingPrompt.fixedType === 'world_info') return buildReferenceContext(activeNovel, selectedWorldviewSetIdForChat, selectedWorldviewIndicesForChat, selectedCharacterSetIdForChat, selectedCharacterIndicesForChat, selectedInspirationSetIdForChat, selectedInspirationIndicesForChat, selectedOutlineSetIdForChat, selectedOutlineIndicesForChat) || buildWorldInfoContext(activeNovel || undefined) || "(暂无设定内容)"
@@ -8348,7 +8360,7 @@ ${taskDescription}`
         baseUrl={baseUrl}
         model={model}
         systemPrompt={systemPrompt}
-        context={getChapterContext(activeNovel || undefined, activeChapter)}
+        context={getChapterContext(activeNovel || undefined, activeChapter) + (activeChapter ? `### ${activeChapter.title}\n${getEffectiveChapterContent(activeChapter)}` : '')}
         onAttach={(content) => {
           // 附加到正文优化界面 (即 activeChapter.content)
           // 用户要求以优化版本形式附加

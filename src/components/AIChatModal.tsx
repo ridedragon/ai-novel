@@ -75,14 +75,10 @@ export function AIChatModal({
       ]
 
       // Add context if available
-      if (context || activeChapter?.content) {
-        let fullContext = context || ''
-        if (activeChapter?.content) {
-          fullContext += `### ${activeChapter.title}\n${activeChapter.content}`
-        }
+      if (context) {
         chatMessages.splice(1, 0, {
           role: 'system',
-          content: `当前创作上下文：\n\n${fullContext}`
+          content: `当前创作上下文：\n\n${context}`
         })
       }
 
