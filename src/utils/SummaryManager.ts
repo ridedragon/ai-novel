@@ -67,12 +67,7 @@ export const checkAndGenerateSummary = async (
   const sInterval = Number(smallSummaryInterval) || 3;
   const bInterval = Number(bigSummaryInterval) || 6;
 
-  // Track insertion offset to fix order bug
-  // When multiple summaries are generated for the same chapter trigger,
-  // we need to insert them sequentially after each other.
-  let insertionOffset = 1;
-
-  const generate = async (type: 'small' | 'big', start: number, end: number) => {
+  const generate = async (type: 'small' | 'big', start: number, end: number, lastChapterId: number) => {
     const rangeStr = `${start}-${end}`;
     const subtype = type === 'small' ? 'small_summary' : ('big_summary' as const);
 
@@ -172,32 +167,40 @@ export const checkAndGenerateSummary = async (
             volumeId: targetVolumeId, // Use same volume as current chapter
           };
 
-          // Update Snapshot - We should ideally insert it in the right place in snapshot too for correctness of Big Summary generation
-          // But for simplicity of logic here (Big Summary filters by range), appending to snapshot is often okay
-          // IF we don't rely on snapshot order for Big Summary finding small summaries.
-          // We relied on parsing range for sorting above, so appending is fine for logic.
-          // However, to be safe, let's splice it into snapshot too so subsequent logic sees it in place.
-          const snapIdx = currentChaptersSnapshot.findIndex(c => c.id === targetChapterId);
+          // Update Snapshot - Insert after the last chapter of the range
+          const snapIdx = currentChaptersSnapshot.findIndex(c => c.id === lastChapterId);
           if (snapIdx !== -1) {
-            currentChaptersSnapshot.splice(snapIdx + insertionOffset, 0, newChapter);
+            // Find the last summary already inserted after this chapter to maintain order (Small then Big)
+            let insertAt = snapIdx + 1;
+            while (
+              insertAt < currentChaptersSnapshot.length &&
+              (currentChaptersSnapshot[insertAt].subtype === 'small_summary' ||
+                currentChaptersSnapshot[insertAt].subtype === 'big_summary')
+            ) {
+              insertAt++;
+            }
+            currentChaptersSnapshot.splice(insertAt, 0, newChapter);
           } else {
             currentChaptersSnapshot.push(newChapter);
           }
 
-          // Update React State: Insert AFTER the target chapter (considering offset)
+          // Update React State: Insert AFTER the last chapter of the range
           updateNovelChapters(prev => {
-            const idx = prev.findIndex(c => c.id === targetChapterId);
+            const idx = prev.findIndex(c => c.id === lastChapterId);
             if (idx !== -1) {
               const newArr = [...prev];
-              // FIX: Use insertionOffset to place subsequent summaries after previous ones
-              newArr.splice(idx + insertionOffset, 0, newChapter);
+              let insertAt = idx + 1;
+              while (
+                insertAt < newArr.length &&
+                (newArr[insertAt].subtype === 'small_summary' || newArr[insertAt].subtype === 'big_summary')
+              ) {
+                insertAt++;
+              }
+              newArr.splice(insertAt, 0, newChapter);
               return newArr;
             }
             return [...prev, newChapter];
           });
-
-          // Increment offset for next summary (e.g. Big Summary)
-          insertionOffset++;
 
           log(`[Summary] Created ${type} summary for ${rangeStr}.`);
         }
@@ -221,7 +224,7 @@ export const checkAndGenerateSummary = async (
       // We can use the global index in storyChapters (+1 for 1-based)
       const globalStart = storyChapters.findIndex(c => c.id === batchChapters[0].id) + 1;
       const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1;
-      await generate('small', globalStart, globalEnd);
+      await generate('small', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
     }
   }
 
@@ -233,7 +236,7 @@ export const checkAndGenerateSummary = async (
     if (batchChapters.length > 0) {
       const globalStart = storyChapters.findIndex(c => c.id === batchChapters[0].id) + 1;
       const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1;
-      await generate('big', globalStart, globalEnd);
+      await generate('big', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
     }
   }
 };

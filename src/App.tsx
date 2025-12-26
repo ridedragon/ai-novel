@@ -80,9 +80,9 @@ const defaultInspirationPresets: GeneratorPreset[] = [
   {
     id: 'default',
     name: '默认灵感助手',
-    temperature: 0.8,
-    topP: 0.95,
-    topK: 1,
+    temperature: 1,
+    topP: 1,
+    topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个创意丰富的灵感激发助手。', enabled: true },
       { id: '2', role: 'user', content: '请根据用户的模糊想法提供创作灵感。\n\n【现有灵感列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的灵感条目。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "灵感关键词/标题", "content": "详细的灵感描述、创意点子..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
@@ -91,9 +91,9 @@ const defaultInspirationPresets: GeneratorPreset[] = [
   {
     id: 'chat',
     name: '灵感聊天助手',
-    temperature: 0.8,
-    topP: 0.95,
-    topK: 1,
+    temperature: 1,
+    topP: 1,
+    topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个创意丰富的灵感激发助手。你可以和用户讨论小说创意，提供建议，并帮助完善想法。', enabled: true },
       { id: '2', role: 'user', content: '【现有灵感列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户说：{{input}}', enabled: true }
@@ -105,9 +105,9 @@ const defaultOutlinePresets: GeneratorPreset[] = [
   { 
     id: 'default', 
     name: '默认大纲助手',
-    temperature: 0.7,
-    topP: 0.95,
-    topK: 1,
+    temperature: 1,
+    topP: 1,
+    topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个专业的小说大纲生成助手。请根据用户的要求生成一份详细的小说大纲。', enabled: true },
       { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户的要求是：{{input}}\n\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "第一章：标题", "summary": "本章的详细剧情摘要..." },\n  { "title": "第二章：标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
@@ -115,10 +115,10 @@ const defaultOutlinePresets: GeneratorPreset[] = [
   },
   { 
     id: 'creative', 
-    name: '创意脑洞型', 
-    temperature: 0.85,
-    topP: 0.98,
-    topK: 1,
+    name: '创意脑洞型',
+    temperature: 1,
+    topP: 1,
+    topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个充满想象力的小说策划。请根据用户的模糊想法，构思一个跌宕起伏、出人意料的故事大纲。', enabled: true },
       { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户的要求是：{{input}}\n\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "第一章：标题", "summary": "本章的详细剧情摘要..." },\n  { "title": "第二章：标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
@@ -126,10 +126,10 @@ const defaultOutlinePresets: GeneratorPreset[] = [
   },
   { 
     id: 'scifi', 
-    name: '科幻风格', 
-    temperature: 0.6,
-    topP: 0.9,
-    topK: 1,
+    name: '科幻风格',
+    temperature: 0.8,
+    topP: 0.95,
+    topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个硬核科幻小说作家。请侧重于世界观设定、技术细节和社会影响，生成一份严谨的科幻小说大纲。', enabled: true },
       { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户的要求是：{{input}}\n\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "第一章：标题", "summary": "本章的详细剧情摘要..." },\n  { "title": "第二章：标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
@@ -138,9 +138,9 @@ const defaultOutlinePresets: GeneratorPreset[] = [
   {
     id: 'chat',
     name: '大纲聊天助手',
-    temperature: 0.7,
-    topP: 0.95,
-    topK: 1,
+    temperature: 1,
+    topP: 1,
+    topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个专业的小说大纲生成助手。你可以和用户讨论故事情节、章节安排和剧情走向。', enabled: true },
       { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户说：{{input}}', enabled: true }
@@ -152,9 +152,9 @@ const defaultCharacterPresets: GeneratorPreset[] = [
   {
     id: 'default',
     name: '默认角色设计',
-    temperature: 0.7,
-    topP: 0.95,
-    topK: 1,
+    temperature: 1,
+    topP: 1,
+    topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个专业的小说角色设计专家。', enabled: true },
       { id: '2', role: 'user', content: '请根据用户的要求生成或补充角色列表。\n\n【现有角色列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的角色（如果是修改现有角色，请返回修改后的完整信息）。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "name": "角色名", "bio": "角色的详细设定、性格、外貌等..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
@@ -163,9 +163,9 @@ const defaultCharacterPresets: GeneratorPreset[] = [
   {
     id: 'chat',
     name: '角色聊天助手',
-    temperature: 0.7,
-    topP: 0.95,
-    topK: 1,
+    temperature: 1,
+    topP: 1,
+    topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个专业的小说角色设计专家。你可以和用户讨论角色性格、背景、动机和人际关系。', enabled: true },
       { id: '2', role: 'user', content: '请根据用户的要求生成或补充角色列表。\n\n【现有角色列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户说：{{input}}', enabled: true }
@@ -177,9 +177,9 @@ const defaultWorldviewPresets: GeneratorPreset[] = [
   {
     id: 'default',
     name: '默认世界观构建',
-    temperature: 0.7,
-    topP: 0.95,
-    topK: 1,
+    temperature: 1,
+    topP: 1,
+    topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个专业的小说世界观架构师。', enabled: true },
       { id: '2', role: 'user', content: '请根据用户的要求生成或补充世界观设定。\n\n【现有设定列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的世界观设定项（如果是修改现有设定，请返回修改后的完整信息）。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "item": "设定项名称（如：地理环境、魔法体系）", "setting": "详细的设定内容..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
@@ -188,9 +188,9 @@ const defaultWorldviewPresets: GeneratorPreset[] = [
   {
     id: 'chat',
     name: '世界观聊天助手',
-    temperature: 0.7,
-    topP: 0.95,
-    topK: 1,
+    temperature: 1,
+    topP: 1,
+    topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个专业的小说世界观架构师。你可以和用户讨论地理环境、魔法体系、社会结构等设定。', enabled: true },
       { id: '2', role: 'user', content: '请根据用户的要求生成或补充世界观设定。\n\n【现有设定列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户说：{{input}}', enabled: true }
@@ -202,9 +202,9 @@ const defaultOptimizePresets: GeneratorPreset[] = [
   {
     id: 'default',
     name: '默认润色优化',
-    temperature: 0.5,
-    topP: 0.9,
-    topK: 1,
+    temperature: 0.8,
+    topP: 0.95,
+    topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个专业的小说编辑。请对用户提供的章节内容进行润色和优化，使其描写更生动、行文更流畅，但不要改变原意。', enabled: true },
       { id: '2', role: 'user', content: '请优化以下小说章节内容：\n\n{{content}}\n\n【用户额外指令】：\n{{input}}\n\n请直接返回优化后的正文内容，不要包含任何解释。', enabled: true }
@@ -216,9 +216,9 @@ const defaultAnalysisPresets: GeneratorPreset[] = [
   {
     id: 'default',
     name: '默认分析预设',
-    temperature: 0.7,
+    temperature: 0.8,
     topP: 0.95,
-    topK: 1,
+    topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个严厉的小说主编。请犀利地指出文章中的问题。', enabled: true },
       { id: '2', role: 'user', content: '请分析以下正文：\n\n{{content}}\n\n【用户要求】：\n{{input}}\n\n请列出具体的修改建议（如剧情节奏、人物性格、描写细节等），不需要重写正文。', enabled: true }
@@ -240,10 +240,10 @@ const fixedPromptItems: PromptItem[] = [
 ]
 
 const defaultPresets: CompletionPreset[] = [
-  { id: 'default', name: 'Default', contextLength: 200000, maxReplyLength: 64000, temperature: 1.30, frequencyPenalty: 0.00, presencePenalty: 0.00, topP: 0.97, topK: 1, stream: true, candidateCount: 1, prompts: defaultPrompts },
-  { id: '3.0', name: '3.0', contextLength: 100000, maxReplyLength: 32000, temperature: 1.10, frequencyPenalty: 0, presencePenalty: 0, topP: 0.95, topK: 1, stream: true, candidateCount: 1 },
-  { id: '3.1', name: '3.1(1)', contextLength: 128000, maxReplyLength: 32000, temperature: 1.20, frequencyPenalty: 0, presencePenalty: 0, topP: 0.98, topK: 1, stream: true, candidateCount: 1 },
-  { id: 'flower', name: 'FlowerDuet 🌸 V1.7', contextLength: 200000, maxReplyLength: 64000, temperature: 1.30, frequencyPenalty: 0, presencePenalty: 0, topP: 0.97, topK: 1, stream: true, candidateCount: 1 },
+  { id: 'default', name: 'Default', contextLength: 200000, maxReplyLength: 64000, temperature: 1.0, frequencyPenalty: 0.00, presencePenalty: 0.00, topP: 1.0, topK: 200, stream: true, candidateCount: 1, prompts: defaultPrompts },
+  { id: '3.0', name: '3.0', contextLength: 100000, maxReplyLength: 32000, temperature: 1.0, frequencyPenalty: 0, presencePenalty: 0, topP: 1.0, topK: 200, stream: true, candidateCount: 1 },
+  { id: '3.1', name: '3.1(1)', contextLength: 128000, maxReplyLength: 32000, temperature: 1.0, frequencyPenalty: 0, presencePenalty: 0, topP: 1.0, topK: 200, stream: true, candidateCount: 1 },
+  { id: 'flower', name: 'FlowerDuet 🌸 V1.7', contextLength: 200000, maxReplyLength: 64000, temperature: 1.0, frequencyPenalty: 0, presencePenalty: 0, topP: 1.0, topK: 200, stream: true, candidateCount: 1 },
 ]
 
 const ensureFixedItems = (items: PromptItem[]): PromptItem[] => {
@@ -1815,11 +1815,11 @@ function App() {
   const [maxReplyLength, setMaxReplyLength] = useState(() => getInitialSetting('maxReplyLength', 64000))
   const [candidateCount, setCandidateCount] = useState(() => getInitialSetting('candidateCount', 1))
   const [stream, setStream] = useState(() => getInitialSetting('stream', true))
-  const [temperature, setTemperature] = useState(() => getInitialSetting('temperature', 1.30))
+  const [temperature, setTemperature] = useState(() => getInitialSetting('temperature', 1.0))
   const [frequencyPenalty, setFrequencyPenalty] = useState(() => getInitialSetting('frequencyPenalty', 0.00))
   const [presencePenalty, setPresencePenalty] = useState(() => getInitialSetting('presencePenalty', 0.00))
-  const [topP, setTopP] = useState(() => getInitialSetting('topP', 0.97))
-  const [topK, setTopK] = useState(() => getInitialSetting('topK', 1))
+  const [topP, setTopP] = useState(() => getInitialSetting('topP', 1.0))
+  const [topK, setTopK] = useState(() => getInitialSetting('topK', 200))
   const [maxRetries, setMaxRetries] = useState(() => parseInt(localStorage.getItem('maxRetries') || '3'))
   const [presetApiConfig, setPresetApiConfig] = useState<PresetApiConfig | undefined>(() => getInitialSetting('apiConfig', undefined))
 
@@ -2792,9 +2792,9 @@ function App() {
         const completion = await openai.chat.completions.create({
           model: apiConfig.model,
           messages: messages,
-          temperature: activePreset.temperature ?? 0.7,
-          top_p: activePreset.topP ?? 0.95,
-          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
+          temperature: activePreset.temperature ?? 1.0,
+          top_p: activePreset.topP ?? 1.0,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 200,
         } as any)
 
         const content = completion.choices[0]?.message?.content || ''
@@ -2965,9 +2965,9 @@ function App() {
         const completion = await openai.chat.completions.create({
           model: apiConfig.model,
           messages: messages,
-          temperature: activePreset.temperature ?? 0.7,
-          top_p: activePreset.topP ?? 0.95,
-          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
+          temperature: activePreset.temperature ?? 1.0,
+          top_p: activePreset.topP ?? 1.0,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 200,
         } as any, {
           signal: outlineAbortControllerRef.current.signal
         })
@@ -3295,9 +3295,9 @@ function App() {
         const completion = await openai.chat.completions.create({
           model: apiConfig.model,
           messages: messages,
-          temperature: activePreset.temperature ?? 0.7,
-          top_p: activePreset.topP ?? 0.95,
-          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
+          temperature: activePreset.temperature ?? 1.0,
+          top_p: activePreset.topP ?? 1.0,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 200,
         } as any, {
           signal: characterAbortControllerRef.current.signal
         })
@@ -3619,9 +3619,9 @@ function App() {
         const completion = await openai.chat.completions.create({
           model: apiConfig.model,
           messages: messages,
-          temperature: activePreset.temperature ?? 0.8,
-          top_p: activePreset.topP ?? 0.95,
-          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
+          temperature: activePreset.temperature ?? 1.0,
+          top_p: activePreset.topP ?? 1.0,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 200,
         } as any, {
           signal: inspirationAbortControllerRef.current.signal
         })
@@ -3860,9 +3860,9 @@ function App() {
         const completion = await openai.chat.completions.create({
           model: apiConfig.model,
           messages: messages,
-          temperature: activePreset.temperature ?? 0.7,
-          top_p: activePreset.topP ?? 0.95,
-          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
+          temperature: activePreset.temperature ?? 1.0,
+          top_p: activePreset.topP ?? 1.0,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 200,
         } as any, {
           signal: worldviewAbortControllerRef.current.signal
         })
@@ -4330,9 +4330,9 @@ function App() {
                 const completion = await openai.chat.completions.create({
                     model: apiConfig.model,
                     messages: analysisMessages,
-                    temperature: analysisPreset.temperature ?? 0.7,
-                    top_p: analysisPreset.topP ?? 0.95,
-                    top_k: analysisPreset.topK && analysisPreset.topK > 0 ? analysisPreset.topK : 1,
+                    temperature: analysisPreset.temperature ?? 1.0,
+                    top_p: analysisPreset.topP ?? 1.0,
+                    top_k: analysisPreset.topK && analysisPreset.topK > 0 ? analysisPreset.topK : 200,
                 } as any, {
                     signal: abortController.signal
                 })
@@ -4432,9 +4432,9 @@ function App() {
         const stream = await openai.chat.completions.create({
           model: apiConfig.model,
           messages: messages,
-          temperature: activePreset.temperature ?? 0.5,
-          top_p: activePreset.topP ?? 0.9,
-          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 1,
+          temperature: activePreset.temperature ?? 1.0,
+          top_p: activePreset.topP ?? 1.0,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 200,
           stream: true
         } as any, {
           signal: abortController.signal
@@ -5092,7 +5092,7 @@ ${taskDescription}`
           stream: stream,
           temperature: temperature,
           top_p: topP,
-          top_k: topK > 0 ? topK : 1,
+          top_k: topK > 0 ? topK : 200,
           presence_penalty: presencePenalty,
           frequency_penalty: frequencyPenalty,
           max_tokens: maxReplyLength,
@@ -5275,7 +5275,7 @@ ${taskDescription}`
     // Use current chapters snapshot for source reading
     const allChapters = [...currentNovel.chapters]
     const storyChapters = getStoryChapters(allChapters)
-    storyChapters.sort((a, b) => a.id - b.id)
+    // REMOVED: storyChapters.sort((a, b) => a.id - b.id) - Trust array order
 
     const sInterval = Number(smallSummaryIntervalRef.current) || 3
     const bInterval = Number(bigSummaryIntervalRef.current) || 6
@@ -5283,7 +5283,7 @@ ${taskDescription}`
     // Local copy to track progress during scan
     let localChapters = [...allChapters]
 
-    const generateForRange = async (type: 'small' | 'big', start: number, end: number) => {
+    const generateForRange = async (type: 'small' | 'big', start: number, end: number, lastChapterId: number) => {
         const rangeStr = `${start}-${end}`
         const subtype = type === 'small' ? 'small_summary' : 'big_summary' as const
         
@@ -5332,11 +5332,39 @@ ${taskDescription}`
                     content: summaryContent,
                     subtype: subtype,
                     summaryRange: rangeStr,
-                    volumeId: undefined 
+                    volumeId: storyChapters[end - 1]?.volumeId // Use same volume as the last chapter in range
                 }
                 
-                localChapters.push(newChapter)
-                setChapters(prev => [...prev, newChapter])
+                // Update local tracking
+                const localIdx = localChapters.findIndex(c => c.id === lastChapterId)
+                if (localIdx !== -1) {
+                    let insertAt = localIdx + 1
+                    while (insertAt < localChapters.length &&
+                           (localChapters[insertAt].subtype === 'small_summary' ||
+                            localChapters[insertAt].subtype === 'big_summary')) {
+                        insertAt++
+                    }
+                    localChapters.splice(insertAt, 0, newChapter)
+                } else {
+                    localChapters.push(newChapter)
+                }
+
+                // Update React State
+                setChapters(prev => {
+                    const idx = prev.findIndex(c => c.id === lastChapterId)
+                    if (idx !== -1) {
+                        const newArr = [...prev]
+                        let insertAt = idx + 1
+                        while (insertAt < newArr.length &&
+                               (newArr[insertAt].subtype === 'small_summary' ||
+                                newArr[insertAt].subtype === 'big_summary')) {
+                            insertAt++
+                        }
+                        newArr.splice(insertAt, 0, newChapter)
+                        return newArr
+                    }
+                    return [...prev, newChapter]
+                })
                 terminal.log(`[Scan] Generated ${type} summary for ${rangeStr}.`)
             }
         } catch (e) {
@@ -5354,7 +5382,10 @@ ${taskDescription}`
         
         const exists = localChapters.some(c => c.subtype === 'small_summary' && c.summaryRange === rangeStr)
         if (!exists) {
-            await generateForRange('small', start, end)
+            const lastChap = storyChapters[end - 1]
+            if (lastChap) {
+                await generateForRange('small', start, end, lastChap.id)
+            }
         }
     }
     
@@ -5366,7 +5397,10 @@ ${taskDescription}`
         
         const exists = localChapters.some(c => c.subtype === 'big_summary' && c.summaryRange === rangeStr)
         if (!exists) {
-            await generateForRange('big', start, end)
+            const lastChap = storyChapters[end - 1]
+            if (lastChap) {
+                await generateForRange('big', start, end, lastChap.id)
+            }
         }
     }
 
@@ -6975,7 +7009,7 @@ ${taskDescription}`
                         { label: '频率惩罚', value: frequencyPenalty, setValue: setFrequencyPenalty, min: -2, max: 2, step: 0.01 },
                         { label: '存在惩罚', value: presencePenalty, setValue: setPresencePenalty, min: -2, max: 2, step: 0.01 },
                         { label: 'Top P', value: topP, setValue: setTopP, min: 0, max: 1, step: 0.01 },
-                        { label: 'Top K', value: topK, setValue: setTopK, min: 1, max: 500, step: 1 },
+                        { label: 'Top K', value: topK, setValue: setTopK, min: 0, max: 500, step: 1 },
                       ].map((item) => (
                         <div key={item.label} className="space-y-1">
                           <div className="flex justify-between text-xs text-gray-400">
@@ -7937,9 +7971,9 @@ ${taskDescription}`
 
                            <div className="bg-gray-900/30 rounded-lg p-4 border border-gray-700/50 space-y-4">
                               {[
-                                 { label: '温度 (Temperature)', value: currentPreset.temperature ?? 0.7, setValue: (v: number) => updatePreset({ temperature: v }), min: 0, max: 2, step: 0.01 },
-                                 { label: 'Top P', value: currentPreset.topP ?? 0.95, setValue: (v: number) => updatePreset({ topP: v }), min: 0, max: 1, step: 0.01 },
-                                 { label: 'Top K', value: currentPreset.topK ?? 1, setValue: (v: number) => updatePreset({ topK: v }), min: 1, max: 500, step: 1 },
+                                 { label: '温度 (Temperature)', value: currentPreset.temperature ?? 1.0, setValue: (v: number) => updatePreset({ temperature: v }), min: 0, max: 2, step: 0.01 },
+                                 { label: 'Top P', value: currentPreset.topP ?? 1.0, setValue: (v: number) => updatePreset({ topP: v }), min: 0, max: 1, step: 0.01 },
+                                 { label: 'Top K', value: currentPreset.topK ?? 200, setValue: (v: number) => updatePreset({ topK: v }), min: 0, max: 500, step: 1 },
                               ].map((item) => (
                                  <div key={item.label} className="space-y-1">
                                     <div className="flex justify-between text-xs text-gray-400">
