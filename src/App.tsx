@@ -109,8 +109,8 @@ const defaultOutlinePresets: GeneratorPreset[] = [
     topP: 1,
     topK: 200,
     prompts: [
-      { id: '1', role: 'system', content: '你是一个专业的小说大纲生成助手。请根据用户的要求生成一份详细的小说大纲。', enabled: true },
-      { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户的要求是：{{input}}\n\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "第一章：标题", "summary": "本章的详细剧情摘要..." },\n  { "title": "第二章：标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
+      { id: '1', role: 'system', content: '你是一个专业的小说大纲生成助手。', enabled: true },
+      { id: '2', role: 'user', content: '请根据用户的要求生成或补充大纲列表。\n\n【现有大纲列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的大纲章节（如果是修改现有章节，请返回修改后的完整信息）。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "章节标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
     ]
   },
   { 
@@ -121,7 +121,7 @@ const defaultOutlinePresets: GeneratorPreset[] = [
     topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个充满想象力的小说策划。请根据用户的模糊想法，构思一个跌宕起伏、出人意料的故事大纲。', enabled: true },
-      { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户的要求是：{{input}}\n\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "第一章：标题", "summary": "本章的详细剧情摘要..." },\n  { "title": "第二章：标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
+      { id: '2', role: 'user', content: '请根据用户的要求生成或补充大纲列表。\n\n【现有大纲列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的大纲章节（如果是修改现有章节，请返回修改后的完整信息）。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "章节标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
     ]
   },
   { 
@@ -132,7 +132,7 @@ const defaultOutlinePresets: GeneratorPreset[] = [
     topK: 200,
     prompts: [
       { id: '1', role: 'system', content: '你是一个硬核科幻小说作家。请侧重于世界观设定、技术细节和社会影响，生成一份严谨的科幻小说大纲。', enabled: true },
-      { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户的要求是：{{input}}\n\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "第一章：标题", "summary": "本章的详细剧情摘要..." },\n  { "title": "第二章：标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
+      { id: '2', role: 'user', content: '请根据用户的要求生成或补充大纲列表。\n\n【现有大纲列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n【用户当前指令】：\n{{input}}\n\n请根据以上信息，生成新的大纲章节（如果是修改现有章节，请返回修改后的完整信息）。\n请严格返回一个 JSON 数组，格式如下：\n[\n  { "title": "章节标题", "summary": "本章的详细剧情摘要..." }\n]\n不要返回任何其他文字，只返回 JSON 数据。', enabled: true }
     ]
   },
   {
@@ -142,8 +142,8 @@ const defaultOutlinePresets: GeneratorPreset[] = [
     topP: 1,
     topK: 200,
     prompts: [
-      { id: '1', role: 'system', content: '你是一个专业的小说大纲生成助手。你可以和用户讨论故事情节、章节安排和剧情走向。', enabled: true },
-      { id: '2', role: 'user', content: '{{context}}\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户说：{{input}}', enabled: true }
+      { id: '1', role: 'system', content: '你是一个专业的小说大纲生成助手。你可以和用户讨论故故事大纲的情节、章节安排和剧情走向。', enabled: true },
+      { id: '2', role: 'user', content: '【现有大纲列表】：\n{{context}}\n\n【用户设定备注/历史输入】：\n{{notes}}\n\n用户说：{{input}}', enabled: true }
     ]
   }
 ]
@@ -2918,12 +2918,10 @@ function App() {
 
         const notes = targetSet?.userNotes || ''
 
-        // Build Existing Outline Context (Only relevant if appending or referring to previous)
+        // Build Existing Outline Context
         let outlineContext = ''
-        if (mode === 'append' && targetSet && targetSet.items && targetSet.items.length > 0) {
-            outlineContext = '\n【现有大纲】：\n' + targetSet.items.map((item, index) =>
-                `${index + 1}. ${item.title}\n   ${item.summary}`
-            ).join('\n') + '\n'
+        if (targetSet && targetSet.items && targetSet.items.length > 0) {
+            outlineContext = '\n【现有大纲列表】：\n' + JSON.stringify(targetSet.items, null, 2) + '\n'
         }
 
         // Build Chat History Context

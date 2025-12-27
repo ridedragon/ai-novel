@@ -31,8 +31,11 @@ if (mode === 'append' && targetSet && targetSet.items && targetSet.items.length 
 
 由于大纲模块在生成时，AI 无法从 `{{context}}` 中读取到已有的 `targetSet.items`（除非是 append 模式且逻辑触发成功），它会根据系统指令“生成一份详细的大纲”从第一章开始构思。
 
-## 4. 修复方案建议
+## 4. 修复方案 (已实施)
 
-1. **取消模式限制**：修改 `src/App.tsx`，将大纲内容的组装逻辑移出 `if (mode === 'append')` 判断，确保 `outlineContext` 在任何生成模式下都包含当前已有的条目。
-2. **标准化格式**：效仿角色集模块，使用 `JSON.stringify(targetSet.items)` 发送数据，提高 AI 的理解深度。
-3. **优化提示词位置**：确保 `{{context}}` 在大纲预设提示词中处于核心位置，并配以明确的“这是当前已有大纲”的标签。
+1. **修复数据发送漏洞**：修改了 `src/App.tsx` 中的 `handleGenerateOutline` 函数，移除了对 `mode === 'append'` 的限制。现在无论是“追加”、“重生成全部”还是“聊天模式”，AI 都能完整接收到当前的大纲内容。
+2. **优化数据传输格式**：将大纲内容的组装逻辑从“手拼字符串”改为标准的 `JSON.stringify` 格式。这使得 AI 能够以结构化的方式更准确地解析现有章节。
+3. **重构预设提示词 (Prompt)**：更新了 `defaultOutlinePresets`。
+   - 明确要求 AI “生成或**补充**大纲列表”。
+   - 增加了显式的 `【现有大纲列表】` 标签。
+   - 指令引导从“生成全书大纲”转变为“基于现有进度继续规划”。
