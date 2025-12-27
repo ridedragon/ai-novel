@@ -2780,6 +2780,7 @@ function App() {
             content = content.replace('{{input}}', specificInstruction)
             return { role: p.role, content }
           })
+          .filter(m => m.content && m.content.trim())
 
         if (globalCreationPrompt.trim()) {
             messages.unshift({ role: 'system', content: globalCreationPrompt })
@@ -2949,6 +2950,7 @@ function App() {
             content = content.replace('{{input}}', userPrompt || (mode === 'chat' ? '请根据以上对话内容和设定，继续与我讨论。' : '请根据以上对话内容和设定，生成新的大纲章节。'))
             return { role: p.role, content }
           })
+          .filter(m => m.content && m.content.trim())
 
         // Add Global Prompt if exists
         if (globalCreationPrompt.trim()) {
@@ -3280,6 +3282,7 @@ function App() {
             content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的角色卡。' : ''))
             return { role: p.role, content }
           })
+          .filter(m => m.content && m.content.trim())
 
         // Add Global Prompt if exists
         if (globalCreationPrompt.trim()) {
@@ -3604,6 +3607,7 @@ function App() {
             content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的灵感条目。' : ''))
             return { role: p.role, content }
           })
+          .filter(m => m.content && m.content.trim())
 
         // Add Global Prompt if exists
         if (globalCreationPrompt.trim()) {
@@ -3845,6 +3849,7 @@ function App() {
             content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的世界观设定项。' : ''))
             return { role: p.role, content }
           })
+          .filter(m => m.content && m.content.trim())
 
         // Add Global Prompt if exists
         if (globalCreationPrompt.trim()) {
@@ -4323,6 +4328,7 @@ function App() {
                         content = content.replace('{{input}}', userPrompt)
                         return { role: p.role, content }
                     })
+                    .filter(m => m.content && m.content.trim())
 
                 const completion = await openai.chat.completions.create({
                     model: apiConfig.model,
@@ -4403,6 +4409,7 @@ function App() {
              }
              return { role: p.role, content }
           })
+          .filter(m => m.content && m.content.trim())
         
         // If analysis result exists but wasn't used in placeholder, append to the last user message
         if (currentAnalysisResult && !isAnalysisUsed) {
@@ -4670,7 +4677,11 @@ ${taskDescription}`
           { role: 'system', content: systemPrompt }
         ]
         promptsToUse.forEach(p => {
-          messages.push({ role: p.role, content: p.content })
+          // 过滤掉固定条目（如对话历史、世界观等），因为这些内容在 autoWriteLoop 中是手动构建并放入 mainPrompt 的
+          // 同时过滤掉内容为空的提示词，避免 OpenAI API 报错
+          if (!p.isFixed && p.content && p.content.trim()) {
+            messages.push({ role: p.role, content: p.content })
+          }
         })
         messages.push({ role: 'user', content: mainPrompt })
 
@@ -4859,7 +4870,11 @@ ${taskDescription}`
              terminal.log('[AutoWrite] Process aborted.')
              return
          }
-         terminal.error(`[AutoWrite] Batch attempt ${attempt + 1} failed:`, err)
+         let errorInfo = err.message || String(err)
+         if (err.status) errorInfo += ` (Status: ${err.status})`
+         if (err.error) errorInfo += `\nDetails: ${JSON.stringify(err.error)}`
+         
+         terminal.error(`[AutoWrite] Batch attempt ${attempt + 1} failed:`, errorInfo)
          attempt++
          if (attempt < maxAttempts) {
             await new Promise(resolve => setTimeout(resolve, 1000))
@@ -5074,7 +5089,7 @@ ${taskDescription}`
             if (content) {
               messages.push({ role: p.role, content: processTextWithRegex(content, scripts, 'input') })
             }
-          } else {
+          } else if (p.content && p.content.trim()) {
             messages.push({ role: p.role, content: p.content })
           }
         })
