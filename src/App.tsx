@@ -285,21 +285,25 @@ const buildWorldInfoContext = (novel: Novel | undefined, activeOutlineSetId: str
 
   // Worldview - 仅包含同名集的条目
   const worldviewSets = novel.worldviewSets || []
-  const relevantWorldview = targetName ? worldviewSets.filter(s => s.name === targetName) : worldviewSets.slice(0, 1)
+  const relevantWorldview = activeOutlineSetId
+    ? worldviewSets.filter(s => s.id === activeOutlineSetId || (targetName && s.name === targetName))
+    : worldviewSets.slice(0, 1)
   
   if (relevantWorldview.length > 0) {
-      context += '【当前小说世界观设定】：\n'
-      relevantWorldview.forEach(set => {
-           set.entries.forEach(entry => {
-               context += `· ${entry.item}: ${entry.setting}\n`
-           })
-      })
-      context += '\n'
+    context += '【当前小说世界观设定】：\n'
+    relevantWorldview.forEach(set => {
+         set.entries.forEach(entry => {
+             context += `· ${entry.item}: ${entry.setting}\n`
+         })
+    })
+    context += '\n'
   }
   
-  // Characters - 仅包含同名集的条目
+  // Characters - 优先匹配 ID，其次匹配同名集
   const characterSets = novel.characterSets || []
-  const relevantCharacters = targetName ? characterSets.filter(s => s.name === targetName) : characterSets.slice(0, 1)
+  const relevantCharacters = activeOutlineSetId
+    ? characterSets.filter(s => s.id === activeOutlineSetId || (targetName && s.name === targetName))
+    : characterSets.slice(0, 1)
 
   if (relevantCharacters.length > 0) {
       context += '【当前小说角色档案】：\n'
@@ -4512,14 +4516,15 @@ function App() {
 
   // Auto Writing Loop
   const autoWriteLoop = async (
-    outline: OutlineItem[], 
-    index: number, 
-    novelId: string, 
+    outline: OutlineItem[],
+    index: number,
+    novelId: string,
     novelTitle: string,
     promptsToUse: PromptItem[],
     contextLimit: number,
     targetVolumeId?: string,
-    includeFullOutline: boolean = false
+    includeFullOutline: boolean = false,
+    outlineSetId: string | null = null
   ) => {
     if (!isAutoWritingRef.current) return
 
@@ -4553,7 +4558,7 @@ function App() {
                 // If the VERY FIRST item exists, we skip just this one and recurse
                 terminal.log(`[AutoWrite] Skipping existing chapter: ${item.title}`)
                 setTimeout(() => {
-                    autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline)
+                    autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline, outlineSetId)
                 }, 50)
                 return
             } else {
@@ -4653,7 +4658,7 @@ function App() {
           ? `【全书大纲参考】：\n${outline.map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`).join('\n')}\n\n` 
           : ''
 
-        const worldInfo = buildWorldInfoContext(latestNovelState, autoWriteOutlineSetId)
+        const worldInfo = buildWorldInfoContext(latestNovelState, outlineSetId)
 
         // Construct Batch Prompt
         let taskDescription = ""
@@ -4909,7 +4914,7 @@ ${taskDescription}`
     if (!isAutoWritingRef.current) return
 
     // Continue to next batch
-    await autoWriteLoop(outline, index + preparedBatch.length, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline)
+    await autoWriteLoop(outline, index + preparedBatch.length, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline, outlineSetId)
   }
 
   const startAutoWriting = () => {
@@ -4999,7 +5004,7 @@ ${taskDescription}`
     }
 
     // Pass contextLength directly, remove previousContent parameter
-    autoWriteLoop(currentSet.items, startIndex, activeNovel.id, activeNovel.title, activePrompts, contextLength, targetVolumeId, includeFullOutlineInAutoWrite)
+    autoWriteLoop(currentSet.items, startIndex, activeNovel.id, activeNovel.title, activePrompts, contextLength, targetVolumeId, includeFullOutlineInAutoWrite, activeOutlineSetId)
   }
 
   const handleQuickGenerate = async () => {
@@ -7331,8 +7336,14 @@ ${taskDescription}`
                        const fullHistory = activeChapter ? `${context}### ${activeChapter.title}\n${currentContent}` : "(暂无历史记录)"
                        return fullHistory.length > contextLength ? "... (内容过长已截断)\n" + fullHistory.slice(-contextLength) : fullHistory
                      }
-                     if (editingPrompt.fixedType === 'world_info') return buildReferenceContext(activeNovel, selectedWorldviewSetIdForChat, selectedWorldviewIndicesForChat, selectedCharacterSetIdForChat, selectedCharacterIndicesForChat, selectedInspirationSetIdForChat, selectedInspirationIndicesForChat, selectedOutlineSetIdForChat, selectedOutlineIndicesForChat) || buildWorldInfoContext(activeNovel || undefined) || "(暂无设定内容)"
-                     if (editingPrompt.fixedType === 'outline') return getChapterContext(activeNovel || undefined, activeChapter) || "(暂无大纲内容)"
+                     if (editingPrompt.fixedType === 'world_info') return buildReferenceContext(activeNovel, selectedWorldviewSetIdForChat, selectedWorldviewIndicesForChat, selectedCharacterSetIdForChat, selectedCharacterIndicesForChat, selectedInspirationSetIdForChat, selectedInspirationIndicesForChat, selectedOutlineSetIdForChat, selectedOutlineIndicesForChat) || buildWorldInfoContext(activeNovel || undefined, activeOutlineSetId) || "(暂无设定内容)"
+                     if (editingPrompt.fixedType === 'outline') {
+                        const set = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
+                        if (set && set.items.length > 0) {
+                            return `【当前小说大纲策划】：\n` + set.items.map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+                        }
+                        return "(暂无大纲内容)"
+                     }
                      return ""
                    })() : editingPrompt.content}
                    onChange={(e) => !editingPrompt.isFixed && setEditingPrompt({...editingPrompt, content: e.target.value})}
