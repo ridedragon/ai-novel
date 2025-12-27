@@ -10,7 +10,7 @@ import {
 import OpenAI from 'openai'
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Chapter, ChatMessage, Novel } from '../types'
+import { Chapter, ChatMessage, Novel, PromptItem } from '../types'
 
 interface AIChatModalProps {
   isOpen: boolean
@@ -22,6 +22,7 @@ interface AIChatModalProps {
   baseUrl: string
   model: string
   systemPrompt: string
+  prompts: PromptItem[]
   context?: string
   onAttach: (content: string) => void
 }
@@ -36,6 +37,7 @@ export function AIChatModal({
   baseUrl,
   model,
   systemPrompt,
+  prompts,
   context,
   onAttach
 }: AIChatModalProps) {
@@ -71,21 +73,19 @@ export function AIChatModal({
         dangerouslyAllowBrowser: true
       })
 
-      const chatMessages: any[] = [
-        { role: 'system', content: systemPrompt },
-        ...newMessages.map(m => ({ role: m.role, content: m.content }))
-      ]
-
-      // 查找与当前大纲集同名的世界观和角色集，作为“当前创作中”的参考
+      // 1. 查找与当前大纲集同名的世界观和角色集，作为“当前创作中”的参考
       let targetName = ''
       if (activeOutlineSetId) {
         targetName = novel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.name || ''
       }
 
-      // Worldview - 仅包含同名集的条目
+      // 2. 构建各个部分的内容
+      // Worldview & Characters
       let worldInfo = ''
       const worldviewSets = novel?.worldviewSets || []
-      const relevantWorldview = targetName ? worldviewSets.filter(s => s.name === targetName) : worldviewSets.slice(0, 1)
+      const relevantWorldview = activeOutlineSetId
+        ? worldviewSets.filter(s => s.id === activeOutlineSetId || (targetName && s.name === targetName))
+        : worldviewSets.slice(0, 1)
       
       if (relevantWorldview.length > 0) {
           worldInfo += '【当前小说世界观设定】：\n'
@@ -97,9 +97,10 @@ export function AIChatModal({
           worldInfo += '\n'
       }
       
-      // Characters - 仅包含同名集的条目
       const characterSets = novel?.characterSets || []
-      const relevantCharacters = targetName ? characterSets.filter(s => s.name === targetName) : characterSets.slice(0, 1)
+      const relevantCharacters = activeOutlineSetId
+        ? characterSets.filter(s => s.id === activeOutlineSetId || (targetName && s.name === targetName))
+        : characterSets.slice(0, 1)
 
       if (relevantCharacters.length > 0) {
           worldInfo += '【当前小说角色档案】：\n'
@@ -111,7 +112,7 @@ export function AIChatModal({
           worldInfo += '\n'
       }
 
-      // Outline - 策划大纲
+      // Outline
       let outlineContent = ''
       if (activeOutlineSetId) {
           const currentOutlineSet = novel?.outlineSets?.find(s => s.id === activeOutlineSetId)
@@ -120,14 +121,32 @@ export function AIChatModal({
           }
       }
 
-      // Add context if available
-      const fullContext = [worldInfo, outlineContent, context ? `【前文剧情参考】：\n${context}` : ''].filter(Boolean).join('\n\n')
-      if (fullContext) {
-        chatMessages.splice(1, 0, {
-          role: 'system',
-          content: `当前创作上下文：\n\n${fullContext}`
-        })
-      }
+      // 3. 根据 prompts 预设的顺序构建消息列表
+      const chatMessages: any[] = [
+        { role: 'system', content: systemPrompt }
+      ]
+
+      prompts.filter(p => p.active).forEach(p => {
+        if (p.isFixed) {
+          let content = ""
+          if (p.fixedType === 'chat_history') {
+            content = context ? `【当前创作上下文参考】：\n${context}` : ""
+          } else if (p.fixedType === 'world_info') {
+            content = worldInfo ? `【世界观与角色设定】：\n${worldInfo}` : ""
+          } else if (p.fixedType === 'outline') {
+            content = outlineContent ? `【剧情大纲参考】：\n${outlineContent}` : ""
+          }
+          
+          if (content) {
+            chatMessages.push({ role: p.role, content: content })
+          }
+        } else if (p.content && p.content.trim()) {
+          chatMessages.push({ role: p.role, content: p.content })
+        }
+      })
+
+      // 添加当前的对话历史
+      chatMessages.push(...newMessages.map(m => ({ role: m.role, content: m.content })))
 
       const response = await openai.chat.completions.create({
         model,

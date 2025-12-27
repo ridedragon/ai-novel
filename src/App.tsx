@@ -8441,6 +8441,7 @@ ${taskDescription}`
         baseUrl={baseUrl}
         model={model}
         systemPrompt={systemPrompt}
+        prompts={prompts}
         context={getChapterContext(activeNovel || undefined, activeChapter) + (activeChapter ? `### ${activeChapter.title}\n${getEffectiveChapterContent(activeChapter)}` : '')}
         onAttach={(content) => {
           // 附加到正文优化界面 (即 activeChapter.content)
