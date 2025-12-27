@@ -273,14 +273,23 @@ const adjustColor = (hex: string, lum: number) => {
 
 const getStoryChapters = (chapters: Chapter[]) => chapters.filter(c => !c.subtype || c.subtype === 'story')
 
-const buildWorldInfoContext = (novel: Novel | undefined) => {
+const buildWorldInfoContext = (novel: Novel | undefined, activeOutlineSetId: string | null = null) => {
   if (!novel) return ''
   let context = ''
   
-  // Worldview
-  if (novel.worldviewSets && novel.worldviewSets.length > 0) {
-      context += '【世界观设定】：\n'
-      novel.worldviewSets.forEach(set => {
+  // 查找与当前大纲集同名的世界观和角色集，作为“当前创作中”的参考
+  let targetName = ''
+  if (activeOutlineSetId) {
+    targetName = novel.outlineSets?.find(s => s.id === activeOutlineSetId)?.name || ''
+  }
+
+  // Worldview - 仅包含同名集的条目
+  const worldviewSets = novel.worldviewSets || []
+  const relevantWorldview = targetName ? worldviewSets.filter(s => s.name === targetName) : worldviewSets.slice(0, 1)
+  
+  if (relevantWorldview.length > 0) {
+      context += '【当前小说世界观设定】：\n'
+      relevantWorldview.forEach(set => {
            set.entries.forEach(entry => {
                context += `· ${entry.item}: ${entry.setting}\n`
            })
@@ -288,10 +297,13 @@ const buildWorldInfoContext = (novel: Novel | undefined) => {
       context += '\n'
   }
   
-  // Characters
-  if (novel.characterSets && novel.characterSets.length > 0) {
-      context += '【角色档案】：\n'
-      novel.characterSets.forEach(set => {
+  // Characters - 仅包含同名集的条目
+  const characterSets = novel.characterSets || []
+  const relevantCharacters = targetName ? characterSets.filter(s => s.name === targetName) : characterSets.slice(0, 1)
+
+  if (relevantCharacters.length > 0) {
+      context += '【当前小说角色档案】：\n'
+      relevantCharacters.forEach(set => {
            set.characters.forEach(char => {
                context += `· ${char.name}: ${char.bio}\n`
            })
@@ -4641,7 +4653,7 @@ function App() {
           ? `【全书大纲参考】：\n${outline.map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`).join('\n')}\n\n` 
           : ''
 
-        const worldInfo = buildWorldInfoContext(latestNovelState)
+        const worldInfo = buildWorldInfoContext(latestNovelState, autoWriteOutlineSetId)
 
         // Construct Batch Prompt
         let taskDescription = ""
@@ -5070,9 +5082,16 @@ ${taskDescription}`
           selectedInspirationIndicesForChat,
           selectedOutlineSetIdForChat,
           selectedOutlineIndicesForChat
-        ) || buildWorldInfoContext(activeNovel || undefined)
+        ) || buildWorldInfoContext(activeNovel || undefined, activeOutlineSetId)
         
-        const outlineContent = getChapterContext(activeNovel || undefined, activeChapter)
+        // 只有当前大纲集的策划条目
+        let outlineContent = ''
+        if (activeOutlineSetId) {
+            const currentOutlineSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
+            if (currentOutlineSet && currentOutlineSet.items.length > 0) {
+                outlineContent = `【当前小说大纲策划】：\n` + currentOutlineSet.items.map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+            }
+        }
 
         // 2. Build messages based on prompts order
         const messages: any[] = [
@@ -8406,6 +8425,7 @@ ${taskDescription}`
         onClose={() => setShowAIChatModal(false)}
         novel={activeNovel}
         activeChapter={activeChapter}
+        activeOutlineSetId={activeOutlineSetId}
         apiKey={apiKey}
         baseUrl={baseUrl}
         model={model}

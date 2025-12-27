@@ -17,6 +17,7 @@ interface AIChatModalProps {
   onClose: () => void
   novel: Novel | undefined
   activeChapter: Chapter | undefined
+  activeOutlineSetId: string | null
   apiKey: string
   baseUrl: string
   model: string
@@ -30,6 +31,7 @@ export function AIChatModal({
   onClose,
   novel,
   activeChapter,
+  activeOutlineSetId,
   apiKey,
   baseUrl,
   model,
@@ -74,11 +76,56 @@ export function AIChatModal({
         ...newMessages.map(m => ({ role: m.role, content: m.content }))
       ]
 
+      // 查找与当前大纲集同名的世界观和角色集，作为“当前创作中”的参考
+      let targetName = ''
+      if (activeOutlineSetId) {
+        targetName = novel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.name || ''
+      }
+
+      // Worldview - 仅包含同名集的条目
+      let worldInfo = ''
+      const worldviewSets = novel?.worldviewSets || []
+      const relevantWorldview = targetName ? worldviewSets.filter(s => s.name === targetName) : worldviewSets.slice(0, 1)
+      
+      if (relevantWorldview.length > 0) {
+          worldInfo += '【当前小说世界观设定】：\n'
+          relevantWorldview.forEach(set => {
+               set.entries.forEach(entry => {
+                   worldInfo += `· ${entry.item}: ${entry.setting}\n`
+               })
+          })
+          worldInfo += '\n'
+      }
+      
+      // Characters - 仅包含同名集的条目
+      const characterSets = novel?.characterSets || []
+      const relevantCharacters = targetName ? characterSets.filter(s => s.name === targetName) : characterSets.slice(0, 1)
+
+      if (relevantCharacters.length > 0) {
+          worldInfo += '【当前小说角色档案】：\n'
+          relevantCharacters.forEach(set => {
+               set.characters.forEach(char => {
+                   worldInfo += `· ${char.name}: ${char.bio}\n`
+               })
+          })
+          worldInfo += '\n'
+      }
+
+      // Outline - 策划大纲
+      let outlineContent = ''
+      if (activeOutlineSetId) {
+          const currentOutlineSet = novel?.outlineSets?.find(s => s.id === activeOutlineSetId)
+          if (currentOutlineSet && currentOutlineSet.items.length > 0) {
+              outlineContent = `【当前小说大纲策划】：\n` + currentOutlineSet.items.map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+          }
+      }
+
       // Add context if available
-      if (context) {
+      const fullContext = [worldInfo, outlineContent, context ? `【前文剧情参考】：\n${context}` : ''].filter(Boolean).join('\n\n')
+      if (fullContext) {
         chatMessages.splice(1, 0, {
           role: 'system',
-          content: `当前创作上下文：\n\n${context}`
+          content: `当前创作上下文：\n\n${fullContext}`
         })
       }
 
