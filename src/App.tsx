@@ -4060,8 +4060,8 @@ function App() {
   }
 
   // Context Builder Helper
-  const getChapterContext = (targetNovel: Novel | undefined, targetChapter: Chapter) => {
-      if (!targetNovel) return ''
+  const getChapterContext = (targetNovel: Novel | undefined, targetChapter: Chapter | undefined) => {
+      if (!targetNovel || !targetChapter) return ''
       
       const chapters = targetNovel.chapters
       let contextContent = ''
