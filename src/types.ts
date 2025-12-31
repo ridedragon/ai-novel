@@ -32,6 +32,30 @@ export interface NovelVolume {
   collapsed: boolean;
 }
 
+export interface SettingNode {
+  id: string;
+  parentId?: string | null;
+  title: string;
+  description: string;
+  type: string; // e.g., '主题', '魔法体系', '地点', '物品', '事件', '科技设定', '其他', '文化'
+  attributes?: Record<string, any>;
+  children?: SettingNode[];
+  status?: '待生成' | '已生成' | '微调中' | 'PENDING' | 'GENERATING' | 'COMPLETED';
+}
+
+export interface SettingGenerationConfig {
+  strategyName: string;
+  expectedRootNodes: number;
+  maxDepth: number;
+  nodeTemplates: Array<{ name: string; description: string }>;
+  rules: {
+    minDescriptionLength: number;
+    maxDescriptionLength: number;
+    requireInterConnections: boolean;
+    [key: string]: any;
+  };
+}
+
 export interface OutlineItem {
   title: string;
   summary: string;
@@ -90,6 +114,22 @@ export interface InspirationSet {
   chatHistory?: ChatMessage[];
 }
 
+export interface PlotOutlineItem {
+  id: string;
+  title: string;
+  description: string;
+  type: string;
+  children?: PlotOutlineItem[];
+}
+
+export interface PlotOutlineSet {
+  id: string;
+  name: string;
+  items: PlotOutlineItem[];
+  userNotes?: string;
+  chatHistory?: ChatMessage[];
+}
+
 export interface Novel {
   id: string;
   title: string;
@@ -104,6 +144,7 @@ export interface Novel {
   worldview?: WorldviewItem[]; // Deprecated, use worldviewSets
   worldviewSets?: WorldviewSet[];
   inspirationSets?: InspirationSet[];
+  plotOutlineSets?: PlotOutlineSet[];
 }
 
 export interface PromptItem {
@@ -142,6 +183,7 @@ export interface GeneratorPreset {
   topP?: number;
   topK?: number;
   apiConfig?: PresetApiConfig;
+  generationConfig?: SettingGenerationConfig;
 }
 
 export interface RegexScript {

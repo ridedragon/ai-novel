@@ -1,4 +1,3 @@
-import React from 'react'
 import {
   ChevronDown,
   Loader2,
@@ -7,6 +6,7 @@ import {
   Wand2,
   X
 } from 'lucide-react'
+import React from 'react'
 
 interface GlobalSettingsModalProps {
   isOpen: boolean
@@ -32,6 +32,8 @@ interface GlobalSettingsModalProps {
   setWorldviewModel: (model: string) => void
   inspirationModel: string
   setInspirationModel: (model: string) => void
+  plotOutlineModel: string
+  setPlotOutlineModel: (model: string) => void
   optimizeModel: string
   setOptimizeModel: (model: string) => void
   analysisModel: string
@@ -76,6 +78,8 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   setWorldviewModel,
   inspirationModel,
   setInspirationModel,
+  plotOutlineModel,
+  setPlotOutlineModel,
   optimizeModel,
   setOptimizeModel,
   analysisModel,
@@ -167,6 +171,7 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
               { label: '角色生成模型', value: characterModel, setter: setCharacterModel },
               { label: '世界观生成模型', value: worldviewModel, setter: setWorldviewModel },
               { label: '灵感生成模型', value: inspirationModel, setter: setInspirationModel },
+              { label: '剧情粗纲模型', value: plotOutlineModel, setter: setPlotOutlineModel },
               { label: '正文优化模型', value: optimizeModel, setter: setOptimizeModel },
               { label: '正文分析模型', value: analysisModel, setter: setAnalysisModel }
             ].map((item, idx) => (

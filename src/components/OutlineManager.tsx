@@ -222,17 +222,19 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
         items: []
     }
 
-    const updatedWorldviewSets = [...(novel.worldviewSets || []), newWorldviewSet]
-    const updatedCharacterSets = [...(novel.characterSets || []), newCharacterSet]
-    const updatedOutlineSets = [...(novel.outlineSets || []), newOutlineSet]
-    const updatedInspirationSets = [...(novel.inspirationSets || []), newInspirationSet]
-    
-    onUpdateNovel({ 
-        ...novel, 
-        worldviewSets: updatedWorldviewSets,
-        characterSets: updatedCharacterSets,
-        outlineSets: updatedOutlineSets,
-        inspirationSets: updatedInspirationSets
+    const newPlotOutlineSet = {
+        id: newId,
+        name: name,
+        items: []
+    }
+
+    onUpdateNovel({
+        ...novel,
+        worldviewSets: [...(novel.worldviewSets || []), newWorldviewSet],
+        characterSets: [...(novel.characterSets || []), newCharacterSet],
+        outlineSets: [...(novel.outlineSets || []), newOutlineSet],
+        inspirationSets: [...(novel.inspirationSets || []), newInspirationSet],
+        plotOutlineSets: [...(novel.plotOutlineSets || []), newPlotOutlineSet]
     })
 
     setNewSetName('')
@@ -579,7 +581,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
             {/* AI Generation Input (Only shown when NOT in independent chat view) */}
             {onGenerateOutline && !showChat && (
               <div className="p-3 md:p-4 bg-gray-800/30 border-b border-gray-700/50">
-                 <div className="max-w-4xl mx-auto space-y-2">
+                 <div className="w-full space-y-2">
                     {/* Context Selectors */}
                     <div className="flex flex-wrap items-center gap-2">
                        <span className="text-xs text-gray-400 shrink-0">参考:</span>
@@ -694,7 +696,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-2 md:p-8 custom-scrollbar flex flex-col min-h-0">
                {showChat ? (
-                  <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full h-full">
+                  <div className="flex-1 flex flex-col w-full h-full">
                      <div className="flex items-center justify-between mb-4 shrink-0">
                         <div className="flex items-center gap-2 text-gray-400">
                            <Bot className="w-4 h-4" />
@@ -884,7 +886,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                      </div>
                   </div>
                ) : (
-              <div className="max-w-4xl mx-auto w-full space-y-3 md:space-y-4 pb-4 md:pb-8 flex flex-col min-h-full">
+              <div className="w-full space-y-3 md:space-y-4 pb-4 md:pb-8 flex flex-col min-h-full">
                 {/* User Notes Area */}
                 <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-4 shrink-0">
                     <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
@@ -906,86 +908,81 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                     <p className="text-xs md:text-sm mt-1">请手动添加章节，或使用上方的 AI 助手生成</p>
                   </div>
                 ) : (
-                  (activeSet.items || []).map((item, idx) => (
-                    <div 
-                      key={idx}
-                      draggable
-                      onDragStart={(e) => onDragStart(e, idx)}
-                      onDragOver={(e) => onDragOver(e, idx)}
-                      onDragEnd={onDragEnd}
-                      onClick={() => openEditChapter(idx, item)}
-                      className={`relative bg-gray-800 border border-gray-700 rounded-lg md:rounded-xl p-3 md:p-5 hover:border-[var(--theme-color)] hover:shadow-lg transition-all cursor-pointer group ${draggedItemIndex === idx ? 'opacity-40 ring-2 ring-[var(--theme-color)]' : ''}`}
-                    >
-                      {/* Drag Handle */}
-                      <div 
-                        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 text-gray-600 hover:text-gray-300 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity md:flex hidden"
-                        onClick={e => e.stopPropagation()}
+                  <div className="space-y-1">
+                    {(activeSet.items || []).map((item, idx) => (
+                      <div
+                        key={idx}
+                        draggable
+                        onDragStart={(e) => onDragStart(e, idx)}
+                        onDragOver={(e) => onDragOver(e, idx)}
+                        onDragEnd={onDragEnd}
+                        onClick={() => openEditChapter(idx, item)}
+                        className={`group flex items-center gap-3 p-2.5 rounded-none border transition-all cursor-pointer relative bg-gray-800/40 border-gray-700/50 hover:bg-gray-700/40 ${draggedItemIndex === idx ? 'opacity-40 ring-2 ring-indigo-500' : ''}`}
                       >
-                        <GripVertical className="w-5 h-5" />
-                      </div>
+                         <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className="p-1 hover:bg-gray-700 rounded transition-colors md:flex hidden cursor-grab active:cursor-grabbing" onClick={e => e.stopPropagation()}>
+                               <GripVertical className="w-3.5 h-3.5 text-gray-500" />
+                            </div>
+                            <div className="p-1.5 rounded text-gray-500 group-hover:text-[var(--theme-color)] transition-colors">
+                               <FileText className="w-3.5 h-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                               <div className="flex items-center gap-3">
+                                  <span className="text-[13px] font-medium truncate text-gray-300">
+                                     <span className="mr-2 text-gray-500 font-mono text-[11px]">{idx + 1}.</span>
+                                     {item.title}
+                                  </span>
+                               </div>
+                            </div>
+                         </div>
 
-                      <div className="flex items-start gap-3 md:gap-4 md:pl-8">
-                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gray-900/80 border border-gray-700 flex items-center justify-center text-xs md:text-sm font-bold text-gray-400 shrink-0 mt-0.5">
-                          {idx + 1}
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                             <h4 className="text-sm md:text-lg font-bold text-gray-200 mb-1 md:mb-2 truncate pr-6 md:pr-8">{item.title}</h4>
-                          </div>
-                          <p className="text-xs md:text-sm text-gray-400 leading-relaxed line-clamp-2">{item.summary || <span className="italic opacity-50">点击添加摘要...</span>}</p>
-                        </div>
-                      </div>
-
-                      {/* Hover Actions (Visible on Mobile? Maybe keep as top-right absolute but smaller) */}
-                      <div className="absolute top-2 right-2 md:top-3 md:right-3 flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800/90 rounded-lg shadow-sm border border-gray-700/50 p-0.5 md:p-1" onClick={e => e.stopPropagation()}>
-                         <button 
-                            onClick={() => handleMoveItem(idx, idx - 1)}
-                            disabled={idx === 0}
-                            className="p-1 md:p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded disabled:opacity-30"
-                            title="上移"
-                         >
-                            <ArrowUp className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                         </button>
-                         <button 
-                            onClick={() => handleMoveItem(idx, idx + 1)}
-                            disabled={idx === (activeSet.items || []).length - 1}
-                            className="p-1 md:p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded disabled:opacity-30"
-                            title="下移"
-                         >
-                            <ArrowDown className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                         </button>
-                         <div className="w-px h-3 md:h-4 bg-gray-600 mx-0.5 md:mx-1"></div>
-                         <button 
-                            onClick={() => handleDeleteItem(idx)}
-                            className="p-1 md:p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded"
-                            title="删除"
-                         >
-                            <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                         </button>
-                         {onRegenerateItem && (
-                            <>
-                               <div className="w-px h-3 md:h-4 bg-gray-600 mx-0.5 md:mx-1"></div>
-                               <button 
-                                  onClick={(e) => {
-                                     e.stopPropagation();
-                                     onRegenerateItem(idx);
-                                  }}
-                                  disabled={regeneratingItemIndices?.has(idx)}
-                                  className="p-1 md:p-1.5 text-gray-400 hover:text-[var(--theme-color)] hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="AI 重新生成本章"
+                         <div className="flex items-center gap-3 shrink-0">
+                            <span className="px-1.5 py-0.5 rounded-none text-[10px] font-bold border whitespace-nowrap leading-none bg-rose-900/20 text-rose-500 border-rose-900/50">
+                               大纲
+                            </span>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                               <button
+                                  onClick={() => handleMoveItem(idx, idx - 1)}
+                                  disabled={idx === 0}
+                                  className="p-1 hover:bg-gray-700 rounded-none text-gray-400 hover:text-gray-200 disabled:opacity-20"
+                                  title="上移"
                                >
-                                  {regeneratingItemIndices?.has(idx) ? (
-                                     <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin text-[var(--theme-color)]" />
-                                  ) : (
-                                     <RefreshCw className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                  )}
+                                  <ArrowUp className="w-3.5 h-3.5" />
                                </button>
-                            </>
-                         )}
+                               <button
+                                  onClick={() => handleMoveItem(idx, idx + 1)}
+                                  disabled={idx === (activeSet.items || []).length - 1}
+                                  className="p-1 hover:bg-gray-700 rounded-none text-gray-400 hover:text-gray-200 disabled:opacity-20"
+                                  title="下移"
+                               >
+                                  <ArrowDown className="w-3.5 h-3.5" />
+                               </button>
+                               {onRegenerateItem && (
+                                  <button
+                                     onClick={() => onRegenerateItem(idx)}
+                                     disabled={regeneratingItemIndices?.has(idx)}
+                                     className="p-1 hover:bg-gray-700 rounded-none text-gray-400 hover:text-[var(--theme-color)] disabled:opacity-50"
+                                     title="AI 重新生成本章"
+                                  >
+                                     {regeneratingItemIndices?.has(idx) ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--theme-color)]" />
+                                     ) : (
+                                        <RefreshCw className="w-3.5 h-3.5" />
+                                     )}
+                                  </button>
+                               )}
+                               <button
+                                  onClick={() => handleDeleteItem(idx)}
+                                  className="p-1 hover:bg-red-900/30 rounded-none text-gray-400 hover:text-red-500 transition-all"
+                                  title="删除"
+                               >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                               </button>
+                            </div>
+                         </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                  </div>
                 )}
               </div>
                )}
@@ -993,7 +990,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
 
             {/* Auto Write Footer Panel */}
             <div className="border-t border-gray-700 bg-gray-800 p-3 md:p-6 z-20 shrink-0">
-               <div className="max-w-4xl mx-auto flex flex-row items-center justify-between gap-3 md:gap-6">
+               <div className="w-full flex flex-row items-center justify-between gap-3 md:gap-6">
                   {/* Left: Options */}
                   <div className="flex flex-col md:block md:flex-1 space-y-0 md:space-y-2">
                      <h3 className="hidden md:flex font-bold items-center gap-2 text-gray-200">
@@ -1010,7 +1007,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                         </div>
                         <span className="text-xs md:text-sm text-gray-400 group-hover:text-gray-300 select-none whitespace-nowrap">
                            <span className="md:hidden">全局参考</span>
-                           <span className="hidden md:inline">在生成时附带完整大纲作为全局参考</span>
+                           <span className="hidden md:inline">在生成时附带完整粗纲作为全局参考</span>
                         </span>
                      </div>
                   </div>
@@ -1057,8 +1054,8 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
 
         {/* Edit Modal */}
         {editingChapterIndex !== null && (
-          <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-             <div className="bg-gray-800 w-full max-w-2xl rounded-xl shadow-2xl border border-gray-600 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+          <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
+             <div className="bg-gray-800 w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-xl shadow-2xl border border-gray-600 flex flex-col animate-in zoom-in-95 duration-200">
                 <div className="p-5 border-b border-gray-700 flex justify-between items-center">
                    <h3 className="font-bold text-lg text-gray-100">编辑章节大纲</h3>
                    <button onClick={() => setEditingChapterIndex(null)} className="text-gray-400 hover:text-white">
@@ -1066,10 +1063,10 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                    </button>
                 </div>
                 
-                <div className="p-6 space-y-5 overflow-y-auto">
-                   <div className="space-y-2">
+                <div className="flex-1 p-6 space-y-5 overflow-y-auto flex flex-col">
+                   <div className="space-y-2 shrink-0">
                       <label className="text-sm font-medium text-gray-400">章节标题</label>
-                      <input 
+                      <input
                          value={editChapterTitle}
                          onChange={e => setEditChapterTitle(e.target.value)}
                          className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-lg font-bold text-white focus:border-[var(--theme-color)] outline-none"
@@ -1078,12 +1075,12 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                       />
                    </div>
                    
-                   <div className="space-y-2">
+                   <div className="space-y-2 flex-1 flex flex-col">
                       <label className="text-sm font-medium text-gray-400">剧情摘要</label>
-                      <textarea 
+                      <textarea
                          value={editChapterSummary}
                          onChange={e => setEditChapterSummary(e.target.value)}
-                         className="w-full h-64 bg-gray-900 border border-gray-600 rounded-lg p-4 text-base leading-relaxed text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none font-mono"
+                         className="w-full flex-1 bg-gray-900 border border-gray-600 rounded-lg p-4 text-base leading-relaxed text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none font-mono"
                          placeholder="输入本章详细剧情..."
                       />
                    </div>

@@ -134,7 +134,7 @@ export function AIChatModal({
           } else if (p.fixedType === 'world_info') {
             content = worldInfo ? `【世界观与角色设定】：\n${worldInfo}` : ""
           } else if (p.fixedType === 'outline') {
-            content = outlineContent ? `【剧情大纲参考】：\n${outlineContent}` : ""
+            content = outlineContent ? `【剧情粗纲参考】：\n${outlineContent}` : ""
           }
           
           if (content) {

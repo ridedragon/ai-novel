@@ -66,7 +66,7 @@ export const ReferenceSelector: React.FC<ReferenceSelectorProps> = ({
       worldview: '世界观',
       character: '角色集',
       inspiration: '灵感',
-      outline: '大纲'
+      outline: '粗纲'
     }
     
     if (selectedSetId) {

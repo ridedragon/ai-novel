@@ -2,30 +2,31 @@ import {
   ArrowLeft,
   Bot,
   ChevronDown,
+  ChevronRight,
   Edit3,
   FileText,
   Folder,
+  LayoutList,
   Plus,
   Send,
   Settings,
   StopCircle,
   Trash2,
-  Users,
   Wand2,
   X
 } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
-import { CharacterItem, CharacterSet, InspirationSet, Novel, OutlineSet, WorldviewSet } from '../types'
+import { Novel, PlotOutlineItem } from '../types'
 import { ReferenceSelector } from './ReferenceSelector'
 
-interface CharacterManagerProps {
+interface PlotOutlineManagerProps {
   novel: Novel
-  activeCharacterSetId: string | null
-  onSetActiveCharacterSetId: (id: string | null) => void
+  activePlotOutlineSetId: string | null
+  onSetActivePlotOutlineSetId: (id: string | null) => void
   onUpdateNovel: (updatedNovel: Novel) => void
   
   // AI Generation Props
-  onGenerateCharacters?: (mode?: 'generate' | 'chat') => void
+  onGeneratePlotOutline?: (mode?: 'generate' | 'chat') => void
   isGenerating?: boolean
   userPrompt?: string
   setUserPrompt?: (val: string) => void
@@ -69,65 +70,134 @@ interface CharacterManagerProps {
   onToggleOutlineSelector: (open: boolean) => void
 }
 
-export const CharacterManager: React.FC<CharacterManagerProps> = ({
-  novel,
-  activeCharacterSetId,
-  onSetActiveCharacterSetId,
-  onUpdateNovel,
-  onGenerateCharacters,
-  isGenerating,
-  userPrompt,
-  setUserPrompt,
-  onStopGeneration,
-  onShowSettings,
-  modelName,
-  sidebarHeader,
-  activePresetId,
-  lastNonChatPresetId,
-  onReturnToMainWithContent,
-  onSetActivePresetId,
-  selectedWorldviewSetId,
-  selectedWorldviewIndices,
-  onSelectWorldviewSet,
-  onToggleWorldviewItem,
-  showWorldviewSelector,
-  onToggleWorldviewSelector,
-  selectedCharacterSetId,
-  selectedCharacterIndices,
-  onSelectCharacterSet,
-  onToggleCharacterItem,
-  showCharacterSelector,
-  onToggleCharacterSelector,
-  selectedInspirationSetId,
-  selectedInspirationIndices,
-  onSelectInspirationSet,
-  onToggleInspirationItem,
-  showInspirationSelector,
-  onToggleInspirationSelector,
-  selectedOutlineSetId,
-  selectedOutlineIndices,
-  onSelectOutlineSet,
-  onToggleOutlineItem,
-  showOutlineSelector,
-  onToggleOutlineSelector
-}) => {
-  // Local State for Set Management
+const TreeItem: React.FC<{
+  item: PlotOutlineItem
+  depth: number
+  onEdit: (item: PlotOutlineItem) => void
+  onAddChild: (parentId: string) => void
+  onDelete: (id: string) => void
+  expandedItems: Set<string>
+  onToggleExpand: (id: string) => void
+}> = ({ item, depth, onEdit, onAddChild, onDelete, expandedItems, onToggleExpand }) => {
+  const isExpanded = expandedItems.has(item.id)
+  const hasChildren = item.children && item.children.length > 0
+
+  return (
+    <div className="flex flex-col">
+      <div 
+        className="group flex items-center gap-2 p-2 hover:bg-gray-800/50 rounded transition-colors border border-transparent hover:border-gray-700/50"
+        style={{ paddingLeft: `${depth * 20 + 8}px` }}
+      >
+        <button 
+          onClick={() => onToggleExpand(item.id)}
+          className={`p-1 hover:bg-gray-700 rounded transition-colors ${hasChildren ? 'visible' : 'invisible'}`}
+        >
+          {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
+        </button>
+        
+        <div className="p-1 text-gray-500">
+          <FileText className="w-4 h-4" />
+        </div>
+
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEdit(item)}>
+          <span className="text-sm font-medium text-gray-200 truncate block">{item.title}</span>
+        </div>
+
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-900/20 text-blue-400 border border-blue-900/50 mr-2">
+            {item.type || '剧情'}
+          </span>
+          <button 
+            onClick={() => onAddChild(item.id)}
+            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+            title="添加子项"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+          <button 
+            onClick={() => onDelete(item.id)}
+            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-red-400"
+            title="删除"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {isExpanded && hasChildren && (
+        <div className="flex flex-col">
+          {item.children?.map(child => (
+            <TreeItem 
+              key={child.id} 
+              item={child} 
+              depth={depth + 1} 
+              onEdit={onEdit} 
+              onAddChild={onAddChild} 
+              onDelete={onDelete}
+              expandedItems={expandedItems}
+              onToggleExpand={onToggleExpand}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => {
+  const {
+    novel,
+    activePlotOutlineSetId,
+    onSetActivePlotOutlineSetId,
+    onUpdateNovel,
+    onGeneratePlotOutline,
+    isGenerating,
+    userPrompt,
+    setUserPrompt,
+    onStopGeneration,
+    onShowSettings,
+    modelName,
+    sidebarHeader,
+    activePresetId,
+    lastNonChatPresetId,
+    onReturnToMainWithContent,
+    onSetActivePresetId,
+    selectedWorldviewSetId,
+    selectedWorldviewIndices,
+    onSelectWorldviewSet,
+    onToggleWorldviewItem,
+    showWorldviewSelector,
+    onToggleWorldviewSelector,
+    selectedCharacterSetId,
+    selectedCharacterIndices,
+    onSelectCharacterSet,
+    onToggleCharacterItem,
+    showCharacterSelector,
+    onToggleCharacterSelector,
+    selectedInspirationSetId,
+    selectedInspirationIndices,
+    onSelectInspirationSet,
+    onToggleInspirationItem,
+    showInspirationSelector,
+    onToggleInspirationSelector,
+    selectedOutlineSetId,
+    selectedOutlineIndices,
+    onSelectOutlineSet,
+    onToggleOutlineItem,
+    showOutlineSelector,
+    onToggleOutlineSelector
+  } = props
+
   const [showChat, setShowChat] = useState(false)
   const [newSetName, setNewSetName] = useState('')
   const [editingSetId, setEditingSetId] = useState<string | null>(null)
   const [editSetName, setEditSetName] = useState('')
-  
-  // Local State for Mobile Sidebar
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
-
-  // Local State for Entry Editing
-  const [selectedCharacterIndex, setSelectedCharacterIndex] = useState<number | null>(null)
-  const [editCharName, setEditCharName] = useState('')
-  const [editCharBio, setEditCharBio] = useState('')
-
-  // Local State for Selectors
-
-  // Confirmation State
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  
+  // Edit Item State
+  const [editingItem, setEditingItem] = useState<PlotOutlineItem | null>(null)
+  
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean
     title: string
@@ -140,171 +210,124 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
     onConfirm: () => {}
   })
 
-  const activeSet = novel.characterSets?.find(s => s.id === activeCharacterSetId)
+  const activeSet = novel.plotOutlineSets?.find(s => s.id === activePlotOutlineSetId)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom of chat
   useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
   }, [activeSet?.chatHistory, showChat])
 
-  // Sync preset with view mode on mount
-  useEffect(() => {
-    if (onSetActivePresetId) {
-      if (showChat) {
-        onSetActivePresetId('chat')
-      } else if (lastNonChatPresetId) {
-        onSetActivePresetId(lastNonChatPresetId)
-      }
-    }
-  }, [])
-
-  // --- Set Management Helpers ---
-
   const handleAddSet = () => {
     if (!newSetName.trim()) return
-    
     const newId = crypto.randomUUID()
     const name = newSetName.trim()
 
-    const newCharacterSet: CharacterSet = {
-      id: newId,
-      name: name,
-      characters: []
-    }
-    
-    const newWorldviewSet: WorldviewSet = {
-        id: newId,
-        name: name,
-        entries: []
-    }
-    
-    const newOutlineSet: OutlineSet = {
-        id: newId,
-        name: name,
-        items: []
-    }
-
-    const newInspirationSet: InspirationSet = {
-        id: newId,
-        name: name,
-        items: []
-    }
-
-    const newPlotOutlineSet = {
-        id: newId,
-        name: name,
-        items: []
-    }
-
     onUpdateNovel({
-        ...novel,
-        worldviewSets: [...(novel.worldviewSets || []), newWorldviewSet],
-        characterSets: [...(novel.characterSets || []), newCharacterSet],
-        outlineSets: [...(novel.outlineSets || []), newOutlineSet],
-        inspirationSets: [...(novel.inspirationSets || []), newInspirationSet],
-        plotOutlineSets: [...(novel.plotOutlineSets || []), newPlotOutlineSet]
+      ...novel,
+      plotOutlineSets: [...(novel.plotOutlineSets || []), { id: newId, name, items: [] }],
+      characterSets: [...(novel.characterSets || []), { id: newId, name, characters: [] }],
+      worldviewSets: [...(novel.worldviewSets || []), { id: newId, name, entries: [] }],
+      outlineSets: [...(novel.outlineSets || []), { id: newId, name, items: [] }],
+      inspirationSets: [...(novel.inspirationSets || []), { id: newId, name, items: [] }]
     })
-    
+
     setNewSetName('')
-    onSetActiveCharacterSetId(newId)
+    onSetActivePlotOutlineSetId(newId)
   }
 
   const handleDeleteSet = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
     setConfirmState({
       isOpen: true,
-      title: '删除角色文件',
-      message: '确定要删除这个角色文件吗？里面的所有角色都会被删除。',
+      title: '删除剧情粗纲文件',
+      message: '确定要删除这个剧情粗纲文件吗？里面的所有内容都会被删除。',
       onConfirm: () => {
-        const updatedSets = (novel.characterSets || []).filter(s => s.id !== id)
-        onUpdateNovel({ ...novel, characterSets: updatedSets })
-        if (activeCharacterSetId === id) {
-          onSetActiveCharacterSetId(updatedSets.length > 0 ? updatedSets[0].id : null)
+        const updatedSets = (novel.plotOutlineSets || []).filter(s => s.id !== id)
+        onUpdateNovel({ ...novel, plotOutlineSets: updatedSets })
+        if (activePlotOutlineSetId === id) {
+          onSetActivePlotOutlineSetId(updatedSets.length > 0 ? updatedSets[0].id : null)
         }
         setConfirmState(prev => ({ ...prev, isOpen: false }))
       }
     })
   }
 
-  const startRenameSet = (set: CharacterSet, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setEditingSetId(set.id)
-    setEditSetName(set.name)
-  }
-
   const confirmRenameSet = () => {
     if (!editingSetId || !editSetName.trim()) return
-    const updatedSets = (novel.characterSets || []).map(s => 
+    const updatedSets = (novel.plotOutlineSets || []).map(s => 
       s.id === editingSetId ? { ...s, name: editSetName.trim() } : s
     )
-    onUpdateNovel({ ...novel, characterSets: updatedSets })
+    onUpdateNovel({ ...novel, plotOutlineSets: updatedSets })
     setEditingSetId(null)
   }
 
-  // --- Character Management Helpers ---
-
-  const updateCharacters = (newCharacters: CharacterItem[]) => {
+  const updateItems = (newItems: PlotOutlineItem[]) => {
     if (!activeSet) return
-    const updatedSets = (novel.characterSets || []).map(s => 
-      s.id === activeSet.id ? { ...s, characters: newCharacters } : s
+    const updatedSets = (novel.plotOutlineSets || []).map(s => 
+      s.id === activeSet.id ? { ...s, items: newItems } : s
     )
-    onUpdateNovel({ ...novel, characterSets: updatedSets })
+    onUpdateNovel({ ...novel, plotOutlineSets: updatedSets })
   }
 
-  const handleAddCharacter = () => {
+  const findAndReplaceItem = (items: PlotOutlineItem[], newItem: PlotOutlineItem): PlotOutlineItem[] => {
+    return items.map(item => {
+      if (item.id === newItem.id) return newItem
+      if (item.children) return { ...item, children: findAndReplaceItem(item.children, newItem) }
+      return item
+    })
+  }
+
+  const findAndDeleteItem = (items: PlotOutlineItem[], id: string): PlotOutlineItem[] => {
+    return items.filter(item => item.id !== id).map(item => {
+      if (item.children) return { ...item, children: findAndDeleteItem(item.children, id) }
+      return item
+    })
+  }
+
+  const findAndAddItem = (items: PlotOutlineItem[], parentId: string, newItem: PlotOutlineItem): PlotOutlineItem[] => {
+    return items.map(item => {
+      if (item.id === parentId) {
+        return { ...item, children: [...(item.children || []), newItem] }
+      }
+      if (item.children) return { ...item, children: findAndAddItem(item.children, parentId, newItem) }
+      return item
+    })
+  }
+
+  const handleAddItem = (parentId: string | null = null) => {
     if (!activeSet) return
-    const newCharacter: CharacterItem = { name: '新角色', bio: '' }
-    updateCharacters([...activeSet.characters, newCharacter])
-    // Optionally open edit modal
-    const newIndex = activeSet.characters.length
-    setSelectedCharacterIndex(newIndex)
-    setEditCharName('新角色')
-    setEditCharBio('')
-  }
-
-  const handleDeleteCharacter = (index: number) => {
-    if (!activeSet) return
-    const newCharacters = [...activeSet.characters]
-    newCharacters.splice(index, 1)
-    updateCharacters(newCharacters)
-  }
-
-  const openEditCharacter = (index: number, char: CharacterItem) => {
-    setSelectedCharacterIndex(index)
-    setEditCharName(char.name)
-    setEditCharBio(char.bio)
-  }
-
-  const saveEditCharacter = () => {
-    if (selectedCharacterIndex === null || !activeSet) return
-    const newCharacters = [...activeSet.characters]
-    newCharacters[selectedCharacterIndex] = {
-      name: editCharName,
-      bio: editCharBio
+    const newItem: PlotOutlineItem = {
+      id: crypto.randomUUID(),
+      title: '新项',
+      description: '',
+      type: '剧情'
     }
-    updateCharacters(newCharacters)
-    setSelectedCharacterIndex(null)
+    
+    if (!parentId) {
+      updateItems([...activeSet.items, newItem])
+    } else {
+      updateItems(findAndAddItem(activeSet.items, parentId, newItem))
+      setExpandedItems(prev => new Set(prev).add(parentId))
+    }
+    setEditingItem(newItem)
   }
 
-  const updateUserNotes = (notes: string) => {
-    if (!activeSet) return
-    const updatedSets = (novel.characterSets || []).map(s => 
-      s.id === activeSet.id ? { ...s, userNotes: notes } : s
-    )
-    onUpdateNovel({ ...novel, characterSets: updatedSets })
+  const handleSaveItemEdit = () => {
+    if (!editingItem || !activeSet) return
+    updateItems(findAndReplaceItem(activeSet.items, editingItem))
+    setEditingItem(null)
   }
 
-  const handleClearAll = () => {
+  const handleDeleteItem = (id: string) => {
     if (!activeSet) return
     setConfirmState({
       isOpen: true,
-      title: '清空角色',
-      message: '确定要清空当前角色集的所有角色吗？此操作无法撤销。',
+      title: '删除项',
+      message: '确定要删除此项及其所有子项吗？',
       onConfirm: () => {
-        updateCharacters([])
+        updateItems(findAndDeleteItem(activeSet.items, id))
         setConfirmState(prev => ({ ...prev, isOpen: false }))
       }
     })
@@ -312,25 +335,46 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
 
   const handleClearChat = () => {
     if (!activeSet) return
-    const updatedSets = (novel.characterSets || []).map(s =>
+    const updatedSets = (novel.plotOutlineSets || []).map(s =>
       s.id === activeSet.id ? { ...s, chatHistory: [] } : s
     )
-    onUpdateNovel({ ...novel, characterSets: updatedSets })
+    onUpdateNovel({ ...novel, plotOutlineSets: updatedSets })
   }
 
   const handleDeleteChatMessage = (index: number) => {
     if (!activeSet || !activeSet.chatHistory) return
     const newChatHistory = [...activeSet.chatHistory]
     newChatHistory.splice(index, 1)
-    const updatedSets = (novel.characterSets || []).map(s =>
+    const updatedSets = (novel.plotOutlineSets || []).map(s =>
       s.id === activeSet.id ? { ...s, chatHistory: newChatHistory } : s
     )
-    onUpdateNovel({ ...novel, characterSets: updatedSets })
+    onUpdateNovel({ ...novel, plotOutlineSets: updatedSets })
+  }
+
+  const handleClearAll = () => {
+    if (!activeSet) return
+    setConfirmState({
+      isOpen: true,
+      title: '清空剧情粗纲',
+      message: '确定要清空当前剧情粗纲的所有设定吗？此操作无法撤销。',
+      onConfirm: () => {
+        updateItems([])
+        setConfirmState(prev => ({ ...prev, isOpen: false }))
+      }
+    })
+  }
+
+  const updateUserNotes = (notes: string) => {
+    if (!activeSet) return
+    const updatedSets = (novel.plotOutlineSets || []).map(s =>
+      s.id === activeSet.id ? { ...s, userNotes: notes } : s
+    )
+    onUpdateNovel({ ...novel, plotOutlineSets: updatedSets })
   }
 
   return (
     <div className="w-full flex flex-col md:flex-row h-full bg-gray-900 text-gray-100 overflow-hidden">
-      {/* Sidebar: Set List */}
+      {/* Sidebar */}
       <div className={`w-full md:w-64 bg-gray-800 border-r border-gray-700 flex flex-col shrink-0 transition-all duration-300 ${isMobileListOpen ? 'h-auto max-h-[60vh]' : 'h-auto'} md:h-auto`}>
         {sidebarHeader && (
           <div className="p-3 md:p-4 border-b border-gray-700 shrink-0">
@@ -338,103 +382,89 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
           </div>
         )}
 
-        {/* Title / Mobile Toggle */}
         <div 
           className="p-3 md:p-4 border-b border-gray-700 flex items-center justify-between shrink-0 cursor-pointer md:cursor-default hover:bg-gray-700/30 md:hover:bg-transparent transition-colors"
           onClick={() => setIsMobileListOpen(!isMobileListOpen)}
         >
           <h3 className="font-bold flex items-center gap-2 text-gray-200">
-            <Users className="w-5 h-5 text-[var(--theme-color)]" />
-            <span>角色文件列表</span>
+            <LayoutList className="w-5 h-5 text-[var(--theme-color)]" />
+            <span>剧情粗纲列表</span>
             <span className="md:hidden text-xs text-gray-500 font-normal ml-2">
-              ({novel.characterSets?.length || 0})
+              ({novel.plotOutlineSets?.length || 0})
             </span>
           </h3>
           <div className="md:hidden text-gray-400">
-             <ChevronDown className={`w-4 h-4 transition-transform ${isMobileListOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-4 h-4 transition-transform ${isMobileListOpen ? 'rotate-180' : ''}`} />
           </div>
         </div>
 
-        {/* List Content */}
         <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isMobileListOpen ? 'max-h-[50vh] opacity-100' : 'max-h-0 opacity-0 md:max-h-none md:opacity-100'}`}>
-           <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-              {novel.characterSets?.map(set => (
-                <div 
-                  key={set.id}
-                  onClick={() => {
-                     onSetActiveCharacterSetId(set.id)
-                     if (window.innerWidth < 768) setIsMobileListOpen(false)
-                  }}
-                  className={`group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
-                    activeCharacterSetId === set.id 
-                      ? 'bg-[var(--theme-color)] text-white shadow-md' 
-                      : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200'
-                  }`}
-                >
-                  {editingSetId === set.id ? (
-                     <div className="flex items-center gap-1 w-full" onClick={e => e.stopPropagation()}>
-                        <input 
-                           className="flex-1 bg-gray-900 text-white text-sm rounded px-2 py-1 outline-none border border-[var(--theme-color)]"
-                           value={editSetName}
-                           onChange={e => setEditSetName(e.target.value)}
-                           autoFocus
-                           onKeyDown={e => {
-                              if(e.key === 'Enter') confirmRenameSet()
-                              if(e.key === 'Escape') setEditingSetId(null)
-                           }}
-                           onBlur={confirmRenameSet}
-                        />
-                     </div>
-                  ) : (
-                     <>
-                        <div className="flex items-center gap-3 overflow-hidden">
-                           <Folder className={`w-4 h-4 shrink-0 ${activeCharacterSetId === set.id ? 'text-white' : 'text-gray-500'}`} />
-                           <span className="truncate text-sm font-medium">{set.name}</span>
-                        </div>
-                        
-                        <div className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${activeCharacterSetId === set.id ? 'text-white' : 'text-gray-400'}`}>
-                           <button 
-                              onClick={(e) => startRenameSet(set, e)}
-                              className="p-1 hover:bg-white/20 rounded"
-                           >
-                              <Edit3 className="w-3 h-3" />
-                           </button>
-                           <button 
-                              onClick={(e) => handleDeleteSet(set.id, e)}
-                              className="p-1 hover:bg-white/20 rounded hover:text-red-200"
-                           >
-                              <Trash2 className="w-3 h-3" />
-                           </button>
-                        </div>
-                     </>
-                  )}
-                </div>
-              ))}
-              {(!novel.characterSets || novel.characterSets.length === 0) && (
-                 <div className="text-center py-8 text-gray-500 text-xs italic">
-                    暂无角色文件，请新建
-                 </div>
-              )}
-           </div>
-
-           <div className="p-3 border-t border-gray-700 bg-gray-800 shrink-0">
-              <div className="flex gap-2">
-                 <input 
-                    value={newSetName}
-                    onChange={e => setNewSetName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleAddSet()}
-                    placeholder="新角色集名称..."
-                    className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 text-sm focus:border-[var(--theme-color)] outline-none transition-colors"
-                 />
-                 <button 
-                    onClick={handleAddSet}
-                    disabled={!newSetName.trim()}
-                    className="p-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
-                 >
-                    <Plus className="w-4 h-4" />
-                 </button>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+            {novel.plotOutlineSets?.map(set => (
+              <div 
+                key={set.id}
+                onClick={() => {
+                  onSetActivePlotOutlineSetId(set.id)
+                  if (window.innerWidth < 768) setIsMobileListOpen(false)
+                }}
+                className={`group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
+                  activePlotOutlineSetId === set.id 
+                    ? 'bg-[var(--theme-color)] text-white shadow-md' 
+                    : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                }`}
+              >
+                {editingSetId === set.id ? (
+                  <div className="flex items-center gap-1 w-full" onClick={e => e.stopPropagation()}>
+                    <input 
+                      className="flex-1 bg-gray-900 text-white text-sm rounded px-2 py-1 outline-none border border-[var(--theme-color)]"
+                      value={editSetName}
+                      onChange={e => setEditSetName(e.target.value)}
+                      autoFocus
+                      onKeyDown={e => {
+                        if(e.key === 'Enter') confirmRenameSet()
+                        if(e.key === 'Escape') setEditingSetId(null)
+                      }}
+                      onBlur={confirmRenameSet}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <Folder className={`w-4 h-4 shrink-0 ${activePlotOutlineSetId === set.id ? 'text-white' : 'text-gray-500'}`} />
+                      <span className="truncate text-sm font-medium">{set.name}</span>
+                    </div>
+                    <div className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${activePlotOutlineSetId === set.id ? 'text-white' : 'text-gray-400'}`}>
+                      <button onClick={(e) => { e.stopPropagation(); setEditingSetId(set.id); setEditSetName(set.name); }} className="p-1 hover:bg-white/20 rounded"><Edit3 className="w-3 h-3" /></button>
+                      <button onClick={(e) => handleDeleteSet(set.id, e)} className="p-1 hover:bg-white/20 rounded hover:text-red-200"><Trash2 className="w-3 h-3" /></button>
+                    </div>
+                  </>
+                )}
               </div>
-           </div>
+            ))}
+            {(!novel.plotOutlineSets || novel.plotOutlineSets.length === 0) && (
+              <div className="text-center py-8 text-gray-500 text-xs italic">
+                暂无剧情粗纲文件，请新建
+              </div>
+            )}
+          </div>
+          <div className="p-3 border-t border-gray-700 bg-gray-800 shrink-0">
+            <div className="flex gap-2">
+              <input 
+                value={newSetName} 
+                onChange={e => setNewSetName(e.target.value)} 
+                onKeyDown={e => e.key === 'Enter' && handleAddSet()} 
+                placeholder="新剧情粗纲名称..." 
+                className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 text-sm focus:border-[var(--theme-color)] outline-none transition-colors" 
+              />
+              <button 
+                onClick={handleAddSet} 
+                disabled={!newSetName.trim()} 
+                className="p-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -447,7 +477,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                   <div className="flex items-center gap-2 md:gap-3 overflow-hidden">
                      <h2 className="text-lg md:text-xl font-bold text-gray-100 truncate">{activeSet.name}</h2>
                      <span className="bg-gray-700 text-gray-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full shrink-0">
-                        {activeSet.characters.length} 个角色
+                        {activeSet.items.length} 个根节点
                      </span>
                   </div>
 
@@ -477,32 +507,32 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                         className={`flex items-center gap-1 px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-colors border mr-2 ${showChat ? 'bg-[var(--theme-color)] text-white border-[var(--theme-color)]' : 'bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600'}`}
                      >
                         {showChat ? <ArrowLeft className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Send className="w-3.5 h-3.5 md:w-4 md:h-4" />}
-                        <span className="hidden sm:inline">{showChat ? '返回' : '聊天'}</span>
+                        <span className="hidden sm:inline">{showChat ? '返回' : 'AI聊天'}</span>
                      </button>
 
                      <button 
                         onClick={handleClearAll}
-                        disabled={activeSet.characters.length === 0}
+                        disabled={activeSet.items.length === 0}
                         className="flex items-center gap-1 px-3 py-1.5 md:px-4 md:py-2 bg-red-900/30 hover:bg-red-900/60 text-red-200 text-xs md:text-sm rounded-lg transition-colors border border-red-900/50 hover:border-red-700/50 disabled:opacity-30 disabled:cursor-not-allowed mr-2"
-                        title="清空当前角色集的所有角色"
+                        title="清空当前剧情粗纲"
                      >
                         <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                         <span className="hidden sm:inline">清空</span>
                      </button>
 
                      <button 
-                        onClick={handleAddCharacter}
+                        onClick={() => handleAddItem()}
                         className="flex items-center gap-1 px-3 py-1.5 md:px-4 md:py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs md:text-sm rounded-lg transition-colors border border-gray-600 hover:border-gray-500"
                      >
                         <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                        <span className="hidden sm:inline">手动添加角色</span>
+                        <span className="hidden sm:inline">添加根节点</span>
                         <span className="md:hidden">添加</span>
                      </button>
                   </div>
                </div>
 
                {/* AI Generation Input (Only shown when NOT in independent chat view) */}
-               {onGenerateCharacters && !showChat && (
+               {onGeneratePlotOutline && !showChat && (
                   <div className="p-3 md:p-4 bg-gray-800/30 border-b border-gray-700/50">
                      <div className="w-full space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -574,7 +604,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                                  onChange={(e) => setUserPrompt && setUserPrompt(e.target.value)}
                                  onKeyDown={(e) => {
                                     if (e.key === 'Enter' && !isGenerating) {
-                                       onGenerateCharacters('generate')
+                                       onGeneratePlotOutline('generate')
                                     }
                                  }}
                                  className="w-full bg-gray-900 border border-gray-600 rounded-lg pl-9 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
@@ -591,11 +621,11 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                               </button>
                            ) : (
                               <button
-                                 onClick={() => onGenerateCharacters('generate')}
+                                 onClick={() => onGeneratePlotOutline('generate')}
                                  className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white"
                               >
                                  <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                 <span className="hidden md:inline">生成角色</span>
+                                 <span className="hidden md:inline">生成剧情粗纲</span>
                                  <span className="md:hidden">生成</span>
                               </button>
                            )}
@@ -605,13 +635,13 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                )}
 
                {/* Content Area */}
-               <div className="flex-1 overflow-y-auto p-2 md:p-8 custom-scrollbar flex flex-col min-h-0">
+               <div className="flex-1 overflow-y-auto p-2 md:p-4 custom-scrollbar flex flex-col min-h-0">
                   {showChat ? (
                      <div className="flex-1 flex flex-col w-full h-full">
                         <div className="flex items-center justify-between mb-4 shrink-0">
                            <div className="flex items-center gap-2 text-gray-400">
                               <Bot className="w-4 h-4" />
-                              <span className="text-sm font-medium">角色讨论对话</span>
+                              <span className="text-sm font-medium">剧情粗纲讨论对话</span>
                            </div>
                            <div className="flex items-center gap-3">
                               <button
@@ -637,11 +667,11 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                            {activeSet.chatHistory?.map((msg, i) => (
                               <div key={i} className={`flex flex-col group/msg ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                                  <div className={`flex items-center gap-2 mb-1 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white'}`}>
                                        {msg.role === 'user' ? 'U' : 'AI'}
                                     </div>
                                     <span className="text-xs text-gray-500">
-                                       {msg.role === 'user' ? '用户' : '角色助手'}
+                                       {msg.role === 'user' ? '用户' : '剧情助手'}
                                     </span>
                                     <button
                                        onClick={() => handleDeleteChatMessage(i)}
@@ -664,7 +694,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                            {(!activeSet.chatHistory || activeSet.chatHistory.length === 0) && (
                               <div className="flex-1 flex flex-col items-center justify-center text-gray-500 py-20">
                                  <Bot className="w-16 h-16 mb-4 opacity-10" />
-                                 <p>开始与 AI 讨论你的角色吧...</p>
+                                 <p>开始与 AI 讨论你的剧情粗纲吧...</p>
                               </div>
                            )}
                         </div>
@@ -740,7 +770,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                                     onKeyDown={(e) => {
                                        if (e.key === 'Enter' && !e.shiftKey && !isGenerating) {
                                           e.preventDefault();
-                                          onGenerateCharacters && onGenerateCharacters('chat');
+                                          onGeneratePlotOutline && onGeneratePlotOutline('chat');
                                        }
                                     }}
                                     className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-3 text-sm focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all resize-none h-24 custom-scrollbar"
@@ -759,7 +789,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                                  ) : (
                                     <div className="flex flex-col gap-2">
                                        <button
-                                          onClick={() => onGenerateCharacters && onGenerateCharacters('chat')}
+                                          onClick={() => onGeneratePlotOutline && onGeneratePlotOutline('chat')}
                                           className={`p-3 rounded-xl bg-gray-700 hover:bg-gray-600 text-white shadow-lg transition-all ${!userPrompt?.trim() ? 'text-white/50' : ''}`}
                                           title="发送对话"
                                        >
@@ -770,7 +800,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                                              if (onReturnToMainWithContent) {
                                                 const history = activeSet.chatHistory || [];
                                                 const formattedHistory = history.map(m =>
-                                                   `${m.role === 'user' ? '用户' : '角色助手'}: ${m.content}`
+                                                   `${m.role === 'user' ? '用户' : '剧情助手'}: ${m.content}`
                                                 ).join('\n\n');
                                                 const finalContent = userPrompt?.trim()
                                                    ? `${formattedHistory}\n\n用户最新想法: ${userPrompt}`
@@ -780,8 +810,8 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                                                 if (onSetActivePresetId && lastNonChatPresetId) {
                                                    onSetActivePresetId(lastNonChatPresetId);
                                                 }
-                                             } else if (onGenerateCharacters) {
-                                                onGenerateCharacters('generate');
+                                             } else if (onGeneratePlotOutline) {
+                                                onGeneratePlotOutline('generate');
                                              }
                                           }}
                                           className={`p-3 rounded-xl bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white shadow-lg transition-all flex items-center justify-center gap-1 ${!userPrompt?.trim() && (!activeSet.chatHistory || activeSet.chatHistory.length === 0) ? 'text-white/70' : ''}`}
@@ -802,149 +832,113 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                      <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-4">
                         <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
                            <FileText className="w-3 h-3" />
-                           <span>用户输入记录 & 设定上下文 (AI 生成时会参考此内容)</span>
+                           <span>用户输入记录 & 剧情上下文 (AI 生成时会参考此内容)</span>
                         </div>
                         <textarea 
                            value={activeSet.userNotes || ''}
                            onChange={(e) => updateUserNotes(e.target.value)}
                            className="w-full h-24 bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-xs md:text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none transition-all focus:bg-gray-900 focus:h-48 placeholder-gray-500 font-mono"
-                           placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这组角色的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
+                           placeholder="用户的指令历史将自动记录在此处...&#10;你也可以手动添加关于这组剧情粗纲的全局设定、注意事项等。&#10;这些内容将作为上下文发送给 AI。"
                         />
                      </div>
 
-                     {/* Character Grid */}
-                     {activeSet.characters.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 md:py-20 text-gray-500 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-800/20">
-                           <Users className="w-12 h-12 md:w-16 md:h-16 mb-3 md:mb-4 opacity-20" />
-                           <p className="text-base md:text-lg font-medium text-gray-400">暂无角色</p>
-                           <p className="text-xs md:text-sm mt-1">请手动添加角色，或使用上方的 AI 助手生成</p>
-                        </div>
-                     ) : (
-                        <div className="space-y-1">
-                           {activeSet.characters.map((char, idx) => (
-                              <div
-                                 key={idx}
-                                 onClick={() => openEditCharacter(idx, char)}
-                                 className="group flex items-center gap-3 p-2.5 rounded-none border transition-all cursor-pointer relative bg-gray-800/40 border-gray-700/50 hover:bg-gray-700/40"
-                              >
-                                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    <div className="p-1.5 rounded text-gray-500 group-hover:text-[var(--theme-color)] transition-colors">
-                                       <Users className="w-3.5 h-3.5" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                       <div className="flex items-center gap-3">
-                                          <span className="text-[13px] font-medium truncate text-gray-300">
-                                             {char.name || '未命名角色'}
-                                          </span>
-                                       </div>
-                                    </div>
-                                 </div>
-
-                                 <div className="flex items-center gap-3 shrink-0">
-                                    <span className="px-1.5 py-0.5 rounded-none text-[10px] font-bold border whitespace-nowrap leading-none bg-indigo-900/20 text-indigo-500 border-indigo-900/50">
-                                       角色
-                                    </span>
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                       <button
-                                          onClick={(e) => { e.stopPropagation(); handleDeleteCharacter(idx); }}
-                                          className="p-1 hover:bg-red-900/30 rounded-none text-gray-400 hover:text-red-400 transition-all"
-                                          title="删除角色"
-                                       >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                       </button>
-                                    </div>
-                                 </div>
-                              </div>
-                           ))}
-                        </div>
-                     )}
+                     <div className="space-y-1">
+                        {activeSet.items.map(item => (
+                           <TreeItem 
+                           key={item.id} 
+                           item={item} 
+                           depth={0} 
+                           onEdit={setEditingItem} 
+                           onAddChild={handleAddItem}
+                           onDelete={handleDeleteItem}
+                           expandedItems={expandedItems}
+                           onToggleExpand={(id) => setExpandedItems(prev => {
+                              const next = new Set(prev)
+                              if (next.has(id)) next.delete(id)
+                              else next.add(id)
+                              return next
+                           })}
+                           />
+                        ))}
+                        {activeSet.items.length === 0 && (
+                           <div className="flex flex-col items-center justify-center py-20 text-gray-500 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-800/20">
+                              <LayoutList className="w-16 h-16 mb-4 opacity-10" />
+                              <p>暂无项，请点击上方“添加根节点”或使用 AI 生成</p>
+                           </div>
+                        )}
+                     </div>
                   </div>
                   )}
                </div>
             </>
          ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-500 bg-gray-900/50">
-               <Users className="w-24 h-24 mb-6 opacity-10" />
-               <h2 className="text-xl font-bold text-gray-400 mb-2">请选择一个角色文件</h2>
+               <LayoutList className="w-24 h-24 mb-6 opacity-10" />
+               <h2 className="text-xl font-bold text-gray-400 mb-2">请选择一个剧情粗纲文件</h2>
                <p className="text-sm">在左侧列表选择或创建一个新的文件</p>
             </div>
          )}
 
          {/* Edit Modal */}
-         {selectedCharacterIndex !== null && (
-            <div className="absolute inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
-               <div
-                 className="bg-gray-800 w-full h-full md:h-[90vh] md:max-w-7xl md:rounded-xl shadow-2xl border border-gray-600 flex flex-col md:flex-row overflow-hidden animate-in zoom-in-95 duration-200"
-                 onClick={(e) => e.stopPropagation()}
-               >
-                  {/* Sidebar (Visuals) */}
-                  <div className="w-full md:w-64 bg-gray-900 border-b md:border-b-0 md:border-r border-gray-700 flex flex-row md:flex-col items-center p-4 md:p-8 shrink-0 gap-4 md:gap-0">
-                     <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl md:text-4xl shadow-2xl md:mb-6 shrink-0">
-                        {editCharName.slice(0, 1) || '?'}
+         {editingItem && (
+            <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
+               <div className="bg-gray-800 w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-xl shadow-2xl border border-gray-600 flex flex-col animate-in zoom-in-95 duration-200">
+                  <div className="p-5 border-b border-gray-700 flex justify-between items-center">
+                     <div className="flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-[var(--theme-color)]" />
+                        <h3 className="font-bold text-lg text-gray-100">编辑剧情项</h3>
                      </div>
-                     <div className="flex-1 md:w-full flex flex-col items-start md:items-center min-w-0">
-                       <h2 className="text-lg md:text-xl font-bold text-gray-100 text-left md:text-center md:mb-2 truncate w-full">{editCharName || '未命名'}</h2>
-                       <p className="text-xs text-gray-500 text-left md:text-center md:mb-8 truncate w-full">
-                          {activeSet?.name}
-                       </p>
-                     </div>
-                     
-                     <div className="w-auto md:w-full space-y-2 mt-0 md:mt-auto shrink-0">
-                        <button 
-                           onClick={() => setSelectedCharacterIndex(null)}
-                           className="px-4 md:w-full py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-300 transition-colors"
-                        >
-                           关闭
-                        </button>
-                     </div>
+                     <button onClick={() => setEditingItem(null)} className="text-gray-400 hover:text-white">
+                        <X className="w-6 h-6" />
+                     </button>
                   </div>
                   
-                  {/* Main Edit Area */}
-                  <div className="flex-1 flex flex-col bg-gray-800 h-full overflow-hidden">
-                     <div className="p-6 border-b border-gray-700 bg-gray-800 flex justify-between items-center shrink-0">
-                        <div className="flex items-center gap-2">
-                           <FileText className="w-5 h-5 text-[var(--theme-color)]" />
-                           <span className="font-bold text-lg">角色详情</span>
-                        </div>
-                        <button 
-                           onClick={() => setSelectedCharacterIndex(null)}
-                           className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white"
-                        >
-                           <X className="w-5 h-5" />
-                        </button>
-                     </div>
-                     
-                     <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar flex flex-col">
-                        <div className="space-y-2 shrink-0">
-                           <label className="text-sm font-medium text-gray-400">角色名称</label>
-                           <input
-                              value={editCharName}
-                              onChange={(e) => setEditCharName(e.target.value)}
-                              className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-base focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
-                              placeholder="输入角色名称..."
-                           />
-                        </div>
-                        
-                        <div className="space-y-2 flex-1 flex flex-col">
-                           <label className="text-sm font-medium text-gray-400">角色设定 (Bio)</label>
-                           <textarea
-                              value={editCharBio}
-                              onChange={(e) => setEditCharBio(e.target.value)}
-                              className="w-full flex-1 bg-gray-900 border border-gray-600 rounded-lg p-4 text-base leading-relaxed focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none resize-none transition-all font-mono"
-                              placeholder="输入详细的角色设定、背景故事、性格特征等..."
-                           />
-                        </div>
+                  <div className="flex-1 p-6 space-y-5 overflow-y-auto flex flex-col">
+                     <div className="space-y-2 shrink-0">
+                        <label className="text-sm font-medium text-gray-400">名称</label>
+                        <input
+                           value={editingItem.title}
+                           onChange={e => setEditingItem({ ...editingItem, title: e.target.value })}
+                           className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-base focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
+                           placeholder="输入剧情项名称..."
+                           autoFocus
+                        />
                      </div>
 
-                     {/* Footer Actions */}
-                     <div className="p-4 border-t border-gray-700 bg-gray-800 flex justify-end gap-3">
-                        <button 
-                           onClick={saveEditCharacter}
-                           className="px-6 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white font-medium rounded-lg shadow-lg transition-all"
-                        >
-                           保存修改
-                        </button>
+                     <div className="space-y-2 shrink-0">
+                        <label className="text-sm font-medium text-gray-400">类型</label>
+                        <input
+                           value={editingItem.type}
+                           onChange={e => setEditingItem({ ...editingItem, type: e.target.value })}
+                           className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-base focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
+                           placeholder="输入类型 (如：剧情, 场景)..."
+                        />
                      </div>
+                     
+                     <div className="space-y-2 flex-1 flex flex-col">
+                        <label className="text-sm font-medium text-gray-400">描述内容</label>
+                        <textarea
+                           value={editingItem.description}
+                           onChange={e => setEditingItem({ ...editingItem, description: e.target.value })}
+                           className="w-full flex-1 bg-gray-900 border border-gray-600 rounded-lg p-4 text-base leading-relaxed text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none font-mono"
+                           placeholder="输入剧情详情或描述内容..."
+                        />
+                     </div>
+                  </div>
+
+                  <div className="p-5 border-t border-gray-700 flex justify-end gap-3 bg-gray-800 rounded-b-xl">
+                     <button 
+                        onClick={() => setEditingItem(null)}
+                        className="px-5 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                     >
+                        取消
+                     </button>
+                     <button 
+                        onClick={handleSaveItemEdit}
+                        className="px-6 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white font-medium rounded-lg shadow-lg transition-all"
+                     >
+                        保存修改
+                     </button>
                   </div>
                </div>
             </div>
@@ -952,7 +946,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
 
          {/* Confirmation Modal */}
          {confirmState.isOpen && (
-            <div className="absolute inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
                <div className="bg-gray-800 w-full max-w-sm rounded-xl shadow-2xl border border-gray-600 flex flex-col animate-in zoom-in-95 duration-200">
                   <div className="p-5 border-b border-gray-700">
                      <h3 className="font-bold text-lg text-gray-100">{confirmState.title}</h3>

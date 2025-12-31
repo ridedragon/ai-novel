@@ -184,29 +184,36 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
 
     // 同时创建同名的其他集合
     const newCharacterSet: CharacterSet = {
-      id: crypto.randomUUID(),
+      id: newId,
       name: name,
       characters: []
     }
 
     const newWorldviewSet: WorldviewSet = {
-      id: crypto.randomUUID(),
+      id: newId,
       name: name,
       entries: []
     }
 
     const newOutlineSet: OutlineSet = {
-      id: crypto.randomUUID(),
+      id: newId,
       name: name,
       items: []
     }
 
-    onUpdateNovel({ 
-        ...novel, 
+    const newPlotOutlineSet = {
+      id: newId,
+      name: name,
+      items: []
+    }
+
+    onUpdateNovel({
+        ...novel,
         inspirationSets: [...(novel.inspirationSets || []), newInspirationSet],
         characterSets: [...(novel.characterSets || []), newCharacterSet],
         worldviewSets: [...(novel.worldviewSets || []), newWorldviewSet],
-        outlineSets: [...(novel.outlineSets || []), newOutlineSet]
+        outlineSets: [...(novel.outlineSets || []), newOutlineSet],
+        plotOutlineSets: [...(novel.plotOutlineSets || []), newPlotOutlineSet]
     })
     
     setNewSetName('')
@@ -505,7 +512,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                {/* AI Generation Input (Only shown when NOT in independent chat view) */}
                {onGenerateInspiration && !showChat && (
                   <div className="p-3 md:p-4 bg-gray-800/30 border-b border-gray-700/50">
-                     <div className="max-w-4xl mx-auto space-y-2">
+                     <div className="w-full space-y-2">
                         <div className="flex gap-2 md:gap-3">
                            <div className="flex-1 relative">
                               <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 md:w-4 md:h-4 text-[var(--theme-color)]" />
@@ -548,7 +555,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                {/* Content Area */}
                <div className="flex-1 overflow-y-auto p-2 md:p-8 custom-scrollbar flex flex-col min-h-0">
                   {showChat ? (
-                     <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full h-full">
+                     <div className="flex-1 flex flex-col w-full h-full">
                         <div className="flex items-center justify-between mb-4 shrink-0">
                            <div className="flex items-center gap-2 text-gray-400">
                               <Bot className="w-4 h-4" />
@@ -747,7 +754,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                         </div>
                      </div>
                   ) : (
-                  <div className="max-w-4xl mx-auto w-full space-y-4 pb-8">
+                  <div className="w-full space-y-4 pb-8">
                      {/* User Notes Area */}
                      <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-4">
                         <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
@@ -770,89 +777,93 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                            <p className="text-xs md:text-sm mt-1">请手动添加灵感，或使用上方的 AI 助手生成</p>
                         </div>
                      ) : (
-                        <div className="grid grid-cols-1 gap-3 md:gap-4">
+                        <div className="space-y-1">
                            {activeSet.items.map((item, idx) => (
-                              <div 
+                              <div
                                  key={idx}
                                  onClick={() => openEditEntry(idx, item)}
-                                 className="bg-gray-800 border border-gray-700 rounded-lg md:rounded-xl p-3 md:p-4 hover:border-[var(--theme-color)] hover:shadow-lg transition-all cursor-pointer group flex flex-col relative"
+                                 className="group flex items-center gap-3 p-2.5 rounded-none border transition-all cursor-pointer relative bg-gray-800/40 border-gray-700/50 hover:bg-gray-700/40"
                               >
-                                 <div className="flex items-start gap-3 md:gap-4">
-                                    <div className="p-2 bg-gray-900/50 rounded-lg text-[var(--theme-color)] shrink-0 mt-0.5">
-                                       <Lightbulb className="w-5 h-5" />
+                                 <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <div className="p-1.5 rounded text-gray-500 group-hover:text-[var(--theme-color)] transition-colors">
+                                       <Lightbulb className="w-3.5 h-3.5" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                       <div className="flex justify-between items-start mb-1">
-                                          <h4 className="font-bold text-gray-200 text-sm md:text-lg truncate pr-8">{item.title || '未命名灵感'}</h4>
+                                       <div className="flex items-center gap-3">
+                                          <span className="text-[13px] font-medium truncate text-gray-300">
+                                             {item.title || '未命名灵感'}
+                                          </span>
                                        </div>
-                                       <p className="text-xs md:text-sm text-gray-400 leading-relaxed line-clamp-3 whitespace-pre-wrap">
-                                          {item.content || <span className="italic opacity-50">点击编辑详情...</span>}
-                                       </p>
                                     </div>
                                  </div>
 
-                                 <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <div className="relative">
-                                       <button 
-                                          onClick={(e) => { 
-                                             e.stopPropagation(); 
-                                             setSendMenuOpenIndex(sendMenuOpenIndex === idx ? null : idx);
-                                          }}
-                                          className={`p-1.5 rounded-lg transition-all ${sendMenuOpenIndex === idx ? 'bg-[var(--theme-color)] text-white' : 'text-gray-500 hover:text-white hover:bg-gray-700'}`}
-                                          title="发送到..."
-                                       >
-                                          <Send className="w-4 h-4" />
-                                       </button>
-                                       
-                                       {sendMenuOpenIndex === idx && onSendToModule && (
-                                          <>
-                                             <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setSendMenuOpenIndex(null); }} />
-                                             <div className="absolute right-0 top-full mt-2 w-48 bg-gray-800 border border-gray-600 rounded-xl shadow-xl overflow-hidden z-20 flex flex-col animate-in fade-in zoom-in-95 duration-200">
-                                                <button 
-                                                   onClick={(e) => { 
-                                                      e.stopPropagation(); 
-                                                      onSendToModule('worldview', item.content || item.title);
-                                                      setSendMenuOpenIndex(null);
-                                                   }}
-                                                   className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white text-left transition-colors"
-                                                >
-                                                   <Globe className="w-4 h-4 text-blue-400" />
-                                                   <span>发送给世界观 AI</span>
-                                                </button>
-                                                <button 
-                                                   onClick={(e) => { 
-                                                      e.stopPropagation(); 
-                                                      onSendToModule('character', item.content || item.title);
-                                                      setSendMenuOpenIndex(null);
-                                                   }}
-                                                   className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white text-left transition-colors border-t border-gray-700/50"
-                                                >
-                                                   <Users className="w-4 h-4 text-green-400" />
-                                                   <span>发送给角色 AI</span>
-                                                </button>
-                                                <button 
-                                                   onClick={(e) => { 
-                                                      e.stopPropagation(); 
-                                                      onSendToModule('outline', item.content || item.title);
-                                                      setSendMenuOpenIndex(null);
-                                                   }}
-                                                   className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white text-left transition-colors border-t border-gray-700/50"
-                                                >
-                                                   <Book className="w-4 h-4 text-purple-400" />
-                                                   <span>发送给大纲 AI</span>
-                                                </button>
-                                             </div>
-                                          </>
-                                       )}
-                                    </div>
+                                 <div className="flex items-center gap-3 shrink-0">
+                                    <span className="px-1.5 py-0.5 rounded-none text-[10px] font-bold border whitespace-nowrap leading-none bg-yellow-900/20 text-yellow-500 border-yellow-900/50">
+                                       灵感
+                                    </span>
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                       <div className="relative">
+                                          <button
+                                             onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSendMenuOpenIndex(sendMenuOpenIndex === idx ? null : idx);
+                                             }}
+                                             className={`p-1 hover:bg-gray-700 rounded-none transition-all ${sendMenuOpenIndex === idx ? 'text-[var(--theme-color)]' : 'text-gray-400 hover:text-gray-200'}`}
+                                             title="发送到..."
+                                          >
+                                             <Send className="w-3.5 h-3.5" />
+                                          </button>
+                                          
+                                          {sendMenuOpenIndex === idx && onSendToModule && (
+                                             <>
+                                                <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setSendMenuOpenIndex(null); }} />
+                                                <div className="absolute right-0 top-full mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl overflow-hidden z-20 flex flex-col animate-in fade-in zoom-in-95 duration-200">
+                                                   <button
+                                                      onClick={(e) => {
+                                                         e.stopPropagation();
+                                                         onSendToModule('worldview', item.content || item.title);
+                                                         setSendMenuOpenIndex(null);
+                                                      }}
+                                                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white text-left transition-colors"
+                                                   >
+                                                      <Globe className="w-4 h-4 text-blue-400" />
+                                                      <span>发送给世界观 AI</span>
+                                                   </button>
+                                                   <button
+                                                      onClick={(e) => {
+                                                         e.stopPropagation();
+                                                         onSendToModule('character', item.content || item.title);
+                                                         setSendMenuOpenIndex(null);
+                                                      }}
+                                                      className="flex items-center gap-3 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white text-left transition-colors border-t border-slate-100 dark:border-slate-700"
+                                                   >
+                                                      <Users className="w-4 h-4 text-green-400" />
+                                                      <span>发送给角色 AI</span>
+                                                   </button>
+                                                   <button
+                                                      onClick={(e) => {
+                                                         e.stopPropagation();
+                                                         onSendToModule('outline', item.content || item.title);
+                                                         setSendMenuOpenIndex(null);
+                                                      }}
+                                                      className="flex items-center gap-3 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white text-left transition-colors border-t border-slate-100 dark:border-slate-700"
+                                                   >
+                                                      <Book className="w-4 h-4 text-purple-400" />
+                                                      <span>发送给大纲 AI</span>
+                                                   </button>
+                                                </div>
+                                             </>
+                                          )}
+                                       </div>
 
-                                    <button 
-                                       onClick={(e) => { e.stopPropagation(); handleDeleteEntry(idx); }}
-                                       className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-all"
-                                       title="删除灵感"
-                                    >
-                                       <Trash2 className="w-4 h-4" />
-                                    </button>
+                                       <button
+                                          onClick={(e) => { e.stopPropagation(); handleDeleteEntry(idx); }}
+                                          className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-none text-slate-400 hover:text-red-500 transition-all"
+                                          title="删除灵感"
+                                       >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                       </button>
+                                    </div>
                                  </div>
                               </div>
                            ))}
@@ -872,8 +883,8 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
 
          {/* Edit Modal */}
          {selectedEntryIndex !== null && (
-            <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-               <div className="bg-gray-800 w-full max-w-2xl rounded-xl shadow-2xl border border-gray-600 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
+               <div className="bg-gray-800 w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-xl shadow-2xl border border-gray-600 flex flex-col animate-in zoom-in-95 duration-200">
                   <div className="p-5 border-b border-gray-700 flex justify-between items-center">
                      <div className="flex items-center gap-2">
                         <FileText className="w-5 h-5 text-[var(--theme-color)]" />
@@ -884,10 +895,10 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                      </button>
                   </div>
                   
-                  <div className="p-6 space-y-5 overflow-y-auto">
-                     <div className="space-y-2">
+                  <div className="flex-1 p-6 space-y-5 overflow-y-auto flex flex-col">
+                     <div className="space-y-2 shrink-0">
                         <label className="text-sm font-medium text-gray-400">灵感标题/关键词</label>
-                        <input 
+                        <input
                            value={editEntryTitle}
                            onChange={e => setEditEntryTitle(e.target.value)}
                            className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-base focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
@@ -896,12 +907,12 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                         />
                      </div>
                      
-                     <div className="space-y-2">
+                     <div className="space-y-2 flex-1 flex flex-col">
                         <label className="text-sm font-medium text-gray-400">详细内容</label>
-                        <textarea 
+                        <textarea
                            value={editEntryContent}
                            onChange={e => setEditEntryContent(e.target.value)}
-                           className="w-full h-64 bg-gray-900 border border-gray-600 rounded-lg p-4 text-base leading-relaxed text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none font-mono"
+                           className="w-full flex-1 bg-gray-900 border border-gray-600 rounded-lg p-4 text-base leading-relaxed text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none font-mono"
                            placeholder="输入详细的灵感内容..."
                         />
                      </div>

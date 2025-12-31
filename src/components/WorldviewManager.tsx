@@ -193,17 +193,19 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
         items: []
     }
 
-    const updatedWorldviewSets = [...(novel.worldviewSets || []), newWorldviewSet]
-    const updatedCharacterSets = [...(novel.characterSets || []), newCharacterSet]
-    const updatedOutlineSets = [...(novel.outlineSets || []), newOutlineSet]
-    const updatedInspirationSets = [...(novel.inspirationSets || []), newInspirationSet]
-    
-    onUpdateNovel({ 
-        ...novel, 
-        worldviewSets: updatedWorldviewSets,
-        characterSets: updatedCharacterSets,
-        outlineSets: updatedOutlineSets,
-        inspirationSets: updatedInspirationSets
+    const newPlotOutlineSet = {
+        id: newId,
+        name: name,
+        items: []
+    }
+
+    onUpdateNovel({
+        ...novel,
+        worldviewSets: [...(novel.worldviewSets || []), newWorldviewSet],
+        characterSets: [...(novel.characterSets || []), newCharacterSet],
+        outlineSets: [...(novel.outlineSets || []), newOutlineSet],
+        inspirationSets: [...(novel.inspirationSets || []), newInspirationSet],
+        plotOutlineSets: [...(novel.plotOutlineSets || []), newPlotOutlineSet]
     })
     
     setNewSetName('')
@@ -502,7 +504,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                {/* AI Generation Input (Only shown when NOT in independent chat view) */}
                {onGenerateWorldview && !showChat && (
                   <div className="p-3 md:p-4 bg-gray-800/30 border-b border-gray-700/50">
-                     <div className="max-w-4xl mx-auto space-y-2">
+                     <div className="w-full space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                            <span className="text-xs text-gray-400 shrink-0">参考:</span>
                            
@@ -605,7 +607,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                {/* Content Area */}
                <div className="flex-1 overflow-y-auto p-2 md:p-8 custom-scrollbar flex flex-col min-h-0">
                   {showChat ? (
-                     <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full h-full">
+                     <div className="flex-1 flex flex-col w-full h-full">
                         <div className="flex items-center justify-between mb-4 shrink-0">
                            <div className="flex items-center gap-2 text-gray-400">
                               <Bot className="w-4 h-4" />
@@ -795,7 +797,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                         </div>
                      </div>
                   ) : (
-                  <div className="max-w-4xl mx-auto w-full space-y-4 pb-8">
+                  <div className="w-full space-y-4 pb-8">
                      {/* User Notes Area */}
                      <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-4">
                         <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
@@ -818,34 +820,40 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                            <p className="text-xs md:text-sm mt-1">请手动添加设定，或使用上方的 AI 助手生成</p>
                         </div>
                      ) : (
-                        <div className="grid grid-cols-1 gap-3 md:gap-4">
+                        <div className="space-y-1">
                            {activeSet.entries.map((entry, idx) => (
-                              <div 
+                              <div
                                  key={idx}
                                  onClick={() => openEditEntry(idx, entry)}
-                                 className="bg-gray-800 border border-gray-700 rounded-lg md:rounded-xl p-3 md:p-4 hover:border-[var(--theme-color)] hover:shadow-lg transition-all cursor-pointer group flex flex-col relative"
+                                 className="group flex items-center gap-3 p-2.5 rounded-none border transition-all cursor-pointer relative bg-gray-800/40 border-gray-700/50 hover:bg-gray-700/40"
                               >
-                                 <div className="flex items-start gap-3 md:gap-4">
-                                    <div className="p-2 bg-gray-900/50 rounded-lg text-[var(--theme-color)] shrink-0 mt-0.5">
-                                       <Globe className="w-5 h-5" />
+                                 <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <div className="p-1.5 rounded text-gray-500 group-hover:text-[var(--theme-color)] transition-colors">
+                                       <Globe className="w-3.5 h-3.5" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                       <div className="flex justify-between items-start mb-1">
-                                          <h4 className="font-bold text-gray-200 text-sm md:text-lg truncate pr-8">{entry.item || '未命名设定'}</h4>
+                                       <div className="flex items-center gap-3">
+                                          <span className="text-[13px] font-medium truncate text-gray-300">
+                                             {entry.item || '未命名设定'}
+                                          </span>
                                        </div>
-                                       <p className="text-xs md:text-sm text-gray-400 leading-relaxed line-clamp-3 whitespace-pre-wrap">
-                                          {entry.setting || <span className="italic opacity-50">点击添加详细设定...</span>}
-                                       </p>
                                     </div>
                                  </div>
 
-                                 <button 
-                                    onClick={(e) => { e.stopPropagation(); handleDeleteEntry(idx); }}
-                                    className="absolute top-3 right-3 p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                    title="删除设定"
-                                 >
-                                    <Trash2 className="w-4 h-4" />
-                                 </button>
+                                 <div className="flex items-center gap-3 shrink-0">
+                                    <span className="px-1.5 py-0.5 rounded-none text-[10px] font-bold border whitespace-nowrap leading-none bg-emerald-900/20 text-emerald-500 border-emerald-900/50">
+                                       世界观
+                                    </span>
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                       <button
+                                          onClick={(e) => { e.stopPropagation(); handleDeleteEntry(idx); }}
+                                          className="p-1 hover:bg-red-900/30 rounded-none text-gray-400 hover:text-red-400 transition-all"
+                                          title="删除设定"
+                                       >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                       </button>
+                                    </div>
+                                 </div>
                               </div>
                            ))}
                         </div>
@@ -864,8 +872,8 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
 
          {/* Edit Modal */}
          {selectedEntryIndex !== null && (
-            <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-               <div className="bg-gray-800 w-full max-w-2xl rounded-xl shadow-2xl border border-gray-600 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
+               <div className="bg-gray-800 w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-xl shadow-2xl border border-gray-600 flex flex-col animate-in zoom-in-95 duration-200">
                   <div className="p-5 border-b border-gray-700 flex justify-between items-center">
                      <div className="flex items-center gap-2">
                         <FileText className="w-5 h-5 text-[var(--theme-color)]" />
@@ -876,10 +884,10 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                      </button>
                   </div>
                   
-                  <div className="p-6 space-y-5 overflow-y-auto">
-                     <div className="space-y-2">
+                  <div className="flex-1 p-6 space-y-5 overflow-y-auto flex flex-col">
+                     <div className="space-y-2 shrink-0">
                         <label className="text-sm font-medium text-gray-400">设定项名称</label>
-                        <input 
+                        <input
                            value={editEntryItem}
                            onChange={e => setEditEntryItem(e.target.value)}
                            className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-base focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
@@ -888,12 +896,12 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                         />
                      </div>
                      
-                     <div className="space-y-2">
+                     <div className="space-y-2 flex-1 flex flex-col">
                         <label className="text-sm font-medium text-gray-400">详细设定内容</label>
-                        <textarea 
+                        <textarea
                            value={editEntrySetting}
                            onChange={e => setEditEntrySetting(e.target.value)}
-                           className="w-full h-64 bg-gray-900 border border-gray-600 rounded-lg p-4 text-base leading-relaxed text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none font-mono"
+                           className="w-full flex-1 bg-gray-900 border border-gray-600 rounded-lg p-4 text-base leading-relaxed text-gray-200 focus:border-[var(--theme-color)] outline-none resize-none font-mono"
                            placeholder="输入详细的设定内容..."
                         />
                      </div>
