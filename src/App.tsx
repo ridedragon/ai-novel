@@ -47,6 +47,7 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import terminal from 'virtual:terminal'
 import { AIChatModal } from './components/AIChatModal'
+import AdvancedFeatures from './components/AdvancedFeatures'
 import { CharacterManager } from './components/CharacterManager'
 import { GlobalSettingsModal } from './components/GlobalSettingsModal'
 import { InspirationManager } from './components/InspirationManager'
@@ -1271,6 +1272,7 @@ function App() {
 
   // AI Chat Modal State
   const [showAIChatModal, setShowAIChatModal] = useState(false)
+  const [showAdvancedFeatures, setShowAdvancedFeatures] = useState(false)
 
   // Helpers for Novel Management
   const getActiveScripts = () => {
@@ -6263,6 +6265,19 @@ ${taskDescription}`
                                 <p className="text-sm text-gray-400">规划章节结构，自动生成剧情，开始自动化写作</p>
                              </div>
                           </button>
+
+                          <button
+                             onClick={() => setShowAdvancedFeatures(true)}
+                             className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
+                          >
+                             <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors">
+                                <Settings className="w-10 h-10" />
+                             </div>
+                             <div>
+                                <h3 className="text-xl font-bold text-gray-100 mb-2">高级功能</h3>
+                                <p className="text-sm text-gray-400">探索更多强大的实验性工具与深度创作辅助</p>
+                             </div>
+                          </button>
                        </div>
 
                        {/* Global Prompt Input */}
@@ -8452,6 +8467,10 @@ ${taskDescription}`
           setShowAIChatModal(false)
         }}
       />
+
+      {showAdvancedFeatures && (
+        <AdvancedFeatures onClose={() => setShowAdvancedFeatures(false)} />
+      )}
 
     </div>
   )
