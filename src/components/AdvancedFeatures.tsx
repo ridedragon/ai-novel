@@ -1,11 +1,18 @@
-import { Settings2, X } from 'lucide-react';
-import React from 'react';
+import { BookOpen, Database, Settings2, Sparkles, X } from 'lucide-react';
+import React, { useState } from 'react';
+import StorySettingsGenerator from './StorySettingsGenerator';
 
 interface AdvancedFeaturesProps {
   onClose: () => void;
 }
 
 const AdvancedFeatures: React.FC<AdvancedFeaturesProps> = ({ onClose }) => {
+  const [activeTab, setActiveTab] = useState<'main' | 'story-settings'>('main');
+
+  if (activeTab === 'story-settings') {
+    return <StorySettingsGenerator onBack={() => setActiveTab('main')} />;
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -24,13 +31,40 @@ const AdvancedFeatures: React.FC<AdvancedFeaturesProps> = ({ onClose }) => {
           </button>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-8 text-center">
-          <div className="max-w-md mx-auto py-12">
-            <Settings2 className="w-20 h-20 text-slate-300 dark:text-slate-600 mx-auto mb-6" />
-            <h3 className="text-2xl font-semibold text-slate-700 dark:text-slate-300 mb-2">即将推出</h3>
-            <p className="text-slate-500 dark:text-slate-400">
-              这里是高级功能的占位符。我们正在努力开发更强大的自动化创作工具，敬请期待。
-            </p>
+        <div className="flex-1 overflow-y-auto p-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <button
+              onClick={() => setActiveTab('story-settings')}
+              className="p-6 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-purple-500 transition-all group flex flex-col items-center gap-4"
+            >
+              <div className="p-4 bg-purple-500/10 rounded-xl group-hover:bg-purple-500/20 transition-colors">
+                <Sparkles className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-white">我的设定</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">管理故事角色、世界观等核心设定</p>
+              </div>
+            </button>
+
+            <button className="p-6 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-500 transition-all group flex flex-col items-center gap-4">
+              <div className="p-4 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors">
+                <BookOpen className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-white">AI拆书</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">智能分析经典作品，提取创作灵感</p>
+              </div>
+            </button>
+
+            <button className="p-6 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-emerald-500 transition-all group flex flex-col items-center gap-4">
+              <div className="p-4 bg-emerald-500/10 rounded-xl group-hover:bg-emerald-500/20 transition-colors">
+                <Database className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-white">我的知识库</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">积累素材、背景资料与专业知识</p>
+              </div>
+            </button>
           </div>
         </div>
         
