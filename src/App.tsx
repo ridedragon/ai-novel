@@ -531,22 +531,53 @@ const sanitizeAndParseJson = (content: string): any[] | null => {
     try {
         const parsed = JSON.parse(result)
         if (Array.isArray(parsed)) return parsed
+        if (typeof parsed === 'object' && parsed !== null) return [parsed]
     } catch (e) {
         // 3. Handle Truncation: Try to recover valid JSON if it ends abruptly
-        // Simple recovery: find last closing object brace "}" and close array
         
-        // Check if string was cut off (odd number of quotes is a heuristic, but tracking state is better)
-        // Since sanitizeJsonString already ran, inString state is lost. 
-        // We can try a simple append.
-        
-        // Find last '}'
-        const lastBraceIndex = result.lastIndexOf('}')
-        if (lastBraceIndex !== -1) {
-            const recoveryTry = result.substring(0, lastBraceIndex + 1) + ']'
-            try {
-                const parsed = JSON.parse(recoveryTry)
-                if (Array.isArray(parsed)) return parsed
-            } catch(e2) {}
+        // Count braces to find where to close
+        let openBraces = 0
+        let openBrackets = 0
+        let inString = false
+        let isEscaped = false
+        let lastValidEnd = -1
+
+        for (let i = 0; i < result.length; i++) {
+            const char = result[i]
+            if (inString) {
+                if (isEscaped) isEscaped = false
+                else if (char === '\\') isEscaped = true
+                else if (char === '"') inString = false
+            } else {
+                if (char === '"') inString = true
+                else if (char === '{') openBraces++
+                else if (char === '}') { openBraces--; lastValidEnd = i; }
+                else if (char === '[') openBrackets++
+                else if (char === ']') { openBrackets--; lastValidEnd = i; }
+            }
+        }
+
+        // Try simple array closing first if it looks like a truncated array
+        if (openBrackets > 0 || openBraces > 0) {
+            let recoveryTry = result
+            if (inString) recoveryTry += '"'
+            
+            // Close all open braces and brackets in reverse order
+            // This is a bit complex to track perfectly without a stack,
+            // but for typical AI truncation at end of file:
+            const lastBrace = result.lastIndexOf('}')
+            const lastBracket = result.lastIndexOf(']')
+            const lastEnd = Math.max(lastBrace, lastBracket)
+            
+            if (lastEnd !== -1) {
+                let fix = result.substring(0, lastEnd + 1)
+                if (openBrackets > 0) fix += ']'
+                try {
+                    const parsed = JSON.parse(fix)
+                    if (Array.isArray(parsed)) return parsed
+                    if (typeof parsed === 'object' && parsed !== null) return [parsed]
+                } catch(e2) {}
+            }
         }
     }
     
@@ -679,15 +710,27 @@ const normalizeGeneratorResult = (data: any[], type: 'outline' | 'character' | '
         const processField = (val: any): string => {
             if (typeof val === 'string') return val
             if (typeof val === 'number') return String(val)
+            if (Array.isArray(val)) {
+                return val.map(item => processField(item)).join('\n')
+            }
             if (typeof val === 'object' && val) {
-                // Try to find a meaningful string property
-                if (val.text) return String(val.text)
-                if (val.content) return String(val.content)
-                if (val.name) return String(val.name)
-                // Fallback: join values or stringify
-                const values = Object.values(val).filter(v => typeof v === 'string' || typeof v === 'number')
-                if (values.length > 0) return values.join(' ')
-                return JSON.stringify(val)
+                // If it's a simple object with text/content/setting, use that
+                if (val.text && typeof val.text === 'string') return val.text
+                if (val.content && typeof val.content === 'string') return val.content
+                if (val.setting && typeof val.setting === 'string') return val.setting
+                if (val.description && typeof val.description === 'string') return val.description
+                
+                // Otherwise, recursively format all key-value pairs
+                return Object.entries(val)
+                    .map(([key, value]) => {
+                        const formattedValue = typeof value === 'object' ? processField(value) : String(value)
+                        // If value is long or contains newlines, put it on a new line
+                        if (formattedValue.includes('\n') || formattedValue.length > 20) {
+                            return `【${key}】：\n${formattedValue}`
+                        }
+                        return `【${key}】：${formattedValue}`
+                    })
+                    .join('\n')
             }
             return ''
         }
