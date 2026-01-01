@@ -48,6 +48,8 @@ interface OutlineManagerProps {
   onShowSettings?: () => void
   modelName?: string
   sidebarHeader?: React.ReactNode
+  onCallPromptAgent?: (userInput: string, stage: string) => void
+  isCallingPromptAgent?: boolean
   activePresetId?: string
   lastNonChatPresetId?: string
   onReturnToMainWithContent?: (content: string) => void
@@ -105,6 +107,8 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
   onShowSettings,
   modelName,
   sidebarHeader,
+  onCallPromptAgent,
+  isCallingPromptAgent,
   activePresetId,
   lastNonChatPresetId,
   onReturnToMainWithContent,
@@ -668,14 +672,16 @@ export const OutlineManager: React.FC<OutlineManagerProps> = ({
                               <span className="hidden md:inline">停止</span>
                            </button>
                         ) : (
-                           <button
-                              onClick={() => onGenerateOutline('generate')}
-                              className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white"
-                           >
-                              <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                              <span className="hidden md:inline">生成大纲</span>
-                              <span className="md:hidden">生成</span>
-                           </button>
+                           <div className="flex gap-2">
+                                 <button
+                                    onClick={() => onGenerateOutline('generate')}
+                                    className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white"
+                                 >
+                                    <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                    <span className="hidden md:inline">生成大纲</span>
+                                    <span className="md:hidden">生成</span>
+                                 </button>
+                              </div>
                         )}
                         {onRegenerateAll && (activeSet.items || []).length > 0 && (
                            <button 

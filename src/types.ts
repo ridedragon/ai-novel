@@ -21,6 +21,7 @@ export interface Chapter {
   activeOptimizePresetId?: string;
   activeAnalysisPresetId?: string;
   analysisResult?: string; // 存储该章节上次的分析结果
+  logicScore?: number; // 逻辑评分 (0-100)，用于逻辑热力图展示
 
   subtype?: 'story' | 'small_summary' | 'big_summary';
   summaryRange?: string;
@@ -30,30 +31,6 @@ export interface NovelVolume {
   id: string;
   title: string;
   collapsed: boolean;
-}
-
-export interface SettingNode {
-  id: string;
-  parentId?: string | null;
-  title: string;
-  description: string;
-  type: string; // e.g., '主题', '魔法体系', '地点', '物品', '事件', '科技设定', '其他', '文化'
-  attributes?: Record<string, any>;
-  children?: SettingNode[];
-  status?: '待生成' | '已生成' | '微调中' | 'PENDING' | 'GENERATING' | 'COMPLETED';
-}
-
-export interface SettingGenerationConfig {
-  strategyName: string;
-  expectedRootNodes: number;
-  maxDepth: number;
-  nodeTemplates: Array<{ name: string; description: string }>;
-  rules: {
-    minDescriptionLength: number;
-    maxDescriptionLength: number;
-    requireInterConnections: boolean;
-    [key: string]: any;
-  };
 }
 
 export interface OutlineItem {
@@ -130,6 +107,15 @@ export interface PlotOutlineSet {
   chatHistory?: ChatMessage[];
 }
 
+export interface ReferenceFile {
+  id: string;
+  name: string;
+  content: string;
+  type: string;
+  size: number;
+  lastModified: number;
+}
+
 export interface Novel {
   id: string;
   title: string;
@@ -145,6 +131,7 @@ export interface Novel {
   worldviewSets?: WorldviewSet[];
   inspirationSets?: InspirationSet[];
   plotOutlineSets?: PlotOutlineSet[];
+  referenceFiles?: ReferenceFile[];
 }
 
 export interface PromptItem {
@@ -183,7 +170,6 @@ export interface GeneratorPreset {
   topP?: number;
   topK?: number;
   apiConfig?: PresetApiConfig;
-  generationConfig?: SettingGenerationConfig;
 }
 
 export interface RegexScript {
@@ -217,4 +203,38 @@ export interface CompletionPreset {
   prompts?: PromptItem[];
   regexScripts?: RegexScript[];
   apiConfig?: PresetApiConfig;
+}
+
+// --- Agent Related Types ---
+
+export interface AgentTaskItem {
+  id: string;
+  type: 'inspiration' | 'worldview' | 'plot_outline' | 'character' | 'outline' | 'chapter';
+  title: string;
+  description: string;
+  targetId?: string; // 执行该任务的目标对象ID（如特定的章节ID或设定集ID）
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+}
+
+export interface AgentManifest {
+  tasks: AgentTaskItem[];
+  currentTaskIndex: number;
+}
+
+export type AgentStatus = 'IDLE' | 'PLANNING' | 'EXECUTING' | 'AWAITING_USER' | 'PAUSED' | 'COMPLETED' | 'ERROR';
+
+export interface AgentAction {
+  type: string;
+  payload: any;
+}
+
+export interface AgentPromptConfig {
+  directorPrompt: string;
+  promptAgentPrompt: string;
+}
+
+export interface AgentModelConfig {
+  directorModel: string;
+  promptAgentModel: string;
+  summaryModel: string;
 }

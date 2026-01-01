@@ -36,6 +36,8 @@ interface InspirationManagerProps {
   onShowSettings?: () => void
   modelName?: string
   sidebarHeader?: React.ReactNode
+  onCallPromptAgent?: (userInput: string, stage: string) => void
+  isCallingPromptAgent?: boolean
 
   // Navigation / Integration
   onSendToModule?: (module: 'worldview' | 'character' | 'outline', content: string) => void
@@ -87,6 +89,8 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
   onShowSettings,
   modelName,
   sidebarHeader,
+  onCallPromptAgent,
+  isCallingPromptAgent,
   onSendToModule,
   onReturnToMainWithContent,
   activePresetId,
@@ -282,8 +286,8 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
 
   const openEditEntry = (index: number, item: InspirationItem) => {
     setSelectedEntryIndex(index)
-    setEditEntryTitle(item.title)
-    setEditEntryContent(item.content)
+    setEditEntryTitle(typeof item.title === 'string' ? item.title : JSON.stringify(item.title))
+    setEditEntryContent(typeof item.content === 'string' ? item.content : JSON.stringify(item.content))
   }
 
   const saveEditEntry = () => {
@@ -538,14 +542,16 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                                  <span className="hidden md:inline">停止</span>
                               </button>
                            ) : (
-                              <button
-                                 onClick={() => onGenerateInspiration('generate')}
-                                 className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white"
-                              >
-                                 <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                 <span className="hidden md:inline">生成灵感</span>
-                                 <span className="md:hidden">生成</span>
-                              </button>
+                              <div className="flex gap-2">
+                                 <button
+                                    onClick={() => onGenerateInspiration('generate')}
+                                    className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white"
+                                 >
+                                    <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                    <span className="hidden md:inline">生成灵感</span>
+                                    <span className="md:hidden">生成</span>
+                                 </button>
+                              </div>
                            )}
                         </div>
                      </div>
@@ -778,7 +784,12 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                         </div>
                      ) : (
                         <div className="space-y-1">
-                           {activeSet.items.map((item, idx) => (
+                           {activeSet.items.map((item, idx) => {
+                              // Defensive string check for legacy or corrupted data
+                              const displayTitle = typeof item.title === 'string' ? item.title :
+                                                 (typeof item.title === 'object' && item.title !== null ? JSON.stringify(item.title) : String(item.title || ''));
+                              
+                              return (
                               <div
                                  key={idx}
                                  onClick={() => openEditEntry(idx, item)}
@@ -791,7 +802,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                                     <div className="flex-1 min-w-0">
                                        <div className="flex items-center gap-3">
                                           <span className="text-[13px] font-medium truncate text-gray-300">
-                                             {item.title || '未命名灵感'}
+                                             {displayTitle || '未命名灵感'}
                                           </span>
                                        </div>
                                     </div>
@@ -821,7 +832,9 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                                                    <button
                                                       onClick={(e) => {
                                                          e.stopPropagation();
-                                                         onSendToModule('worldview', item.content || item.title);
+                                                         const contentToSend = typeof item.content === 'string' ? item.content : JSON.stringify(item.content);
+                                                         const titleToSend = typeof item.title === 'string' ? item.title : JSON.stringify(item.title);
+                                                         onSendToModule('worldview', contentToSend || titleToSend);
                                                          setSendMenuOpenIndex(null);
                                                       }}
                                                       className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white text-left transition-colors"
@@ -832,7 +845,9 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                                                    <button
                                                       onClick={(e) => {
                                                          e.stopPropagation();
-                                                         onSendToModule('character', item.content || item.title);
+                                                         const contentToSend = typeof item.content === 'string' ? item.content : JSON.stringify(item.content);
+                                                         const titleToSend = typeof item.title === 'string' ? item.title : JSON.stringify(item.title);
+                                                         onSendToModule('character', contentToSend || titleToSend);
                                                          setSendMenuOpenIndex(null);
                                                       }}
                                                       className="flex items-center gap-3 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white text-left transition-colors border-t border-slate-100 dark:border-slate-700"
@@ -843,7 +858,9 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                                                    <button
                                                       onClick={(e) => {
                                                          e.stopPropagation();
-                                                         onSendToModule('outline', item.content || item.title);
+                                                         const contentToSend = typeof item.content === 'string' ? item.content : JSON.stringify(item.content);
+                                                         const titleToSend = typeof item.title === 'string' ? item.title : JSON.stringify(item.title);
+                                                         onSendToModule('outline', contentToSend || titleToSend);
                                                          setSendMenuOpenIndex(null);
                                                       }}
                                                       className="flex items-center gap-3 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white text-left transition-colors border-t border-slate-100 dark:border-slate-700"
@@ -866,7 +883,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                                     </div>
                                  </div>
                               </div>
-                           ))}
+                           )})}
                         </div>
                      )}
                   </div>

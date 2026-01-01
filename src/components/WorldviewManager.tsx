@@ -33,6 +33,8 @@ interface WorldviewManagerProps {
   onShowSettings?: () => void
   modelName?: string
   sidebarHeader?: React.ReactNode
+  onCallPromptAgent?: (userInput: string, stage: string) => void
+  isCallingPromptAgent?: boolean
 
   activePresetId?: string
   lastNonChatPresetId?: string
@@ -82,6 +84,8 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
   onShowSettings,
   modelName,
   sidebarHeader,
+  onCallPromptAgent,
+  isCallingPromptAgent,
   activePresetId,
   lastNonChatPresetId,
   onReturnToMainWithContent,
@@ -124,8 +128,6 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
   const [selectedEntryIndex, setSelectedEntryIndex] = useState<number | null>(null)
   const [editEntryItem, setEditEntryItem] = useState('')
   const [editEntrySetting, setEditEntrySetting] = useState('')
-
-  // Local State for Selectors
 
   // Confirmation State
   const [confirmState, setConfirmState] = useState<{
@@ -372,7 +374,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                   }`}
                 >
                   {editingSetId === set.id ? (
-                     <div className="flex items-center gap-1 w-full" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-1 w-full" onClick={e => e.stopPropagation()}>
                         <input 
                            className="flex-1 bg-gray-900 text-white text-sm rounded px-2 py-1 outline-none border border-[var(--theme-color)]"
                            value={editSetName}
@@ -590,14 +592,16 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                                  <span className="hidden md:inline">停止</span>
                               </button>
                            ) : (
-                              <button
-                                 onClick={() => onGenerateWorldview('generate')}
-                                 className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white"
-                              >
-                                 <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                 <span className="hidden md:inline">生成世界观</span>
-                                 <span className="md:hidden">生成</span>
-                              </button>
+                              <div className="flex gap-2">
+                                 <button
+                                    onClick={() => onGenerateWorldview('generate')}
+                                    className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white"
+                                 >
+                                    <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                    <span className="hidden md:inline">生成世界观</span>
+                                    <span className="md:hidden">生成</span>
+                                 </button>
+                              </div>
                            )}
                         </div>
                      </div>
