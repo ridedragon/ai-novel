@@ -36,8 +36,6 @@ interface InspirationManagerProps {
   onShowSettings?: () => void
   modelName?: string
   sidebarHeader?: React.ReactNode
-  onCallPromptAgent?: (userInput: string, stage: string) => void
-  isCallingPromptAgent?: boolean
 
   // Navigation / Integration
   onSendToModule?: (module: 'worldview' | 'character' | 'outline', content: string) => void
@@ -89,8 +87,6 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
   onShowSettings,
   modelName,
   sidebarHeader,
-  onCallPromptAgent,
-  isCallingPromptAgent,
   onSendToModule,
   onReturnToMainWithContent,
   activePresetId,
@@ -543,21 +539,6 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
                               </button>
                            ) : (
                               <div className="flex gap-2">
-                                 {onCallPromptAgent && (
-                                    <button
-                                       onClick={() => userPrompt && onCallPromptAgent(userPrompt, 'inspiration')}
-                                       disabled={isCallingPromptAgent || !userPrompt?.trim()}
-                                       className="px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
-                                       title="调用提示词 AI 增强指令"
-                                    >
-                                       {isCallingPromptAgent ? (
-                                          <div className="w-3.5 h-3.5 md:w-4 md:h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                       ) : (
-                                          <Wand2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                       )}
-                                       <span className="hidden md:inline">提示词 AI</span>
-                                    </button>
-                                 )}
                                  <button
                                     onClick={() => onGenerateInspiration('generate')}
                                     className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white"
