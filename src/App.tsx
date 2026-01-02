@@ -44,7 +44,7 @@ import {
   Zap
 } from 'lucide-react'
 import OpenAI from 'openai'
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import terminal from 'virtual:terminal'
 import { CharacterManager } from './components/CharacterManager'
@@ -5389,12 +5389,23 @@ ${taskDescription}`
           selectedOutlineIndicesForChat
         ) || buildWorldInfoContext(activeNovel || undefined, activeOutlineSetId)
         
-        // 只有当前大纲集的策划条目
+        // 统一逻辑：根据用户在自动化面板的选择，决定是发送完整大纲还是仅发送当前大纲条目
         let outlineContent = ''
         if (activeOutlineSetId) {
             const currentOutlineSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
             if (currentOutlineSet && currentOutlineSet.items.length > 0) {
-                outlineContent = `【当前小说大纲策划】：\n` + currentOutlineSet.items.map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+                if (includeFullOutlineInAutoWrite) {
+                    outlineContent = `【全书粗纲参考】：\n` + currentOutlineSet.items.map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+                } else {
+                    // 如果没开启全局参考，则尝试寻找匹配当前章节的大纲条目
+                    const matchedItem = currentOutlineSet.items.find(item => item.title === activeChapter.title)
+                    if (matchedItem) {
+                        outlineContent = `【本章大纲参考】：\n${matchedItem.title}: ${matchedItem.summary}`
+                    } else {
+                        // 兜底：发送前几个条目
+                        outlineContent = `【当前大纲策划摘要】：\n` + currentOutlineSet.items.slice(0, 5).map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+                    }
+                }
             }
         }
 
@@ -6488,11 +6499,11 @@ ${taskDescription}`
              </div>
              <button
                onClick={() => setShowWorkflowEditor(true)}
-               className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-xs text-white transition-colors whitespace-nowrap shrink-0 shadow-lg shadow-indigo-900/20"
+               className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-xs text-white transition-colors whitespace-nowrap shrink-0 shadow-lg shadow-indigo-900/20 ring-2 ring-indigo-500/30 animate-pulse hover:animate-none"
                title="打开工作流编辑器"
              >
                <GitBranch className="w-3.5 h-3.5" />
-               <span className="hidden sm:inline">工作流</span>
+               <span className="font-bold">可视化工作流</span>
              </button>
           </div>
         </div>
@@ -6599,6 +6610,18 @@ ${taskDescription}`
                              </div>
                           </button>
 
+                          <button
+                             onClick={() => setShowWorkflowEditor(true)}
+                             className="bg-indigo-900/20 border-2 border-indigo-500/50 rounded-xl p-6 hover:border-indigo-400 hover:shadow-indigo-500/20 hover:shadow-xl transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
+                          >
+                             <div className="p-4 bg-indigo-500/20 rounded-full group-hover:bg-indigo-500/30 text-indigo-400">
+                                <GitBranch className="w-10 h-10" />
+                             </div>
+                             <div>
+                                <h3 className="text-xl font-bold text-indigo-100 mb-2">可视化工作流</h3>
+                                <p className="text-sm text-indigo-300/70">串联多步骤自动化任务，实现全自动小说创作</p>
+                             </div>
+                          </button>
 
                        </div>
 
@@ -8431,9 +8454,9 @@ ${taskDescription}`
                       }
 
                       const removePrompt = (index: number) => {
-                          const newPrompts = currentPreset.prompts.filter((_, i) => i !== index)
-                          updatePreset({ prompts: newPrompts })
-                      }
+                          const newPrompts = currentPreset.prompts.filter((_, i) => i !== index);
+                          updatePreset({ prompts: newPrompts });
+                      };
 
                       const handleEditPrompt = (index: number, prompt: GeneratorPrompt) => {
                           setEditingGeneratorPromptIndex(index)
@@ -8448,7 +8471,7 @@ ${taskDescription}`
                           updatePreset({ prompts: newPrompts })
                       }
 
-                      const handleDragStart = (_: React.DragEvent, index: number) => {
+                      const handleDragStart = (_e: React.DragEvent, index: number) => {
                           setDraggedPromptIndex(index)
                       }
 
@@ -8976,6 +8999,22 @@ ${taskDescription}`
         isOpen={showWorkflowEditor}
         onClose={() => setShowWorkflowEditor(false)}
         activeNovel={activeNovel}
+        onStartAutoWrite={startAutoWriting}
+        globalConfig={{
+          apiKey,
+          baseUrl,
+          model,
+          outlineModel,
+          characterModel,
+          worldviewModel,
+          inspirationModel,
+          plotOutlineModel,
+          optimizeModel,
+          analysisModel
+        }}
+        onUpdateNovel={(updatedNovel) => {
+          setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));
+        }}
       />
 
     </div>
