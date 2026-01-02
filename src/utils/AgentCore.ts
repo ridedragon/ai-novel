@@ -1,5 +1,6 @@
 import { AgentAction, AgentManifest, AgentModelConfig, AgentPromptConfig, AgentStatus, Novel } from '../types';
 import { AgentDirector } from './AgentDirector';
+import { AgentParser } from './AgentParser';
 
 export interface AgentCoreState {
   status: AgentStatus;
@@ -30,6 +31,7 @@ export class AgentCore {
   private callLLM?: (system: string, user: string, model?: string) => Promise<string>;
   private modelConfig?: AgentModelConfig;
   private promptConfig?: AgentPromptConfig;
+  private userInstruction: string = '';
   private onAction?: (actions: AgentAction[]) => void;
   private onTaskTrigger?: (type: string, payload: any, onComplete: () => void) => void;
 
@@ -44,7 +46,7 @@ export class AgentCore {
     novel: Novel,
     callLLM: (system: string, user: string, model?: string) => Promise<string>,
     onAction: (actions: AgentAction[]) => void,
-    onTaskTrigger: (type: string, payload: any) => void,
+    onTaskTrigger: (type: string, payload: any, onComplete: () => void) => void,
     modelConfig?: AgentModelConfig,
     promptConfig?: AgentPromptConfig,
   ) {
@@ -85,16 +87,23 @@ export class AgentCore {
     this.callLLM = callLLM;
     this.modelConfig = modelConfig;
     this.promptConfig = promptConfig;
+    this.userInstruction = userInstruction || '';
     this.stopFlag = false;
 
     this.updateState({ status: 'PLANNING' });
     this.logs('导演 Agent 开始规划创作清单...');
 
     try {
-      const systemPrompt = this.promptConfig?.directorPrompt || AgentDirector.getSystemPrompt();
-      const userPrompt = AgentDirector.buildUserPrompt(novel, userInstruction);
+      const baseSystemPrompt = this.promptConfig?.directorPrompt || AgentDirector.getSystemPrompt();
+      // 应用全局宏替换
+      const systemPromptWithMacros = AgentParser.replaceMacros(
+        `${baseSystemPrompt}\n\n${AgentDirector.getToolInstructions()}`,
+        this.userInstruction,
+      );
 
-      const response = await callLLM(systemPrompt, userPrompt, this.modelConfig?.directorModel);
+      const userPrompt = AgentDirector.buildUserPrompt(novel, this.userInstruction);
+
+      const response = await callLLM(systemPromptWithMacros, userPrompt, this.modelConfig?.directorModel);
       if (this.stopFlag) return;
       const manifest = AgentDirector.parseManifest(response);
 
@@ -112,6 +121,14 @@ export class AgentCore {
       this.updateState({ status: 'ERROR' });
       this.logs(`规划失败: ${e.message}`);
     }
+  }
+
+  /**
+   * 更新当前的清单（允许用户手动编辑）
+   */
+  public updateManifest(manifest: AgentManifest) {
+    this.updateState({ manifest });
+    this.logs('用户已更新创作清单。');
   }
 
   /**
@@ -179,8 +196,8 @@ export class AgentCore {
       // 导演 Agent 不写内容，只规划任务。具体的“生成”由 UI/程序层面监听此触发器执行。
       if (this.onTaskTrigger) {
         this.onTaskTrigger(currentTask.type, currentTask, () => {
-          if (this.stopFlag) return;
           this.updateState({ currentTaskIndex: index + 1 });
+          if (this.stopFlag) return;
           this.executeNextTask();
         });
       } else {
@@ -200,6 +217,12 @@ export class AgentCore {
     this.stopFlag = true;
     this.updateState({ status: 'IDLE' });
     this.logs('已停止。');
+  }
+
+  public pause() {
+    this.stopFlag = true;
+    this.updateState({ status: 'PAUSED' });
+    this.logs('任务暂停，等待用户输入或手动恢复。');
   }
 
   public getState() {

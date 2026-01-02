@@ -808,15 +808,19 @@ function App() {
       const saved = localStorage.getItem('agentPromptConfig')
       const config = saved ? JSON.parse(saved) : null;
       
-      // 检查是否需要强制更新默认提示词（如果用户未曾修改过，或者版本过旧）
-      // 这里我们简单处理：如果本地没有保存，或者保存的提示词与当前代码中的默认提示词完全不一致，则尝试合并或更新。
-      // 为确保新逻辑立即生效，当检测到 directorPrompt 包含旧的线性流程描述时，进行更新。
-      if (config && config.directorPrompt && config.directorPrompt.includes('灵感 (inspiration) -> 世界观 (worldview) -> 角色集 (character) -> 粗纲 (plot_outline)')) {
-          terminal.log('[Agent] Detecting legacy prompt, updating to new chunked planning logic.');
-          return {
-            ...config,
-            directorPrompt: AgentDirector.getSystemPrompt()
-          };
+      // 检查并清洗用户本地缓存中的提示词
+      if (config && config.directorPrompt) {
+          // 如果包含旧的线性流程描述，或者包含了已经内嵌到代码中的工具箱指令说明，则强制重置为纯净版
+          const hasLegacyFlow = config.directorPrompt.includes('灵感 (inspiration) -> 世界观 (worldview) -> 角色集 (character) -> 粗纲 (plot_outline)');
+          const hasEmbeddedTools = config.directorPrompt.includes('工具箱使用指南') || config.directorPrompt.includes('getToolInstructions');
+          
+          if (hasLegacyFlow || hasEmbeddedTools) {
+              terminal.log('[Agent] Cleaning legacy or redundant tool instructions from prompt cache.');
+              return {
+                ...config,
+                directorPrompt: AgentDirector.getSystemPrompt()
+              };
+          }
       }
 
       return config || {
@@ -895,12 +899,18 @@ function App() {
   }, [novels])
 
   const [activeNovelId, setActiveNovelId] = useState<string | null>(null)
+  const activeNovelIdRef = useRef(activeNovelId)
+  useEffect(() => { activeNovelIdRef.current = activeNovelId }, [activeNovelId])
+
+  const creationModuleRef = useRef<'menu' | 'outline' | 'plotOutline' | 'characters' | 'worldview' | 'inspiration' | 'reference'>('menu')
 
   // Keep Alive Mode
   const [keepAliveMode, setKeepAliveMode] = useState(false)
 
   // Outline Sets State
   const [activeOutlineSetId, setActiveOutlineSetId] = useState<string | null>(null)
+  const activeOutlineSetIdRef = useRef(activeOutlineSetId)
+  useEffect(() => { activeOutlineSetIdRef.current = activeOutlineSetId }, [activeOutlineSetId])
   const [newOutlineSetName, setNewOutlineSetName] = useState('')
   const [selectedCharacterSetIdForOutlineGen, setSelectedCharacterSetIdForOutlineGen] = useState<string | null>(null)
   const [showCharacterSetSelector, setShowCharacterSetSelector] = useState(false)
@@ -1370,17 +1380,25 @@ function App() {
   const [autoWriteOutlineSetId, setAutoWriteOutlineSetId] = useState<string | null>(null)
   const [includeFullOutlineInAutoWrite, setIncludeFullOutlineInAutoWrite] = useState(false)
   const [activeCharacterSetId, setActiveCharacterSetId] = useState<string | null>(null)
+  const activeCharacterSetIdRef = useRef(activeCharacterSetId)
+  useEffect(() => { activeCharacterSetIdRef.current = activeCharacterSetId }, [activeCharacterSetId])
   const [newCharacterSetName, setNewCharacterSetName] = useState('')
   const [selectedCharacter, setSelectedCharacter] = useState<{setId: string, index: number} | null>(null)
 
   const [activeWorldviewSetId, setActiveWorldviewSetId] = useState<string | null>(null)
+  const activeWorldviewSetIdRef = useRef(activeWorldviewSetId)
+  useEffect(() => { activeWorldviewSetIdRef.current = activeWorldviewSetId }, [activeWorldviewSetId])
   const [newWorldviewSetName, setNewWorldviewSetName] = useState('')
   const [selectedWorldviewEntry, setSelectedWorldviewEntry] = useState<{setId: string, index: number} | null>(null)
 
   const [activeInspirationSetId, setActiveInspirationSetId] = useState<string | null>(null)
+  const activeInspirationSetIdRef = useRef(activeInspirationSetId)
+  useEffect(() => { activeInspirationSetIdRef.current = activeInspirationSetId }, [activeInspirationSetId])
   const [newInspirationSetName, setNewInspirationSetName] = useState('')
 
   const [activePlotOutlineSetId, setActivePlotOutlineSetId] = useState<string | null>(null)
+  const activePlotOutlineSetIdRef = useRef(activePlotOutlineSetId)
+  useEffect(() => { activePlotOutlineSetIdRef.current = activePlotOutlineSetId }, [activePlotOutlineSetId])
 
   // Character Generation Settings
   const [selectedWorldviewSetIdForCharGen, setSelectedWorldviewSetIdForCharGen] = useState<string | null>(null)
@@ -1389,6 +1407,7 @@ function App() {
   // Auto Write State
   const [showOutline, setShowOutline] = useState(false)
   const [creationModule, setCreationModule] = useState<'menu' | 'outline' | 'plotOutline' | 'characters' | 'worldview' | 'inspiration' | 'reference'>('menu')
+  useEffect(() => { creationModuleRef.current = creationModule }, [creationModule])
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false)
   const [regeneratingOutlineItemIndices, setRegeneratingOutlineItemIndices] = useState<Set<number>>(new Set())
   const [isGeneratingCharacters, setIsGeneratingCharacters] = useState(false)
@@ -1451,6 +1470,8 @@ function App() {
     retryCount: 0,
     logs: ['等待初始化...']
   });
+  const agentCoreStateRef = useRef(agentCoreState)
+  useEffect(() => { agentCoreStateRef.current = agentCoreState }, [agentCoreState])
   const [agentUserInstruction, setAgentUserInstruction] = useState('');
   const agentCoreRef = useRef<AgentCore | null>(null);
 
@@ -3064,7 +3085,7 @@ function App() {
     }
   }
 
-  const handleGenerateOutline = async (mode: 'append' | 'replace' | 'chat' = 'append', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
+  const handleGenerateOutline = async (mode: 'append' | 'replace' | 'chat' = 'append', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activeOutlinePresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -3088,18 +3109,18 @@ function App() {
     let targetSetId = overrideSetId !== undefined ? overrideSetId : activeOutlineSetId;
     let targetSet = activeNovel?.outlineSets?.find(s => s.id === targetSetId);
 
-    if (!targetSetId || !targetSet) {
-        const newSet: OutlineSet = {
-            id: crypto.randomUUID(),
-            name: '默认粗纲',
-            items: []
-        };
-        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, outlineSets: [...(n.outlineSets || []), newSet] } : n));
-        setActiveOutlineSetId(newSet.id);
-        
-        targetSetId = newSet.id;
-        targetSet = newSet;
+    // 如果找不到指定的集，尝试复用当前活跃的集或第一个可用的集，避免创建多余的“默认”集
+    if (!targetSet && activeNovel?.outlineSets && activeNovel.outlineSets.length > 0) {
+        targetSet = activeNovel.outlineSets.find(s => s.id === activeOutlineSetId) || activeNovel.outlineSets[0];
+        targetSetId = targetSet.id;
+        setActiveOutlineSetId(targetSetId);
     }
+
+    if (!targetSet) {
+        setIsGeneratingOutline(false);
+        return;
+    }
+
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -3171,7 +3192,7 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', `${referenceContext}\n${outlineContext}\n${chatContext}\n${mainChatContext}`)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt || (mode === 'chat' ? '请根据以上对话内容和设定，继续与我讨论。' : '请根据以上对话内容和设定，生成新的大纲章节。'))
+            content = content.replace('{{input}}', promptOverride || userPrompt || (mode === 'chat' ? '请根据以上对话内容和设定，继续与我讨论。' : '请根据以上对话内容和设定，生成新的大纲章节。'))
             return { role: p.role, content }
           })
           .filter(m => m.content && m.content.trim())
@@ -3399,7 +3420,7 @@ function App() {
       })
   }
 
-  const handleGenerateCharacters = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
+  const handleGenerateCharacters = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activeCharacterPresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -3423,18 +3444,17 @@ function App() {
     let targetSetId = overrideSetId !== undefined ? overrideSetId : activeCharacterSetId;
     let targetSet = activeNovel?.characterSets?.find(s => s.id === targetSetId);
 
-    if (!targetSetId || !targetSet) {
-        const newSet: CharacterSet = {
-            id: crypto.randomUUID(),
-            name: '默认角色集',
-            characters: []
-        };
-        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, characterSets: [...(n.characterSets || []), newSet] } : n));
-        setActiveCharacterSetId(newSet.id);
-        
-        targetSetId = newSet.id;
-        targetSet = newSet;
+    if (!targetSet && activeNovel?.characterSets && activeNovel.characterSets.length > 0) {
+        targetSet = activeNovel.characterSets.find(s => s.id === activeCharacterSetId) || activeNovel.characterSets[0];
+        targetSetId = targetSet.id;
+        handleSetActiveCharacterSetId(targetSetId);
     }
+
+    if (!targetSet) {
+        setIsGeneratingCharacters(false);
+        return;
+    }
+
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -3503,7 +3523,7 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', contextStr)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的角色卡。' : ''))
+            content = content.replace('{{input}}', promptOverride || userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的角色卡。' : ''))
             return { role: p.role, content }
           })
           .filter(m => m.content && m.content.trim())
@@ -3724,7 +3744,7 @@ function App() {
   }
 
   // Inspiration Generation
-  const handleGenerateInspiration = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
+  const handleGenerateInspiration = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activeInspirationPresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -3748,18 +3768,17 @@ function App() {
     let targetSetId = overrideSetId !== undefined ? overrideSetId : activeInspirationSetId;
     let targetSet = activeNovel?.inspirationSets?.find(s => s.id === targetSetId);
 
-    if (!targetSetId || !targetSet) {
-        const newSet: InspirationSet = {
-            id: crypto.randomUUID(),
-            name: '默认灵感集',
-            items: []
-        };
-        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, inspirationSets: [...(n.inspirationSets || []), newSet] } : n));
-        setActiveInspirationSetId(newSet.id);
-        
-        targetSetId = newSet.id;
-        targetSet = newSet;
+    if (!targetSet && activeNovel?.inspirationSets && activeNovel.inspirationSets.length > 0) {
+        targetSet = activeNovel.inspirationSets.find(s => s.id === activeInspirationSetId) || activeNovel.inspirationSets[0];
+        targetSetId = targetSet.id;
+        setActiveInspirationSetId(targetSetId);
     }
+
+    if (!targetSet) {
+        setIsGeneratingInspiration(false);
+        return;
+    }
+
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -3828,7 +3847,7 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', contextStr)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的灵感条目。' : ''))
+            content = content.replace('{{input}}', promptOverride || userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的灵感条目。' : ''))
             return { role: p.role, content }
           })
           .filter(m => m.content && m.content.trim())
@@ -3959,7 +3978,7 @@ function App() {
   }
 
   // Worldview Generation
-  const handleGenerateWorldview = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
+  const handleGenerateWorldview = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activeWorldviewPresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -3983,18 +4002,17 @@ function App() {
     let targetSetId = overrideSetId !== undefined ? overrideSetId : activeWorldviewSetId;
     let targetSet = activeNovel?.worldviewSets?.find(s => s.id === targetSetId);
 
-    if (!targetSetId || !targetSet) {
-        const newSet: WorldviewSet = {
-            id: crypto.randomUUID(),
-            name: '默认世界观',
-            entries: []
-        };
-        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, worldviewSets: [...(n.worldviewSets || []), newSet] } : n));
-        setActiveWorldviewSetId(newSet.id);
-        
-        targetSetId = newSet.id;
-        targetSet = newSet;
+    if (!targetSet && activeNovel?.worldviewSets && activeNovel.worldviewSets.length > 0) {
+        targetSet = activeNovel.worldviewSets.find(s => s.id === activeWorldviewSetId) || activeNovel.worldviewSets[0];
+        targetSetId = targetSet.id;
+        setActiveWorldviewSetId(targetSetId);
     }
+
+    if (!targetSet) {
+        setIsGeneratingWorldview(false);
+        return;
+    }
+
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -4063,7 +4081,7 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', contextStr)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的世界观设定项。' : ''))
+            content = content.replace('{{input}}', promptOverride || userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的世界观设定项。' : ''))
             return { role: p.role, content }
           })
           .filter(m => m.content && m.content.trim())
@@ -4223,7 +4241,7 @@ function App() {
   }
 
   // Plot Outline Generation
-  const handleGeneratePlotOutline = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
+  const handleGeneratePlotOutline = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activePlotOutlinePresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -4248,18 +4266,17 @@ function App() {
     let targetSetId = overrideSetId !== undefined ? overrideSetId : activePlotOutlineSetId;
     let targetSet = activeNovel?.plotOutlineSets?.find(s => s.id === targetSetId);
 
-    if (!targetSetId || !targetSet) {
-        const newId = crypto.randomUUID()
-        const newSet: PlotOutlineSet = {
-            id: newId,
-            name: '默认剧情粗纲',
-            items: []
-        };
-        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, plotOutlineSets: [...(n.plotOutlineSets || []), newSet] } : n));
-        setActivePlotOutlineSetId(newId);
-        targetSetId = newId;
-        targetSet = newSet;
+    if (!targetSet && activeNovel?.plotOutlineSets && activeNovel.plotOutlineSets.length > 0) {
+        targetSet = activeNovel.plotOutlineSets.find(s => s.id === activePlotOutlineSetId) || activeNovel.plotOutlineSets[0];
+        targetSetId = targetSet.id;
+        setActivePlotOutlineSetId(targetSetId);
     }
+
+    if (!targetSet) {
+        setIsGeneratingPlotOutline(false);
+        return;
+    }
+
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -4297,7 +4314,7 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', contextStr)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的剧情粗纲条目。' : ''))
+            content = content.replace('{{input}}', promptOverride || userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的剧情粗纲条目。' : ''))
             return { role: p.role, content }
           })
           .filter(m => m.content && m.content.trim())
@@ -6020,12 +6037,14 @@ ${taskDescription}`
     actions.forEach(action => {
       terminal.log(`[Agent Action] Executing ${action.type}:`, action.payload)
       
+      const currentNovel = novelsRef.current.find(n => n.id === activeNovelIdRef.current);
+
       if (action.type === 'UPDATE_CHARACTER' || action.type === 'ADD_CHARACTER') {
         const { name, bio, setName } = action.payload
-        if (!activeNovel) return
-        const sets = activeNovel.characterSets || []
+        if (!currentNovel) return
+        const sets = currentNovel.characterSets || []
         
-        let targetSet = sets.find(s => s.id === activeCharacterSetId)
+        let targetSet = sets.find(s => s.id === activeCharacterSetIdRef.current)
         if (setName) {
           const found = sets.find(s => s.name === setName)
           if (found) targetSet = found
@@ -6053,10 +6072,10 @@ ${taskDescription}`
 
       if (action.type === 'ADD_WORLDVIEW' || action.type === 'UPDATE_WORLDVIEW') {
         const { item, setting, setName } = action.payload
-        if (!activeNovel) return
-        const sets = activeNovel.worldviewSets || []
+        if (!currentNovel) return
+        const sets = currentNovel.worldviewSets || []
         
-        let targetSet = sets.find(s => s.id === activeWorldviewSetId)
+        let targetSet = sets.find(s => s.id === activeWorldviewSetIdRef.current)
         if (setName) {
           const found = sets.find(s => s.name === setName)
           if (found) targetSet = found
@@ -6084,11 +6103,11 @@ ${taskDescription}`
 
       if (action.type === 'ADD_PLOT_OUTLINE' || action.type === 'ADD_PLOT_HOOK') {
         const { name, title, description, setName } = action.payload
-        if (!activeNovel) return
-        const sets = activeNovel.plotOutlineSets || []
+        if (!currentNovel) return
+        const sets = currentNovel.plotOutlineSets || []
         
         const targetName = setName || name;
-        let targetSet = sets.find(s => s.id === activePlotOutlineSetId)
+        let targetSet = sets.find(s => s.id === activePlotOutlineSetIdRef.current)
         if (targetName) {
           const found = sets.find(s => s.name === targetName)
           if (found) targetSet = found
@@ -6136,10 +6155,10 @@ ${taskDescription}`
         const items = payload.filter((it: any) => it.title || it.summary);
         const setName = (action.payload as any).setName;
 
-        if (!activeNovel) return;
-        const sets = activeNovel.outlineSets || [];
+        if (!currentNovel) return;
+        const sets = currentNovel.outlineSets || [];
         
-        let targetSet = sets.find(s => s.id === activeOutlineSetId)
+        let targetSet = sets.find(s => s.id === activeOutlineSetIdRef.current)
         if (setName) {
           const found = sets.find(s => s.name === setName)
           if (found) targetSet = found
@@ -6165,11 +6184,11 @@ ${taskDescription}`
 
       if (action.type === 'ADD_INSPIRATION') {
         const payload = action.payload;
-        if (!activeNovel) return;
-        const sets = activeNovel.inspirationSets || [];
+        if (!currentNovel) return;
+        const sets = currentNovel.inspirationSets || [];
         const setName = payload.setName;
         
-        let targetSet = sets.find(s => s.id === activeInspirationSetId)
+        let targetSet = sets.find(s => s.id === activeInspirationSetIdRef.current)
         if (setName) {
           const found = sets.find(s => s.name === setName)
           if (found) targetSet = found
@@ -6227,27 +6246,37 @@ ${taskDescription}`
 
       if (action.type === 'SELECT_REFERENCE') {
         const { type, setName, indices } = action.payload;
-        if (!activeNovel) return;
+        if (!currentNovel) return;
 
         let targetSetId: string | null = null;
-        if (type === 'worldview') targetSetId = activeNovel.worldviewSets?.find(s => s.name === setName)?.id || null;
-        else if (type === 'character') targetSetId = activeNovel.characterSets?.find(s => s.name === setName)?.id || null;
-        else if (type === 'inspiration') targetSetId = activeNovel.inspirationSets?.find(s => s.name === setName)?.id || null;
-        else if (type === 'outline') targetSetId = activeNovel.outlineSets?.find(s => s.name === setName)?.id || null;
+        if (type === 'worldview') targetSetId = currentNovel.worldviewSets?.find(s => s.name === setName)?.id || null;
+        else if (type === 'character') targetSetId = currentNovel.characterSets?.find(s => s.name === setName)?.id || null;
+        else if (type === 'inspiration') targetSetId = currentNovel.inspirationSets?.find(s => s.name === setName)?.id || null;
+        else if (type === 'outline') targetSetId = currentNovel.outlineSets?.find(s => s.name === setName)?.id || null;
 
         if (targetSetId) {
-          const setters = {
-            worldview: { id: setSelectedWorldviewSetIdForModules, indices: setSelectedWorldviewIndicesForModules },
-            character: { id: setSelectedCharacterSetIdForModules, indices: setSelectedCharacterIndicesForModules },
-            inspiration: { id: setSelectedInspirationSetIdForModules, indices: setSelectedInspirationIndicesForModules },
-            outline: { id: setSelectedOutlineSetIdForModules, indices: setSelectedOutlineIndicesForModules }
-          };
-          const s = setters[type as keyof typeof setters];
-          if (s) {
-            s.id(targetSetId);
-            s.indices(indices || []);
-            terminal.log(`[PromptAgent] Auto-selected reference: ${type} - ${setName}`);
+          if (type === 'worldview') {
+            setSelectedWorldviewSetIdForModules(targetSetId);
+            setSelectedWorldviewIndicesForModules(indices || []);
+            setSelectedWorldviewSetIdForChat(targetSetId);
+            setSelectedWorldviewIndicesForChat(indices || []);
+          } else if (type === 'character') {
+            setSelectedCharacterSetIdForModules(targetSetId);
+            setSelectedCharacterIndicesForModules(indices || []);
+            setSelectedCharacterSetIdForChat(targetSetId);
+            setSelectedCharacterIndicesForChat(indices || []);
+          } else if (type === 'inspiration') {
+            setSelectedInspirationSetIdForModules(targetSetId);
+            setSelectedInspirationIndicesForModules(indices || []);
+            setSelectedInspirationSetIdForChat(targetSetId);
+            setSelectedInspirationIndicesForChat(indices || []);
+          } else if (type === 'outline') {
+            setSelectedOutlineSetIdForModules(targetSetId);
+            setSelectedOutlineIndicesForModules(indices || []);
+            setSelectedOutlineSetIdForChat(targetSetId);
+            setSelectedOutlineIndicesForChat(indices || []);
           }
+          terminal.log(`[PromptAgent] Auto-selected reference: ${type} - ${setName} (Indices: ${indices})`);
         }
       }
 
@@ -6258,21 +6287,21 @@ ${taskDescription}`
           handleSwitchModule(target as any);
           setShowOutline(true);
           
-          if (setName && activeNovel) {
+          if (setName && currentNovel) {
             if (target === 'inspiration') {
-              const found = activeNovel.inspirationSets?.find(s => s.name === setName);
+              const found = currentNovel.inspirationSets?.find(s => s.name === setName);
               if (found) setActiveInspirationSetId(found.id);
             } else if (target === 'worldview') {
-              const found = activeNovel.worldviewSets?.find(s => s.name === setName);
+              const found = currentNovel.worldviewSets?.find(s => s.name === setName);
               if (found) setActiveWorldviewSetId(found.id);
             } else if (target === 'characters') {
-              const found = activeNovel.characterSets?.find(s => s.name === setName);
+              const found = currentNovel.characterSets?.find(s => s.name === setName);
               if (found) handleSetActiveCharacterSetId(found.id);
             } else if (target === 'plotOutline') {
-              const found = activeNovel.plotOutlineSets?.find(s => s.name === setName);
+              const found = currentNovel.plotOutlineSets?.find(s => s.name === setName);
               if (found) setActivePlotOutlineSetId(found.id);
             } else if (target === 'outline') {
-              const found = activeNovel.outlineSets?.find(s => s.name === setName);
+              const found = currentNovel.outlineSets?.find(s => s.name === setName);
               if (found) handleSetActiveOutlineSetId(found.id);
             }
           }
@@ -6281,7 +6310,7 @@ ${taskDescription}`
 
       if (action.type === 'CREATE_PROJECT_FOLDERS') {
         const { name } = action.payload;
-        if (!name || !activeNovelId) return;
+        if (!name || !activeNovelIdRef.current) return;
         
         const newId = crypto.randomUUID();
         const folderName = name.trim();
@@ -6292,28 +6321,43 @@ ${taskDescription}`
         const newInspirationSet: InspirationSet = { id: newId, name: folderName, items: [] };
         const newPlotOutlineSet: PlotOutlineSet = { id: newId, name: folderName, items: [] };
 
-        setNovels(prev => prev.map(n => {
-          if (n.id === activeNovelId) {
-            // 确保同步创建所有必需的文件夹/集合
-            return {
-              ...n,
-              outlineSets: [...(n.outlineSets || []).filter(s => s.name !== folderName), newOutlineSet],
-              worldviewSets: [...(n.worldviewSets || []).filter(s => s.name !== folderName), newWorldviewSet],
-              characterSets: [...(n.characterSets || []).filter(s => s.name !== folderName), newCharacterSet],
-              inspirationSets: [...(n.inspirationSets || []).filter(s => s.name !== folderName), newInspirationSet],
-              plotOutlineSets: [...(n.plotOutlineSets || []).filter(s => s.name !== folderName), newPlotOutlineSet]
-            }
-          }
-          return n;
-        }));
+        setNovels(prev => {
+          const next = prev.map(n => {
+            if (n.id === activeNovelIdRef.current) {
+              // 彻底清理：移除所有名为“默认xxx”或与新文件夹同名的集合
+              const filter = (sets: any[]) => (sets || []).filter(s =>
+                s.name !== '默认粗纲' && s.name !== '默认世界观' && s.name !== '默认角色集' &&
+                s.name !== '默认灵感集' && s.name !== '默认剧情粗纲' && s.name !== folderName
+              );
 
-        handleSetActiveOutlineSetId(newId);
-        setActiveWorldviewSetId(newId);
-        handleSetActiveCharacterSetId(newId);
+              return {
+                ...n,
+                outlineSets: [...filter(n.outlineSets || []), newOutlineSet],
+                worldviewSets: [...filter(n.worldviewSets || []), newWorldviewSet],
+                characterSets: [...filter(n.characterSets || []), newCharacterSet],
+                inspirationSets: [...filter(n.inspirationSets || []), newInspirationSet],
+                plotOutlineSets: [...filter(n.plotOutlineSets || []), newPlotOutlineSet]
+              }
+            }
+            return n;
+          });
+          novelsRef.current = next;
+          return next;
+        });
+
+        // 立即同步活跃状态，使用 Ref 确保后续动作能立即看到新 ID
         setActiveInspirationSetId(newId);
+        activeInspirationSetIdRef.current = newId;
+        setActiveWorldviewSetId(newId);
+        activeWorldviewSetIdRef.current = newId;
+        handleSetActiveCharacterSetId(newId);
+        activeCharacterSetIdRef.current = newId;
         setActivePlotOutlineSetId(newId);
+        activePlotOutlineSetIdRef.current = newId;
+        handleSetActiveOutlineSetId(newId);
+        activeOutlineSetIdRef.current = newId;
         
-        terminal.log(`[Agent] Created synchronized folders for project: ${folderName}`);
+        terminal.log(`[Agent] Created synchronized project folders: ${folderName}`);
       }
 
       if (action.type === 'START_AUTO_WRITE') {
@@ -6333,80 +6377,174 @@ ${taskDescription}`
           handleConfirmAutoWrite();
         }, 500);
       }
+
+      if (action.type === 'AWAIT_USER_INPUT') {
+        const { message } = action.payload;
+        terminal.log(`[Agent] Awaiting user input: ${message}`);
+        setError(`Agent 请求输入: ${message}`);
+        // 真正暂停执行流
+        if (agentCoreRef.current) {
+          agentCoreRef.current.pause();
+        }
+      }
+
+      if (action.type === 'FILL_AND_GENERATE') {
+        const { content } = action.payload;
+        terminal.log(`[Agent] Filling and generating: ${content}`);
+        setUserPrompt(content);
+        // 根据当前模块触发生成，使用 Ref 获取最新的模块状态
+        setTimeout(() => {
+          const mod = creationModuleRef.current;
+          if (mod === 'menu') handleGenerate();
+          else if (mod === 'inspiration') handleGenerateInspiration('generate');
+          else if (mod === 'worldview') handleGenerateWorldview('generate');
+          else if (mod === 'characters') handleGenerateCharacters('generate');
+          else if (mod === 'plotOutline') handleGeneratePlotOutline('generate');
+          else if (mod === 'outline') handleGenerateOutline('append');
+        }, 500);
+      }
+
+      if (action.type === 'GET_MANIFEST') {
+        const manifest = agentCoreStateRef.current.manifest;
+        terminal.log(`[Agent] Current Manifest:`, manifest);
+      }
+
+      if (action.type === 'GET_CURRENT_TASK') {
+        const task = agentCoreStateRef.current.manifest?.tasks[agentCoreStateRef.current.currentTaskIndex];
+        terminal.log(`[Agent] Current Task:`, task);
+      }
     })
   }
 
   const handleAgentTaskTrigger = async (type: string, task: any, onComplete: () => void) => {
     terminal.log(`[Agent Task] Triggered: ${type} - ${task.title}`);
     
-    // 解析 Action 指令（如果 description 中包含）
+    // 解析 Action 指令
     const actions = AgentParser.parseActions(task.description);
+    const hasWaitAction = actions.some(a => a.type === 'AWAIT_USER_INPUT');
+
     if (actions.length > 0) {
       handleAgentAction(actions);
     }
 
-    const waitForGeneration = async (genFunc: () => Promise<void>) => {
-      // 模拟提示词 Agent 的介入：根据任务描述生成增强提示词
-      if (task.description) {
-        // 简单处理：提取 [ACTION] 之外的文本作为输入
-        const pureInput = task.description.replace(/\[ACTION:.*?\][\s\S]*?\[\/ACTION\]/g, '').trim();
-        if (pureInput) {
-          await handleCallPromptAgent(pureInput, type);
+    const waitForGeneration = async (genFunc: (promptOverride?: string) => Promise<void>, navigateAction?: () => void) => {
+      try {
+        let promptOverride: string | undefined = undefined;
+        // 提示词 Agent 的介入
+        if (task.description) {
+          const pureInput = AgentParser.cleanText(task.description);
+          if (pureInput) {
+            const result = await handleCallPromptAgent(pureInput, type);
+            if (result) promptOverride = result;
+          }
         }
+        
+        // 执行生成逻辑
+        // 修复：即使有等待指令，也应该先执行当前任务的自动化生成部分（如灵感生成），然后才进入暂停状态
+        // 除非任务类型不需要生成（genFunc 为空）
+        if (genFunc) {
+          await genFunc(promptOverride);
+        }
+        
+        if (navigateAction) {
+          navigateAction();
+        }
+      } catch (e: any) {
+        terminal.error(`[Agent Task Error] ${e.message}`);
+        setError(`Agent 任务执行失败: ${e.message}`);
+      } finally {
+        // 无论成功失败，都必须尝试回调以防状态卡死
+        onComplete();
       }
-      // 这里的 genFunc 必须被 await，否则流程会立即结束
-      await genFunc();
-      onComplete();
     };
 
     // 根据任务类型自动切换 UI 并触发生成
     // 提取任务标题中的名称（如果有），用于切换到对应的文件夹
-    const targetSetName = task.title?.match(/文件夹\s*(.*)$/)?.[1] || task.title?.match(/生成\s*(.*)$/)?.[1] || '';
+    let targetSetName = task.title?.match(/(?:文件夹|生成)\s*[:：]?\s*(.*)$/)?.[1]?.trim() || '';
+    
+    // 如果刚刚执行了创建文件夹操作，优先使用新文件夹名
+    const createFolderAction = actions.find(a => a.type === 'CREATE_PROJECT_FOLDERS');
+    if (createFolderAction) {
+      targetSetName = createFolderAction.payload.name;
+    }
 
     if (type === 'inspiration') {
-      handleSwitchModule('inspiration');
-      if (targetSetName && activeNovel) {
-        const found = activeNovel.inspirationSets?.find(s => s.name === targetSetName);
-        if (found) setActiveInspirationSetId(found.id);
+      const currentNovel = novelsRef.current.find(n => n.id === activeNovelIdRef.current);
+      // 1. 优先尝试按名称匹配
+      let found = targetSetName && currentNovel ? currentNovel.inspirationSets?.find(s => s.name === targetSetName) : null;
+      // 2. 如果没匹配到但有新创建的 Ref ID，尝试按 ID 匹配
+      if (!found && activeInspirationSetIdRef.current && currentNovel) {
+        found = currentNovel.inspirationSets?.find(s => s.id === activeInspirationSetIdRef.current) || null;
       }
-      setShowOutline(true);
-      await waitForGeneration(() => handleGenerateInspiration('generate'));
+      // 3. 最终同步状态
+      if (found) {
+        setActiveInspirationSetId(found.id);
+        activeInspirationSetIdRef.current = found.id;
+      }
+      await waitForGeneration(
+        (override) => handleGenerateInspiration('generate', found?.id || activeInspirationSetIdRef.current, 'module', override),
+        () => { handleSwitchModule('inspiration'); setShowOutline(true); }
+      );
     } else if (type === 'worldview') {
-      handleSwitchModule('worldview');
-      if (targetSetName && activeNovel) {
-        const found = activeNovel.worldviewSets?.find(s => s.name === targetSetName);
-        if (found) setActiveWorldviewSetId(found.id);
+      const currentNovel = novelsRef.current.find(n => n.id === activeNovelIdRef.current);
+      let found = targetSetName && currentNovel ? currentNovel.worldviewSets?.find(s => s.name === targetSetName) : null;
+      if (!found && activeWorldviewSetIdRef.current && currentNovel) {
+        found = currentNovel.worldviewSets?.find(s => s.id === activeWorldviewSetIdRef.current) || null;
       }
-      setShowOutline(true);
-      await waitForGeneration(() => handleGenerateWorldview('generate'));
+      if (found) {
+        setActiveWorldviewSetId(found.id);
+        activeWorldviewSetIdRef.current = found.id;
+      }
+      await waitForGeneration(
+        (override) => handleGenerateWorldview('generate', found?.id || activeWorldviewSetIdRef.current, 'module', override),
+        () => { handleSwitchModule('worldview'); setShowOutline(true); }
+      );
     } else if (type === 'plot_outline') {
-      handleSwitchModule('plotOutline');
-      if (targetSetName && activeNovel) {
-        const found = activeNovel.plotOutlineSets?.find(s => s.name === targetSetName);
-        if (found) setActivePlotOutlineSetId(found.id);
+      const currentNovel = novelsRef.current.find(n => n.id === activeNovelIdRef.current);
+      let found = targetSetName && currentNovel ? currentNovel.plotOutlineSets?.find(s => s.name === targetSetName) : null;
+      if (!found && activePlotOutlineSetIdRef.current && currentNovel) {
+        found = currentNovel.plotOutlineSets?.find(s => s.id === activePlotOutlineSetIdRef.current) || null;
       }
-      setShowOutline(true);
-      await waitForGeneration(() => handleGeneratePlotOutline('generate'));
+      if (found) {
+        setActivePlotOutlineSetId(found.id);
+        activePlotOutlineSetIdRef.current = found.id;
+      }
+      await waitForGeneration(
+        (override) => handleGeneratePlotOutline('generate', found?.id || activePlotOutlineSetIdRef.current, 'module', override),
+        () => { handleSwitchModule('plotOutline'); setShowOutline(true); }
+      );
     } else if (type === 'character') {
-      handleSwitchModule('characters');
-      if (targetSetName && activeNovel) {
-        const found = activeNovel.characterSets?.find(s => s.name === targetSetName);
-        if (found) handleSetActiveCharacterSetId(found.id);
+      const currentNovel = novelsRef.current.find(n => n.id === activeNovelIdRef.current);
+      let found = targetSetName && currentNovel ? currentNovel.characterSets?.find(s => s.name === targetSetName) : null;
+      if (!found && activeCharacterSetIdRef.current && currentNovel) {
+        found = currentNovel.characterSets?.find(s => s.id === activeCharacterSetIdRef.current) || null;
       }
-      setShowOutline(true);
-      await waitForGeneration(() => handleGenerateCharacters('generate'));
+      if (found) {
+        handleSetActiveCharacterSetId(found.id);
+        activeCharacterSetIdRef.current = found.id;
+      }
+      await waitForGeneration(
+        (override) => handleGenerateCharacters('generate', found?.id || activeCharacterSetIdRef.current, 'module', override),
+        () => { handleSwitchModule('characters'); setShowOutline(true); }
+      );
     } else if (type === 'outline') {
-      handleSwitchModule('outline');
-      if (targetSetName && activeNovel) {
-        const found = activeNovel.outlineSets?.find(s => s.name === targetSetName);
-        if (found) handleSetActiveOutlineSetId(found.id);
+      const currentNovel = novelsRef.current.find(n => n.id === activeNovelIdRef.current);
+      let found = targetSetName && currentNovel ? currentNovel.outlineSets?.find(s => s.name === targetSetName) : null;
+      if (!found && activeOutlineSetIdRef.current && currentNovel) {
+        found = currentNovel.outlineSets?.find(s => s.id === activeOutlineSetIdRef.current) || null;
       }
-      setShowOutline(true);
-      await waitForGeneration(() => handleGenerateOutline('append'));
+      if (found) {
+        handleSetActiveOutlineSetId(found.id);
+        activeOutlineSetIdRef.current = found.id;
+      }
+      await waitForGeneration(
+        (override) => handleGenerateOutline('append', found?.id || activeOutlineSetIdRef.current, 'module', override),
+        () => { handleSwitchModule('outline'); setShowOutline(true); }
+      );
     } else if (type === 'chapter') {
       setShowOutline(false);
-      // 自动化创作循环逻辑：如果还没开始自动写作，则触发
-      if (!isAutoWritingRef.current) {
+      // 自动化创作循环逻辑：如果还没开始自动写作，且没有等待指令，则触发
+      if (!isAutoWritingRef.current && !hasWaitAction) {
         const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId);
         if (currentSet && currentSet.items.length > 0) {
           // 自动勾选附加完整大纲
@@ -6455,11 +6593,45 @@ ${taskDescription}`
     }
   }
 
-  const handleCallPromptAgent = async (userInput: string, stage: string) => {
-    if (!activeNovel) return
+  const handleCallPromptAgent = async (userInput: string, stage: string): Promise<string | null> => {
+    if (!activeNovel) return null
     setIsCallingPromptAgent(true)
     try {
-      const systemPrompt = agentPromptConfig.promptAgentPrompt || PromptAgent.getSystemPrompt(stage)
+      // 映射阶段以获取对应的自定义覆盖提示词
+      const stageMap: Record<string, keyof AgentPromptConfig> = {
+        'inspiration': 'inspirationPrompt',
+        'worldview': 'worldviewPrompt',
+        'plot_outline': 'plotOutlinePrompt',
+        'plotOutline': 'plotOutlinePrompt',
+        'character': 'characterPrompt',
+        'characters': 'characterPrompt',
+        'outline': 'outlinePrompt'
+      };
+      
+      const customPromptKey = stageMap[stage];
+      const customPrompt = customPromptKey ? (agentPromptConfig[customPromptKey] as string) : null;
+
+      /**
+       * 提示词组装逻辑：
+       * 1. “通用提示词”作为全局基座，始终优先发送。
+       * 2. 如果有“阶段自定义提示词”，则追加在通用提示词之后。
+       * 3. 如果没有“阶段自定义提示词”，则追加内置的“专业阶段指导”。
+       */
+      const basePrompt = agentPromptConfig.promptAgentPrompt?.trim() || PromptAgent.getSystemPrompt(stage, false); // 如果通用为空，使用带Base的内置
+      
+      let systemPrompt = '';
+      if (agentPromptConfig.promptAgentPrompt?.trim()) {
+        // 如果有通用提示词，则：通用 + (阶段自定义 OR 内置专项)
+        const specializedPart = customPrompt?.trim() || PromptAgent.getSystemPrompt(stage, true);
+        systemPrompt = `${agentPromptConfig.promptAgentPrompt}\n\n${specializedPart}`;
+      } else {
+        // 如果通用提示词为空，则逻辑退回到：阶段自定义 OR 完整内置
+        systemPrompt = customPrompt?.trim() || PromptAgent.getSystemPrompt(stage, false);
+      }
+
+      // 应用全局宏替换
+      systemPrompt = AgentParser.replaceMacros(systemPrompt, agentUserInstruction);
+      
       const userPromptMsg = PromptAgent.buildUserPrompt(
         activeNovel,
         userInput,
@@ -6479,21 +6651,37 @@ ${taskDescription}`
       // Clean text and update UI
       const cleanContent = AgentParser.cleanText(response)
       
-      // We can either update the userInput directly if AI provides a "Recommended Prompt"
-      // Or show it in a chat-like way. For now, let's look for 【推荐提示词】 pattern
-      const promptMatch = cleanContent.match(/【推荐提示词】：?\s*([\s\S]*?)(?=\n\n【|$)/)
-      if (promptMatch && promptMatch[1]) {
-        setUserPrompt(promptMatch[1].trim())
+      // 增强的推荐提示词提取逻辑
+      let recommendedPrompt = null;
+      
+      // 策略 1: 寻找带标记的内容，支持 Markdown 代码块
+      // 优化：增加对“优化后的提示词”等变体标记的支持，并更精准地定位结尾
+      const strategy1 = cleanContent.match(/(?:【推荐提示词】|推荐提示词|优化后的提示词|生成提示词)[:：]?\s*(?:```(?:prompt|text|markdown)?\n)?([\s\S]*?)(?:\n```|(?=\n\n【)|(?=\n\n推荐参考)|$)/i);
+      
+      if (strategy1 && strategy1[1]) {
+        recommendedPrompt = strategy1[1].trim();
+      } else {
+        // 策略 2: 如果没有标记但内容较短且没有复杂结构，视为提示词
+        if (cleanContent.length < 1000 && !cleanContent.includes('【') && !cleanContent.includes('---')) {
+          recommendedPrompt = cleanContent.trim();
+        }
+      }
+      
+      if (recommendedPrompt) {
+        // 移除可能残余的 Markdown 标记
+        recommendedPrompt = recommendedPrompt.replace(/^```\w*\n?/, '').replace(/\n?```$/, '').trim();
+        setUserPrompt(recommendedPrompt);
+        terminal.log(`[PromptAgent] Extracted prompt: ${recommendedPrompt.substring(0, 50)}...`);
       }
 
       // Also log the full advice to terminal or a dedicated modal
       terminal.log(`[PromptAgent] Advice:\n${cleanContent}`)
       
-      // If there's a reason/explanation, maybe we should show it to the user
-      // For now, let's just update the input box.
+      return recommendedPrompt;
     } catch (e: any) {
       terminal.error(`[PromptAgent] Failed: ${e.message}`)
       setError(`提示词 Agent 运行失败: ${e.message}`)
+      return null;
     } finally {
       setIsCallingPromptAgent(false)
     }
@@ -9626,6 +9814,7 @@ ${taskDescription}`
         onStop={() => agentCoreRef.current?.stop()}
         onReset={() => agentCoreRef.current?.resetToIdle()}
         onFullReset={() => agentCoreRef.current?.fullReset()}
+        onUpdateManifest={(manifest) => agentCoreRef.current?.updateManifest(manifest)}
         agentPromptConfig={agentPromptConfig}
         setAgentPromptConfig={setAgentPromptConfig}
       />

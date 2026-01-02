@@ -580,7 +580,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                                     }
                                  }}
                                  className="w-full bg-gray-900 border border-gray-600 rounded-lg pl-9 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
-                                 placeholder="AI 助手：请给我一些关于..."
+                                 placeholder="输入创作指令，或点击右侧 AI 按钮优化..."
                               />
                            </div>
                            {isGenerating ? (
@@ -593,6 +593,21 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                               </button>
                            ) : (
                               <div className="flex gap-2">
+                                 {onCallPromptAgent && (
+                                    <button
+                                       onClick={() => userPrompt && onCallPromptAgent(userPrompt, 'worldview')}
+                                       disabled={isCallingPromptAgent || !userPrompt?.trim()}
+                                       className="px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                                       title="调用提示词 AI 增强指令"
+                                    >
+                                       {isCallingPromptAgent ? (
+                                          <div className="w-3.5 h-3.5 md:w-4 md:h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                       ) : (
+                                          <Wand2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                       )}
+                                       <span className="hidden md:inline">提示词 AI</span>
+                                    </button>
+                                 )}
                                  <button
                                     onClick={() => onGenerateWorldview('generate')}
                                     className="px-3 md:px-5 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 transition-all shadow-lg shrink-0 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white"

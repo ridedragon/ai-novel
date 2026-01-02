@@ -8,7 +8,7 @@ import {
   X
 } from 'lucide-react'
 import React from 'react'
-import { AgentModelConfig } from '../types'
+import { AgentModelConfig, AgentPromptConfig } from '../types'
 
 interface GlobalSettingsModalProps {
   isOpen: boolean
@@ -56,6 +56,8 @@ interface GlobalSettingsModalProps {
   setConcurrentOptimizationLimit: (val: number | '') => void
   agentModelConfig: AgentModelConfig
   setAgentModelConfig: (config: AgentModelConfig) => void
+  agentPromptConfig: AgentPromptConfig
+  setAgentPromptConfig: (config: AgentPromptConfig) => void
 }
 
 export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
@@ -103,7 +105,9 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   concurrentOptimizationLimit,
   setConcurrentOptimizationLimit,
   agentModelConfig,
-  setAgentModelConfig
+  setAgentModelConfig,
+  agentPromptConfig,
+  setAgentPromptConfig
 }) => {
   if (!isOpen) return null
 

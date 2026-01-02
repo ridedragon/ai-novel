@@ -231,6 +231,11 @@ export interface AgentAction {
 export interface AgentPromptConfig {
   directorPrompt: string;
   promptAgentPrompt: string;
+  inspirationPrompt?: string;
+  worldviewPrompt?: string;
+  plotOutlinePrompt?: string;
+  characterPrompt?: string;
+  outlinePrompt?: string;
 }
 
 export interface AgentModelConfig {

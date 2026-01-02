@@ -6,7 +6,8 @@ import { AgentAction } from '../types';
  */
 export class AgentParser {
   // 支持带闭合标签的 [ACTION:TYPE]payload[/ACTION] 或不带闭合标签的 [ACTION:TYPE]payload
-  private static ACTION_REGEX = /\[ACTION:(\w+)\](.*?)(?:\[\/ACTION\]|$)/gs;
+  // 优化正则：使用非贪婪匹配，并显式排除后续标签的干扰，提高对连续无闭合标签的兼容性
+  private static ACTION_REGEX = /\[ACTION:(\w+)\]([\s\S]*?)(?:\[\/ACTION\]|(?=\[ACTION:)|$)/g;
 
   /**
    * 从文本中提取所有 Action 指令
@@ -50,5 +51,16 @@ export class AgentParser {
     if (!type) return this.ACTION_REGEX.test(text);
     const specificRegex = new RegExp(`\\[ACTION:${type}\\]`, 'g');
     return specificRegex.test(text);
+  }
+
+  /**
+   * 替换文本中的全局宏
+   * @param text 原始文本
+   * @param userInstruction 用户输入的指令
+   */
+  public static replaceMacros(text: string, userInstruction?: string): string {
+    if (!text) return text;
+    const instruction = userInstruction || '';
+    return text.replace(/\{\{userinput\}\}/g, instruction);
   }
 }

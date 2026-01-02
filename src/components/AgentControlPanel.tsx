@@ -1,6 +1,6 @@
-import { Bot, ChevronDown, ChevronRight, Settings } from 'lucide-react';
+import { Bot, ChevronDown, ChevronRight, Edit2, Save, Settings, X } from 'lucide-react';
 import React, { useState } from 'react';
-import { AgentPromptConfig, Novel } from '../types';
+import { AgentManifest, AgentPromptConfig, Novel } from '../types';
 import { AgentCoreState } from '../utils/AgentCore';
 
 interface AgentControlPanelProps {
@@ -16,6 +16,7 @@ interface AgentControlPanelProps {
   onStop: () => void;
   onReset: () => void;
   onFullReset: () => void;
+  onUpdateManifest: (manifest: AgentManifest) => void;
   agentPromptConfig: AgentPromptConfig;
   setAgentPromptConfig: (config: AgentPromptConfig) => void;
 }
@@ -32,13 +33,38 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
   onStop,
   onReset,
   onFullReset,
+  onUpdateManifest,
   agentPromptConfig,
   setAgentPromptConfig
 }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showPromptSettings, setShowPromptSettings] = useState(false);
+  const [editingTaskIndex, setEditingTaskIndex] = useState<number | null>(null);
+  const [tempTitle, setTempTitle] = useState('');
+  const [tempDesc, setTempDesc] = useState('');
 
   if (!active) return null;
+
+  const handleEditTask = (index: number) => {
+    if (!coreState.manifest) return;
+    const task = coreState.manifest.tasks[index];
+    setEditingTaskIndex(index);
+    setTempTitle(task.title);
+    setTempDesc(task.description);
+  };
+
+  const handleSaveTask = () => {
+    if (!coreState.manifest || editingTaskIndex === null) return;
+    const newManifest = { ...coreState.manifest };
+    newManifest.tasks = [...newManifest.tasks];
+    newManifest.tasks[editingTaskIndex] = {
+      ...newManifest.tasks[editingTaskIndex],
+      title: tempTitle,
+      description: tempDesc
+    };
+    onUpdateManifest(newManifest);
+    setEditingTaskIndex(null);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={onClose}>
@@ -110,14 +136,58 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
           {coreState.status === 'AWAITING_USER' && coreState.manifest && (
             <div className="border border-slate-200 dark:border-slate-700 rounded p-3 bg-slate-50 dark:bg-slate-900/50">
               <h3 className="font-bold text-sm mb-2 text-slate-800 dark:text-slate-200">导演已完成规划:</h3>
-              <ul className="text-xs space-y-1">
+              <ul className="text-xs space-y-2">
                 {coreState.manifest.tasks.map((task, i) => (
-                  <li key={i} className="flex items-center space-x-2">
-                    <span className="text-slate-500 dark:text-slate-400 w-8 font-mono">#{i+1}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold shrink-0 ${
-                      task.type === 'chapter' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700'
-                    }`}>{task.type}</span>
-                    <span className="flex-1 truncate text-slate-700 dark:text-slate-300 font-medium">{task.title}</span>
+                  <li key={i} className="flex flex-col space-y-1 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-slate-500 dark:text-slate-400 w-8 font-mono">#{i+1}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold shrink-0 ${
+                        task.type === 'chapter' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700'
+                      }`}>{task.type}</span>
+                      
+                      {editingTaskIndex === i ? (
+                        <input
+                          value={tempTitle}
+                          onChange={(e) => setTempTitle(e.target.value)}
+                          className="flex-1 px-2 py-1 text-xs font-bold border-2 border-indigo-500 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none shadow-sm"
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="flex-1 truncate text-slate-700 dark:text-slate-300 font-medium">{task.title}</span>
+                      )}
+
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {editingTaskIndex === i ? (
+                          <>
+                            <button onClick={handleSaveTask} className="p-1 text-green-600 hover:bg-green-50 rounded" title="保存">
+                              <Save className="w-3 h-3" />
+                            </button>
+                            <button onClick={() => setEditingTaskIndex(null)} className="p-1 text-slate-400 hover:bg-slate-200 rounded" title="取消">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </>
+                        ) : (
+                          <button onClick={() => handleEditTask(i)} className="p-1 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded" title="编辑任务">
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {(editingTaskIndex === i || (task.description && task.description.length > 0)) && (
+                      <div className="pl-10">
+                        {editingTaskIndex === i ? (
+                          <textarea
+                            value={tempDesc}
+                            onChange={(e) => setTempDesc(e.target.value)}
+                            className="w-full h-40 p-3 text-xs border-2 border-indigo-500 rounded bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-mono outline-none resize-none shadow-inner leading-relaxed"
+                            placeholder="任务描述（支持指令如 [ACTION:XXX]）"
+                          />
+                        ) : (
+                          <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-3 italic leading-relaxed">{task.description}</p>
+                        )}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -155,15 +225,36 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Bot className="w-3 h-3 text-indigo-400" />
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">提示词 Agent (导师) 提示词</label>
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">提示词 Agent (导师) 提示词 - 通用</label>
                   </div>
                   <textarea
                     value={agentPromptConfig.promptAgentPrompt}
                     onChange={(e) => setAgentPromptConfig({ ...agentPromptConfig, promptAgentPrompt: e.target.value })}
-                    className="w-full h-40 p-3 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none resize-none transition-all"
-                    placeholder="输入提示词 Agent 的系统提示词..."
+                    className="w-full h-32 p-3 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none resize-none transition-all"
+                    placeholder="通用提示词（留空则使用内置默认指令）"
                   />
                 </div>
+
+                {[
+                  { label: '灵感阶段 提示词', key: 'inspirationPrompt' },
+                  { label: '世界观阶段 提示词', key: 'worldviewPrompt' },
+                  { label: '粗纲阶段 提示词', key: 'plotOutlinePrompt' },
+                  { label: '角色集阶段 提示词', key: 'characterPrompt' },
+                  { label: '大纲阶段 提示词', key: 'outlinePrompt' }
+                ].map((item) => (
+                  <div key={item.key} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Bot className="w-3 h-3 text-indigo-400" />
+                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{item.label}</label>
+                    </div>
+                    <textarea
+                      value={(agentPromptConfig as any)[item.key] || ''}
+                      onChange={(e) => setAgentPromptConfig({ ...agentPromptConfig, [item.key]: e.target.value })}
+                      className="w-full h-32 p-3 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none resize-none transition-all"
+                      placeholder={`${item.label}（留空则使用内置对应阶段指令）`}
+                    />
+                  </div>
+                ))}
                 
                 <p className="text-[10px] text-slate-500 italic">
                   💡 提示词修改后将立即生效于下次 Agent 任务。
