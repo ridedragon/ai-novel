@@ -5217,11 +5217,19 @@ ${taskDescription}`
     await autoWriteLoop(outline, index + preparedBatch.length, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline, outlineSetId)
   }
 
-  const startAutoWriting = () => {
-     const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
+  const startAutoWriting = (outlineSetId?: string | null) => {
+     // 如果外部指定了 ID，优先使用，否则使用当前 UI 选中的 ID
+     const effectiveId = (outlineSetId && typeof outlineSetId === 'string') ? outlineSetId : activeOutlineSetId;
+     
+     const currentSet = activeNovel?.outlineSets?.find(s => s.id === effectiveId)
      if (!currentSet || currentSet.items.length === 0) {
         setError('请先生成或选择一个有效的大纲')
         return
+     }
+
+     // 如果指定了有效的大纲集，自动同步到 UI 状态
+     if (outlineSetId && typeof outlineSetId === 'string' && outlineSetId !== activeOutlineSetId) {
+        handleSetActiveOutlineSetId(outlineSetId);
      }
      if (!apiKey) {
         setError('请配置 API Key')

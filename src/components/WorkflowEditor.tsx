@@ -218,7 +218,7 @@ export interface WorkflowEditorProps {
   onClose: () => void;
   activeNovel: Novel | undefined;
   onUpdateNovel?: (novel: Novel) => void;
-  onStartAutoWrite?: () => void;
+  onStartAutoWrite?: (outlineSetId?: string | null) => void;
   globalConfig?: {
     apiKey: string;
     baseUrl: string;
@@ -289,11 +289,13 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
     const savedWorkflow = localStorage.getItem('novel_workflow');
     if (savedWorkflow) {
       try {
-        const { nodes: savedNodes, edges: savedEdges } = JSON.parse(savedWorkflow);
+        const { nodes: savedNodes, edges: savedEdges, currentNodeIndex: savedIndex } = JSON.parse(savedWorkflow);
         const restoredNodes = (savedNodes || []).map((n: WorkflowNode) => ({
           ...n,
           data: {
             ...n.data,
+            // 恢复时将“执行中”状态重置为“待处理”或“已完成/已失败”
+            status: n.data.status === 'executing' ? 'pending' : n.data.status,
             icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon,
             selectedWorldviewSets: n.data.selectedWorldviewSets || [],
             selectedCharacterSets: n.data.selectedCharacterSets || [],
@@ -304,11 +306,23 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
         }));
         setNodes(restoredNodes);
         setEdges(savedEdges);
+        if (savedIndex !== undefined && savedIndex !== -1) {
+          setCurrentNodeIndex(savedIndex);
+          setIsPaused(true);
+        }
       } catch (e) {
         console.error('Failed to load workflow', e);
       }
     }
   }, [isOpen, setNodes, setEdges]);
+
+  // 自动持久化状态
+  useEffect(() => {
+    if (nodes.length > 0 || edges.length > 0) {
+      const workflow = { nodes, edges, currentNodeIndex };
+      localStorage.setItem('novel_workflow', JSON.stringify(workflow));
+    }
+  }, [nodes, edges, currentNodeIndex]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -1020,6 +1034,10 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
   };
 
   const stopWorkflow = () => {
+    // 停止时显式保存进度
+    const workflow = { nodes, edges, currentNodeIndex };
+    localStorage.setItem('novel_workflow', JSON.stringify(workflow));
+    
     setStopRequested(true);
     stopRequestedRef.current = true;
     if (abortControllerRef.current) {
@@ -1039,6 +1057,15 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
       <div className="bg-gray-900 w-full h-full md:w-[98%] md:h-[95vh] md:rounded-xl shadow-2xl border-none md:border border-gray-700 flex flex-col overflow-hidden relative">
+        {/* 执行中状态提示 */}
+        {isRunning && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[130] bg-indigo-600/90 border border-indigo-400 px-4 py-2 rounded-full flex items-center gap-3 shadow-2xl animate-in zoom-in-95 duration-300 backdrop-blur-md">
+            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+            <span className="text-xs font-bold text-white tracking-wide">
+              正在执行: {nodes.sort((a, b) => a.position.y - b.position.y)[currentNodeIndex]?.data.typeLabel}
+            </span>
+          </div>
+        )}
         {/* 顶部报错 UI */}
         {error && (
           <div className="absolute top-0 left-0 right-0 z-[130] bg-red-900/90 border-b border-red-500 px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300 backdrop-blur-md">
