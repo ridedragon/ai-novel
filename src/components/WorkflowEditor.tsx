@@ -20,6 +20,8 @@ import {
   CheckSquare,
   ChevronDown,
   Cpu,
+  Download,
+  Edit2,
   FileText,
   FolderPlus,
   Globe,
@@ -32,6 +34,7 @@ import {
   Save,
   Square,
   Trash2,
+  Upload,
   User,
   Users,
   Workflow,
@@ -81,6 +84,15 @@ export interface WorkflowNodeData extends Record<string, unknown> {
 }
 
 export type WorkflowNode = Node<WorkflowNodeData>;
+
+export interface WorkflowData {
+  id: string;
+  name: string;
+  nodes: WorkflowNode[];
+  edges: Edge[];
+  currentNodeIndex?: number;
+  lastModified: number;
+}
 
 // --- 自定义节点组件 ---
 
@@ -255,7 +267,12 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
   const { isOpen, onClose, activeNovel, onSelectChapter, onUpdateNovel, onStartAutoWrite, globalConfig } = props;
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [workflows, setWorkflows] = useState<WorkflowData[]>([]);
+  const [activeWorkflowId, setActiveWorkflowId] = useState<string>('default');
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showWorkflowMenu, setShowWorkflowMenu] = useState(false);
+  const [isEditingWorkflowName, setIsEditingWorkflowName] = useState(false);
+  const [newWorkflowName, setNewWorkflowName] = useState('');
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -267,6 +284,7 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
 
   const stopRequestedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isInitialLoadRef = useRef(true);
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
 
@@ -302,46 +320,219 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
     setAllPresets(loaded);
   }, [isOpen]);
 
-  // 加载保存的工作流
+  // 加载保存的工作流列表
   useEffect(() => {
-    if (!isOpen) return;
-    const savedWorkflow = localStorage.getItem('novel_workflow');
-    if (savedWorkflow) {
+    // 如果已经初始化过，且当前正在运行，不要重新从本地存储加载，避免覆盖内存中的执行状态
+    if (!isInitialLoadRef.current && isRunning) return;
+    if (!isOpen && !isInitialLoadRef.current) return;
+
+    const savedWorkflows = localStorage.getItem('novel_workflows');
+    const lastActiveId = localStorage.getItem('active_workflow_id');
+    
+    let loadedWorkflows: WorkflowData[] = [];
+    if (savedWorkflows) {
       try {
-        const { nodes: savedNodes, edges: savedEdges, currentNodeIndex: savedIndex } = JSON.parse(savedWorkflow);
-        const restoredNodes = (savedNodes || []).map((n: WorkflowNode) => ({
-          ...n,
-          data: {
-            ...n.data,
-            // 恢复时保持原有状态，确保“执行中”状态能维持发光效果
-            status: n.data.status,
-            icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon,
-            selectedWorldviewSets: n.data.selectedWorldviewSets || [],
-            selectedCharacterSets: n.data.selectedCharacterSets || [],
-            selectedOutlineSets: n.data.selectedOutlineSets || [],
-            selectedInspirationSets: n.data.selectedInspirationSets || [],
-            outputEntries: n.data.outputEntries || (n.data.outputContent ? [{ id: '1', title: '生成内容', content: n.data.outputContent as string }] : []),
-          }
-        }));
-        setNodes(restoredNodes);
-        setEdges(savedEdges);
-        if (savedIndex !== undefined && savedIndex !== -1) {
-          setCurrentNodeIndex(savedIndex);
-          setIsPaused(true);
-        }
+        loadedWorkflows = JSON.parse(savedWorkflows);
       } catch (e) {
-        console.error('Failed to load workflow', e);
+        console.error('Failed to load workflows', e);
       }
     }
-  }, [isOpen, setNodes, setEdges]);
+
+    // 兼容旧版本数据
+    if (loadedWorkflows.length === 0) {
+      const oldWorkflow = localStorage.getItem('novel_workflow');
+      if (oldWorkflow) {
+        try {
+          const { nodes: oldNodes, edges: oldEdges } = JSON.parse(oldWorkflow);
+          loadedWorkflows = [{
+            id: 'default',
+            name: '默认工作流',
+            nodes: oldNodes,
+            edges: oldEdges,
+            lastModified: Date.now()
+          }];
+        } catch (e) {}
+      } else {
+        loadedWorkflows = [{
+          id: 'default',
+          name: '默认工作流',
+          nodes: [],
+          edges: [],
+          lastModified: Date.now()
+        }];
+      }
+    }
+
+    setWorkflows(loadedWorkflows);
+    
+    const targetId = lastActiveId && loadedWorkflows.find(w => w.id === lastActiveId)
+      ? lastActiveId
+      : loadedWorkflows[0].id;
+    
+    setActiveWorkflowId(targetId);
+    loadWorkflow(targetId, loadedWorkflows);
+    isInitialLoadRef.current = false;
+  }, [isOpen]);
+
+  const loadWorkflow = (id: string, workflowList: WorkflowData[]) => {
+    // 如果工作流正在运行，不要从缓存恢复状态，避免覆盖内存中最新的执行进度
+    if (isRunning) return;
+
+    const workflow = workflowList.find(w => w.id === id);
+    if (workflow) {
+      const restoredNodes = (workflow.nodes || []).map((n: WorkflowNode) => ({
+        ...n,
+        data: {
+          ...n.data,
+          status: n.data.status,
+          icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon,
+          selectedWorldviewSets: n.data.selectedWorldviewSets || [],
+          selectedCharacterSets: n.data.selectedCharacterSets || [],
+          selectedOutlineSets: n.data.selectedOutlineSets || [],
+          selectedInspirationSets: n.data.selectedInspirationSets || [],
+          outputEntries: n.data.outputEntries || [],
+        }
+      }));
+      setNodes(restoredNodes);
+      setEdges(workflow.edges || []);
+      setCurrentNodeIndex(workflow.currentNodeIndex !== undefined ? workflow.currentNodeIndex : -1);
+      
+      // 只有当有明确的执行进度且未在运行时，才设为暂停状态以便恢复
+      if (workflow.currentNodeIndex !== undefined && workflow.currentNodeIndex !== -1) {
+        setIsPaused(true);
+      } else {
+        setIsPaused(false);
+      }
+    }
+  };
 
   // 自动持久化状态
   useEffect(() => {
-    if (nodes.length > 0 || edges.length > 0) {
-      const workflow = { nodes, edges, currentNodeIndex };
-      localStorage.setItem('novel_workflow', JSON.stringify(workflow));
+    // 即使界面关闭，如果正在后台运行，也需要持续保存进度
+    if ((!isOpen && !isRunning) || workflows.length === 0) return;
+    
+    setWorkflows(prevWorkflows => {
+      const updatedWorkflows = prevWorkflows.map(w => {
+        if (w.id === activeWorkflowId) {
+          return {
+            ...w,
+            nodes,
+            edges,
+            currentNodeIndex,
+            lastModified: Date.now()
+          };
+        }
+        return w;
+      });
+      
+      localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
+      localStorage.setItem('active_workflow_id', activeWorkflowId);
+      
+      return updatedWorkflows;
+    });
+  }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning]);
+
+  const switchWorkflow = (id: string) => {
+    setActiveWorkflowId(id);
+    loadWorkflow(id, workflows);
+    setShowWorkflowMenu(false);
+  };
+
+  const createNewWorkflow = () => {
+    const newId = `wf_${Date.now()}`;
+    const newWf: WorkflowData = {
+      id: newId,
+      name: `新工作流 ${workflows.length + 1}`,
+      nodes: [],
+      edges: [],
+      lastModified: Date.now()
+    };
+    const updated = [...workflows, newWf];
+    setWorkflows(updated);
+    switchWorkflow(newId);
+  };
+
+  const deleteWorkflow = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (workflows.length <= 1) {
+      setError('无法删除最后一个工作流');
+      return;
     }
-  }, [nodes, edges, currentNodeIndex]);
+    if (confirm('确定要删除这个工作流吗？')) {
+      const updated = workflows.filter(w => w.id !== id);
+      setWorkflows(updated);
+      if (activeWorkflowId === id) {
+        switchWorkflow(updated[0].id);
+      }
+    }
+  };
+
+  const renameWorkflow = (id: string, newName: string) => {
+    if (!newName.trim()) return;
+    setWorkflows(prev => prev.map(w => w.id === id ? { ...w, name: newName } : w));
+    setIsEditingWorkflowName(false);
+  };
+
+  const exportWorkflow = (id: string) => {
+    const workflow = workflows.find(w => w.id === id);
+    if (!workflow) return;
+    
+    // 导出时移除临时状态
+    const exportData = {
+      ...workflow,
+      nodes: workflow.nodes.map(n => ({
+        ...n,
+        data: {
+          ...n.data,
+          status: 'pending',
+          outputEntries: []
+        }
+      })),
+      currentNodeIndex: -1
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${workflow.name}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const importWorkflow = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const imported = JSON.parse(event.target?.result as string) as WorkflowData;
+        if (!imported.nodes || !imported.edges) {
+          throw new Error('无效的工作流文件格式');
+        }
+        
+        const newId = `wf_imported_${Date.now()}`;
+        const newWf: WorkflowData = {
+          ...imported,
+          id: newId,
+          name: `${imported.name} (导入)`,
+          lastModified: Date.now()
+        };
+        
+        setWorkflows(prev => [...prev, newWf]);
+        switchWorkflow(newId);
+        setError(null);
+      } catch (err: any) {
+        setError(`导入失败: ${err.message}`);
+      }
+    };
+    reader.readAsText(file);
+    // 重置 input
+    e.target.value = '';
+  };
 
   // 只有在组件真正卸载（如切换页面）时才中止执行
   // 关闭弹窗（isOpen 变为 false）不应停止执行，实现后台运行
@@ -656,6 +847,17 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
             const updatedNovel = { ...localNovel };
             let changed = false;
 
+            // 自动创建与目录名称相同的分卷
+            const volumeResult = createSetIfNotExist(updatedNovel.volumes, currentWorkflowFolder, () => ({
+              id: `vol_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+              title: currentWorkflowFolder,
+              collapsed: false,
+            }));
+            if (volumeResult.isNew) {
+              updatedNovel.volumes = [...(updatedNovel.volumes || []), volumeResult.set];
+              changed = true;
+            }
+
             const worldviewResult = createSetIfNotExist(updatedNovel.worldviewSets, currentWorkflowFolder, () => ({
               id: `wv_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
               name: currentWorkflowFolder,
@@ -720,6 +922,10 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
                 selectedCharacterSets: (n.data.selectedCharacterSets as string[] || []).map(id => id === oldPendingId ? characterResult.id : id),
                 selectedOutlineSets: (n.data.selectedOutlineSets as string[] || []).map(id => id === oldPendingId ? outlineResult.id : id),
                 selectedInspirationSets: (n.data.selectedInspirationSets as string[] || []).map(id => id === oldPendingId ? inspirationResult.id : id),
+                // 关键修复：自动将生成的章节关联到新创建的分卷，除非用户已手动指定
+                targetVolumeId: (n.data.typeKey === 'chapter' && (!n.data.targetVolumeId || n.data.targetVolumeId === ''))
+                  ? volumeResult.id
+                  : n.data.targetVolumeId
               }
             })));
           }
@@ -875,8 +1081,37 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
             }
           }
 
-          // 2. 处理分卷逻辑：如果是新建分卷，先在小说中创建它
+          // 2. 确定最终分卷 ID (此处必须实时从 localNovel 中获取，确保能感知到刚创建的分卷)
           let finalVolumeId = node.data.targetVolumeId as string;
+          
+          // 获取最新的分卷列表（从执行中的内存状态获取）
+          const latestVolumes = localNovel.volumes || [];
+
+          // 优先级 1: 如果节点已经显式关联了某个真实分卷 ID，且该分卷依然存在
+          if (finalVolumeId && finalVolumeId !== 'NEW_VOLUME') {
+            const exists = latestVolumes.some(v => v.id === finalVolumeId);
+            if (!exists) finalVolumeId = ''; // 如果关联的分卷被删了，重置它
+          }
+
+          // 优先级 2: 自动匹配逻辑 (针对“自动匹配分卷”模式)
+          if (!finalVolumeId || finalVolumeId === '') {
+            // 尝试匹配与当前工作流文件夹同名的分卷
+            const matchedVol = latestVolumes.find(v => v.title === currentWorkflowFolder);
+            if (matchedVol) {
+              finalVolumeId = matchedVol.id;
+              // 关键：必须立即将匹配到的 ID 写回节点状态，确保 AutoWriteEngine 拿到的是确定值
+              updateNodeData(node.id, { targetVolumeId: finalVolumeId });
+            }
+          }
+
+          // 优先级 3: 兜底逻辑
+          if (!finalVolumeId || finalVolumeId === '') {
+            if (latestVolumes.length > 0) {
+              finalVolumeId = latestVolumes[0].id;
+              updateNodeData(node.id, { targetVolumeId: finalVolumeId });
+            }
+          }
+
           if (finalVolumeId === 'NEW_VOLUME' && node.data.targetVolumeName) {
             const newVolume = {
               id: `vol_${Date.now()}`,
@@ -1247,9 +1482,21 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
   };
 
   const stopWorkflow = () => {
-    // 停止时显式保存进度
-    const workflow = { nodes, edges, currentNodeIndex };
-    localStorage.setItem('novel_workflow', JSON.stringify(workflow));
+    // 停止时显式更新工作流列表并保存
+    const updatedWorkflows = workflows.map(w => {
+      if (w.id === activeWorkflowId) {
+        return {
+          ...w,
+          nodes,
+          edges,
+          currentNodeIndex,
+          lastModified: Date.now()
+        };
+      }
+      return w;
+    });
+    setWorkflows(updatedWorkflows);
+    localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
     
     setStopRequested(true);
     stopRequestedRef.current = true;
@@ -1301,13 +1548,109 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
         )}
         {/* Header */}
         <div className="p-4 border-b border-gray-700 bg-gray-800 flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-900/20">
-              <Workflow className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 border-r border-gray-700 pr-4">
+              <div className="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-900/20">
+                <Workflow className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-gray-100 leading-tight">工作流编辑器</h3>
+                <p className="text-xs text-gray-500">串联多步骤自动化任务</p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-bold text-lg text-gray-100 leading-tight">工作流编辑器</h3>
-              <p className="text-xs text-gray-500">串联多步骤自动化任务</p>
+
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                {isEditingWorkflowName ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={newWorkflowName}
+                      onChange={(e) => setNewWorkflowName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') renameWorkflow(activeWorkflowId, newWorkflowName);
+                        if (e.key === 'Escape') setIsEditingWorkflowName(false);
+                      }}
+                      onBlur={() => renameWorkflow(activeWorkflowId, newWorkflowName)}
+                      className="bg-gray-700 border border-indigo-500 rounded px-2 py-1 text-sm text-white outline-none"
+                    />
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowWorkflowMenu(!showWorkflowMenu)}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-700/50 hover:bg-gray-700 text-gray-200 rounded-lg text-sm font-medium transition-all border border-gray-600/50"
+                  >
+                    <span className="font-bold text-indigo-400">
+                      {workflows.find(w => w.id === activeWorkflowId)?.name || '选择工作流'}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showWorkflowMenu ? 'rotate-180' : ''}`} />
+                  </button>
+                )}
+                {!isEditingWorkflowName && (
+                  <button
+                    onClick={() => {
+                      setNewWorkflowName(workflows.find(w => w.id === activeWorkflowId)?.name || '');
+                      setIsEditingWorkflowName(true);
+                    }}
+                    className="p-1.5 text-gray-500 hover:text-indigo-400 transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {showWorkflowMenu && (
+                <div className="absolute top-full left-0 mt-2 w-64 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl py-2 z-[150] animate-in slide-in-from-top-2 duration-200">
+                  <div className="px-3 py-1 mb-1 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                    切换工作流
+                  </div>
+                  <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                    {workflows.map(wf => (
+                      <div
+                        key={wf.id}
+                        onClick={() => switchWorkflow(wf.id)}
+                        className={`group px-3 py-2.5 flex items-center justify-between cursor-pointer transition-colors ${wf.id === activeWorkflowId ? 'bg-indigo-600/20 text-indigo-400' : 'text-gray-300 hover:bg-gray-700'}`}
+                      >
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-medium truncate">{wf.name}</span>
+                          <span className="text-[10px] opacity-50">{new Date(wf.lastModified).toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                          <button
+                            onClick={(e) => deleteWorkflow(wf.id, e)}
+                            className="p-1 hover:text-red-400 transition-colors"
+                            title="删除"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-gray-700 px-2 space-y-1">
+                    <button
+                      onClick={createNewWorkflow}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-indigo-400 hover:bg-indigo-600/10 rounded-lg transition-colors font-bold"
+                    >
+                      <Plus className="w-4 h-4" />
+                      创建新工作流
+                    </button>
+                    <label className="w-full flex items-center gap-2 px-3 py-2 text-sm text-emerald-400 hover:bg-emerald-600/10 rounded-lg transition-colors font-bold cursor-pointer">
+                      <Upload className="w-4 h-4" />
+                      导入工作流
+                      <input type="file" accept=".json" onChange={importWorkflow} className="hidden" />
+                    </label>
+                    <button
+                      onClick={() => exportWorkflow(activeWorkflowId)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-amber-400 hover:bg-amber-600/10 rounded-lg transition-colors font-bold"
+                    >
+                      <Download className="w-4 h-4" />
+                      导出当前工作流
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1518,7 +1861,7 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
                             onChange={(e) => updateNodeData(editingNode.id, { targetVolumeId: e.target.value, targetVolumeName: '' })}
                             className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all"
                           >
-                            <option value="">-- 未分卷 --</option>
+                            <option value="">{pendingFolders.length > 0 ? `-- 自动匹配分卷 (${pendingFolders[0]}) --` : '-- 未分卷 --'}</option>
                             <option value="NEW_VOLUME">+ 新建分卷...</option>
                             {activeNovel.volumes.map(v => (
                               <option key={v.id} value={v.id}>{v.title}</option>

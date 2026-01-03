@@ -50,6 +50,7 @@ import terminal from 'virtual:terminal'
 import { CharacterManager } from './components/CharacterManager'
 import { GlobalSettingsModal } from './components/GlobalSettingsModal'
 import { InspirationManager } from './components/InspirationManager'
+import { MobileWorkflowEditor } from './components/MobileWorkflowEditor'
 import { OutlineManager } from './components/OutlineManager'
 import { PlotOutlineManager } from './components/PlotOutlineManager'
 import { ReferenceManager } from './components/ReferenceManager'
@@ -1180,6 +1181,15 @@ function App() {
   const [showWorkflowEditor, setShowWorkflowEditor] = useState(false)
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Main Chat Reference Selection State
   const [selectedWorldviewSetIdForChat, setSelectedWorldviewSetIdForChat] = useState<string | null>(null)
@@ -9012,10 +9022,60 @@ ${taskDescription}`
       )}
 
       {/* Workflow Editor */}
-      <WorkflowEditor
-        isOpen={showWorkflowEditor}
-        onClose={() => setShowWorkflowEditor(false)}
-        activeNovel={activeNovel}
+      {isMobile ? (
+        <MobileWorkflowEditor
+          isOpen={showWorkflowEditor}
+          onClose={() => setShowWorkflowEditor(false)}
+          activeNovel={activeNovel}
+          onSelectChapter={(id) => {
+            setActiveChapterId(id)
+            setShowWorkflowEditor(false)
+          }}
+          onStartAutoWrite={startAutoWriting}
+          globalConfig={{
+            apiKey,
+            baseUrl,
+            model,
+            outlineModel,
+            characterModel,
+            worldviewModel,
+            inspirationModel,
+            plotOutlineModel,
+            optimizeModel,
+            analysisModel,
+            contextLength,
+            maxReplyLength,
+            temperature,
+            stream,
+            maxRetries,
+            globalCreationPrompt,
+            longTextMode,
+            autoOptimize,
+            consecutiveChapterCount: Number(consecutiveChapterCount),
+            smallSummaryInterval: Number(smallSummaryInterval),
+            bigSummaryInterval: Number(bigSummaryInterval),
+            smallSummaryPrompt,
+            bigSummaryPrompt,
+            prompts,
+            getActiveScripts,
+            onChapterComplete: async (chapterId, content) => {
+              if (longTextModeRef.current) {
+                await checkAndGenerateSummary(chapterId, content);
+              }
+              if (autoOptimizeRef.current) {
+                setOptimizationQueue(prev => [...prev, chapterId]);
+              }
+            }
+          }}
+          onUpdateNovel={(updatedNovel) => {
+            setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));
+          }}
+        />
+      ) : (
+        <WorkflowEditor
+          isOpen={showWorkflowEditor}
+          onClose={() => setShowWorkflowEditor(false)}
+          activeNovel={activeNovel}
         onSelectChapter={(id) => {
           setActiveChapterId(id)
           setLeftPanelActiveTab('chapters')
@@ -9060,6 +9120,7 @@ ${taskDescription}`
           setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));
         }}
       />
+      )}
 
     </div>
   )
