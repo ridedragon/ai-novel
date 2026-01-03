@@ -114,6 +114,13 @@ export interface ReferenceFile {
   type: string;
   size: number;
   lastModified: number;
+  parentId?: string; // 所属文件夹ID
+}
+
+export interface ReferenceFolder {
+  id: string;
+  name: string;
+  parentId?: string; // 父文件夹ID，支持多级
 }
 
 export interface Novel {
@@ -132,6 +139,7 @@ export interface Novel {
   inspirationSets?: InspirationSet[];
   plotOutlineSets?: PlotOutlineSet[];
   referenceFiles?: ReferenceFile[];
+  referenceFolders?: ReferenceFolder[];
 }
 
 export interface PromptItem {

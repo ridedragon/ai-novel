@@ -2,6 +2,8 @@ import {
   Book,
   Check,
   ChevronDown,
+  FileText,
+  Folder,
   Globe,
   Lightbulb,
   Users
@@ -11,8 +13,8 @@ import { Novel } from '../types'
 
 interface ReferenceSelectorProps {
   novel: Novel | undefined
-  type: 'worldview' | 'character' | 'inspiration' | 'outline'
-  selectedSetId: string | null
+  type: 'worldview' | 'character' | 'inspiration' | 'outline' | 'reference'
+  selectedSetId: string | null | string[] // 支持多选setId（目前仅用于reference）
   selectedItemIndices: number[]
   onSelectSet: (setId: string | null) => void
   onToggleItem: (setId: string, index: number) => void
@@ -58,6 +60,7 @@ export const ReferenceSelector: React.FC<ReferenceSelectorProps> = ({
       case 'character': return <Users className="w-3 h-3" />
       case 'inspiration': return <Lightbulb className="w-3 h-3" />
       case 'outline': return <Book className="w-3 h-3" />
+      case 'reference': return <FileText className="w-3 h-3" />
     }
   }
 
@@ -66,7 +69,8 @@ export const ReferenceSelector: React.FC<ReferenceSelectorProps> = ({
       worldview: '世界观',
       character: '角色集',
       inspiration: '灵感',
-      outline: '粗纲'
+      outline: '粗纲',
+      reference: '资料库'
     }
     
     if (selectedSetId) {
@@ -74,7 +78,8 @@ export const ReferenceSelector: React.FC<ReferenceSelectorProps> = ({
         worldview: novel.worldviewSets,
         character: novel.characterSets,
         inspiration: novel.inspirationSets,
-        outline: novel.outlineSets
+        outline: novel.outlineSets,
+        reference: novel.referenceFiles // 资料库可能直接选文件
       }
       const set = (sets[type] as any[])?.find(s => s.id === selectedSetId)
       if (set) {
@@ -94,6 +99,7 @@ export const ReferenceSelector: React.FC<ReferenceSelectorProps> = ({
       case 'character': return novel.characterSets || []
       case 'inspiration': return novel.inspirationSets || []
       case 'outline': return novel.outlineSets || []
+      case 'reference': return [] // 资料库逻辑较特殊
     }
   }
 
@@ -125,7 +131,44 @@ export const ReferenceSelector: React.FC<ReferenceSelectorProps> = ({
             >
               不使用
             </button>
-            {sets.map((set: any) => (
+            {type === 'reference' ? (
+              <div className="p-1 space-y-1">
+                {(novel.referenceFolders || []).map(folder => (
+                  <button
+                    key={folder.id}
+                    onClick={() => onToggleItem('folder', novel.referenceFolders?.indexOf(folder) || 0)}
+                    className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-700 flex items-center justify-between rounded ${
+                      (selectedSetId === 'folder' || (Array.isArray(selectedSetId) && selectedSetId.includes('folder'))) && selectedItemIndices.includes(novel.referenceFolders?.indexOf(folder) || 0)
+                        ? 'text-[var(--theme-color-light)] bg-gray-700/50'
+                        : 'text-gray-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <Folder className="w-3 h-3 text-yellow-500/70" />
+                      <span className="truncate">{folder.name}</span>
+                    </div>
+                    {(selectedSetId === 'folder' || (Array.isArray(selectedSetId) && selectedSetId.includes('folder'))) && selectedItemIndices.includes(novel.referenceFolders?.indexOf(folder) || 0) && <Check className="w-3 h-3" />}
+                  </button>
+                ))}
+                {(novel.referenceFiles || []).map(file => (
+                  <button
+                    key={file.id}
+                    onClick={() => onToggleItem('file', novel.referenceFiles?.indexOf(file) || 0)}
+                    className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-700 flex items-center justify-between rounded ${
+                      (selectedSetId === 'file' || (Array.isArray(selectedSetId) && selectedSetId.includes('file'))) && selectedItemIndices.includes(novel.referenceFiles?.indexOf(file) || 0)
+                        ? 'text-[var(--theme-color-light)] bg-gray-700/50'
+                        : 'text-gray-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate text-gray-300">
+                      <FileText className="w-3 h-3 text-blue-400/70" />
+                      <span className="truncate">{file.name}</span>
+                    </div>
+                    {(selectedSetId === 'file' || (Array.isArray(selectedSetId) && selectedSetId.includes('file'))) && selectedItemIndices.includes(novel.referenceFiles?.indexOf(file) || 0) && <Check className="w-3 h-3" />}
+                  </button>
+                ))}
+              </div>
+            ) : sets.map((set: any) => (
               <div key={set.id} className="border-b border-gray-700 last:border-0">
                 <button
                   onClick={() => onSelectSet(set.id === selectedSetId ? null : set.id)}

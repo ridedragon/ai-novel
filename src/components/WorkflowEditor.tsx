@@ -260,6 +260,8 @@ export interface WorkflowEditorProps {
     prompts: PromptItem[];
     getActiveScripts: () => RegexScript[];
     onChapterComplete: (chapterId: number, content: string) => Promise<void>;
+    updateAutoOptimize?: (val: boolean) => void;
+    updateTwoStepOptimization?: (val: boolean) => void;
   };
 }
 
@@ -1880,14 +1882,26 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
                       </div>
                       <div className="flex items-end gap-4 pb-1">
                         <button
-                          onClick={() => updateNodeData(editingNode.id, { autoOptimize: !editingNode.data.autoOptimize })}
+                          onClick={() => {
+                            const newVal = !editingNode.data.autoOptimize;
+                            updateNodeData(editingNode.id, { autoOptimize: newVal });
+                            if (globalConfig?.updateAutoOptimize) {
+                              globalConfig.updateAutoOptimize(newVal);
+                            }
+                          }}
                           className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${editingNode.data.autoOptimize ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
                         >
                           <div className={`w-3 h-3 rounded-full ${editingNode.data.autoOptimize ? 'bg-purple-500 animate-pulse' : 'bg-gray-600'}`} />
                           自动优化
                         </button>
                         <button
-                          onClick={() => updateNodeData(editingNode.id, { twoStepOptimization: !editingNode.data.twoStepOptimization })}
+                          onClick={() => {
+                            const newVal = !editingNode.data.twoStepOptimization;
+                            updateNodeData(editingNode.id, { twoStepOptimization: newVal });
+                            if (globalConfig?.updateTwoStepOptimization) {
+                              globalConfig.updateTwoStepOptimization(newVal);
+                            }
+                          }}
                           className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${editingNode.data.twoStepOptimization ? 'bg-pink-500/20 text-pink-300 border-pink-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
                         >
                           <div className={`w-3 h-3 rounded-full ${editingNode.data.twoStepOptimization ? 'bg-pink-500 animate-pulse' : 'bg-gray-600'}`} />

@@ -67,6 +67,13 @@ interface WorldviewManagerProps {
   onToggleOutlineItem: (setId: string, index: number) => void
   showOutlineSelector: boolean
   onToggleOutlineSelector: (open: boolean) => void
+
+  selectedReferenceType: string | null
+  selectedReferenceIndices: number[]
+  onSelectReferenceSet: (id: string | null) => void
+  onToggleReferenceItem: (setId: string, index: number) => void
+  showReferenceSelector: boolean
+  onToggleReferenceSelector: (open: boolean) => void
 }
 
 export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
@@ -109,7 +116,13 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
   onSelectOutlineSet,
   onToggleOutlineItem,
   showOutlineSelector,
-  onToggleOutlineSelector
+  onToggleOutlineSelector,
+  selectedReferenceType,
+  selectedReferenceIndices,
+  onSelectReferenceSet,
+  onToggleReferenceItem,
+  showReferenceSelector,
+  onToggleReferenceSelector
 }) => {
   // Local State for Set Management
   const [showChat, setShowChat] = useState(false)
@@ -516,7 +529,21 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                               isOpen={showWorldviewSelector}
                               onToggleOpen={(open) => {
                                  onToggleWorldviewSelector(open);
-                                 if (open) { onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
+                                 if (open) { onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); onToggleReferenceSelector(false); }
+                              }}
+                           />
+
+                           <ReferenceSelector
+                              novel={novel}
+                              type="reference"
+                              selectedSetId={selectedReferenceType}
+                              selectedItemIndices={selectedReferenceIndices}
+                              onSelectSet={onSelectReferenceSet}
+                              onToggleItem={onToggleReferenceItem}
+                              isOpen={showReferenceSelector}
+                              onToggleOpen={(open) => {
+                                 onToggleReferenceSelector(open);
+                                 if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
                               }}
                            />
 
@@ -530,7 +557,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                               isOpen={showCharacterSelector}
                               onToggleOpen={(open) => {
                                  onToggleCharacterSelector(open);
-                                 if (open) { onToggleWorldviewSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
+                                 if (open) { onToggleWorldviewSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); onToggleReferenceSelector(false); }
                               }}
                            />
 
@@ -544,7 +571,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                               isOpen={showInspirationSelector}
                               onToggleOpen={(open) => {
                                  onToggleInspirationSelector(open);
-                                 if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleOutlineSelector(false); }
+                                 if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleOutlineSelector(false); onToggleReferenceSelector(false); }
                               }}
                            />
 
@@ -558,7 +585,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                               isOpen={showOutlineSelector}
                               onToggleOpen={(open) => {
                                  onToggleOutlineSelector(open);
-                                 if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); }
+                                 if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleReferenceSelector(false); }
                               }}
                            />
                         </div>
@@ -685,7 +712,21 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                                  isOpen={showWorldviewSelector}
                                  onToggleOpen={(open) => {
                                     onToggleWorldviewSelector(open);
-                                    if (open) { onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
+                                    if (open) { onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); onToggleReferenceSelector(false); }
+                                 }}
+                              />
+
+                              <ReferenceSelector
+                                 novel={novel}
+                                 type="reference"
+                                 selectedSetId={selectedReferenceType}
+                                 selectedItemIndices={selectedReferenceIndices}
+                                 onSelectSet={onSelectReferenceSet}
+                                 onToggleItem={onToggleReferenceItem}
+                                 isOpen={showReferenceSelector}
+                                 onToggleOpen={(open) => {
+                                    onToggleReferenceSelector(open);
+                                    if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
                                  }}
                               />
 
@@ -699,7 +740,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                                  isOpen={showCharacterSelector}
                                  onToggleOpen={(open) => {
                                     onToggleCharacterSelector(open);
-                                    if (open) { onToggleWorldviewSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
+                                    if (open) { onToggleWorldviewSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); onToggleReferenceSelector(false); }
                                  }}
                               />
 
@@ -713,7 +754,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                                  isOpen={showInspirationSelector}
                                  onToggleOpen={(open) => {
                                     onToggleInspirationSelector(open);
-                                    if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleOutlineSelector(false); }
+                                    if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleOutlineSelector(false); onToggleReferenceSelector(false); }
                                  }}
                               />
 
@@ -727,7 +768,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
                                  isOpen={showOutlineSelector}
                                  onToggleOpen={(open) => {
                                     onToggleOutlineSelector(open);
-                                    if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); }
+                                    if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleReferenceSelector(false); }
                                  }}
                               />
                            </div>
