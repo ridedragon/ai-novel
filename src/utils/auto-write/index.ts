@@ -89,8 +89,13 @@ export class AutoWriteEngine {
             content: '',
             volumeId: targetVolumeId,
           });
-        } else if (existingByTitle && !existingById) {
+        } else if (existingByTitle) {
           batchItem.id = existingByTitle.id;
+          // 深度修复：即便章节已存在，如果它处于“未分卷”状态，且当前生成任务明确了目标分卷，
+          // 则在执行时将其归类到该分卷中。这解决了用户看到的“空卷”且章节在“未分卷”中的问题。
+          if ((!existingByTitle.volumeId || existingByTitle.volumeId === '') && targetVolumeId) {
+            existingByTitle.volumeId = targetVolumeId;
+          }
         }
       });
       this.novel = { ...this.novel, chapters: newChapters };
