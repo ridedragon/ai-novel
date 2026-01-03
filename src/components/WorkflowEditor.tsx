@@ -378,6 +378,7 @@ export interface WorkflowEditorProps {
     globalCreationPrompt: string;
     longTextMode: boolean;
     autoOptimize: boolean;
+    twoStepOptimization: boolean;
     consecutiveChapterCount: number;
     smallSummaryInterval: number;
     bigSummaryInterval: number;
@@ -925,6 +926,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const stopRequestedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isInitialLoadRef = useRef(true);
+  const activeNovelRef = useRef(activeNovel);
+
+  useEffect(() => {
+    activeNovelRef.current = activeNovel;
+  }, [activeNovel]);
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
 
@@ -1466,10 +1472,12 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       let localNovel = { ...activeNovel };
       const updateLocalAndGlobal = async (newNovel: Novel) => {
         // 核心修复：合并状态时保留 UI 特有的折叠状态
+        // 使用 activeNovelRef 获取最新的全局状态，避免闭包过时
+        const currentActiveNovel = activeNovelRef.current;
         const mergedNovel: Novel = {
           ...newNovel,
           volumes: newNovel.volumes.map(v => {
-            const existingVol = activeNovel.volumes.find(ev => ev.id === v.id);
+            const existingVol = currentActiveNovel?.volumes.find(ev => ev.id === v.id);
             return existingVol ? { ...v, collapsed: existingVol.collapsed } : v;
           })
         };
