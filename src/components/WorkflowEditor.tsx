@@ -1951,8 +1951,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             globalConfig.prompts.filter(p => p.active),
             globalConfig.getActiveScripts,
             (status) => {
-              // 更新节点标签以显示进度
-              updateNodeData(node.id, { label: `创作中: ${status}` });
+              // 更新节点标签以显示进度，如果状态包含“优化”或“完成”则直接显示，否则增加“创作中”前缀
+              const displayStatus = (status.includes('优化') || status.includes('完成')) ? status : `创作中: ${status}`;
+              updateNodeData(node.id, { label: displayStatus });
             },
             (updatedNovel) => {
               localNovel = updatedNovel; // 实时同步本地副本
@@ -2006,7 +2007,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             },
             finalVolumeId,
             false,
-            selectedOutlineSetId
+            selectedOutlineSetId,
+            abortControllerRef.current?.signal
           );
 
           updateNodeData(node.id, { label: NODE_CONFIGS.chapter.defaultLabel });

@@ -37,9 +37,19 @@ export class AutoWriteEngine {
     targetVolumeId?: string,
     includeFullOutline: boolean = false,
     outlineSetId: string | null = null,
+    signal?: AbortSignal,
   ) {
     this.isRunning = true;
     this.abortController = new AbortController();
+
+    // 监听外部停止信号
+    if (signal) {
+      if (signal.aborted) {
+        this.stop();
+        return;
+      }
+      signal.addEventListener('abort', () => this.stop());
+    }
 
     if (startIndex >= outline.length) {
       onStatusUpdate('创作完成！');
@@ -320,6 +330,14 @@ export class AutoWriteEngine {
       }
     }
 
+    // 等待所有异步优化任务完成，确保节点状态正确结束
+    if (this.activeOptimizationTasks.size > 0 && this.isRunning) {
+      onStatusUpdate(`正在完成最后的优化 (${this.activeOptimizationTasks.size}个任务)...`);
+      while (this.activeOptimizationTasks.size > 0 && this.isRunning) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
     if (this.isRunning) {
       onStatusUpdate('创作完成！');
       this.isRunning = false;
@@ -353,7 +371,7 @@ export class AutoWriteEngine {
       this.config.optimizePresets?.[0];
     if (!activePreset) return;
 
-    onStatusUpdate(`正在优化章节...`);
+    onStatusUpdate(`优化中 (${this.activeOptimizationTasks.size}个任务)...`);
     const baseTime = Date.now();
     let currentAnalysisResult = '';
 
@@ -370,7 +388,7 @@ export class AutoWriteEngine {
           this.config.analysisPresets?.find(p => p.id === this.config.activeAnalysisPresetId) ||
           this.config.analysisPresets?.[0];
         if (analysisPreset) {
-          onStatusUpdate(`正在分析章节建议...`);
+          onStatusUpdate(`优化分析中...`);
           const analysisMessages: any[] = analysisPreset.prompts
             .filter(p => p.enabled)
             .map(p => ({
