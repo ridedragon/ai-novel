@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowUp,
   Book,
+  BookOpen,
   Bot,
   Check,
   ChevronDown,
