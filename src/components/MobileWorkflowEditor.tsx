@@ -282,7 +282,7 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
       }
 
       let accumContext = '';
-      let lastNodeOutput = '';
+      let lastNodeOutput = ''; // 累积的前序节点产出
       let currentWorkflowFolder = '';
 
       if (startIndex > 0) {
@@ -290,8 +290,9 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
           const prevNode = sortedNodes[j];
           if (prevNode.data.typeKey === 'createFolder') currentWorkflowFolder = prevNode.data.folderName;
           else if (prevNode.data.typeKey === 'userInput') accumContext += `【全局输入】：\n${prevNode.data.instruction}\n\n`;
-          if (j === startIndex - 1 && prevNode.data.outputEntries?.length > 0) {
-            lastNodeOutput = `【${prevNode.data.typeLabel}输出】：\n${prevNode.data.outputEntries[0].content}`;
+          
+          if (prevNode.data.outputEntries?.length > 0) {
+            lastNodeOutput += `【${prevNode.data.typeLabel}输出】：\n${prevNode.data.outputEntries[0].content}\n\n`;
           }
         }
       }
@@ -363,7 +364,12 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         }
 
         const openai = new OpenAI({ apiKey: globalConfig.apiKey, baseURL: globalConfig.baseUrl, dangerouslyAllowBrowser: true });
-        const messages = [{ role: 'user' as const, content: `${accumContext}${lastNodeOutput}\n要求：${node.data.instruction || preset?.name || '生成内容'}` }];
+        
+        // 增加去重逻辑 (参考 PC 端)
+        const isDuplicate = lastNodeOutput && node.data.instruction && node.data.instruction.includes(lastNodeOutput.substring(0, 100));
+        const finalContext = `${accumContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
+        
+        const messages = [{ role: 'user' as const, content: `${finalContext}要求：${node.data.instruction || preset?.name || '生成内容'}` }];
         
         const completion = await openai.chat.completions.create({
           model: globalConfig.model, messages, temperature: preset?.temperature ?? 1.0,
@@ -372,7 +378,7 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         const result = completion.choices[0]?.message?.content || '';
         const entry: OutputEntry = { id: Date.now().toString(), title: '生成结果', content: result };
         updateNodeData(node.id, { status: 'completed', outputEntries: [entry, ...(node.data.outputEntries || [])] });
-        lastNodeOutput = `【${node.data.typeLabel}输出】：\n${result}`;
+        lastNodeOutput += `【${node.data.typeLabel}输出】：\n${result}\n\n`;
       }
       if (!stopRequestedRef.current) { setCurrentNodeIndex(-1); setIsRunning(false); }
     } catch (e: any) {

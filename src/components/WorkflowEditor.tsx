@@ -11,8 +11,10 @@ import {
   Panel,
   Position,
   ReactFlow,
+  ReactFlowProvider,
   useEdgesState,
-  useNodesState
+  useNodesState,
+  useReactFlow
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
@@ -23,6 +25,7 @@ import {
   Download,
   Edit2,
   FileText,
+  Folder,
   FolderPlus,
   Globe,
   LayoutList,
@@ -75,6 +78,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   selectedCharacterSets: string[];
   selectedOutlineSets: string[];
   selectedInspirationSets: string[];
+  selectedReferenceFolders: string[];
   outputEntries: OutputEntry[]; // 改为结构化条目
   status?: 'pending' | 'executing' | 'completed' | 'failed';
   targetVolumeId?: string;
@@ -103,7 +107,8 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
   const refCount = (data.selectedWorldviewSets?.length || 0) +
                    (data.selectedCharacterSets?.length || 0) +
                    (data.selectedOutlineSets?.length || 0) +
-                   (data.selectedInspirationSets?.length || 0);
+                   (data.selectedInspirationSets?.length || 0) +
+                   (data.selectedReferenceFolders?.length || 0);
 
   const getStatusColor = () => {
     switch (data.status) {
@@ -158,7 +163,7 @@ const nodeTypes = {
 
 // --- 配置定义 ---
 
-type NodeTypeKey = 'createFolder' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter';
+type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter';
 
 const NODE_CONFIGS: Record<NodeTypeKey, any> = {
   createFolder: {
@@ -166,6 +171,13 @@ const NODE_CONFIGS: Record<NodeTypeKey, any> = {
     icon: FolderPlus,
     color: '#818cf8',
     defaultLabel: '初始化目录',
+    presetType: null,
+  },
+  reuseDirectory: {
+    typeLabel: '复用已有目录',
+    icon: Folder,
+    color: '#fbbf24',
+    defaultLabel: '切换目录节点',
     presetType: null,
   },
   userInput: {
@@ -265,8 +277,9 @@ export interface WorkflowEditorProps {
   };
 }
 
-export const WorkflowEditor = (props: WorkflowEditorProps) => {
+const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const { isOpen, onClose, activeNovel, onSelectChapter, onUpdateNovel, onStartAutoWrite, globalConfig } = props;
+  const { screenToFlowPosition } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [workflows, setWorkflows] = useState<WorkflowData[]>([]);
@@ -374,7 +387,7 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
     setActiveWorkflowId(targetId);
     loadWorkflow(targetId, loadedWorkflows);
     isInitialLoadRef.current = false;
-  }, [isOpen]);
+  }, [isOpen, activeNovel]); // 增加 activeNovel 依赖，确保智能清理逻辑能根据最新数据执行
 
   const loadWorkflow = (id: string, workflowList: WorkflowData[]) => {
     // 如果工作流正在运行，不要从缓存恢复状态，避免覆盖内存中最新的执行进度
@@ -382,19 +395,49 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
 
     const workflow = workflowList.find(w => w.id === id);
     if (workflow) {
-      const restoredNodes = (workflow.nodes || []).map((n: WorkflowNode) => ({
-        ...n,
-        data: {
-          ...n.data,
-          status: n.data.status,
-          icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon,
-          selectedWorldviewSets: n.data.selectedWorldviewSets || [],
-          selectedCharacterSets: n.data.selectedCharacterSets || [],
-          selectedOutlineSets: n.data.selectedOutlineSets || [],
-          selectedInspirationSets: n.data.selectedInspirationSets || [],
-          outputEntries: n.data.outputEntries || [],
-        }
-      }));
+      const restoredNodes = (workflow.nodes || []).map((n: WorkflowNode) => {
+        // 判定并过滤旧数据中遗留的自动勾选引用
+        // 逻辑：如果 ID 是 'pending:' 开头，或者该资料集的名称与当前工作流定义的目录名一致，
+        // 则判定为旧版自动生成的冗余引用，加载时将其剔除。
+        const workflowFolderName = (workflow.nodes || []).find(node => node.data.typeKey === 'createFolder')?.data.folderName;
+
+        const filterLegacyRefs = (list: string[] | undefined, type: 'worldview' | 'character' | 'outline' | 'inspiration') => {
+          if (!list) return [];
+          return list.filter(setId => {
+            if (!setId || typeof setId !== 'string') return false;
+            // 1. 过滤掉所有未创建的计划中引用
+            if (setId.startsWith('pending:')) return false;
+            
+            // 2. 过滤掉名称与目录名完全一致的已转换引用（旧版自动勾选的特征）
+            if (activeNovel && workflowFolderName) {
+              let sets: any[] = [];
+              if (type === 'worldview') sets = activeNovel.worldviewSets || [];
+              else if (type === 'character') sets = activeNovel.characterSets || [];
+              else if (type === 'outline') sets = activeNovel.outlineSets || [];
+              else if (type === 'inspiration') sets = activeNovel.inspirationSets || [];
+              
+              const targetSet = sets.find(s => s.id === setId);
+              if (targetSet && targetSet.name === workflowFolderName) return false;
+            }
+            return true;
+          });
+        };
+        
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            status: n.data.status,
+            icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon,
+            selectedWorldviewSets: filterLegacyRefs(n.data.selectedWorldviewSets, 'worldview'),
+            selectedCharacterSets: filterLegacyRefs(n.data.selectedCharacterSets, 'character'),
+            selectedOutlineSets: filterLegacyRefs(n.data.selectedOutlineSets, 'outline'),
+            selectedInspirationSets: filterLegacyRefs(n.data.selectedInspirationSets, 'inspiration'),
+            selectedReferenceFolders: n.data.selectedReferenceFolders || [],
+            outputEntries: n.data.outputEntries || [],
+          }
+        };
+      });
       setNodes(restoredNodes);
       setEdges(workflow.edges || []);
       setCurrentNodeIndex(workflow.currentNodeIndex !== undefined ? workflow.currentNodeIndex : -1);
@@ -560,6 +603,14 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
       .filter(n => n.data.typeKey === 'createFolder' && n.data.folderName)
       .map(n => `pending:${n.data.folderName}`);
 
+    // 计算视口中心位置
+    // 我们假设编辑器区域的中心点。screenToFlowPosition 需要屏幕坐标。
+    // 由于 WorkflowEditor 通常占据大部分屏幕，我们可以取 window 的中心，
+    // 或者取一个合理的默认值。
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    const position = screenToFlowPosition({ x: centerX, y: centerY });
+
     const newNode: WorkflowNode = {
       id: `node-${Date.now()}`,
       type: 'custom',
@@ -571,22 +622,25 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
         presetName: '',
         instruction: '',
         folderName: '',
-        // 新增节点时，默认勾选计划中的文件夹
-        selectedWorldviewSets: [...currentPendingFolders],
-        selectedCharacterSets: [...currentPendingFolders],
-        selectedOutlineSets: [...currentPendingFolders],
-        selectedInspirationSets: [...currentPendingFolders],
+        selectedWorldviewSets: [],
+        selectedCharacterSets: [],
+        selectedOutlineSets: [],
+        selectedInspirationSets: [],
+        selectedReferenceFolders: [],
         outputEntries: [],
         targetVolumeId: activeNovel?.volumes[0]?.id || '',
         targetVolumeName: '',
         autoOptimize: false,
         twoStepOptimization: false,
       },
-      position: { x: 100 + Math.random() * 200, y: 100 + Math.random() * 200 },
+      position: {
+        x: position.x - 140, // 减去节点宽度的一半 (280/2)
+        y: position.y - 40   // 减去大概高度的一半
+      },
     };
     setNodes((nds) => [...nds, newNode]);
     setShowAddMenu(false);
-  }, [setNodes, nodes, activeNovel]);
+  }, [setNodes, nodes, activeNovel, screenToFlowPosition]);
 
   const onNodeClick = useCallback((_: any, node: Node) => {
     setEditingNodeId(node.id);
@@ -616,31 +670,13 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
           return { ...node, data: { ...node.data, ...updates } };
         }
         
-        // 如果是文件夹重命名，自动更新其他节点对该“计划中”文件夹的引用，并清空历史产物
-        if (isRenameFolder && oldFolderName && newFolderName) {
-          const oldPendingId = `pending:${oldFolderName}`;
-          const newPendingId = `pending:${newFolderName}`;
-          
-          const updateRefs = (refs: string[] | undefined) => {
-            if (!refs) return [newPendingId]; // 如果没定义，默认选上新的
-            if (refs.includes(oldPendingId)) {
-              return refs.map(r => r === oldPendingId ? newPendingId : r);
-            }
-            if (!refs.includes(newPendingId)) {
-              return [...refs, newPendingId];
-            }
-            return refs;
-          };
-
+        // 如果是“创建目录”模块重命名，仅负责清空其他节点的产物（因为环境变了），不再维护冗余引用
+        if (isRenameFolder) {
           return {
             ...node,
             data: {
               ...node.data,
-              selectedWorldviewSets: updateRefs(node.data.selectedWorldviewSets),
-              selectedCharacterSets: updateRefs(node.data.selectedCharacterSets),
-              selectedOutlineSets: updateRefs(node.data.selectedOutlineSets),
-              selectedInspirationSets: updateRefs(node.data.selectedInspirationSets),
-              outputEntries: [], // 只有当初始化目录改名时，才清空其他节点的产物
+              outputEntries: [],
             }
           };
         }
@@ -649,14 +685,15 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
     });
   }, [setNodes]);
 
-  const toggleSetReference = useCallback((type: 'worldview' | 'character' | 'outline' | 'inspiration', setId: string) => {
+  const toggleSetReference = useCallback((type: 'worldview' | 'character' | 'outline' | 'inspiration' | 'folder', setId: string) => {
     if (!editingNodeId) return;
     
     setNodes((nds) => nds.map(node => {
       if (node.id === editingNodeId) {
         const key = type === 'worldview' ? 'selectedWorldviewSets' :
                     type === 'character' ? 'selectedCharacterSets' :
-                    type === 'outline' ? 'selectedOutlineSets' : 'selectedInspirationSets';
+                    type === 'outline' ? 'selectedOutlineSets' :
+                    type === 'inspiration' ? 'selectedInspirationSets' : 'selectedReferenceFolders';
         
         const currentList = [...(node.data[key] as string[])];
         // 这里的 setId 可能是真实的 ID，也可能是 'pending:FolderName'
@@ -798,7 +835,7 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
       }
 
       let accumContext = ''; // 累积全局和常驻上下文
-      let lastNodeOutput = ''; // 上一个节点的直接输出
+      let lastNodeOutput = ''; // 累积的前序节点产出
       let currentWorkflowFolder = ''; // 当前工作流确定的文件夹名
 
       // 如果是从中间开始，需要重建上下文
@@ -811,8 +848,8 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
             accumContext += `【全局输入】：\n${prevNode.data.instruction}\n\n`;
           }
           // 获取上一个执行完的节点的产出作为 lastNodeOutput
-          if (j === startIndex - 1 && prevNode.data.outputEntries && prevNode.data.outputEntries.length > 0) {
-            lastNodeOutput = `【${prevNode.data.typeLabel}输出】：\n${prevNode.data.outputEntries[0].content}`;
+          if (prevNode.data.outputEntries && prevNode.data.outputEntries.length > 0) {
+            lastNodeOutput += `【${prevNode.data.typeLabel}输出】：\n${prevNode.data.outputEntries[0].content}\n\n`;
           }
         }
       }
@@ -836,8 +873,18 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
         }
 
         // 处理创建文件夹节点
-        if (node.data.typeKey === 'createFolder') {
-          currentWorkflowFolder = node.data.folderName;
+        if (node.data.typeKey === 'createFolder' || node.data.typeKey === 'reuseDirectory') {
+          // 如果节点指定了目录名，则切换；如果复用节点没填目录，则保持当前已有的目录名
+          if (node.data.folderName) {
+            currentWorkflowFolder = node.data.folderName;
+          }
+          
+          if (node.data.typeKey === 'reuseDirectory') {
+             // 复用目录节点仅切换当前上下文中的目录名，不重新创建
+             setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+             continue;
+          }
+
           if (currentWorkflowFolder) {
             const createSetIfNotExist = (sets: any[] | undefined, name: string, creator: () => any) => {
               const existing = sets?.find(s => s.name === name);
@@ -914,17 +961,12 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
               await updateLocalAndGlobal(updatedNovel);
             }
 
-            // 关键修复：目录创建后，立即更新工作流中所有引用该“计划中”目录的节点，将其转换为真实 ID
-            const oldPendingId = `pending:${currentWorkflowFolder}`;
+            // 目录创建后，仅负责将正文生成节点关联到新分卷，不再进行资料集的自动转换和强行勾选
             setNodes(nds => nds.map(n => ({
               ...n,
               data: {
                 ...n.data,
-                selectedWorldviewSets: (n.data.selectedWorldviewSets as string[] || []).map(id => id === oldPendingId ? worldviewResult.id : id),
-                selectedCharacterSets: (n.data.selectedCharacterSets as string[] || []).map(id => id === oldPendingId ? characterResult.id : id),
-                selectedOutlineSets: (n.data.selectedOutlineSets as string[] || []).map(id => id === oldPendingId ? outlineResult.id : id),
-                selectedInspirationSets: (n.data.selectedInspirationSets as string[] || []).map(id => id === oldPendingId ? inspirationResult.id : id),
-                // 关键修复：自动将生成的章节关联到新创建的分卷，除非用户已手动指定
+                // 仅自动将生成的章节关联到新创建的分卷，除非用户已手动指定
                 targetVolumeId: (n.data.typeKey === 'chapter' && (!n.data.targetVolumeId || n.data.targetVolumeId === ''))
                   ? volumeResult.id
                   : n.data.targetVolumeId
@@ -965,6 +1007,7 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
         let selectedCharacters = [...(node.data.selectedCharacterSets || [])];
         let selectedOutlines = [...(node.data.selectedOutlineSets || [])];
         let selectedInspirations = [...(node.data.selectedInspirationSets || [])];
+        let selectedFolders = [...(node.data.selectedReferenceFolders || [])];
 
         // 核心逻辑：解析 pending: 引用
         const resolvePendingRef = (list: string[], sets: any[] | undefined) => {
@@ -983,20 +1026,6 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
         selectedOutlines = resolvePendingRef(selectedOutlines, localNovel.outlineSets);
         selectedInspirations = resolvePendingRef(selectedInspirations, localNovel.inspirationSets);
 
-        // 如果存在当前工作流确定的文件夹名，确保该文件夹被关联（即使用户没手动选，也要作为默认输出目标/上下文）
-        if (currentWorkflowFolder) {
-          const wvId = localNovel.worldviewSets?.find(s => s.name === currentWorkflowFolder)?.id;
-          if (wvId && !selectedWorldview.includes(wvId)) selectedWorldview.push(wvId);
-          
-          const charId = localNovel.characterSets?.find(s => s.name === currentWorkflowFolder)?.id;
-          if (charId && !selectedCharacters.includes(charId)) selectedCharacters.push(charId);
-          
-          const outId = localNovel.outlineSets?.find(s => s.name === currentWorkflowFolder)?.id;
-          if (outId && !selectedOutlines.includes(outId)) selectedOutlines.push(outId);
-          
-          const inspId = localNovel.inspirationSets?.find(s => s.name === currentWorkflowFolder)?.id;
-          if (inspId && !selectedInspirations.includes(inspId)) selectedInspirations.push(inspId);
-        }
 
         selectedWorldview.forEach(id => {
             const set = localNovel.worldviewSets?.find(s => s.id === id);
@@ -1014,11 +1043,30 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
             const set = localNovel.inspirationSets?.find(s => s.id === id);
             if (set) refContext += `【参考灵感 (${set.name})】：\n${set.items.map(i => `· ${i.title}: ${i.content}`).join('\n')}\n`;
         });
+        
+        selectedFolders.forEach(folderId => {
+            const folder = localNovel.referenceFolders?.find(f => f.id === folderId);
+            if (folder) {
+                const folderFiles = localNovel.referenceFiles?.filter(f => f.parentId === folderId) || [];
+                if (folderFiles.length > 0) {
+                    refContext += `【参考资料库文件夹 (${folder.name})】：\n`;
+                    folderFiles.forEach(f => {
+                        // 简单处理：如果是文本类则包含内容，如果是图片/PDF则只列出文件名（因为大模型无法直接处理二进制content数据）
+                        const isText = f.type.startsWith('text/') || f.name.endsWith('.md') || f.name.endsWith('.txt');
+                        if (isText) {
+                            refContext += `· 文件: ${f.name}\n内容: ${f.content}\n---\n`;
+                        } else {
+                            refContext += `· 文件: ${f.name} (非文本格式，仅供参考文件名)\n`;
+                        }
+                    });
+                }
+            }
+        });
 
         // 3. 构建消息
         // 去重逻辑：如果上个节点的输出已经包含在参考资料中，则不再重复追加 lastNodeOutput
         const isDuplicate = lastNodeOutput && refContext.includes(lastNodeOutput.substring(0, 100)); // 取前100字符判断
-        const finalContext = `${refContext}${accumContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点产出】：\n${lastNodeOutput}\n\n` : ''}`;
+        const finalContext = `${refContext}${accumContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
         let messages: any[] = [];
         
         if (node.data.typeKey === 'aiChat' && !preset) {
@@ -1452,9 +1500,8 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
           updateLocalAndGlobal(updatedNovelState);
         }
         
-        // 6. 更新传递给下一个节点的上下文
-        lastNodeOutput = `【${node.data.typeLabel}输出】：\n${result}`;
-        // 注意：不累加到 accumContext，这样下下个节点就拿不到这个输出了
+        // 6. 更新传递给下一个节点的上下文 (累加模式)
+        lastNodeOutput += `【${node.data.typeLabel}输出】：\n${result}\n\n`;
 
         // 更新节点状态为已完成 (确保在 novel 更新后同步更新节点状态，避免竞争)
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
@@ -1803,17 +1850,38 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
                       className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all"
                     />
                   </div>
-                  <div className={`space-y-2.5 ${editingNode.data.typeKey === 'createFolder' ? 'col-span-2' : ''}`}>
+                  <div className={`space-y-2.5 ${(editingNode.data.typeKey === 'createFolder' || editingNode.data.typeKey === 'reuseDirectory') ? 'col-span-2' : ''}`}>
                     <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <FolderPlus className="w-3 h-3" /> {editingNode.data.typeKey === 'createFolder' ? '创建并关联目录名' : '独立目录关联 (可选)'}
+                      {editingNode.data.typeKey === 'createFolder' ? <FolderPlus className="w-3 h-3" /> : <Folder className="w-3 h-3" />}
+                      {editingNode.data.typeKey === 'createFolder' ? '创建并关联目录名' : editingNode.data.typeKey === 'reuseDirectory' ? '选择或输入要复用的目录名' : '独立目录关联 (可选)'}
                     </label>
-                    <input
-                      type="text"
-                      value={editingNode.data.folderName}
-                      onChange={(e) => updateNodeData(editingNode.id, { folderName: e.target.value })}
-                      className="w-full bg-[#161922] border border-indigo-900/30 rounded-lg px-4 py-2.5 text-sm text-indigo-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all"
-                      placeholder={editingNode.data.typeKey === 'createFolder' ? "输入要创建的项目文件夹名称..." : "该步骤特定的目录名..."}
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editingNode.data.folderName}
+                        onChange={(e) => updateNodeData(editingNode.id, { folderName: e.target.value })}
+                        className="flex-1 bg-[#161922] border border-indigo-900/30 rounded-lg px-4 py-2.5 text-sm text-indigo-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all"
+                        placeholder={editingNode.data.typeKey === 'createFolder' ? "输入要创建的项目文件夹名称..." : "输入或选择目录名..."}
+                      />
+                      {editingNode.data.typeKey === 'reuseDirectory' && activeNovel && (
+                        <select
+                          className="bg-[#161922] border border-gray-700 rounded-lg px-2 text-xs text-gray-300 outline-none"
+                          onChange={(e) => updateNodeData(editingNode.id, { folderName: e.target.value })}
+                          value=""
+                        >
+                          <option value="" disabled>快速选择...</option>
+                          {/* 提取所有已存在的集合名称作为候选目录 */}
+                          {Array.from(new Set([
+                            ...(activeNovel.volumes?.map(v => v.title) || []),
+                            ...(activeNovel.worldviewSets?.map(s => s.name) || []),
+                            ...(activeNovel.characterSets?.map(s => s.name) || []),
+                            ...(activeNovel.outlineSets?.map(s => s.name) || [])
+                          ])).filter(Boolean).map(name => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -2051,6 +2119,30 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
                         </div>
                       </div>
                     </div>
+
+                    {/* 参考资料库文件夹选择 */}
+                    <div className="mt-4 pt-4 border-t border-gray-700/30">
+                      <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-2">
+                        <Folder className="w-3 h-3 text-blue-500"/> 参考资料库文件夹 (全量关联)
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {activeNovel.referenceFolders?.map(folder => (
+                          <button
+                            key={folder.id}
+                            onClick={() => toggleSetReference('folder', folder.id)}
+                            className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${editingNode.data.selectedReferenceFolders?.includes(folder.id) ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium' : 'bg-[#161922] hover:bg-gray-700 text-gray-400 border border-gray-700/50'}`}
+                          >
+                            {editingNode.data.selectedReferenceFolders?.includes(folder.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                            <span className="truncate">{folder.name}</span>
+                          </button>
+                        ))}
+                        {(!activeNovel.referenceFolders || activeNovel.referenceFolders.length === 0) && (
+                          <div className="col-span-2 py-4 text-center text-[10px] text-gray-600 border border-dashed border-gray-700 rounded-lg">
+                            资料库中暂无文件夹，请先在资料库中创建
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -2264,5 +2356,13 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
         </div>
       </div>
     </div>
+  );
+};
+
+export const WorkflowEditor = (props: WorkflowEditorProps) => {
+  return (
+    <ReactFlowProvider>
+      <WorkflowEditorContent {...props} />
+    </ReactFlowProvider>
   );
 };
