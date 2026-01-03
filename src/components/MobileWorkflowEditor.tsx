@@ -241,6 +241,7 @@ interface ConfigPanelProps {
   globalConfig: any;
   onUpdateNodeData: (nodeId: string, updates: Partial<WorkflowNodeData>) => void;
   onDeleteNode: (nodeId: string) => void;
+  onDeleteOutputEntry: (nodeId: string, entryId: string) => void;
   onClose: () => void;
   onPreviewEntry: (entry: OutputEntry) => void;
 }
@@ -253,6 +254,7 @@ const ConfigPanel = React.memo(({
   globalConfig,
   onUpdateNodeData,
   onDeleteNode,
+  onDeleteOutputEntry,
   onClose,
   onPreviewEntry
 }: ConfigPanelProps) => {
@@ -494,7 +496,20 @@ const ConfigPanel = React.memo(({
                       <div className="text-[10px] text-gray-500 truncate">{entry.content.substring(0, 40)}...</div>
                     </div>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-gray-600 -rotate-90" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('确定要删除这条产出吗？')) {
+                          onDeleteOutputEntry(editingNode.id, entry.id);
+                        }
+                      }}
+                      className="p-2 text-gray-500 hover:text-red-400"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <ChevronDown className="w-4 h-4 text-gray-600 -rotate-90" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -749,6 +764,21 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
     setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n));
   };
 
+  const deleteOutputEntry = (nodeId: string, entryId: string) => {
+    setNodes(nds => nds.map(n => {
+      if (n.id === nodeId) {
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            outputEntries: (n.data.outputEntries || []).filter(e => e.id !== entryId)
+          }
+        };
+      }
+      return n;
+    }));
+  };
+
   const handleSaveWorkflow = () => {
     // 同时更新 workflows 列表中的当前项并保存，确保双重保险
     const updatedWorkflows = workflows.map(w =>
@@ -922,6 +952,62 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
       if (startIndex === 0) {
         setNodes(nds => nds.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } })));
         setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+
+        // --- 核心修复：重新开始时清除关联目录下的内容 ---
+        const firstCreateFolderNode = getOrderedNodes().find(n => n.data.typeKey === 'createFolder');
+        const workflowFolderName = firstCreateFolderNode?.data.folderName;
+
+        if (workflowFolderName && onUpdateNovel) {
+          const updatedNovel = { ...localNovel };
+          let novelChanged = false;
+
+          // 清理世界观
+          if (updatedNovel.worldviewSets) {
+            updatedNovel.worldviewSets = updatedNovel.worldviewSets.map(s =>
+              s.name === workflowFolderName ? { ...s, entries: [] } : s
+            );
+            novelChanged = true;
+          }
+          // 清理角色
+          if (updatedNovel.characterSets) {
+            updatedNovel.characterSets = updatedNovel.characterSets.map(s =>
+              s.name === workflowFolderName ? { ...s, characters: [] } : s
+            );
+            novelChanged = true;
+          }
+          // 清理粗纲
+          if (updatedNovel.outlineSets) {
+            updatedNovel.outlineSets = updatedNovel.outlineSets.map(s =>
+              s.name === workflowFolderName ? { ...s, items: [] } : s
+            );
+            novelChanged = true;
+          }
+          // 清理灵感
+          if (updatedNovel.inspirationSets) {
+            updatedNovel.inspirationSets = updatedNovel.inspirationSets.map(s =>
+              s.name === workflowFolderName ? { ...s, items: [] } : s
+            );
+            novelChanged = true;
+          }
+          // 清理剧情粗纲
+          if (updatedNovel.plotOutlineSets) {
+            updatedNovel.plotOutlineSets = updatedNovel.plotOutlineSets.map(s =>
+              s.name === workflowFolderName ? { ...s, items: [] } : s
+            );
+            novelChanged = true;
+          }
+          // 清理相关章节 (根据分卷名称匹配)
+          const targetVolume = updatedNovel.volumes?.find(v => v.title === workflowFolderName);
+          if (targetVolume) {
+            updatedNovel.chapters = (updatedNovel.chapters || []).filter(c => c.volumeId !== targetVolume.id);
+            novelChanged = true;
+          }
+
+          if (novelChanged) {
+            localNovel = updatedNovel;
+            onUpdateNovel(updatedNovel);
+          }
+        }
       }
 
       const resolvePendingRef = (list: string[], sets: any[] | undefined) => {
@@ -1284,21 +1370,32 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
               setNodes(nds => nds.map(n => {
                 if (n.id === node.id) {
                   const novel = (localNovel as Novel);
-                  const chapter = novel.chapters.find(c => c.id === id);
-                  const title = chapter?.title || `第${id}章`;
-                  const newEntry: OutputEntry = {
-                    id: `chapter-${id}`,
-                    title: title,
-                    content: content,
-                    versions: chapter?.versions,
-                    analysisResult: chapter?.analysisResult
-                  };
-                  const otherEntries = (n.data.outputEntries || []).filter(e => e.id !== `chapter-${id}`);
-                  return { ...n, data: { ...n.data, outputEntries: [...otherEntries, newEntry].sort((a,b) => {
-                    const idA = parseInt(a.id.replace('chapter-', '') || '0');
-                    const idB = parseInt(b.id.replace('chapter-', '') || '0');
-                    return idA - idB;
-                  }) } };
+                  
+                  // --- 修复：在长文模式下，获取所有相关的章节和总结 ---
+                  // 这里的逻辑改为：找出该节点 targetVolumeId 下的所有章节、小总结、大总结
+                  const targetVolId = n.data.targetVolumeId || finalVolumeId;
+                  const volumeChapters = novel.chapters.filter(c => c.volumeId === targetVolId);
+                  
+                  const newEntries: OutputEntry[] = volumeChapters.map(c => ({
+                    id: c.subtype ? `${c.subtype}-${c.id}` : `chapter-${c.id}`,
+                    title: c.title,
+                    content: c.content || '',
+                    versions: c.versions,
+                    analysisResult: c.analysisResult
+                  }));
+
+                  // 排序：严格按照章节在小说中的实际索引顺序展示
+                  const sortedEntries = newEntries.sort((a, b) => {
+                    const indexA = novel.chapters.findIndex(c =>
+                      (c.subtype ? `${c.subtype}-${c.id}` : `chapter-${c.id}`) === a.id
+                    );
+                    const indexB = novel.chapters.findIndex(c =>
+                      (c.subtype ? `${c.subtype}-${c.id}` : `chapter-${c.id}`) === b.id
+                    );
+                    return indexA - indexB;
+                  });
+
+                  return { ...n, data: { ...n.data, outputEntries: sortedEntries } };
                 }
                 return n;
               }));
@@ -1591,6 +1688,7 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             setNodes(nds => nds.filter(n => n.id !== id));
             setEditingNodeId(null);
           }}
+          onDeleteOutputEntry={deleteOutputEntry}
           onClose={() => setEditingNodeId(null)}
           onPreviewEntry={setPreviewEntry}
         />

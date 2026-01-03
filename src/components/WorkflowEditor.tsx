@@ -808,9 +808,23 @@ const NodePropertiesModal = ({
                           <div className="text-[10px] text-gray-500 truncate">{entry.content.replace(/\s+/g, ' ').substring(0, 60)}...</div>
                         </div>
                       </div>
-                      <button type="button" className="px-3 py-1 bg-indigo-600/20 text-indigo-400 rounded text-[10px] font-bold group-hover/chapter:bg-indigo-600 group-hover/chapter:text-white transition-all whitespace-nowrap">
-                        查看正文
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('确定要删除这条正文记录吗？')) {
+                              removeEntry(entry.id);
+                            }
+                          }}
+                          className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button type="button" className="px-3 py-1 bg-indigo-600/20 text-indigo-400 rounded text-[10px] font-bold group-hover/chapter:bg-indigo-600 group-hover/chapter:text-white transition-all whitespace-nowrap">
+                          查看正文
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1442,6 +1456,62 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         setEdges(eds => eds.map(e => ({ ...e, animated: false })));
         // 同步清空快照
         sortedNodes = sortedNodes.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } }));
+
+        // --- 核心修复：重新开始时清除关联目录下的内容 ---
+        const firstCreateFolderNode = getOrderedNodes().find(n => n.data.typeKey === 'createFolder');
+        const workflowFolderName = firstCreateFolderNode?.data.folderName;
+
+        if (workflowFolderName && onUpdateNovel) {
+          const updatedNovel = { ...localNovel };
+          let novelChanged = false;
+
+          // 清理世界观
+          if (updatedNovel.worldviewSets) {
+            updatedNovel.worldviewSets = updatedNovel.worldviewSets.map(s =>
+              s.name === workflowFolderName ? { ...s, entries: [] } : s
+            );
+            novelChanged = true;
+          }
+          // 清理角色
+          if (updatedNovel.characterSets) {
+            updatedNovel.characterSets = updatedNovel.characterSets.map(s =>
+              s.name === workflowFolderName ? { ...s, characters: [] } : s
+            );
+            novelChanged = true;
+          }
+          // 清理粗纲
+          if (updatedNovel.outlineSets) {
+            updatedNovel.outlineSets = updatedNovel.outlineSets.map(s =>
+              s.name === workflowFolderName ? { ...s, items: [] } : s
+            );
+            novelChanged = true;
+          }
+          // 清理灵感
+          if (updatedNovel.inspirationSets) {
+            updatedNovel.inspirationSets = updatedNovel.inspirationSets.map(s =>
+              s.name === workflowFolderName ? { ...s, items: [] } : s
+            );
+            novelChanged = true;
+          }
+          // 清理剧情粗纲
+          if (updatedNovel.plotOutlineSets) {
+            updatedNovel.plotOutlineSets = updatedNovel.plotOutlineSets.map(s =>
+              s.name === workflowFolderName ? { ...s, items: [] } : s
+            );
+            novelChanged = true;
+          }
+          // 清理相关章节 (根据分卷名称匹配)
+          const targetVolume = updatedNovel.volumes?.find(v => v.title === workflowFolderName);
+          if (targetVolume) {
+            updatedNovel.chapters = (updatedNovel.chapters || []).filter(c => c.volumeId !== targetVolume.id);
+            novelChanged = true;
+          }
+
+          if (novelChanged) {
+            localNovel = updatedNovel;
+            onUpdateNovel(updatedNovel);
+          }
+        }
       }
 
       let accumContext = ''; // 累积全局和常驻上下文
@@ -1873,28 +1943,28 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               setNodes(nds => nds.map(n => {
                 if (n.id === node.id) {
                   const novel = (localNovel as Novel);
-                  const chapter = novel.chapters.find(c => c.id === chapterId);
-                  const title = chapter?.title || `第${chapterId}章`;
                   
-                  const existingEntries = n.data.outputEntries || [];
-                  const otherEntries = existingEntries.filter(e => e.id !== `chapter-${chapterId}`);
-                  const newEntry: OutputEntry = {
-                    id: `chapter-${chapterId}`,
-                    title: title,
-                    content: content,
-                    versions: chapter?.versions,
-                    analysisResult: chapter?.analysisResult
-                  };
+                  // --- 修复：在长文模式下，获取所有相关的章节和总结 ---
+                  const targetVolId = n.data.targetVolumeId || finalVolumeId;
+                  const volumeChapters = novel.chapters.filter(c => c.volumeId === targetVolId);
                   
-                  // 改进排序：根据小说中实际的章节顺序进行排序
-                  const updatedEntries = [...otherEntries, newEntry];
-                  const sortedEntries = updatedEntries.sort((a, b) => {
-                    const idA = parseInt(a.id.replace('chapter-', '') || '0', 10);
-                    const idB = parseInt(b.id.replace('chapter-', '') || '0', 10);
-                    const indexA = novel.chapters.findIndex(c => c.id === idA);
-                    const indexB = novel.chapters.findIndex(c => c.id === idB);
-                    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                    return idA - idB;
+                  const newEntries: OutputEntry[] = volumeChapters.map(c => ({
+                    id: c.subtype ? `${c.subtype}-${c.id}` : `chapter-${c.id}`,
+                    title: c.title,
+                    content: c.content || '',
+                    versions: c.versions,
+                    analysisResult: c.analysisResult
+                  }));
+
+                  // 排序：根据小说中实际的章节顺序进行排序
+                  const sortedEntries = newEntries.sort((a, b) => {
+                    const indexA = novel.chapters.findIndex(c =>
+                      (c.subtype ? `${c.subtype}-${c.id}` : `chapter-${c.id}`) === a.id
+                    );
+                    const indexB = novel.chapters.findIndex(c =>
+                      (c.subtype ? `${c.subtype}-${c.id}` : `chapter-${c.id}`) === b.id
+                    );
+                    return indexA - indexB;
                   });
 
                   return {
