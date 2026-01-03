@@ -390,6 +390,481 @@ export interface WorkflowEditorProps {
   };
 }
 
+const NodePropertiesModal = ({
+  node,
+  onClose,
+  updateNodeData,
+  toggleSetReference,
+  activeNovel,
+  allPresets,
+  pendingFolders,
+  globalConfig,
+  addEntry,
+  removeEntry,
+  updateEntryTitle,
+  updateEntryContent,
+  setPreviewEntry
+}: {
+  node: WorkflowNode;
+  onClose: () => void;
+  updateNodeData: (nodeId: string, updates: Partial<WorkflowNodeData>) => void;
+  toggleSetReference: (type: any, setId: string) => void;
+  activeNovel: Novel | undefined;
+  allPresets: Record<string, GeneratorPreset[]>;
+  pendingFolders: string[];
+  globalConfig: any;
+  addEntry: () => void;
+  removeEntry: (entryId: string) => void;
+  updateEntryTitle: (entryId: string, title: string) => void;
+  updateEntryContent: (entryId: string, content: string) => void;
+  setPreviewEntry: (entry: OutputEntry) => void;
+}) => {
+  const [localLabel, setLocalLabel] = useState(node.data.label);
+  const [localFolderName, setLocalFolderName] = useState(node.data.folderName);
+  const [localInstruction, setLocalInstruction] = useState(node.data.instruction);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    setLocalLabel(node.data.label);
+    setLocalFolderName(node.data.folderName);
+    setLocalInstruction(node.data.instruction);
+  }, [node.id]);
+
+  const debouncedUpdate = (updates: Partial<WorkflowNodeData>) => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      updateNodeData(node.id, updates);
+    }, 500);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200">
+      <div className="absolute inset-0" onClick={onClose} />
+      <div className="relative w-full max-w-[650px] bg-[#1e2230] rounded-xl shadow-2xl border border-gray-700/50 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-5 border-b border-gray-700/50 flex items-center justify-between bg-[#1a1d29]">
+          <div className="flex items-center gap-2.5 text-indigo-400">
+            {node.data.icon && <node.data.icon className="w-5 h-5" />}
+            <span className="font-bold text-gray-100 text-lg">配置: {localLabel}</span>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-700/50 rounded-md text-gray-400 hover:text-white transition-all">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-8 space-y-8 custom-scrollbar max-h-[80vh] overflow-y-auto bg-[#1e2230]">
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2.5">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">模块显示名称</label>
+              <input
+                type="text"
+                value={localLabel}
+                onChange={(e) => {
+                  setLocalLabel(e.target.value);
+                  debouncedUpdate({ label: e.target.value });
+                }}
+                className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all"
+              />
+            </div>
+            <div className={`space-y-2.5 ${(node.data.typeKey === 'createFolder' || node.data.typeKey === 'reuseDirectory') ? 'col-span-2' : ''}`}>
+              <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+                {node.data.typeKey === 'createFolder' ? <FolderPlus className="w-3 h-3" /> : <Folder className="w-3 h-3" />}
+                {node.data.typeKey === 'createFolder' ? '创建并关联目录名' : node.data.typeKey === 'reuseDirectory' ? '选择或输入要复用的目录名' : '独立目录关联 (可选)'}
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={localFolderName}
+                  onChange={(e) => {
+                    setLocalFolderName(e.target.value);
+                    debouncedUpdate({ folderName: e.target.value });
+                  }}
+                  className="flex-1 bg-[#161922] border border-indigo-900/30 rounded-lg px-4 py-2.5 text-sm text-indigo-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all"
+                  placeholder={node.data.typeKey === 'createFolder' ? "输入要创建的项目文件夹名称..." : "输入或选择目录名..."}
+                />
+                {node.data.typeKey === 'reuseDirectory' && activeNovel && (
+                  <select
+                    className="bg-[#161922] border border-gray-700 rounded-lg px-2 text-xs text-gray-300 outline-none"
+                    onChange={(e) => {
+                      setLocalFolderName(e.target.value);
+                      updateNodeData(node.id, { folderName: e.target.value });
+                    }}
+                    value=""
+                  >
+                    <option value="" disabled>快速选择...</option>
+                    {Array.from(new Set([
+                      ...(activeNovel.volumes?.map(v => v.title) || []),
+                      ...(activeNovel.worldviewSets?.map(s => s.name) || []),
+                      ...(activeNovel.characterSets?.map(s => s.name) || []),
+                      ...(activeNovel.outlineSets?.map(s => s.name) || [])
+                    ])).filter(Boolean).map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {node.data.presetType && (
+            <div className="space-y-3 pt-6 border-t border-gray-700/30">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                <Cpu className="w-3.5 h-3.5" /> 调用系统预设
+              </label>
+              <div className="relative">
+                <select
+                  value={node.data.presetId as string}
+                  onChange={(e) => {
+                    const presets = allPresets[node.data.presetType as string] || [];
+                    const preset = presets.find(p => p.id === e.target.value);
+                    updateNodeData(node.id, {
+                      presetId: e.target.value,
+                      presetName: preset?.name || ''
+                    });
+                  }}
+                  className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none appearance-none cursor-pointer transition-all"
+                >
+                  <option value="">-- {node.data.typeKey === 'aiChat' ? '使用主设置模型' : '请选择生成预设'} --</option>
+                  {node.data.typeKey === 'aiChat'
+                    ? Object.values(allPresets).flat().map(p => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认模型'})</option>
+                      ))
+                    : (allPresets[node.data.presetType as string] || []).map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))
+                  }
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+              </div>
+            </div>
+          )}
+
+          {node.data.typeKey === 'chapter' && activeNovel && (
+            <div className="space-y-6 pt-6 border-t border-gray-700/30">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2.5">
+                  <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Library className="w-3 h-3" /> 保存至分卷
+                  </label>
+                  <div className="space-y-2">
+                    <select
+                      value={node.data.targetVolumeId as string}
+                      onChange={(e) => updateNodeData(node.id, { targetVolumeId: e.target.value, targetVolumeName: '' })}
+                      className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all"
+                    >
+                      <option value="">{pendingFolders.length > 0 ? `-- 自动匹配分卷 (${pendingFolders[0]}) --` : '-- 未分卷 --'}</option>
+                      <option value="NEW_VOLUME">+ 新建分卷...</option>
+                      {activeNovel.volumes.map(v => (
+                        <option key={v.id} value={v.id}>{v.title}</option>
+                      ))}
+                    </select>
+                    {node.data.targetVolumeId === 'NEW_VOLUME' && (
+                      <input
+                        type="text"
+                        value={node.data.targetVolumeName as string}
+                        onChange={(e) => updateNodeData(node.id, { targetVolumeName: e.target.value })}
+                        placeholder="输入新分卷名称..."
+                        className="w-full bg-[#161922] border border-indigo-900/40 rounded-lg px-4 py-2 text-xs text-indigo-100 focus:border-indigo-500 outline-none transition-all"
+                      />
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-end gap-4 pb-1">
+                  <button
+                    onClick={() => {
+                      const newVal = !node.data.autoOptimize;
+                      updateNodeData(node.id, { autoOptimize: newVal });
+                      if (globalConfig?.updateAutoOptimize) {
+                        globalConfig.updateAutoOptimize(newVal);
+                      }
+                    }}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${node.data.autoOptimize ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+                  >
+                    <div className={`w-3 h-3 rounded-full ${node.data.autoOptimize ? 'bg-purple-500 animate-pulse' : 'bg-gray-600'}`} />
+                    自动优化
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newVal = !node.data.twoStepOptimization;
+                      updateNodeData(node.id, { twoStepOptimization: newVal });
+                      if (globalConfig?.updateTwoStepOptimization) {
+                        globalConfig.updateTwoStepOptimization(newVal);
+                      }
+                    }}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${node.data.twoStepOptimization ? 'bg-pink-500/20 text-pink-300 border-pink-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+                  >
+                    <div className={`w-3 h-3 rounded-full ${node.data.twoStepOptimization ? 'bg-pink-500 animate-pulse' : 'bg-gray-600'}`} />
+                    两阶段优化
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {node.data.typeKey !== 'userInput' && activeNovel && (
+            <div className="space-y-4 pt-6 border-t border-gray-700/30">
+              <label className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                <CheckSquare className="w-3.5 h-3.5" /> 关联参考资料集 (Context)
+              </label>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-[#161922] p-3 rounded-lg border border-gray-700/50 space-y-2">
+                  <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
+                    <Globe className="w-3 h-3 text-emerald-500"/> 世界观设定
+                  </div>
+                  <div className="space-y-1 pt-1">
+                    {activeNovel.worldviewSets?.map(set => (
+                      <button
+                        key={set.id}
+                        onClick={() => toggleSetReference('worldview', set.id)}
+                        className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${((node.data.selectedWorldviewSets || []) as string[]).includes(set.id) ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium' : 'bg-gray-800/50 hover:bg-gray-700 text-gray-400 border border-transparent'}`}
+                      >
+                        {((node.data.selectedWorldviewSets || []) as string[]).includes(set.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                        {set.name}
+                      </button>
+                    ))}
+                    {pendingFolders.filter(name => !activeNovel.worldviewSets?.some(s => s.name === name)).map(name => {
+                      const pendingId = `pending:${name}`;
+                      const isSelected = ((node.data.selectedWorldviewSets || []) as string[]).includes(pendingId);
+                      return (
+                        <button
+                          key={pendingId}
+                          onClick={() => toggleSetReference('worldview', pendingId)}
+                          className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${isSelected ? 'bg-emerald-600/30 text-emerald-200 border border-emerald-500/50 shadow-sm shadow-emerald-900/20 font-bold' : 'bg-gray-800/40 hover:bg-gray-700/60 text-gray-500 border border-dashed border-emerald-500/20'}`}
+                        >
+                          {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-emerald-400" /> : <Square className="w-3.5 h-3.5" />}
+                          {name} (计划中)
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-[#161922] p-3 rounded-lg border border-gray-700/50 space-y-2">
+                  <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
+                    <Users className="w-3 h-3 text-orange-500"/> 角色档案集
+                  </div>
+                  <div className="space-y-1 pt-1">
+                    {activeNovel.characterSets?.map(set => (
+                      <button
+                        key={set.id}
+                        onClick={() => toggleSetReference('character', set.id)}
+                        className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${((node.data.selectedCharacterSets || []) as string[]).includes(set.id) ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30 font-medium' : 'bg-gray-800/50 hover:bg-gray-700 text-gray-400 border border-transparent'}`}
+                      >
+                        {((node.data.selectedCharacterSets || []) as string[]).includes(set.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                        {set.name}
+                      </button>
+                    ))}
+                    {pendingFolders.filter(name => !activeNovel.characterSets?.some(s => s.name === name)).map(name => {
+                      const pendingId = `pending:${name}`;
+                      const isSelected = ((node.data.selectedCharacterSets || []) as string[]).includes(pendingId);
+                      return (
+                        <button
+                          key={pendingId}
+                          onClick={() => toggleSetReference('character', pendingId)}
+                          className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${isSelected ? 'bg-orange-600/30 text-orange-200 border border-orange-500/50 shadow-sm shadow-orange-900/20 font-bold' : 'bg-gray-800/40 hover:bg-gray-700/60 text-gray-500 border border-dashed border-orange-500/20'}`}
+                        >
+                          {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-orange-400" /> : <Square className="w-3.5 h-3.5" />}
+                          {name} (计划中)
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-[#161922] p-3 rounded-lg border border-gray-700/50 space-y-2">
+                  <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
+                    <LayoutList className="w-3 h-3 text-pink-500"/> 剧情粗纲
+                  </div>
+                  <div className="space-y-1 pt-1">
+                    {activeNovel.outlineSets?.map(set => (
+                      <button
+                        key={set.id}
+                        onClick={() => toggleSetReference('outline', set.id)}
+                        className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${((node.data.selectedOutlineSets || []) as string[]).includes(set.id) ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30 font-medium' : 'bg-gray-800/50 hover:bg-gray-700 text-gray-400 border border-transparent'}`}
+                      >
+                        {((node.data.selectedOutlineSets || []) as string[]).includes(set.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                        {set.name}
+                      </button>
+                    ))}
+                    {pendingFolders.filter(name => !activeNovel.outlineSets?.some(s => s.name === name)).map(name => {
+                      const pendingId = `pending:${name}`;
+                      const isSelected = ((node.data.selectedOutlineSets || []) as string[]).includes(pendingId);
+                      return (
+                        <button
+                          key={pendingId}
+                          onClick={() => toggleSetReference('outline', pendingId)}
+                          className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${isSelected ? 'bg-pink-600/30 text-pink-200 border border-pink-500/50 shadow-sm shadow-pink-900/20 font-bold' : 'bg-gray-800/40 hover:bg-gray-700/60 text-gray-500 border border-dashed border-pink-500/20'}`}
+                        >
+                          {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-pink-400" /> : <Square className="w-3.5 h-3.5" />}
+                          {name} (计划中)
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-[#161922] p-3 rounded-lg border border-gray-700/50 space-y-2">
+                  <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
+                    <Lightbulb className="w-3 h-3 text-yellow-500"/> 灵感脑洞集
+                  </div>
+                  <div className="space-y-1 pt-1">
+                    {activeNovel.inspirationSets?.map(set => (
+                      <button
+                        key={set.id}
+                        onClick={() => toggleSetReference('inspiration', set.id)}
+                        className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${((node.data.selectedInspirationSets || []) as string[]).includes(set.id) ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 font-medium' : 'bg-gray-800/50 hover:bg-gray-700 text-gray-400 border border-transparent'}`}
+                      >
+                        {((node.data.selectedInspirationSets || []) as string[]).includes(set.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                        {set.name}
+                      </button>
+                    ))}
+                    {pendingFolders.filter(name => !activeNovel.inspirationSets?.some(s => s.name === name)).map(name => {
+                      const pendingId = `pending:${name}`;
+                      const isSelected = ((node.data.selectedInspirationSets || []) as string[]).includes(pendingId);
+                      return (
+                        <button
+                          key={pendingId}
+                          onClick={() => toggleSetReference('inspiration', pendingId)}
+                          className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${isSelected ? 'bg-yellow-600/30 text-yellow-200 border border-yellow-500/50 shadow-sm shadow-yellow-900/20 font-bold' : 'bg-gray-800/40 hover:bg-gray-700/60 text-gray-500 border border-dashed border-yellow-500/20'}`}
+                        >
+                          {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-yellow-400" /> : <Square className="w-3.5 h-3.5" />}
+                          {name} (计划中)
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-700/30">
+                <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-2">
+                  <Folder className="w-3 h-3 text-blue-500"/> 参考资料库文件夹 (全量关联)
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {activeNovel.referenceFolders?.map(folder => (
+                    <button
+                      key={folder.id}
+                      onClick={() => toggleSetReference('folder', folder.id)}
+                      className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${((node.data.selectedReferenceFolders || []) as string[]).includes(folder.id) ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium' : 'bg-[#161922] hover:bg-gray-700 text-gray-400 border border-gray-700/50'}`}
+                    >
+                      {((node.data.selectedReferenceFolders || []) as string[]).includes(folder.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                      <span className="truncate">{folder.name}</span>
+                    </button>
+                  ))}
+                  {(!activeNovel.referenceFolders || activeNovel.referenceFolders.length === 0) && (
+                    <div className="col-span-2 py-4 text-center text-[10px] text-gray-600 border border-dashed border-gray-700 rounded-lg">
+                      资料库中暂无文件夹，请先在资料库中创建
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3 pt-6 border-t border-gray-700/30">
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">额外指令 (USER PROMPT)</label>
+            <textarea
+              value={localInstruction}
+              onChange={(e) => {
+                setLocalInstruction(e.target.value);
+                debouncedUpdate({ instruction: e.target.value });
+              }}
+              placeholder="输入该步骤的特定要求或引导词..."
+              className="w-full h-32 bg-[#161922] border border-gray-700/80 rounded-lg p-4 text-sm text-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none font-mono leading-relaxed transition-all"
+            />
+          </div>
+
+          <div className="space-y-4 pt-6 border-t border-gray-700/30">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                <Workflow className="w-3.5 h-3.5" /> {node.data.typeKey === 'chapter' ? '章节生成列表' : '生成内容列表 (Output Entries)'}
+              </label>
+              {node.data.typeKey !== 'chapter' && (
+                <button onClick={addEntry} className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+                  <Plus className="w-3 h-3" /> 新增条目
+                </button>
+              )}
+            </div>
+            
+            <div className="space-y-4">
+              {node.data.typeKey === 'chapter' && (
+                <div className="grid grid-cols-1 gap-2">
+                  {((node.data.outputEntries || []) as OutputEntry[]).map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="bg-[#161922] border border-gray-700/50 rounded-lg p-3 hover:bg-[#1a1d29] transition-colors group/chapter cursor-pointer flex items-center justify-between"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setPreviewEntry(entry);
+                      }}
+                    >
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="w-8 h-8 rounded bg-indigo-500/10 flex items-center justify-center shrink-0">
+                          <FileText className="w-4 h-4 text-indigo-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-200 truncate">{entry.title}</div>
+                          <div className="text-[10px] text-gray-500 truncate">{entry.content.replace(/\s+/g, ' ').substring(0, 60)}...</div>
+                        </div>
+                      </div>
+                      <button type="button" className="px-3 py-1 bg-indigo-600/20 text-indigo-400 rounded text-[10px] font-bold group-hover/chapter:bg-indigo-600 group-hover/chapter:text-white transition-all whitespace-nowrap">
+                        查看正文
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {node.data.typeKey !== 'chapter' && ((node.data.outputEntries || []) as OutputEntry[]).map((entry) => (
+                <div key={entry.id} className="bg-[#161922] border border-gray-700/50 rounded-xl overflow-hidden shadow-lg group/entry">
+                  <div className="bg-[#1a1d29] px-4 py-2 border-b border-gray-700/50 flex items-center justify-between">
+                    <input
+                      value={entry.title}
+                      onChange={(e) => updateEntryTitle(entry.id, e.target.value)}
+                      className="bg-transparent border-none outline-none text-xs font-bold text-indigo-300 focus:text-white transition-colors flex-1"
+                      placeholder="条目标题..."
+                    />
+                    <button onClick={() => removeEntry(entry.id)} className="p-1 text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover/entry:opacity-100">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <textarea
+                    value={entry.content}
+                    onChange={(e) => updateEntryContent(entry.id, e.target.value)}
+                    placeholder="输入内容..."
+                    className="w-full h-32 bg-transparent p-4 text-sm text-gray-300 focus:text-emerald-50 outline-none resize-none font-mono leading-relaxed"
+                  />
+                </div>
+              ))}
+              {(!node.data.outputEntries || (node.data.outputEntries as OutputEntry[]).length === 0) && (
+                <div className="text-center py-12 bg-[#161922] rounded-xl border border-dashed border-gray-700">
+                  <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
+                    <Workflow className="w-6 h-6 text-gray-600" />
+                  </div>
+                  <p className="text-sm text-gray-500">暂无生成产物，执行工作流或手动添加</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5 border-t border-gray-700/50 bg-[#1a1d29]">
+          <button
+            onClick={() => {
+              updateNodeData(node.id, { _deleted: true });
+              onClose();
+            }}
+            className="w-full py-3 bg-red-900/10 hover:bg-red-900/20 text-red-400 hover:text-red-300 rounded-lg border border-red-900/30 text-sm font-semibold transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+          >
+            <Trash2 className="w-4 h-4" /> 删除模块
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const { isOpen, onClose, activeNovel, onSelectChapter, onUpdateNovel, onStartAutoWrite, globalConfig } = props;
   const { screenToFlowPosition } = useReactFlow();
@@ -571,30 +1046,44 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     }
   };
 
-  // 自动持久化状态
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 自动持久化状态 - 增加防抖处理
   useEffect(() => {
     // 即使界面关闭，如果正在后台运行，也需要持续保存进度
     if ((!isOpen && !isRunning) || workflows.length === 0) return;
     
-    setWorkflows(prevWorkflows => {
-      const updatedWorkflows = prevWorkflows.map(w => {
-        if (w.id === activeWorkflowId) {
-          return {
-            ...w,
-            nodes,
-            edges,
-            currentNodeIndex,
-            lastModified: Date.now()
-          };
-        }
-        return w;
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      setWorkflows(prevWorkflows => {
+        const updatedWorkflows = prevWorkflows.map(w => {
+          if (w.id === activeWorkflowId) {
+            return {
+              ...w,
+              nodes,
+              edges,
+              currentNodeIndex,
+              lastModified: Date.now()
+            };
+          }
+          return w;
+        });
+        
+        localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
+        localStorage.setItem('active_workflow_id', activeWorkflowId);
+        
+        return updatedWorkflows;
       });
-      
-      localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
-      localStorage.setItem('active_workflow_id', activeWorkflowId);
-      
-      return updatedWorkflows;
-    });
+    }, 1000); // 1秒防抖，避免高频写入
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning]);
 
   const switchWorkflow = (id: string) => {
@@ -1982,441 +2471,27 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
         {/* --- 节点属性弹窗 --- */}
         {editingNode && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200">
-            <div
-              className="absolute inset-0"
-              onClick={() => setEditingNodeId(null)}
-            />
-            
-            <div className="relative w-full max-w-[650px] bg-[#1e2230] rounded-xl shadow-2xl border border-gray-700/50 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-              <div className="p-5 border-b border-gray-700/50 flex items-center justify-between bg-[#1a1d29]">
-                <div className="flex items-center gap-2.5 text-indigo-400">
-                  <editingNode.data.icon className="w-5 h-5" />
-                  <span className="font-bold text-gray-100 text-lg">配置: {editingNode.data.label}</span>
-                </div>
-                <button
-                  onClick={() => setEditingNodeId(null)}
-                  className="p-1.5 hover:bg-gray-700/50 rounded-md text-gray-400 hover:text-white transition-all"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="p-8 space-y-8 custom-scrollbar max-h-[80vh] overflow-y-auto bg-[#1e2230]">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2.5">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">模块显示名称</label>
-                    <input
-                      type="text"
-                      value={editingNode.data.label}
-                      onChange={(e) => updateNodeData(editingNode.id, { label: e.target.value })}
-                      className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all"
-                    />
-                  </div>
-                  <div className={`space-y-2.5 ${(editingNode.data.typeKey === 'createFolder' || editingNode.data.typeKey === 'reuseDirectory') ? 'col-span-2' : ''}`}>
-                    <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
-                      {editingNode.data.typeKey === 'createFolder' ? <FolderPlus className="w-3 h-3" /> : <Folder className="w-3 h-3" />}
-                      {editingNode.data.typeKey === 'createFolder' ? '创建并关联目录名' : editingNode.data.typeKey === 'reuseDirectory' ? '选择或输入要复用的目录名' : '独立目录关联 (可选)'}
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={editingNode.data.folderName}
-                        onChange={(e) => updateNodeData(editingNode.id, { folderName: e.target.value })}
-                        className="flex-1 bg-[#161922] border border-indigo-900/30 rounded-lg px-4 py-2.5 text-sm text-indigo-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all"
-                        placeholder={editingNode.data.typeKey === 'createFolder' ? "输入要创建的项目文件夹名称..." : "输入或选择目录名..."}
-                      />
-                      {editingNode.data.typeKey === 'reuseDirectory' && activeNovel && (
-                        <select
-                          className="bg-[#161922] border border-gray-700 rounded-lg px-2 text-xs text-gray-300 outline-none"
-                          onChange={(e) => updateNodeData(editingNode.id, { folderName: e.target.value })}
-                          value=""
-                        >
-                          <option value="" disabled>快速选择...</option>
-                          {/* 提取所有已存在的集合名称作为候选目录 */}
-                          {Array.from(new Set([
-                            ...(activeNovel.volumes?.map(v => v.title) || []),
-                            ...(activeNovel.worldviewSets?.map(s => s.name) || []),
-                            ...(activeNovel.characterSets?.map(s => s.name) || []),
-                            ...(activeNovel.outlineSets?.map(s => s.name) || [])
-                          ])).filter(Boolean).map(name => (
-                            <option key={name} value={name}>{name}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {editingNode.data.presetType && (
-                  <div className="space-y-3 pt-6 border-t border-gray-700/30">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                      <Cpu className="w-3.5 h-3.5" /> 调用系统预设
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={editingNode.data.presetId}
-                        onChange={(e) => {
-                          const presets = allPresets[editingNode.data.presetType as string] || [];
-                          const preset = presets.find(p => p.id === e.target.value);
-                          updateNodeData(editingNode.id, {
-                            presetId: e.target.value,
-                            presetName: preset?.name || ''
-                          });
-                        }}
-                        className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none appearance-none cursor-pointer transition-all"
-                      >
-                        <option value="">-- {editingNode.data.typeKey === 'aiChat' ? '使用主设置模型' : '请选择生成预设'} --</option>
-                        {editingNode.data.typeKey === 'aiChat'
-                          ? Object.values(allPresets).flat().map(p => (
-                              <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认模型'})</option>
-                            ))
-                          : (allPresets[editingNode.data.presetType as string] || []).map(p => (
-                              <option key={p.id} value={p.id}>{p.name}</option>
-                            ))
-                        }
-                      </select>
-                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
-                    </div>
-                  </div>
-                )}
-
-                {editingNode.data.typeKey === 'chapter' && activeNovel && (
-                  <div className="space-y-6 pt-6 border-t border-gray-700/30">
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-2.5">
-                        <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
-                          <Library className="w-3 h-3" /> 保存至分卷
-                        </label>
-                        <div className="space-y-2">
-                          <select
-                            value={editingNode.data.targetVolumeId as string}
-                            onChange={(e) => updateNodeData(editingNode.id, { targetVolumeId: e.target.value, targetVolumeName: '' })}
-                            className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all"
-                          >
-                            <option value="">{pendingFolders.length > 0 ? `-- 自动匹配分卷 (${pendingFolders[0]}) --` : '-- 未分卷 --'}</option>
-                            <option value="NEW_VOLUME">+ 新建分卷...</option>
-                            {activeNovel.volumes.map(v => (
-                              <option key={v.id} value={v.id}>{v.title}</option>
-                            ))}
-                          </select>
-                          {editingNode.data.targetVolumeId === 'NEW_VOLUME' && (
-                            <input
-                              type="text"
-                              value={editingNode.data.targetVolumeName as string}
-                              onChange={(e) => updateNodeData(editingNode.id, { targetVolumeName: e.target.value })}
-                              placeholder="输入新分卷名称..."
-                              className="w-full bg-[#161922] border border-indigo-900/40 rounded-lg px-4 py-2 text-xs text-indigo-100 focus:border-indigo-500 outline-none transition-all"
-                            />
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-end gap-4 pb-1">
-                        <button
-                          onClick={() => {
-                            const newVal = !editingNode.data.autoOptimize;
-                            updateNodeData(editingNode.id, { autoOptimize: newVal });
-                            if (globalConfig?.updateAutoOptimize) {
-                              globalConfig.updateAutoOptimize(newVal);
-                            }
-                          }}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${editingNode.data.autoOptimize ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-                        >
-                          <div className={`w-3 h-3 rounded-full ${editingNode.data.autoOptimize ? 'bg-purple-500 animate-pulse' : 'bg-gray-600'}`} />
-                          自动优化
-                        </button>
-                        <button
-                          onClick={() => {
-                            const newVal = !editingNode.data.twoStepOptimization;
-                            updateNodeData(editingNode.id, { twoStepOptimization: newVal });
-                            if (globalConfig?.updateTwoStepOptimization) {
-                              globalConfig.updateTwoStepOptimization(newVal);
-                            }
-                          }}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${editingNode.data.twoStepOptimization ? 'bg-pink-500/20 text-pink-300 border-pink-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-                        >
-                          <div className={`w-3 h-3 rounded-full ${editingNode.data.twoStepOptimization ? 'bg-pink-500 animate-pulse' : 'bg-gray-600'}`} />
-                          两阶段优化
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {editingNode.data.typeKey !== 'userInput' && activeNovel && (
-                  <div className="space-y-4 pt-6 border-t border-gray-700/30">
-                    <label className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-2">
-                      <CheckSquare className="w-3.5 h-3.5" /> 关联参考资料集 (Context)
-                    </label>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-[#161922] p-3 rounded-lg border border-gray-700/50 space-y-2">
-                        <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
-                          <Globe className="w-3 h-3 text-emerald-500"/> 世界观设定
-                        </div>
-                        <div className="space-y-1 pt-1">
-                          {activeNovel.worldviewSets?.map(set => (
-                            <button
-                              key={set.id}
-                              onClick={() => toggleSetReference('worldview', set.id)}
-                              className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${editingNode.data.selectedWorldviewSets.includes(set.id) ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium' : 'bg-gray-800/50 hover:bg-gray-700 text-gray-400 border border-transparent'}`}
-                            >
-                              {editingNode.data.selectedWorldviewSets.includes(set.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
-                              {set.name}
-                            </button>
-                          ))}
-                          {/* 显示尚未创建但计划中的文件夹，使用 pending: 前缀标识 */}
-                          {pendingFolders.filter(name => !activeNovel.worldviewSets?.some(s => s.name === name)).map(name => {
-                            const pendingId = `pending:${name}`;
-                            const isSelected = (editingNode.data.selectedWorldviewSets as string[]).includes(pendingId);
-                            return (
-                              <button
-                                key={pendingId}
-                                onClick={() => toggleSetReference('worldview', pendingId)}
-                                className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${isSelected ? 'bg-emerald-600/30 text-emerald-200 border border-emerald-500/50 shadow-sm shadow-emerald-900/20 font-bold' : 'bg-gray-800/40 hover:bg-gray-700/60 text-gray-500 border border-dashed border-emerald-500/20'}`}
-                              >
-                                {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-emerald-400" /> : <Square className="w-3.5 h-3.5" />}
-                                {name} (计划中)
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="bg-[#161922] p-3 rounded-lg border border-gray-700/50 space-y-2">
-                        <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
-                          <Users className="w-3 h-3 text-orange-500"/> 角色档案集
-                        </div>
-                        <div className="space-y-1 pt-1">
-                          {activeNovel.characterSets?.map(set => (
-                            <button
-                              key={set.id}
-                              onClick={() => toggleSetReference('character', set.id)}
-                              className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${editingNode.data.selectedCharacterSets.includes(set.id) ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30 font-medium' : 'bg-gray-800/50 hover:bg-gray-700 text-gray-400 border border-transparent'}`}
-                            >
-                              {editingNode.data.selectedCharacterSets.includes(set.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
-                              {set.name}
-                            </button>
-                          ))}
-                          {/* 显示尚未创建但计划中的文件夹 */}
-                          {pendingFolders.filter(name => !activeNovel.characterSets?.some(s => s.name === name)).map(name => {
-                            const pendingId = `pending:${name}`;
-                            const isSelected = (editingNode.data.selectedCharacterSets as string[]).includes(pendingId);
-                            return (
-                              <button
-                                key={pendingId}
-                                onClick={() => toggleSetReference('character', pendingId)}
-                                className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${isSelected ? 'bg-orange-600/30 text-orange-200 border border-orange-500/50 shadow-sm shadow-orange-900/20 font-bold' : 'bg-gray-800/40 hover:bg-gray-700/60 text-gray-500 border border-dashed border-orange-500/20'}`}
-                              >
-                                {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-orange-400" /> : <Square className="w-3.5 h-3.5" />}
-                                {name} (计划中)
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="bg-[#161922] p-3 rounded-lg border border-gray-700/50 space-y-2">
-                        <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
-                          <LayoutList className="w-3 h-3 text-pink-500"/> 剧情粗纲
-                        </div>
-                        <div className="space-y-1 pt-1">
-                          {activeNovel.outlineSets?.map(set => (
-                            <button
-                              key={set.id}
-                              onClick={() => toggleSetReference('outline', set.id)}
-                              className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${editingNode.data.selectedOutlineSets.includes(set.id) ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30 font-medium' : 'bg-gray-800/50 hover:bg-gray-700 text-gray-400 border border-transparent'}`}
-                            >
-                              {editingNode.data.selectedOutlineSets.includes(set.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
-                              {set.name}
-                            </button>
-                          ))}
-                          {/* 显示尚未创建但计划中的文件夹 */}
-                          {pendingFolders.filter(name => !activeNovel.outlineSets?.some(s => s.name === name)).map(name => {
-                            const pendingId = `pending:${name}`;
-                            const isSelected = (editingNode.data.selectedOutlineSets as string[]).includes(pendingId);
-                            return (
-                              <button
-                                key={pendingId}
-                                onClick={() => toggleSetReference('outline', pendingId)}
-                                className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${isSelected ? 'bg-pink-600/30 text-pink-200 border border-pink-500/50 shadow-sm shadow-pink-900/20 font-bold' : 'bg-gray-800/40 hover:bg-gray-700/60 text-gray-500 border border-dashed border-pink-500/20'}`}
-                              >
-                                {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-pink-400" /> : <Square className="w-3.5 h-3.5" />}
-                                {name} (计划中)
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="bg-[#161922] p-3 rounded-lg border border-gray-700/50 space-y-2">
-                        <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
-                          <Lightbulb className="w-3 h-3 text-yellow-500"/> 灵感脑洞集
-                        </div>
-                        <div className="space-y-1 pt-1">
-                          {activeNovel.inspirationSets?.map(set => (
-                            <button
-                              key={set.id}
-                              onClick={() => toggleSetReference('inspiration', set.id)}
-                              className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${editingNode.data.selectedInspirationSets.includes(set.id) ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 font-medium' : 'bg-gray-800/50 hover:bg-gray-700 text-gray-400 border border-transparent'}`}
-                            >
-                              {editingNode.data.selectedInspirationSets.includes(set.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
-                              {set.name}
-                            </button>
-                          ))}
-                          {/* 显示尚未创建但计划中的文件夹 */}
-                          {pendingFolders.filter(name => !activeNovel.inspirationSets?.some(s => s.name === name)).map(name => {
-                            const pendingId = `pending:${name}`;
-                            const isSelected = (editingNode.data.selectedInspirationSets as string[]).includes(pendingId);
-                            return (
-                              <button
-                                key={pendingId}
-                                onClick={() => toggleSetReference('inspiration', pendingId)}
-                                className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${isSelected ? 'bg-yellow-600/30 text-yellow-200 border border-yellow-500/50 shadow-sm shadow-yellow-900/20 font-bold' : 'bg-gray-800/40 hover:bg-gray-700/60 text-gray-500 border border-dashed border-yellow-500/20'}`}
-                              >
-                                {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-yellow-400" /> : <Square className="w-3.5 h-3.5" />}
-                                {name} (计划中)
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 参考资料库文件夹选择 */}
-                    <div className="mt-4 pt-4 border-t border-gray-700/30">
-                      <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-2">
-                        <Folder className="w-3 h-3 text-blue-500"/> 参考资料库文件夹 (全量关联)
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {activeNovel.referenceFolders?.map(folder => (
-                          <button
-                            key={folder.id}
-                            onClick={() => toggleSetReference('folder', folder.id)}
-                            className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${editingNode.data.selectedReferenceFolders?.includes(folder.id) ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium' : 'bg-[#161922] hover:bg-gray-700 text-gray-400 border border-gray-700/50'}`}
-                          >
-                            {editingNode.data.selectedReferenceFolders?.includes(folder.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
-                            <span className="truncate">{folder.name}</span>
-                          </button>
-                        ))}
-                        {(!activeNovel.referenceFolders || activeNovel.referenceFolders.length === 0) && (
-                          <div className="col-span-2 py-4 text-center text-[10px] text-gray-600 border border-dashed border-gray-700 rounded-lg">
-                            资料库中暂无文件夹，请先在资料库中创建
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-3 pt-6 border-t border-gray-700/30">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">额外指令 (USER PROMPT)</label>
-                  <textarea
-                    value={editingNode.data.instruction}
-                    onChange={(e) => updateNodeData(editingNode.id, { instruction: e.target.value })}
-                    placeholder="输入该步骤的特定要求或引导词..."
-                    className="w-full h-32 bg-[#161922] border border-gray-700/80 rounded-lg p-4 text-sm text-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none font-mono leading-relaxed transition-all"
-                  />
-                </div>
-
-                {/* 结构化生成内容编辑器 (条目模式) */}
-                <div className="space-y-4 pt-6 border-t border-gray-700/30">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                      <Workflow className="w-3.5 h-3.5" /> {editingNode.data.typeKey === 'chapter' ? '章节生成列表' : '生成内容列表 (Output Entries)'}
-                    </label>
-                    {editingNode.data.typeKey !== 'chapter' && (
-                      <button
-                        onClick={addEntry}
-                        className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
-                      >
-                        <Plus className="w-3 h-3" /> 新增条目
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-4">
-                    {editingNode.data.typeKey === 'chapter' && (
-                      <div className="grid grid-cols-1 gap-2">
-                        {(editingNode.data.outputEntries || []).map((entry) => (
-                          <div
-                            key={entry.id}
-                            className="bg-[#161922] border border-gray-700/50 rounded-lg p-3 hover:bg-[#1a1d29] transition-colors group/chapter cursor-pointer flex items-center justify-between"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setPreviewEntry(entry);
-                            }}
-                          >
-                            <div className="flex items-center gap-3 overflow-hidden">
-                              <div className="w-8 h-8 rounded bg-indigo-500/10 flex items-center justify-center shrink-0">
-                                <FileText className="w-4 h-4 text-indigo-400" />
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium text-gray-200 truncate">{entry.title}</div>
-                                <div className="text-[10px] text-gray-500 truncate">{entry.content.replace(/\s+/g, ' ').substring(0, 60)}...</div>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="px-3 py-1 bg-indigo-600/20 text-indigo-400 rounded text-[10px] font-bold group-hover/chapter:bg-indigo-600 group-hover/chapter:text-white transition-all whitespace-nowrap"
-                            >
-                              查看正文
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {editingNode.data.typeKey !== 'chapter' && (editingNode.data.outputEntries || []).map((entry) => (
-                      <div key={entry.id} className="bg-[#161922] border border-gray-700/50 rounded-xl overflow-hidden shadow-lg group/entry">
-                        <div className="bg-[#1a1d29] px-4 py-2 border-b border-gray-700/50 flex items-center justify-between">
-                          <input
-                            value={entry.title}
-                            onChange={(e) => updateEntryTitle(entry.id, e.target.value)}
-                            className="bg-transparent border-none outline-none text-xs font-bold text-indigo-300 focus:text-white transition-colors flex-1"
-                            placeholder="条目标题..."
-                          />
-                          <button
-                            onClick={() => removeEntry(entry.id)}
-                            className="p-1 text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover/entry:opacity-100"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                        <textarea
-                          value={entry.content}
-                          onChange={(e) => updateEntryContent(entry.id, e.target.value)}
-                          placeholder="输入内容..."
-                          className="w-full h-32 bg-transparent p-4 text-sm text-gray-300 focus:text-emerald-50 outline-none resize-none font-mono leading-relaxed"
-                        />
-                      </div>
-                    ))}
-                    {editingNode.data.outputEntries.length === 0 && (
-                      <div className="text-center py-12 bg-[#161922] rounded-xl border border-dashed border-gray-700">
-                        <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
-                          <Workflow className="w-6 h-6 text-gray-600" />
-                        </div>
-                        <p className="text-sm text-gray-500">暂无生成产物，执行工作流或手动添加</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-5 border-t border-gray-700/50 bg-[#1a1d29]">
-                <button
-                  onClick={() => {
-                    setNodes((nds) => nds.filter(n => n.id !== editingNodeId));
-                    setEditingNodeId(null);
-                  }}
-                  className="w-full py-3 bg-red-900/10 hover:bg-red-900/20 text-red-400 hover:text-red-300 rounded-lg border border-red-900/30 text-sm font-semibold transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
-                >
-                  <Trash2 className="w-4 h-4" /> 删除模块
-                </button>
-              </div>
-            </div>
-          </div>
+          <NodePropertiesModal
+            node={editingNode}
+            onClose={() => setEditingNodeId(null)}
+            updateNodeData={(id, updates) => {
+              if ((updates as any)._deleted) {
+                setNodes((nds) => nds.filter(n => n.id !== id));
+              } else {
+                updateNodeData(id, updates);
+              }
+            }}
+            toggleSetReference={toggleSetReference}
+            activeNovel={activeNovel}
+            allPresets={allPresets}
+            pendingFolders={pendingFolders}
+            globalConfig={globalConfig}
+            addEntry={addEntry}
+            removeEntry={removeEntry}
+            updateEntryTitle={updateEntryTitle}
+            updateEntryContent={updateEntryContent}
+            setPreviewEntry={setPreviewEntry}
+          />
         )}
 
         {/* --- 章节正文预览弹窗 --- */}

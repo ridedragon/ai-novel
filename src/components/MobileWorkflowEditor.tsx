@@ -531,6 +531,7 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
   const stopRequestedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isInitialLoadRef = useRef(true);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
 
@@ -654,12 +655,41 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
     }
   };
 
-  // 自动保存
+  // 自动保存 - 增加防抖处理
   useEffect(() => {
     if (!isOpen || workflows.length === 0 || isInitialLoadRef.current) return;
-    const updatedWorkflows = workflows.map(w => w.id === activeWorkflowId ? { ...w, nodes, edges, currentNodeIndex, lastModified: Date.now() } : w);
-    localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
-    localStorage.setItem('active_workflow_id', activeWorkflowId);
+    
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      setWorkflows(prevWorkflows => {
+        const updatedWorkflows = prevWorkflows.map(w => {
+          if (w.id === activeWorkflowId) {
+            return {
+              ...w,
+              nodes,
+              edges,
+              currentNodeIndex,
+              lastModified: Date.now()
+            };
+          }
+          return w;
+        });
+        
+        localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
+        localStorage.setItem('active_workflow_id', activeWorkflowId);
+        
+        return updatedWorkflows;
+      });
+    }, 1000);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [nodes, edges, currentNodeIndex, activeWorkflowId, isOpen]);
 
   const onConnect = useCallback(
