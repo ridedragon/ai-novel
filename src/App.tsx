@@ -5300,26 +5300,27 @@ ${taskDescription}`
         // Apply Regex Scripts to each part
         finalContents = finalContents.map(c => processTextWithRegex(c, scripts, 'output'))
 
-        // Update State with final separated content
-        const updatedNovels = novelsRef.current.map(n => {
-            if (n.id === novelId) {
-                return {
-                    ...n,
-                    chapters: n.chapters.map(c => {
-                        const batchIdx = preparedBatch.findIndex(b => b.id === c.id)
-                        if (batchIdx !== -1) {
-                            return { ...c, content: finalContents[batchIdx] || '' }
-                        }
-                        return c
-                    })
+        // Update State with final separated content - 使用函数式更新避免覆盖其他状态更改（如分卷折叠）
+        setNovels(prevNovels => {
+            const updated = prevNovels.map(n => {
+                if (n.id === novelId) {
+                    return {
+                        ...n,
+                        chapters: n.chapters.map(c => {
+                            const batchIdx = preparedBatch.findIndex(b => b.id === c.id)
+                            if (batchIdx !== -1) {
+                                return { ...c, content: finalContents[batchIdx] || '' }
+                            }
+                            return c
+                        })
+                    }
                 }
-            }
-            return n
+                return n
+            })
+            // 同步 Ref 以便后续逻辑（如摘要生成）使用
+            novelsRef.current = updated
+            return updated
         })
-        
-        setNovels(updatedNovels)
-        // CRITICAL: Manually sync ref to ensure immediate summary generation has access to new content
-        novelsRef.current = updatedNovels
 
         // Post-Generation Actions (Summary, Optimization)
         for (let i = 0; i < preparedBatch.length; i++) {
