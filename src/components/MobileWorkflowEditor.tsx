@@ -774,7 +774,28 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
   };
 
   const updateNodeData = (nodeId: string, updates: Partial<WorkflowNodeData>) => {
-    setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n));
+    setNodes((nds) => {
+      const targetNode = nds.find(n => n.id === nodeId);
+      const isRenameFolder = (targetNode?.data.typeKey === 'createFolder' || targetNode?.data.typeKey === 'reuseDirectory') && updates.folderName !== undefined && updates.folderName !== targetNode?.data.folderName;
+
+      return nds.map((node) => {
+        if (node.id === nodeId) {
+          return { ...node, data: { ...node.data, ...updates } };
+        }
+        
+        // 如果是目录节点重命名，清空其他节点的产物
+        if (isRenameFolder) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              outputEntries: [],
+            }
+          };
+        }
+        return node;
+      });
+    });
   };
 
   const deleteOutputEntry = (nodeId: string, entryId: string) => {
@@ -959,16 +980,20 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         }
       };
 
-      const sortedNodes = getOrderedNodes();
+      let sortedNodes = getOrderedNodes();
       
       // 重置后续节点的执行状态
       if (startIndex === 0) {
         setNodes(nds => nds.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } })));
         setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+        
+        // 同步清空快照，防止历史记录累加
+        sortedNodes = sortedNodes.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } }));
 
         // --- 核心修复：重新开始时清除关联目录下的内容 ---
-        const firstCreateFolderNode = getOrderedNodes().find(n => n.data.typeKey === 'createFolder');
-        const workflowFolderName = firstCreateFolderNode?.data.folderName;
+        // 查找第一个定义了目录名的节点（无论是创建还是复用）
+        const firstDirNode = getOrderedNodes().find(n => (n.data.typeKey === 'createFolder' || n.data.typeKey === 'reuseDirectory') && n.data.folderName);
+        const workflowFolderName = firstDirNode?.data.folderName;
 
         if (workflowFolderName && onUpdateNovel) {
           const updatedNovel = { ...localNovel };

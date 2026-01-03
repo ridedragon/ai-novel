@@ -298,15 +298,24 @@ export class AutoWriteEngine {
               if (this.config.asyncOptimize) {
                 // 异步模式：不等待优化完成，立即进行下一章或上报完成
                 this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate);
-                await onChapterComplete(chapterId, content, this.novel);
+                const resultNovel = await onChapterComplete(chapterId, content, this.novel);
+                if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
+                  this.novel = resultNovel as Novel;
+                }
               } else {
                 // 线性模式：等待优化完成
                 await this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate);
                 const updatedChapter = this.novel.chapters.find(c => c.id === chapterId);
-                await onChapterComplete(chapterId, updatedChapter?.content || content, this.novel);
+                const resultNovel = await onChapterComplete(chapterId, updatedChapter?.content || content, this.novel);
+                if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
+                  this.novel = resultNovel as Novel;
+                }
               }
             } else {
-              await onChapterComplete(chapterId, content, this.novel);
+              const resultNovel = await onChapterComplete(chapterId, content, this.novel);
+              if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
+                this.novel = resultNovel as Novel;
+              }
             }
           }
 

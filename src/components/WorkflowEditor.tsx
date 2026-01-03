@@ -392,6 +392,10 @@ export interface WorkflowEditorProps {
     asyncOptimize?: boolean;
     contextChapterCount?: number;
     maxConcurrentOptimizations?: number;
+    optimizePresets?: GeneratorPreset[];
+    activeOptimizePresetId?: string;
+    analysisPresets?: GeneratorPreset[];
+    activeAnalysisPresetId?: string;
   };
 }
 
@@ -1304,7 +1308,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const updateNodeData = useCallback((nodeId: string, updates: Partial<WorkflowNodeData>) => {
     setNodes((nds) => {
       const targetNode = nds.find(n => n.id === nodeId);
-      const isRenameFolder = targetNode?.data.typeKey === 'createFolder' && updates.folderName !== undefined && updates.folderName !== targetNode?.data.folderName;
+      const isRenameFolder = (targetNode?.data.typeKey === 'createFolder' || targetNode?.data.typeKey === 'reuseDirectory') && updates.folderName !== undefined && updates.folderName !== targetNode?.data.folderName;
       const oldFolderName = targetNode?.data.folderName;
       const newFolderName = updates.folderName;
 
@@ -1478,8 +1482,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         sortedNodes = sortedNodes.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } }));
 
         // --- 核心修复：重新开始时清除关联目录下的内容 ---
-        const firstCreateFolderNode = getOrderedNodes().find(n => n.data.typeKey === 'createFolder');
-        const workflowFolderName = firstCreateFolderNode?.data.folderName;
+        // 查找第一个定义了目录名的节点（无论是创建还是复用）
+        const firstDirNode = getOrderedNodes().find(n => (n.data.typeKey === 'createFolder' || n.data.typeKey === 'reuseDirectory') && n.data.folderName);
+        const workflowFolderName = firstDirNode?.data.folderName;
 
         if (workflowFolderName && onUpdateNovel) {
           const updatedNovel = { ...localNovel };
@@ -1965,8 +1970,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               }
               if (globalConfig.onChapterComplete) {
                 const result = await globalConfig.onChapterComplete(chapterId, content);
-                if (result && typeof result === 'object' && result.chapters) {
-                  localNovel = result;
+                if (result && typeof result === 'object' && (result as Novel).chapters) {
+                  localNovel = result as Novel;
                 }
               }
               // 实时更新正文生成节点的 outputEntries，以便用户查看
@@ -1976,10 +1981,12 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                   
                   // --- 修复：在长文模式下，获取所有相关的章节和总结 ---
                   const targetVolId = n.data.targetVolumeId || finalVolumeId;
+                  // 这里必须要包含 subtype 存在的章节（即小总结和大总结）
                   const volumeChapters = novel.chapters.filter(c => c.volumeId === targetVolId);
                   
                   const newEntries: OutputEntry[] = volumeChapters.map(c => ({
-                    id: c.subtype ? `${c.subtype}-${c.id}` : `chapter-${c.id}`,
+                    // 注意：这里 ID 的构造必须和下方排序逻辑中的查找 ID 一致
+                    id: (c.subtype === 'small_summary' || c.subtype === 'big_summary') ? `${c.subtype}-${c.id}` : `chapter-${c.id}`,
                     title: c.title,
                     content: c.content || '',
                     versions: c.versions,
@@ -1988,12 +1995,14 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
                   // 排序：根据小说中实际的章节顺序进行排序
                   const sortedEntries = newEntries.sort((a, b) => {
-                    const indexA = novel.chapters.findIndex(c =>
-                      (c.subtype ? `${c.subtype}-${c.id}` : `chapter-${c.id}`) === a.id
-                    );
-                    const indexB = novel.chapters.findIndex(c =>
-                      (c.subtype ? `${c.subtype}-${c.id}` : `chapter-${c.id}`) === b.id
-                    );
+                    const indexA = novel.chapters.findIndex(c => {
+                      const cid = (c.subtype === 'small_summary' || c.subtype === 'big_summary') ? `${c.subtype}-${c.id}` : `chapter-${c.id}`;
+                      return cid === a.id;
+                    });
+                    const indexB = novel.chapters.findIndex(c => {
+                      const cid = (c.subtype === 'small_summary' || c.subtype === 'big_summary') ? `${c.subtype}-${c.id}` : `chapter-${c.id}`;
+                      return cid === b.id;
+                    });
                     return indexA - indexB;
                   });
 
@@ -2007,6 +2016,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 }
                 return n;
               }));
+              
+              // 核心修复：必须将最新的 localNovel 返回给引擎
+              return localNovel;
             },
             finalVolumeId,
             false,

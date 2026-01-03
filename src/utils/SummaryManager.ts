@@ -74,7 +74,7 @@ export const checkAndGenerateSummary = async (
   const sInterval = Number(smallSummaryInterval) || 3;
   const bInterval = Number(bigSummaryInterval) || 6;
 
-  let lastUpdatedNovel: Novel | undefined = currentNovel;
+  let lastUpdatedNovel: Novel = { ...currentNovel, chapters: currentChaptersSnapshot };
 
   const generate = async (type: 'small' | 'big', start: number, end: number, lastChapterId: number) => {
     const rangeStr = `${start}-${end}`;
@@ -101,10 +101,6 @@ export const checkAndGenerateSummary = async (
           const [s, e] = c.summaryRange.split('-').map(Number);
           return s >= start && e <= end;
         })
-        // Sort by appearance order in the snapshot instead of ID
-        // Since we trust array order now, and we might have just appended/inserted,
-        // we should rely on their relative positions if possible, or parsing range.
-        // Parsing range is safer for logical ordering.
         .sort((a, b) => {
           const startA = parseInt(a.summaryRange!.split('-')[0]);
           const startB = parseInt(b.summaryRange!.split('-')[0]);
@@ -136,52 +132,30 @@ export const checkAndGenerateSummary = async (
 
       const summaryContent = completion.choices[0]?.message?.content || '';
       if (summaryContent) {
-        // Check if exists in Snapshot
         const existingIndex = currentChaptersSnapshot.findIndex(
           c => c.subtype === subtype && c.summaryRange === rangeStr,
         );
-
-        // Helper to update chapters for specific novel
-        const updateNovelChapters = (updater: (chapters: Chapter[]) => Chapter[]) => {
-          setNovels(prevNovels =>
-            prevNovels.map(n => {
-              if (n.id === targetNovelId) {
-                const updatedNovel = { ...n, chapters: updater(n.chapters) };
-                lastUpdatedNovel = updatedNovel;
-                return updatedNovel;
-              }
-              return n;
-            }),
-          );
-        };
 
         if (existingIndex !== -1) {
           // Update existing
           const existingChapter = currentChaptersSnapshot[existingIndex];
           const updatedChapter = { ...existingChapter, content: summaryContent };
-
-          // Update Snapshot
           currentChaptersSnapshot[existingIndex] = updatedChapter;
-
-          // Update React State
-          updateNovelChapters(prev => prev.map(c => (c.id === existingChapter.id ? updatedChapter : c)));
-
           log(`[Summary] Updated ${type} summary for ${rangeStr}.`);
         } else {
           // Create new
           const newChapter: Chapter = {
-            id: Date.now() + Math.floor(Math.random() * 10000), // Random padding to avoid ID collision
+            id: Date.now() + Math.floor(Math.random() * 10000),
             title: `${type === 'small' ? '🔹小总结' : '🔸大总结'} (${rangeStr})`,
             content: summaryContent,
             subtype: subtype,
             summaryRange: rangeStr,
-            volumeId: targetVolumeId, // Use same volume as current chapter
+            volumeId: targetVolumeId,
           };
 
           // Update Snapshot - Insert after the last chapter of the range
           const snapIdx = currentChaptersSnapshot.findIndex(c => c.id === lastChapterId);
           if (snapIdx !== -1) {
-            // Find the last summary already inserted after this chapter to maintain order (Small then Big)
             let insertAt = snapIdx + 1;
             while (
               insertAt < currentChaptersSnapshot.length &&
@@ -194,27 +168,13 @@ export const checkAndGenerateSummary = async (
           } else {
             currentChaptersSnapshot.push(newChapter);
           }
-
-          // Update React State: Insert AFTER the last chapter of the range
-          updateNovelChapters(prev => {
-            const idx = prev.findIndex(c => c.id === lastChapterId);
-            if (idx !== -1) {
-              const newArr = [...prev];
-              let insertAt = idx + 1;
-              while (
-                insertAt < newArr.length &&
-                (newArr[insertAt].subtype === 'small_summary' || newArr[insertAt].subtype === 'big_summary')
-              ) {
-                insertAt++;
-              }
-              newArr.splice(insertAt, 0, newChapter);
-              return newArr;
-            }
-            return [...prev, newChapter];
-          });
-
           log(`[Summary] Created ${type} summary for ${rangeStr}.`);
         }
+
+        // Sync to Novel and React State
+        const finalChapters = [...currentChaptersSnapshot];
+        lastUpdatedNovel = { ...currentNovel, chapters: finalChapters };
+        setNovels(prevNovels => prevNovels.map(n => (n.id === targetNovelId ? { ...n, chapters: finalChapters } : n)));
       }
     } catch (e) {
       console.error(e);
