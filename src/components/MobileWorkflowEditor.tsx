@@ -34,6 +34,7 @@ import {
   MessageSquare,
   Play,
   Plus,
+  Save,
   Settings2,
   Square,
   Trash2,
@@ -399,6 +400,22 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
     setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n));
   };
 
+  const handleSaveWorkflow = () => {
+    // 同时更新 workflows 列表中的当前项并保存，确保双重保险
+    const updatedWorkflows = workflows.map(w =>
+      w.id === activeWorkflowId ? { ...w, nodes, edges, currentNodeIndex, lastModified: Date.now() } : w
+    );
+    setWorkflows(updatedWorkflows);
+    localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
+    localStorage.setItem('active_workflow_id', activeWorkflowId);
+    
+    // 兼容旧版单一保存位置
+    localStorage.setItem('novel_workflow', JSON.stringify({ nodes, edges }));
+    
+    setError('工作流已手动保存');
+    setTimeout(() => setError(null), 2000);
+  };
+
   const switchWorkflow = (id: string) => {
     setActiveWorkflowId(id);
     loadWorkflow(id, workflows);
@@ -490,21 +507,38 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
       }
     });
-    const queue: string[] = nodes.filter(n => (inDegree.get(n.id) || 0) === 0).map(n => n.id);
+    const queue: string[] = [];
+    // 找到所有起始节点（入度为0），并按坐标排序作为初始顺序
+    const startNodes = nodes.filter(n => (inDegree.get(n.id) || 0) === 0)
+                           .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+    
+    startNodes.forEach(n => queue.push(n.id));
+    
     const result: string[] = [];
     const currentInDegree = new Map(inDegree);
+
     while (queue.length > 0) {
       const uId = queue.shift()!;
       result.push(uId);
-      (adjacencyList.get(uId) || []).forEach(v => {
-        const newDegree = (currentInDegree.get(v) || 0) - 1;
-        currentInDegree.set(v, newDegree);
-        if (newDegree === 0) queue.push(v);
+      
+      const neighbors = adjacencyList.get(uId) || [];
+      // 对邻居按坐标排序以保持执行稳定性
+      const sortedNeighbors = neighbors
+        .map(id => nodes.find(n => n.id === id)!)
+        .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+
+      sortedNeighbors.forEach(v => {
+        const newDegree = (currentInDegree.get(v.id) || 0) - 1;
+        currentInDegree.set(v.id, newDegree);
+        if (newDegree === 0) queue.push(v.id);
       });
     }
-    const ordered = result.map(id => nodes.find(n => n.id === id)!).filter(Boolean);
-    const remaining = nodes.filter(n => !result.includes(n.id));
-    return [...ordered, ...remaining];
+    
+    const orderedNodes = result.map(id => nodes.find(n => n.id === id)!);
+    const remainingNodes = nodes.filter(n => !result.includes(n.id))
+                               .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+    
+    return [...orderedNodes, ...remainingNodes];
   }, [nodes, edges]);
 
   // --- 执行引擎 ---
@@ -1083,6 +1117,15 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {!isRunning && (
+            <button
+              onClick={handleSaveWorkflow}
+              className="p-2 bg-gray-700/50 text-indigo-400 rounded-lg border border-gray-600/50 active:scale-95 transition-all"
+              title="保存"
+            >
+              <Save className="w-4 h-4" />
+            </button>
+          )}
           {isRunning ? (
             <button onClick={stopWorkflow} className="bg-red-600/20 text-red-500 p-2 rounded-lg border border-red-500/20"><Square className="w-4 h-4 fill-current" /></button>
           ) : isPaused && currentNodeIndex !== -1 ? (
