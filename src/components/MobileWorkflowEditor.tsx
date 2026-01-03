@@ -197,6 +197,50 @@ const NODE_CONFIGS: Record<NodeTypeKey, any> = {
   chapter: { typeLabel: '正文', icon: FileText, color: '#8b5cf6', defaultLabel: '生成章节正文', presetType: 'completion' },
 };
 
+// --- 性能优化输入组件 ---
+const OptimizedInput = ({ value, onChange, onBlur, className, placeholder, type = "text" }: any) => {
+  const [localValue, setLocalValue] = useState(value);
+  
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  return (
+    <input
+      type={type}
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={(e) => {
+        onChange(e.target.value);
+        if (onBlur) onBlur(e);
+      }}
+      className={className}
+      placeholder={placeholder}
+    />
+  );
+};
+
+const OptimizedTextarea = ({ value, onChange, onBlur, className, placeholder }: any) => {
+  const [localValue, setLocalValue] = useState(value);
+  
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  return (
+    <textarea
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={(e) => {
+        onChange(e.target.value);
+        if (onBlur) onBlur(e);
+      }}
+      className={className}
+      placeholder={placeholder}
+    />
+  );
+};
+
 // --- 子组件：配置面板 (实现性能隔离) ---
 interface ConfigPanelProps {
   editingNode: WorkflowNode;
@@ -221,27 +265,8 @@ const ConfigPanel = React.memo(({
   onClose,
   onPreviewEntry
 }: ConfigPanelProps) => {
-  // 核心优化：本地状态管理，仅在失去焦点或关闭时同步
-  const [localLabel, setLocalLabel] = useState(editingNode.data.label || '');
-  const [localFolderName, setLocalFolderName] = useState(editingNode.data.folderName || '');
-  const [localInstruction, setLocalInstruction] = useState(editingNode.data.instruction || '');
-  const [localTargetVolumeName, setLocalTargetVolumeName] = useState((editingNode.data.targetVolumeName as string) || '');
-
-  // 节点切换时更新本地状态
-  useEffect(() => {
-    setLocalLabel(editingNode.data.label || '');
-    setLocalFolderName(editingNode.data.folderName || '');
-    setLocalInstruction(editingNode.data.instruction || '');
-    setLocalTargetVolumeName((editingNode.data.targetVolumeName as string) || '');
-  }, [editingNode.id]);
-
-  const syncLocalToGlobal = () => {
-    onUpdateNodeData(editingNode.id, {
-      label: localLabel,
-      folderName: localFolderName,
-      instruction: localInstruction,
-      targetVolumeName: localTargetVolumeName
-    });
+  const handleUpdate = (updates: Partial<WorkflowNodeData>) => {
+    onUpdateNodeData(editingNode.id, updates);
   };
 
   const toggleSetReference = (type: 'worldview' | 'character' | 'outline' | 'inspiration' | 'folder', setId: string) => {
@@ -265,9 +290,9 @@ const ConfigPanel = React.memo(({
           <div className="p-2 rounded-lg" style={{ backgroundColor: `${editingNode.data.color}20`, color: editingNode.data.color }}>
             {(() => { const Icon = editingNode.data.icon; return <Icon className="w-5 h-5" /> })()}
           </div>
-          <h3 className="font-bold text-gray-100 truncate max-w-[200px]">{localLabel || editingNode.data.label}</h3>
+          <h3 className="font-bold text-gray-100 truncate max-w-[200px]">{editingNode.data.label}</h3>
         </div>
-        <button onClick={() => { syncLocalToGlobal(); onClose(); }} className="p-2 bg-gray-700 rounded-full text-gray-400">
+        <button onClick={onClose} className="p-2 bg-gray-700 rounded-full text-gray-400">
           <X className="w-5 h-5" />
         </button>
       </div>
@@ -275,11 +300,9 @@ const ConfigPanel = React.memo(({
       <div className="flex-1 overflow-y-auto p-6 space-y-8 pb-24 custom-scrollbar">
         <div className="space-y-3">
           <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">模块名称</label>
-          <input
-            type="text"
-            value={localLabel}
-            onChange={(e) => setLocalLabel(e.target.value)}
-            onBlur={syncLocalToGlobal}
+          <OptimizedInput
+            value={editingNode.data.label}
+            onChange={(val: string) => handleUpdate({ label: val })}
             className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500 shadow-inner"
           />
         </div>
@@ -290,21 +313,16 @@ const ConfigPanel = React.memo(({
               <Folder className="w-3.5 h-3.5" /> 关联目录名
             </label>
             <div className="flex gap-2">
-              <input
-                type="text"
-                value={localFolderName}
-                onChange={(e) => setLocalFolderName(e.target.value)}
-                onBlur={syncLocalToGlobal}
+              <OptimizedInput
+                value={editingNode.data.folderName}
+                onChange={(val: string) => handleUpdate({ folderName: val })}
                 className="flex-1 bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500"
                 placeholder="输入文件夹名称..."
               />
               {editingNode.data.typeKey === 'reuseDirectory' && activeNovel && (
                 <select
                   className="bg-gray-800 border border-gray-700 rounded-2xl px-2 text-xs text-gray-300 outline-none"
-                  onChange={(e) => {
-                    setLocalFolderName(e.target.value);
-                    onUpdateNodeData(editingNode.id, { folderName: e.target.value });
-                  }}
+                  onChange={(e) => handleUpdate({ folderName: e.target.value })}
                   value=""
                 >
                   <option value="" disabled>选择...</option>
@@ -359,11 +377,9 @@ const ConfigPanel = React.memo(({
                 ))}
               </select>
               {editingNode.data.targetVolumeId === 'NEW_VOLUME' && (
-                <input
-                  type="text"
-                  value={localTargetVolumeName}
-                  onChange={(e) => setLocalTargetVolumeName(e.target.value)}
-                  onBlur={syncLocalToGlobal}
+                <OptimizedInput
+                  value={editingNode.data.targetVolumeName}
+                  onChange={(val: string) => handleUpdate({ targetVolumeName: val })}
                   placeholder="输入新分卷名称..."
                   className="w-full bg-gray-800 border border-indigo-900/40 rounded-2xl px-5 py-3 text-white text-xs outline-none focus:border-indigo-500"
                 />
@@ -390,10 +406,9 @@ const ConfigPanel = React.memo(({
 
         <div className="space-y-3">
           <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">创作指令 (User Prompt)</label>
-          <textarea
-            value={localInstruction}
-            onChange={(e) => setLocalInstruction(e.target.value)}
-            onBlur={syncLocalToGlobal}
+          <OptimizedTextarea
+            value={editingNode.data.instruction}
+            onChange={(val: string) => handleUpdate({ instruction: val })}
             className="w-full h-56 bg-gray-800 border border-gray-700 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed"
             placeholder="在此输入具体要求..."
           />
@@ -500,8 +515,8 @@ const ConfigPanel = React.memo(({
         <button onClick={() => { if(confirm('确定要删除这个模块吗？')) { onDeleteNode(editingNode.id); } }} className="p-4 bg-red-900/20 text-red-400 rounded-2xl">
           <Trash2 className="w-6 h-6" />
         </button>
-        <button onClick={() => { syncLocalToGlobal(); onClose(); }} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">
-          保存并返回
+        <button onClick={onClose} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">
+          确定并返回
         </button>
       </div>
     </div>
