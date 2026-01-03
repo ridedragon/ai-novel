@@ -204,37 +204,3 @@ export interface CompletionPreset {
   regexScripts?: RegexScript[];
   apiConfig?: PresetApiConfig;
 }
-
-// --- Agent Related Types ---
-
-export interface AgentTaskItem {
-  id: string;
-  type: 'inspiration' | 'worldview' | 'plot_outline' | 'character' | 'outline' | 'chapter';
-  title: string;
-  description: string;
-  targetId?: string; // 执行该任务的目标对象ID（如特定的章节ID或设定集ID）
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
-}
-
-export interface AgentManifest {
-  tasks: AgentTaskItem[];
-  currentTaskIndex: number;
-}
-
-export type AgentStatus = 'IDLE' | 'PLANNING' | 'EXECUTING' | 'AWAITING_USER' | 'PAUSED' | 'COMPLETED' | 'ERROR';
-
-export interface AgentAction {
-  type: string;
-  payload: any;
-}
-
-export interface AgentPromptConfig {
-  directorPrompt: string;
-  promptAgentPrompt: string;
-}
-
-export interface AgentModelConfig {
-  directorModel: string;
-  promptAgentModel: string;
-  summaryModel: string;
-}

@@ -19,6 +19,7 @@ import {
   Folder,
   FolderInput,
   FolderPlus,
+  GitBranch,
   Globe,
   GripVertical,
   Home,
@@ -26,7 +27,6 @@ import {
   Lightbulb,
   List,
   Menu,
-  MessageSquare,
   PlayCircle,
   Plus,
   RotateCcw,
@@ -44,22 +44,18 @@ import {
   Zap
 } from 'lucide-react'
 import OpenAI from 'openai'
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import terminal from 'virtual:terminal'
-import { AIChatModal } from './components/AIChatModal'
-import AgentControlPanel from './components/AgentControlPanel'
 import { CharacterManager } from './components/CharacterManager'
 import { GlobalSettingsModal } from './components/GlobalSettingsModal'
 import { InspirationManager } from './components/InspirationManager'
 import { OutlineManager } from './components/OutlineManager'
 import { PlotOutlineManager } from './components/PlotOutlineManager'
 import { ReferenceManager } from './components/ReferenceManager'
+import { WorkflowEditor } from './components/WorkflowEditor'
 import { WorldviewManager } from './components/WorldviewManager'
 import {
-  AgentAction,
-  AgentModelConfig,
-  AgentPromptConfig,
   Chapter,
   ChapterVersion,
   CharacterItem,
@@ -81,11 +77,7 @@ import {
   WorldviewItem,
   WorldviewSet
 } from './types'
-import { AgentCore, AgentCoreState } from './utils/AgentCore'
-import { AgentDirector } from './utils/AgentDirector'
-import { AgentParser } from './utils/AgentParser'
 import { keepAliveManager } from './utils/KeepAliveManager'
-import { PromptAgent } from './utils/PromptAgent'
 import { checkAndGenerateSummary as checkAndGenerateSummaryUtil } from './utils/SummaryManager'
 import { storage } from './utils/storage'
  
@@ -786,50 +778,6 @@ function App() {
   const [optimizeModel, setOptimizeModel] = useState(() => localStorage.getItem('optimizeModel') || '')
   const [analysisModel, setAnalysisModel] = useState(() => localStorage.getItem('analysisModel') || '')
   
-  const [agentModelConfig, setAgentModelConfig] = useState<AgentModelConfig>(() => {
-    try {
-      const saved = localStorage.getItem('agentModelConfig')
-      return saved ? JSON.parse(saved) : {
-        directorModel: '',
-        promptAgentModel: '',
-        summaryModel: ''
-      }
-    } catch (e) {
-      return {
-        directorModel: '',
-        promptAgentModel: '',
-        summaryModel: ''
-      }
-    }
-  })
-
-  const [agentPromptConfig, setAgentPromptConfig] = useState<AgentPromptConfig>(() => {
-    try {
-      const saved = localStorage.getItem('agentPromptConfig')
-      const config = saved ? JSON.parse(saved) : null;
-      
-      // 检查是否需要强制更新默认提示词（如果用户未曾修改过，或者版本过旧）
-      // 这里我们简单处理：如果本地没有保存，或者保存的提示词与当前代码中的默认提示词完全不一致，则尝试合并或更新。
-      // 为确保新逻辑立即生效，当检测到 directorPrompt 包含旧的线性流程描述时，进行更新。
-      if (config && config.directorPrompt && config.directorPrompt.includes('灵感 (inspiration) -> 世界观 (worldview) -> 角色集 (character) -> 粗纲 (plot_outline)')) {
-          terminal.log('[Agent] Detecting legacy prompt, updating to new chunked planning logic.');
-          return {
-            ...config,
-            directorPrompt: AgentDirector.getSystemPrompt()
-          };
-      }
-
-      return config || {
-        directorPrompt: AgentDirector.getSystemPrompt(),
-        promptAgentPrompt: PromptAgent.getSystemPrompt('')
-      }
-    } catch (e) {
-      return {
-        directorPrompt: AgentDirector.getSystemPrompt(),
-        promptAgentPrompt: PromptAgent.getSystemPrompt('')
-      }
-    }
-  })
 
   const [modelList, setModelList] = useState<string[]>(() => {
     try {
@@ -852,10 +800,8 @@ function App() {
     localStorage.setItem('plotOutlineModel', plotOutlineModel)
     localStorage.setItem('optimizeModel', optimizeModel)
     localStorage.setItem('analysisModel', analysisModel)
-    localStorage.setItem('agentModelConfig', JSON.stringify(agentModelConfig))
-    localStorage.setItem('agentPromptConfig', JSON.stringify(agentPromptConfig))
     localStorage.setItem('modelList', JSON.stringify(modelList))
-  }, [apiKey, baseUrl, model, outlineModel, characterModel, worldviewModel, inspirationModel, plotOutlineModel, optimizeModel, analysisModel, agentModelConfig, agentPromptConfig, modelList])
+  }, [apiKey, baseUrl, model, outlineModel, characterModel, worldviewModel, inspirationModel, plotOutlineModel, optimizeModel, analysisModel, modelList])
 
   const handleAddModel = () => {
     if (newModelInput.trim()) {
@@ -895,12 +841,18 @@ function App() {
   }, [novels])
 
   const [activeNovelId, setActiveNovelId] = useState<string | null>(null)
+  const activeNovelIdRef = useRef(activeNovelId)
+  useEffect(() => { activeNovelIdRef.current = activeNovelId }, [activeNovelId])
+
+  const creationModuleRef = useRef<'menu' | 'outline' | 'plotOutline' | 'characters' | 'worldview' | 'inspiration' | 'reference'>('menu')
 
   // Keep Alive Mode
   const [keepAliveMode, setKeepAliveMode] = useState(false)
 
   // Outline Sets State
   const [activeOutlineSetId, setActiveOutlineSetId] = useState<string | null>(null)
+  const activeOutlineSetIdRef = useRef(activeOutlineSetId)
+  useEffect(() => { activeOutlineSetIdRef.current = activeOutlineSetId }, [activeOutlineSetId])
   const [newOutlineSetName, setNewOutlineSetName] = useState('')
   const [selectedCharacterSetIdForOutlineGen, setSelectedCharacterSetIdForOutlineGen] = useState<string | null>(null)
   const [showCharacterSetSelector, setShowCharacterSetSelector] = useState(false)
@@ -1225,6 +1177,7 @@ function App() {
 
   // Local State
   const [userPrompt, setUserPrompt] = useState('')
+  const [showWorkflowEditor, setShowWorkflowEditor] = useState(false)
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
 
@@ -1240,11 +1193,6 @@ function App() {
   
   const [selectedOutlineSetIdForChat, setSelectedOutlineSetIdForChat] = useState<string | null>(null)
   const [selectedOutlineIndicesForChat, setSelectedOutlineIndicesForChat] = useState<number[]>([])
-
-  const [showWorldviewSelectorForChat, setShowWorldviewSelectorForChat] = useState(false)
-  const [showCharacterSelectorForChat, setShowCharacterSelectorForChat] = useState(false)
-  const [showInspirationSelectorForChat, setShowInspirationSelectorForChat] = useState(false)
-  const [showOutlineSelectorForChat, setShowOutlineSelectorForChat] = useState(false)
 
   // Module Reference Selection State (Shared by all managers)
   const [selectedWorldviewSetIdForModules, setSelectedWorldviewSetIdForModules] = useState<string | null>(null)
@@ -1370,17 +1318,25 @@ function App() {
   const [autoWriteOutlineSetId, setAutoWriteOutlineSetId] = useState<string | null>(null)
   const [includeFullOutlineInAutoWrite, setIncludeFullOutlineInAutoWrite] = useState(false)
   const [activeCharacterSetId, setActiveCharacterSetId] = useState<string | null>(null)
+  const activeCharacterSetIdRef = useRef(activeCharacterSetId)
+  useEffect(() => { activeCharacterSetIdRef.current = activeCharacterSetId }, [activeCharacterSetId])
   const [newCharacterSetName, setNewCharacterSetName] = useState('')
   const [selectedCharacter, setSelectedCharacter] = useState<{setId: string, index: number} | null>(null)
 
   const [activeWorldviewSetId, setActiveWorldviewSetId] = useState<string | null>(null)
+  const activeWorldviewSetIdRef = useRef(activeWorldviewSetId)
+  useEffect(() => { activeWorldviewSetIdRef.current = activeWorldviewSetId }, [activeWorldviewSetId])
   const [newWorldviewSetName, setNewWorldviewSetName] = useState('')
   const [selectedWorldviewEntry, setSelectedWorldviewEntry] = useState<{setId: string, index: number} | null>(null)
 
   const [activeInspirationSetId, setActiveInspirationSetId] = useState<string | null>(null)
+  const activeInspirationSetIdRef = useRef(activeInspirationSetId)
+  useEffect(() => { activeInspirationSetIdRef.current = activeInspirationSetId }, [activeInspirationSetId])
   const [newInspirationSetName, setNewInspirationSetName] = useState('')
 
   const [activePlotOutlineSetId, setActivePlotOutlineSetId] = useState<string | null>(null)
+  const activePlotOutlineSetIdRef = useRef(activePlotOutlineSetId)
+  useEffect(() => { activePlotOutlineSetIdRef.current = activePlotOutlineSetId }, [activePlotOutlineSetId])
 
   // Character Generation Settings
   const [selectedWorldviewSetIdForCharGen, setSelectedWorldviewSetIdForCharGen] = useState<string | null>(null)
@@ -1389,6 +1345,7 @@ function App() {
   // Auto Write State
   const [showOutline, setShowOutline] = useState(false)
   const [creationModule, setCreationModule] = useState<'menu' | 'outline' | 'plotOutline' | 'characters' | 'worldview' | 'inspiration' | 'reference'>('menu')
+  useEffect(() => { creationModuleRef.current = creationModule }, [creationModule])
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false)
   const [regeneratingOutlineItemIndices, setRegeneratingOutlineItemIndices] = useState<Set<number>>(new Set())
   const [isGeneratingCharacters, setIsGeneratingCharacters] = useState(false)
@@ -1398,11 +1355,6 @@ function App() {
   const [optimizingChapterIds, setOptimizingChapterIds] = useState<Set<number>>(new Set())
   const [isAutoWriting, setIsAutoWriting] = useState(false)
   const [autoWriteStatus, setAutoWriteStatus] = useState('')
-  const [isCallingPromptAgent, setIsCallingPromptAgent] = useState(false)
-
-  useEffect(() => {
-    isAutoWritingRef.current = isAutoWriting
-  }, [isAutoWriting])
 
   // Optimization Queue Processor
   useEffect(() => {
@@ -1439,29 +1391,6 @@ function App() {
   // Analysis Result Modal
   const [showAnalysisResultModal, setShowAnalysisResultModal] = useState(false)
 
-  // AI Chat Modal State
-  const [showAIChatModal, setShowAIChatModal] = useState(false)
-  const [showAgentPanel, setShowAgentPanel] = useState(false)
-
-  // Agent Core State
-  const [agentCoreState, setAgentCoreState] = useState<AgentCoreState>({
-    status: 'IDLE',
-    manifest: null,
-    currentTaskIndex: -1,
-    retryCount: 0,
-    logs: ['等待初始化...']
-  });
-  const [agentUserInstruction, setAgentUserInstruction] = useState('');
-  const agentCoreRef = useRef<AgentCore | null>(null);
-
-  useEffect(() => {
-    if (!agentCoreRef.current) {
-      agentCoreRef.current = new AgentCore((state) => setAgentCoreState({ ...state }));
-    }
-    if (activeNovel) {
-      agentCoreRef.current.init(activeNovel, callAgentLLM, handleAgentAction, handleAgentTaskTrigger, agentModelConfig, agentPromptConfig);
-    }
-  }, [activeNovel, agentModelConfig, agentPromptConfig]);
 
   // Helpers for Novel Management
   const getActiveScripts = () => {
@@ -3064,7 +2993,7 @@ function App() {
     }
   }
 
-  const handleGenerateOutline = async (mode: 'append' | 'replace' | 'chat' = 'append', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
+  const handleGenerateOutline = async (mode: 'append' | 'replace' | 'chat' = 'append', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activeOutlinePresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -3088,18 +3017,18 @@ function App() {
     let targetSetId = overrideSetId !== undefined ? overrideSetId : activeOutlineSetId;
     let targetSet = activeNovel?.outlineSets?.find(s => s.id === targetSetId);
 
-    if (!targetSetId || !targetSet) {
-        const newSet: OutlineSet = {
-            id: crypto.randomUUID(),
-            name: '默认粗纲',
-            items: []
-        };
-        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, outlineSets: [...(n.outlineSets || []), newSet] } : n));
-        setActiveOutlineSetId(newSet.id);
-        
-        targetSetId = newSet.id;
-        targetSet = newSet;
+    // 如果找不到指定的集，尝试复用当前活跃的集或第一个可用的集，避免创建多余的“默认”集
+    if (!targetSet && activeNovel?.outlineSets && activeNovel.outlineSets.length > 0) {
+        targetSet = activeNovel.outlineSets.find(s => s.id === activeOutlineSetId) || activeNovel.outlineSets[0];
+        targetSetId = targetSet.id;
+        setActiveOutlineSetId(targetSetId);
     }
+
+    if (!targetSet) {
+        setIsGeneratingOutline(false);
+        return;
+    }
+
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -3171,7 +3100,7 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', `${referenceContext}\n${outlineContext}\n${chatContext}\n${mainChatContext}`)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt || (mode === 'chat' ? '请根据以上对话内容和设定，继续与我讨论。' : '请根据以上对话内容和设定，生成新的大纲章节。'))
+            content = content.replace('{{input}}', promptOverride || userPrompt || (mode === 'chat' ? '请根据以上对话内容和设定，继续与我讨论。' : '请根据以上对话内容和设定，生成新的大纲章节。'))
             return { role: p.role, content }
           })
           .filter(m => m.content && m.content.trim())
@@ -3399,7 +3328,7 @@ function App() {
       })
   }
 
-  const handleGenerateCharacters = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
+  const handleGenerateCharacters = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activeCharacterPresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -3423,18 +3352,17 @@ function App() {
     let targetSetId = overrideSetId !== undefined ? overrideSetId : activeCharacterSetId;
     let targetSet = activeNovel?.characterSets?.find(s => s.id === targetSetId);
 
-    if (!targetSetId || !targetSet) {
-        const newSet: CharacterSet = {
-            id: crypto.randomUUID(),
-            name: '默认角色集',
-            characters: []
-        };
-        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, characterSets: [...(n.characterSets || []), newSet] } : n));
-        setActiveCharacterSetId(newSet.id);
-        
-        targetSetId = newSet.id;
-        targetSet = newSet;
+    if (!targetSet && activeNovel?.characterSets && activeNovel.characterSets.length > 0) {
+        targetSet = activeNovel.characterSets.find(s => s.id === activeCharacterSetId) || activeNovel.characterSets[0];
+        targetSetId = targetSet.id;
+        handleSetActiveCharacterSetId(targetSetId);
     }
+
+    if (!targetSet) {
+        setIsGeneratingCharacters(false);
+        return;
+    }
+
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -3503,7 +3431,7 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', contextStr)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的角色卡。' : ''))
+            content = content.replace('{{input}}', promptOverride || userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的角色卡。' : ''))
             return { role: p.role, content }
           })
           .filter(m => m.content && m.content.trim())
@@ -3724,7 +3652,7 @@ function App() {
   }
 
   // Inspiration Generation
-  const handleGenerateInspiration = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
+  const handleGenerateInspiration = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activeInspirationPresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -3748,18 +3676,17 @@ function App() {
     let targetSetId = overrideSetId !== undefined ? overrideSetId : activeInspirationSetId;
     let targetSet = activeNovel?.inspirationSets?.find(s => s.id === targetSetId);
 
-    if (!targetSetId || !targetSet) {
-        const newSet: InspirationSet = {
-            id: crypto.randomUUID(),
-            name: '默认灵感集',
-            items: []
-        };
-        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, inspirationSets: [...(n.inspirationSets || []), newSet] } : n));
-        setActiveInspirationSetId(newSet.id);
-        
-        targetSetId = newSet.id;
-        targetSet = newSet;
+    if (!targetSet && activeNovel?.inspirationSets && activeNovel.inspirationSets.length > 0) {
+        targetSet = activeNovel.inspirationSets.find(s => s.id === activeInspirationSetId) || activeNovel.inspirationSets[0];
+        targetSetId = targetSet.id;
+        setActiveInspirationSetId(targetSetId);
     }
+
+    if (!targetSet) {
+        setIsGeneratingInspiration(false);
+        return;
+    }
+
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -3828,7 +3755,7 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', contextStr)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的灵感条目。' : ''))
+            content = content.replace('{{input}}', promptOverride || userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的灵感条目。' : ''))
             return { role: p.role, content }
           })
           .filter(m => m.content && m.content.trim())
@@ -3959,7 +3886,7 @@ function App() {
   }
 
   // Worldview Generation
-  const handleGenerateWorldview = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
+  const handleGenerateWorldview = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activeWorldviewPresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -3983,18 +3910,17 @@ function App() {
     let targetSetId = overrideSetId !== undefined ? overrideSetId : activeWorldviewSetId;
     let targetSet = activeNovel?.worldviewSets?.find(s => s.id === targetSetId);
 
-    if (!targetSetId || !targetSet) {
-        const newSet: WorldviewSet = {
-            id: crypto.randomUUID(),
-            name: '默认世界观',
-            entries: []
-        };
-        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, worldviewSets: [...(n.worldviewSets || []), newSet] } : n));
-        setActiveWorldviewSetId(newSet.id);
-        
-        targetSetId = newSet.id;
-        targetSet = newSet;
+    if (!targetSet && activeNovel?.worldviewSets && activeNovel.worldviewSets.length > 0) {
+        targetSet = activeNovel.worldviewSets.find(s => s.id === activeWorldviewSetId) || activeNovel.worldviewSets[0];
+        targetSetId = targetSet.id;
+        setActiveWorldviewSetId(targetSetId);
     }
+
+    if (!targetSet) {
+        setIsGeneratingWorldview(false);
+        return;
+    }
+
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -4063,7 +3989,7 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', contextStr)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的世界观设定项。' : ''))
+            content = content.replace('{{input}}', promptOverride || userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的世界观设定项。' : ''))
             return { role: p.role, content }
           })
           .filter(m => m.content && m.content.trim())
@@ -4223,7 +4149,7 @@ function App() {
   }
 
   // Plot Outline Generation
-  const handleGeneratePlotOutline = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module') => {
+  const handleGeneratePlotOutline = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activePlotOutlinePresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -4248,18 +4174,17 @@ function App() {
     let targetSetId = overrideSetId !== undefined ? overrideSetId : activePlotOutlineSetId;
     let targetSet = activeNovel?.plotOutlineSets?.find(s => s.id === targetSetId);
 
-    if (!targetSetId || !targetSet) {
-        const newId = crypto.randomUUID()
-        const newSet: PlotOutlineSet = {
-            id: newId,
-            name: '默认剧情粗纲',
-            items: []
-        };
-        setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, plotOutlineSets: [...(n.plotOutlineSets || []), newSet] } : n));
-        setActivePlotOutlineSetId(newId);
-        targetSetId = newId;
-        targetSet = newSet;
+    if (!targetSet && activeNovel?.plotOutlineSets && activeNovel.plotOutlineSets.length > 0) {
+        targetSet = activeNovel.plotOutlineSets.find(s => s.id === activePlotOutlineSetId) || activeNovel.plotOutlineSets[0];
+        targetSetId = targetSet.id;
+        setActivePlotOutlineSetId(targetSetId);
     }
+
+    if (!targetSet) {
+        setIsGeneratingPlotOutline(false);
+        return;
+    }
+
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -4297,7 +4222,7 @@ function App() {
             let content = p.content
             content = content.replace('{{context}}', contextStr)
             content = content.replace('{{notes}}', notes)
-            content = content.replace('{{input}}', userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的剧情粗纲条目。' : ''))
+            content = content.replace('{{input}}', promptOverride || userPrompt || (mode === 'generate' ? '请根据以上对话内容和设定，生成新的剧情粗纲条目。' : ''))
             return { role: p.role, content }
           })
           .filter(m => m.content && m.content.trim())
@@ -5292,11 +5217,28 @@ ${taskDescription}`
     await autoWriteLoop(outline, index + preparedBatch.length, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline, outlineSetId)
   }
 
-  const startAutoWriting = () => {
-     const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
+  const startAutoWriting = (outlineSetId?: string | null) => {
+     // 如果外部指定了 ID，优先使用，否则使用当前 UI 选中的 ID
+     let effectiveId = (outlineSetId && typeof outlineSetId === 'string') ? outlineSetId : activeOutlineSetId;
+     
+     // 兜底逻辑：如果没有选中 ID，尝试自动选择第一个有内容的大纲集
+     if (!effectiveId && activeNovel?.outlineSets) {
+        const firstValidSet = activeNovel.outlineSets.find(s => s.items && s.items.length > 0);
+        if (firstValidSet) {
+            effectiveId = firstValidSet.id;
+            handleSetActiveOutlineSetId(effectiveId); // 同步到 UI 状态
+        }
+     }
+
+     const currentSet = activeNovel?.outlineSets?.find(s => s.id === effectiveId)
      if (!currentSet || currentSet.items.length === 0) {
         setError('请先生成或选择一个有效的大纲')
         return
+     }
+
+     // 如果指定了有效的大纲集，自动同步到 UI 状态
+     if (outlineSetId && typeof outlineSetId === 'string' && outlineSetId !== activeOutlineSetId) {
+        handleSetActiveOutlineSetId(outlineSetId);
      }
      if (!apiKey) {
         setError('请配置 API Key')
@@ -5464,12 +5406,23 @@ ${taskDescription}`
           selectedOutlineIndicesForChat
         ) || buildWorldInfoContext(activeNovel || undefined, activeOutlineSetId)
         
-        // 只有当前大纲集的策划条目
+        // 统一逻辑：根据用户在自动化面板的选择，决定是发送完整大纲还是仅发送当前大纲条目
         let outlineContent = ''
         if (activeOutlineSetId) {
             const currentOutlineSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
             if (currentOutlineSet && currentOutlineSet.items.length > 0) {
-                outlineContent = `【当前小说大纲策划】：\n` + currentOutlineSet.items.map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+                if (includeFullOutlineInAutoWrite) {
+                    outlineContent = `【全书粗纲参考】：\n` + currentOutlineSet.items.map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+                } else {
+                    // 如果没开启全局参考，则尝试寻找匹配当前章节的大纲条目
+                    const matchedItem = currentOutlineSet.items.find(item => item.title === activeChapter.title)
+                    if (matchedItem) {
+                        outlineContent = `【本章大纲参考】：\n${matchedItem.title}: ${matchedItem.summary}`
+                    } else {
+                        // 兜底：发送前几个条目
+                        outlineContent = `【当前大纲策划摘要】：\n` + currentOutlineSet.items.slice(0, 5).map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+                    }
+                }
             }
         }
 
@@ -5992,512 +5945,6 @@ ${taskDescription}`
     if (module === 'outline') handleSwitchModule('outline')
   }
 
-  // --- Agent Handlers ---
-
-  const callAgentLLM = async (system: string, user: string, modelOverride?: string) => {
-    const config = getApiConfig(presetApiConfig, '')
-    if (!config.apiKey) throw new Error('API Key not configured')
-
-    const openai = new OpenAI({
-      apiKey: config.apiKey,
-      baseURL: config.baseUrl,
-      dangerouslyAllowBrowser: true
-    })
-
-    const completion = await openai.chat.completions.create({
-      model: modelOverride || config.model,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user }
-      ],
-      temperature: temperature,
-    })
-
-    return completion.choices[0]?.message?.content || ''
-  }
-
-  const handleAgentAction = (actions: AgentAction[]) => {
-    actions.forEach(action => {
-      terminal.log(`[Agent Action] Executing ${action.type}:`, action.payload)
-      
-      if (action.type === 'UPDATE_CHARACTER' || action.type === 'ADD_CHARACTER') {
-        const { name, bio, setName } = action.payload
-        if (!activeNovel) return
-        const sets = activeNovel.characterSets || []
-        
-        let targetSet = sets.find(s => s.id === activeCharacterSetId)
-        if (setName) {
-          const found = sets.find(s => s.name === setName)
-          if (found) targetSet = found
-          else {
-            const newId = crypto.randomUUID()
-            const newSet = { id: newId, name: setName, characters: [] }
-            updateCharacterSets([...sets, newSet])
-            targetSet = newSet
-          }
-        } else if (!targetSet) {
-          targetSet = sets[0]
-        }
-        
-        if (!targetSet) return
-
-        const exists = targetSet.characters.find(c => c.name === name)
-        let newChars
-        if (exists) {
-          newChars = targetSet.characters.map(c => c.name === name ? { ...c, bio } : c)
-        } else {
-          newChars = [...targetSet.characters, { name, bio }]
-        }
-        updateCharactersInSet(targetSet.id, newChars)
-      }
-
-      if (action.type === 'ADD_WORLDVIEW' || action.type === 'UPDATE_WORLDVIEW') {
-        const { item, setting, setName } = action.payload
-        if (!activeNovel) return
-        const sets = activeNovel.worldviewSets || []
-        
-        let targetSet = sets.find(s => s.id === activeWorldviewSetId)
-        if (setName) {
-          const found = sets.find(s => s.name === setName)
-          if (found) targetSet = found
-          else {
-            const newId = crypto.randomUUID()
-            const newSet = { id: newId, name: setName, entries: [] }
-            updateWorldviewSets([...sets, newSet])
-            targetSet = newSet
-          }
-        } else if (!targetSet) {
-          targetSet = sets[0]
-        }
-
-        if (!targetSet) return
-
-        const exists = targetSet.entries.find(e => e.item === item)
-        let newEntries
-        if (exists) {
-          newEntries = targetSet.entries.map(e => e.item === item ? { ...e, setting } : e)
-        } else {
-          newEntries = [...targetSet.entries, { item, setting }]
-        }
-        updateEntriesInSet(targetSet.id, newEntries)
-      }
-
-      if (action.type === 'ADD_PLOT_OUTLINE' || action.type === 'ADD_PLOT_HOOK') {
-        const { name, title, description, setName } = action.payload
-        if (!activeNovel) return
-        const sets = activeNovel.plotOutlineSets || []
-        
-        const targetName = setName || name;
-        let targetSet = sets.find(s => s.id === activePlotOutlineSetId)
-        if (targetName) {
-          const found = sets.find(s => s.name === targetName)
-          if (found) targetSet = found
-          else {
-            const newId = crypto.randomUUID()
-            const newSet = { id: newId, name: targetName, items: [] }
-            setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, plotOutlineSets: [...(n.plotOutlineSets || []), newSet] } : n))
-            targetSet = newSet
-          }
-        } else if (!targetSet) {
-          targetSet = sets[0]
-        }
-
-        if (!targetSet) return
-
-        if (title || description) {
-          const newPlotItem = {
-            id: crypto.randomUUID(),
-            title: action.type === 'ADD_PLOT_HOOK' ? `[伏笔] ${title}` : (title || '未命名粗纲条目'),
-            description: description || '',
-            type: action.type === 'ADD_PLOT_HOOK' ? '伏笔' : '剧情'
-          }
-          
-          setNovels(prev => prev.map(n => {
-            if (n.id === activeNovelId) {
-              const currentSets = n.plotOutlineSets || []
-              const existingSetIndex = currentSets.findIndex(s => s.id === targetSet!.id)
-              if (existingSetIndex !== -1) {
-                const updatedSet = {
-                  ...currentSets[existingSetIndex],
-                  items: [...currentSets[existingSetIndex].items, newPlotItem]
-                }
-                const newSets = [...currentSets]
-                newSets[existingSetIndex] = updatedSet
-                return { ...n, plotOutlineSets: newSets }
-              }
-            }
-            return n
-          }))
-        }
-      }
-
-      if (action.type === 'UPDATE_OUTLINE' || action.type === 'ADD_OUTLINE') {
-        const payload = Array.isArray(action.payload) ? action.payload : [action.payload];
-        const items = payload.filter((it: any) => it.title || it.summary);
-        const setName = (action.payload as any).setName;
-
-        if (!activeNovel) return;
-        const sets = activeNovel.outlineSets || [];
-        
-        let targetSet = sets.find(s => s.id === activeOutlineSetId)
-        if (setName) {
-          const found = sets.find(s => s.name === setName)
-          if (found) targetSet = found
-          else {
-            const newId = crypto.randomUUID()
-            const newSet = { id: newId, name: setName, items: [] }
-            updateOutlineSets([...sets, newSet])
-            targetSet = newSet
-          }
-        } else if (!targetSet) {
-          targetSet = sets[0]
-        }
-
-        if (!targetSet) return;
-
-        const newItems = items.map((it: any) => ({
-          title: it.title || it.chapter || '未命名章节',
-          summary: it.summary || it.content || it.plot || ''
-        }));
-
-        updateOutlineItemsInSet(targetSet.id, [...targetSet.items, ...newItems]);
-      }
-
-      if (action.type === 'ADD_INSPIRATION') {
-        const payload = action.payload;
-        if (!activeNovel) return;
-        const sets = activeNovel.inspirationSets || [];
-        const setName = payload.setName;
-        
-        let targetSet = sets.find(s => s.id === activeInspirationSetId)
-        if (setName) {
-          const found = sets.find(s => s.name === setName)
-          if (found) targetSet = found
-          else {
-            const newId = crypto.randomUUID()
-            const newSet = { id: newId, name: setName, items: [] }
-            setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, inspirationSets: [...(n.inspirationSets || []), newSet] } : n))
-            targetSet = newSet
-          }
-        } else if (!targetSet) {
-          targetSet = sets[0]
-        }
-
-        if (!targetSet) return;
-
-        // Normalize items from payload
-        let itemsToAdd: any[] = [];
-        if (Array.isArray(payload)) {
-          itemsToAdd = normalizeGeneratorResult(payload, 'inspiration');
-        } else if (payload.items && Array.isArray(payload.items)) {
-          itemsToAdd = normalizeGeneratorResult(payload.items, 'inspiration');
-        } else if (payload.title || payload.content) {
-          itemsToAdd = normalizeGeneratorResult([payload], 'inspiration');
-        }
-
-        if (itemsToAdd.length === 0) return;
-
-        setNovels(prev => prev.map(n => {
-          if (n.id === activeNovelId) {
-            const currentSets = n.inspirationSets || [];
-            const idx = currentSets.findIndex(s => s.id === targetSet!.id);
-            if (idx !== -1) {
-              const newSets = [...currentSets];
-              newSets[idx] = {
-                ...newSets[idx],
-                items: [...newSets[idx].items, ...itemsToAdd]
-              };
-              return { ...n, inspirationSets: newSets };
-            }
-          }
-          return n;
-        }));
-      }
-
-      if (action.type === 'ADD_VOLUME') {
-        const { title } = action.payload;
-        if (!activeNovel || !title) return;
-        const newVolume: NovelVolume = {
-          id: crypto.randomUUID(),
-          title: title.trim(),
-          collapsed: false
-        };
-        setVolumes([...volumes, newVolume]);
-      }
-
-      if (action.type === 'SELECT_REFERENCE') {
-        const { type, setName, indices } = action.payload;
-        if (!activeNovel) return;
-
-        let targetSetId: string | null = null;
-        if (type === 'worldview') targetSetId = activeNovel.worldviewSets?.find(s => s.name === setName)?.id || null;
-        else if (type === 'character') targetSetId = activeNovel.characterSets?.find(s => s.name === setName)?.id || null;
-        else if (type === 'inspiration') targetSetId = activeNovel.inspirationSets?.find(s => s.name === setName)?.id || null;
-        else if (type === 'outline') targetSetId = activeNovel.outlineSets?.find(s => s.name === setName)?.id || null;
-
-        if (targetSetId) {
-          const setters = {
-            worldview: { id: setSelectedWorldviewSetIdForModules, indices: setSelectedWorldviewIndicesForModules },
-            character: { id: setSelectedCharacterSetIdForModules, indices: setSelectedCharacterIndicesForModules },
-            inspiration: { id: setSelectedInspirationSetIdForModules, indices: setSelectedInspirationIndicesForModules },
-            outline: { id: setSelectedOutlineSetIdForModules, indices: setSelectedOutlineIndicesForModules }
-          };
-          const s = setters[type as keyof typeof setters];
-          if (s) {
-            s.id(targetSetId);
-            s.indices(indices || []);
-            terminal.log(`[PromptAgent] Auto-selected reference: ${type} - ${setName}`);
-          }
-        }
-      }
-
-      if (action.type === 'NAVIGATE') {
-        const { target, setName } = action.payload;
-        if (target) {
-          terminal.log(`[PromptAgent] Navigating to: ${target}${setName ? ` - ${setName}` : ''}`);
-          handleSwitchModule(target as any);
-          setShowOutline(true);
-          
-          if (setName && activeNovel) {
-            if (target === 'inspiration') {
-              const found = activeNovel.inspirationSets?.find(s => s.name === setName);
-              if (found) setActiveInspirationSetId(found.id);
-            } else if (target === 'worldview') {
-              const found = activeNovel.worldviewSets?.find(s => s.name === setName);
-              if (found) setActiveWorldviewSetId(found.id);
-            } else if (target === 'characters') {
-              const found = activeNovel.characterSets?.find(s => s.name === setName);
-              if (found) handleSetActiveCharacterSetId(found.id);
-            } else if (target === 'plotOutline') {
-              const found = activeNovel.plotOutlineSets?.find(s => s.name === setName);
-              if (found) setActivePlotOutlineSetId(found.id);
-            } else if (target === 'outline') {
-              const found = activeNovel.outlineSets?.find(s => s.name === setName);
-              if (found) handleSetActiveOutlineSetId(found.id);
-            }
-          }
-        }
-      }
-
-      if (action.type === 'CREATE_PROJECT_FOLDERS') {
-        const { name } = action.payload;
-        if (!name || !activeNovelId) return;
-        
-        const newId = crypto.randomUUID();
-        const folderName = name.trim();
-
-        const newOutlineSet: OutlineSet = { id: newId, name: folderName, items: [] };
-        const newWorldviewSet: WorldviewSet = { id: newId, name: folderName, entries: [] };
-        const newCharacterSet: CharacterSet = { id: newId, name: folderName, characters: [] };
-        const newInspirationSet: InspirationSet = { id: newId, name: folderName, items: [] };
-        const newPlotOutlineSet: PlotOutlineSet = { id: newId, name: folderName, items: [] };
-
-        setNovels(prev => prev.map(n => {
-          if (n.id === activeNovelId) {
-            // 确保同步创建所有必需的文件夹/集合
-            return {
-              ...n,
-              outlineSets: [...(n.outlineSets || []).filter(s => s.name !== folderName), newOutlineSet],
-              worldviewSets: [...(n.worldviewSets || []).filter(s => s.name !== folderName), newWorldviewSet],
-              characterSets: [...(n.characterSets || []).filter(s => s.name !== folderName), newCharacterSet],
-              inspirationSets: [...(n.inspirationSets || []).filter(s => s.name !== folderName), newInspirationSet],
-              plotOutlineSets: [...(n.plotOutlineSets || []).filter(s => s.name !== folderName), newPlotOutlineSet]
-            }
-          }
-          return n;
-        }));
-
-        handleSetActiveOutlineSetId(newId);
-        setActiveWorldviewSetId(newId);
-        handleSetActiveCharacterSetId(newId);
-        setActiveInspirationSetId(newId);
-        setActivePlotOutlineSetId(newId);
-        
-        terminal.log(`[Agent] Created synchronized folders for project: ${folderName}`);
-      }
-
-      if (action.type === 'START_AUTO_WRITE') {
-        const { includeFullOutline } = action.payload;
-        terminal.log(`[Agent Action] START_AUTO_WRITE - includeFullOutline: ${includeFullOutline}`);
-        
-        // 确保切换到大纲模块
-        handleSwitchModule('outline');
-        setShowOutline(true);
-
-        if (includeFullOutline !== undefined) {
-          setIncludeFullOutlineInAutoWrite(!!includeFullOutline);
-        }
-
-        // 延迟触发以确保状态同步
-        setTimeout(() => {
-          handleConfirmAutoWrite();
-        }, 500);
-      }
-    })
-  }
-
-  const handleAgentTaskTrigger = async (type: string, task: any, onComplete: () => void) => {
-    terminal.log(`[Agent Task] Triggered: ${type} - ${task.title}`);
-    
-    // 解析 Action 指令（如果 description 中包含）
-    const actions = AgentParser.parseActions(task.description);
-    if (actions.length > 0) {
-      handleAgentAction(actions);
-    }
-
-    const waitForGeneration = async (genFunc: () => Promise<void>) => {
-      // 模拟提示词 Agent 的介入：根据任务描述生成增强提示词
-      if (task.description) {
-        // 简单处理：提取 [ACTION] 之外的文本作为输入
-        const pureInput = task.description.replace(/\[ACTION:.*?\][\s\S]*?\[\/ACTION\]/g, '').trim();
-        if (pureInput) {
-          await handleCallPromptAgent(pureInput, type);
-        }
-      }
-      // 这里的 genFunc 必须被 await，否则流程会立即结束
-      await genFunc();
-      onComplete();
-    };
-
-    // 根据任务类型自动切换 UI 并触发生成
-    // 提取任务标题中的名称（如果有），用于切换到对应的文件夹
-    const targetSetName = task.title?.match(/文件夹\s*(.*)$/)?.[1] || task.title?.match(/生成\s*(.*)$/)?.[1] || '';
-
-    if (type === 'inspiration') {
-      handleSwitchModule('inspiration');
-      if (targetSetName && activeNovel) {
-        const found = activeNovel.inspirationSets?.find(s => s.name === targetSetName);
-        if (found) setActiveInspirationSetId(found.id);
-      }
-      setShowOutline(true);
-      await waitForGeneration(() => handleGenerateInspiration('generate'));
-    } else if (type === 'worldview') {
-      handleSwitchModule('worldview');
-      if (targetSetName && activeNovel) {
-        const found = activeNovel.worldviewSets?.find(s => s.name === targetSetName);
-        if (found) setActiveWorldviewSetId(found.id);
-      }
-      setShowOutline(true);
-      await waitForGeneration(() => handleGenerateWorldview('generate'));
-    } else if (type === 'plot_outline') {
-      handleSwitchModule('plotOutline');
-      if (targetSetName && activeNovel) {
-        const found = activeNovel.plotOutlineSets?.find(s => s.name === targetSetName);
-        if (found) setActivePlotOutlineSetId(found.id);
-      }
-      setShowOutline(true);
-      await waitForGeneration(() => handleGeneratePlotOutline('generate'));
-    } else if (type === 'character') {
-      handleSwitchModule('characters');
-      if (targetSetName && activeNovel) {
-        const found = activeNovel.characterSets?.find(s => s.name === targetSetName);
-        if (found) handleSetActiveCharacterSetId(found.id);
-      }
-      setShowOutline(true);
-      await waitForGeneration(() => handleGenerateCharacters('generate'));
-    } else if (type === 'outline') {
-      handleSwitchModule('outline');
-      if (targetSetName && activeNovel) {
-        const found = activeNovel.outlineSets?.find(s => s.name === targetSetName);
-        if (found) handleSetActiveOutlineSetId(found.id);
-      }
-      setShowOutline(true);
-      await waitForGeneration(() => handleGenerateOutline('append'));
-    } else if (type === 'chapter') {
-      setShowOutline(false);
-      // 自动化创作循环逻辑：如果还没开始自动写作，则触发
-      if (!isAutoWritingRef.current) {
-        const currentSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId);
-        if (currentSet && currentSet.items.length > 0) {
-          // 自动勾选附加完整大纲
-          setIncludeFullOutlineInAutoWrite(true);
-          
-          setIsAutoWriting(true);
-          isAutoWritingRef.current = true;
-          setAutoWriteOutlineSetId(activeOutlineSetId);
-          autoWriteAbortControllerRef.current = new AbortController();
-          
-          const activePrompts = prompts.filter(p => p.active);
-          
-          let startIndex = 0;
-          for (let i = 0; i < currentSet.items.length; i++) {
-            const item = currentSet.items[i];
-            const existingChapter = activeNovel?.chapters.find(c => c.title === item.title);
-            if (!existingChapter || !existingChapter.content || existingChapter.content.trim().length === 0) {
-              startIndex = i;
-              break;
-            }
-          }
-
-          if (startIndex < currentSet.items.length) {
-            await autoWriteLoop(currentSet.items, startIndex, activeNovel!.id, activeNovel!.title, activePrompts, contextLength, volumes[volumes.length - 1]?.id, true, activeOutlineSetId);
-            
-            // 导演 Agent 介入：检查是否达到用户要求（通过重新调用 Planning）
-            if (activeNovel) {
-              const currentChapters = novelsRef.current.find(n => n.id === activeNovel.id)?.chapters || [];
-              terminal.log(`[Agent] Current chapters: ${currentChapters.length}. Checking requirements...`);
-              
-              // 触发一次新的规划，让导演 Agent 决定是否继续循环
-              // 注意：此时可能需要稍微延迟，确保 novel 状态已持久化
-              setTimeout(() => {
-                const refreshedNovel = novelsRef.current.find(n => n.id === activeNovel.id);
-                if (refreshedNovel) {
-                  agentCoreRef.current?.startPlanning(refreshedNovel, callAgentLLM, agentUserInstruction, agentModelConfig, agentPromptConfig);
-                }
-              }, 1000);
-            }
-          }
-        }
-      }
-      onComplete();
-    } else {
-      onComplete();
-    }
-  }
-
-  const handleCallPromptAgent = async (userInput: string, stage: string) => {
-    if (!activeNovel) return
-    setIsCallingPromptAgent(true)
-    try {
-      const systemPrompt = agentPromptConfig.promptAgentPrompt || PromptAgent.getSystemPrompt(stage)
-      const userPromptMsg = PromptAgent.buildUserPrompt(
-        activeNovel,
-        userInput,
-        stage,
-        agentUserInstruction,
-        agentCoreState.manifest
-      )
-      
-      const response = await callAgentLLM(systemPrompt, userPromptMsg, agentModelConfig.promptAgentModel)
-      
-      // Parse Actions (e.g. SELECT_REFERENCE)
-      const actions = AgentParser.parseActions(response)
-      if (actions.length > 0) {
-        handleAgentAction(actions)
-      }
-
-      // Clean text and update UI
-      const cleanContent = AgentParser.cleanText(response)
-      
-      // We can either update the userInput directly if AI provides a "Recommended Prompt"
-      // Or show it in a chat-like way. For now, let's look for 【推荐提示词】 pattern
-      const promptMatch = cleanContent.match(/【推荐提示词】：?\s*([\s\S]*?)(?=\n\n【|$)/)
-      if (promptMatch && promptMatch[1]) {
-        setUserPrompt(promptMatch[1].trim())
-      }
-
-      // Also log the full advice to terminal or a dedicated modal
-      terminal.log(`[PromptAgent] Advice:\n${cleanContent}`)
-      
-      // If there's a reason/explanation, maybe we should show it to the user
-      // For now, let's just update the input box.
-    } catch (e: any) {
-      terminal.error(`[PromptAgent] Failed: ${e.message}`)
-      setError(`提示词 Agent 运行失败: ${e.message}`)
-    } finally {
-      setIsCallingPromptAgent(false)
-    }
-  }
 
   if (!activeNovelId) {
     return (
@@ -6623,10 +6070,6 @@ ${taskDescription}`
           setConsecutiveChapterCount={setConsecutiveChapterCount}
           concurrentOptimizationLimit={concurrentOptimizationLimit}
           setConcurrentOptimizationLimit={setConcurrentOptimizationLimit}
-          agentModelConfig={agentModelConfig}
-          setAgentModelConfig={setAgentModelConfig}
-          agentPromptConfig={agentPromptConfig}
-          setAgentPromptConfig={setAgentPromptConfig}
         />
 
         {/* Create Novel Modal (List View) */}
@@ -7055,28 +6498,12 @@ ${taskDescription}`
                </div>
 
                <button
-                 onClick={() => setShowAIChatModal(true)}
-                 className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] rounded text-xs text-white transition-colors whitespace-nowrap shrink-0 shadow-lg shadow-blue-900/20"
-                 title="AI 创作助手"
-               >
-                 <MessageSquare className="w-3.5 h-3.5" />
-                 <span className="hidden sm:inline">AI 助手</span>
-               </button>
-               <button
                  onClick={() => setShowRegexModal(true)}
                  className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors whitespace-nowrap shrink-0"
                  title="正则"
                >
                  <Code2 className="w-3.5 h-3.5" />
                  <span className="hidden sm:inline">正则</span>
-               </button>
-               <button
-                 onClick={() => setShowAgentPanel(true)}
-                 className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 rounded text-xs text-white transition-colors whitespace-nowrap shrink-0 shadow-lg shadow-indigo-900/20"
-                 title="Agent 全自动创作"
-               >
-                 <Bot className="w-3.5 h-3.5" />
-                 <span className="hidden sm:inline">Agent 创作</span>
                </button>
                <button
                  onClick={() => setShowSettings(true)}
@@ -7087,6 +6514,14 @@ ${taskDescription}`
                  <span className="hidden sm:inline">设置</span>
                </button>
              </div>
+             <button
+               onClick={() => setShowWorkflowEditor(true)}
+               className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-xs text-white transition-colors whitespace-nowrap shrink-0 shadow-lg shadow-indigo-900/20 ring-2 ring-indigo-500/30 animate-pulse hover:animate-none"
+               title="打开工作流编辑器"
+             >
+               <GitBranch className="w-3.5 h-3.5" />
+               <span className="font-bold">可视化工作流</span>
+             </button>
           </div>
         </div>
 
@@ -7193,15 +6628,15 @@ ${taskDescription}`
                           </button>
 
                           <button
-                             onClick={() => setShowAgentPanel(true)}
-                             className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-indigo-500 hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
+                             onClick={() => setShowWorkflowEditor(true)}
+                             className="bg-indigo-900/20 border-2 border-indigo-500/50 rounded-xl p-6 hover:border-indigo-400 hover:shadow-indigo-500/20 hover:shadow-xl transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
                           >
-                             <div className="p-4 bg-indigo-900/30 rounded-full group-hover:bg-indigo-500/20 group-hover:text-indigo-400 transition-colors text-indigo-500">
-                                <Bot className="w-10 h-10" />
+                             <div className="p-4 bg-indigo-500/20 rounded-full group-hover:bg-indigo-500/30 text-indigo-400">
+                                <GitBranch className="w-10 h-10" />
                              </div>
                              <div>
-                                <h3 className="text-xl font-bold text-gray-100 mb-2">Agent 全自动创作</h3>
-                                <p className="text-sm text-gray-400">开启高度智能的 Agent 协同创作流</p>
+                                <h3 className="text-xl font-bold text-indigo-100 mb-2">可视化工作流</h3>
+                                <p className="text-sm text-indigo-300/70">串联多步骤自动化任务，实现全自动小说创作</p>
                              </div>
                           </button>
 
@@ -7247,8 +6682,6 @@ ${taskDescription}`
                           }}
                           onShowSettings={() => { setGeneratorSettingsType('inspiration'); setShowGeneratorSettingsModal(true); }}
                           modelName={inspirationPresets.find(p => p.id === activeInspirationPresetId)?.name || '默认灵感'}
-                          onCallPromptAgent={handleCallPromptAgent}
-                          isCallingPromptAgent={isCallingPromptAgent}
                           onSendToModule={handleSendInspirationToModule}
                           onReturnToMainWithContent={(content) => {
                              setUserPrompt(content);
@@ -7361,8 +6794,6 @@ ${taskDescription}`
                           }}
                           onShowSettings={() => { setGeneratorSettingsType('character'); setShowGeneratorSettingsModal(true); }}
                           modelName={characterPresets.find(p => p.id === activeCharacterPresetId)?.name || '默认设置'}
-                          onCallPromptAgent={handleCallPromptAgent}
-                          isCallingPromptAgent={isCallingPromptAgent}
                           activePresetId={activeCharacterPresetId}
                           lastNonChatPresetId={lastNonChatCharacterPresetId}
                           onReturnToMainWithContent={(content) => {
@@ -7467,8 +6898,6 @@ ${taskDescription}`
                           }}
                           onShowSettings={() => { setGeneratorSettingsType('worldview'); setShowGeneratorSettingsModal(true); }}
                           modelName={worldviewPresets.find(p => p.id === activeWorldviewPresetId)?.name || '默认设置'}
-                          onCallPromptAgent={handleCallPromptAgent}
-                          isCallingPromptAgent={isCallingPromptAgent}
                           activePresetId={activeWorldviewPresetId}
                           lastNonChatPresetId={lastNonChatWorldviewPresetId}
                           onReturnToMainWithContent={(content) => {
@@ -7566,8 +6995,6 @@ ${taskDescription}`
                           onStartAutoWrite={startAutoWriting}
                           isAutoWriting={isAutoWriting}
                           autoWriteStatus={autoWriteStatus}
-                          onCallPromptAgent={handleCallPromptAgent}
-                          isCallingPromptAgent={isCallingPromptAgent}
                           onStopAutoWrite={() => {
                              setIsAutoWriting(false)
                              autoWriteAbortControllerRef.current?.abort()
@@ -7683,8 +7110,6 @@ ${taskDescription}`
                              setIsGeneratingPlotOutline(false)
                           }}
                           onShowSettings={() => { setGeneratorSettingsType('plotOutline'); setShowGeneratorSettingsModal(true); }}
-                          onCallPromptAgent={handleCallPromptAgent}
-                          isCallingPromptAgent={isCallingPromptAgent}
                           modelName={plotOutlinePresets.find(p => p.id === activePlotOutlinePresetId)?.name || '默认设置'}
                           activePresetId={activePlotOutlinePresetId}
                           lastNonChatPresetId={lastNonChatPlotOutlinePresetId}
@@ -8042,6 +7467,8 @@ ${taskDescription}`
         setWorldviewModel={setWorldviewModel}
         inspirationModel={inspirationModel}
         setInspirationModel={setInspirationModel}
+        plotOutlineModel={plotOutlineModel}
+        setPlotOutlineModel={setPlotOutlineModel}
         optimizeModel={optimizeModel}
         setOptimizeModel={setOptimizeModel}
         analysisModel={analysisModel}
@@ -8055,17 +7482,11 @@ ${taskDescription}`
         bigSummaryPrompt={bigSummaryPrompt}
         setBigSummaryPrompt={setBigSummaryPrompt}
         handleScanSummaries={handleScanSummaries}
-        plotOutlineModel={plotOutlineModel}
-        setPlotOutlineModel={setPlotOutlineModel}
         isLoading={isLoading}
         consecutiveChapterCount={consecutiveChapterCount}
         setConsecutiveChapterCount={setConsecutiveChapterCount}
         concurrentOptimizationLimit={concurrentOptimizationLimit}
         setConcurrentOptimizationLimit={setConcurrentOptimizationLimit}
-        agentModelConfig={agentModelConfig}
-        setAgentModelConfig={setAgentModelConfig}
-        agentPromptConfig={agentPromptConfig}
-        setAgentPromptConfig={setAgentPromptConfig}
       />
 
       {/* Advanced Settings Panel ("对话补全源") */}
@@ -9050,9 +8471,9 @@ ${taskDescription}`
                       }
 
                       const removePrompt = (index: number) => {
-                          const newPrompts = currentPreset.prompts.filter((_, i) => i !== index)
-                          updatePreset({ prompts: newPrompts })
-                      }
+                          const newPrompts = currentPreset.prompts.filter((_, i) => i !== index);
+                          updatePreset({ prompts: newPrompts });
+                      };
 
                       const handleEditPrompt = (index: number, prompt: GeneratorPrompt) => {
                           setEditingGeneratorPromptIndex(index)
@@ -9067,7 +8488,7 @@ ${taskDescription}`
                           updatePreset({ prompts: newPrompts })
                       }
 
-                      const handleDragStart = (_: React.DragEvent, index: number) => {
+                      const handleDragStart = (_e: React.DragEvent, index: number) => {
                           setDraggedPromptIndex(index)
                       }
 
@@ -9590,44 +9011,54 @@ ${taskDescription}`
         </div>
       )}
 
-      {/* AI Chat Modal */}
-      <AIChatModal
-        isOpen={showAIChatModal}
-        onClose={() => setShowAIChatModal(false)}
-        novel={activeNovel}
-        activeChapter={activeChapter}
-        activeOutlineSetId={activeOutlineSetId}
-        apiKey={apiKey}
-        baseUrl={baseUrl}
-        model={model}
-        systemPrompt={systemPrompt}
-        prompts={prompts}
-        context={getChapterContext(activeNovel || undefined, activeChapter) + (activeChapter ? `### ${activeChapter.title}\n${getEffectiveChapterContent(activeChapter)}` : '')}
-        onAttach={(content) => {
-          // 附加到正文优化界面 (即 activeChapter.content)
-          // 用户要求以优化版本形式附加
-          if (activeChapterId) {
-            handleOptimize(activeChapterId, content)
-          }
-          setShowAIChatModal(false)
+      {/* Workflow Editor */}
+      <WorkflowEditor
+        isOpen={showWorkflowEditor}
+        onClose={() => setShowWorkflowEditor(false)}
+        activeNovel={activeNovel}
+        onSelectChapter={(id) => {
+          setActiveChapterId(id)
+          setLeftPanelActiveTab('chapters')
         }}
-      />
-
-      <AgentControlPanel
-        novel={activeNovel!}
-        active={showAgentPanel}
-        onClose={() => setShowAgentPanel(false)}
-        coreState={agentCoreState}
-        userInstruction={agentUserInstruction}
-        setUserInstruction={setAgentUserInstruction}
-        onStartPlanning={() => activeNovel && agentCoreRef.current?.startPlanning(activeNovel, callAgentLLM, agentUserInstruction, agentModelConfig, agentPromptConfig)}
-        onStartExecution={() => agentCoreRef.current?.startExecution()}
-        onResume={() => agentCoreRef.current?.resume()}
-        onStop={() => agentCoreRef.current?.stop()}
-        onReset={() => agentCoreRef.current?.resetToIdle()}
-        onFullReset={() => agentCoreRef.current?.fullReset()}
-        agentPromptConfig={agentPromptConfig}
-        setAgentPromptConfig={setAgentPromptConfig}
+        onStartAutoWrite={startAutoWriting}
+        globalConfig={{
+          apiKey,
+          baseUrl,
+          model,
+          outlineModel,
+          characterModel,
+          worldviewModel,
+          inspirationModel,
+          plotOutlineModel,
+          optimizeModel,
+          analysisModel,
+          contextLength,
+          maxReplyLength,
+          temperature,
+          stream,
+          maxRetries,
+          globalCreationPrompt,
+          longTextMode,
+          autoOptimize,
+          consecutiveChapterCount: Number(consecutiveChapterCount),
+          smallSummaryInterval: Number(smallSummaryInterval),
+          bigSummaryInterval: Number(bigSummaryInterval),
+          smallSummaryPrompt,
+          bigSummaryPrompt,
+          prompts,
+          getActiveScripts,
+          onChapterComplete: async (chapterId, content) => {
+            if (longTextModeRef.current) {
+              await checkAndGenerateSummary(chapterId, content);
+            }
+            if (autoOptimizeRef.current) {
+              setOptimizationQueue(prev => [...prev, chapterId]);
+            }
+          }
+        }}
+        onUpdateNovel={(updatedNovel) => {
+          setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));
+        }}
       />
 
     </div>

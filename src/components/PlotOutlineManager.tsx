@@ -34,8 +34,6 @@ interface PlotOutlineManagerProps {
   onShowSettings?: () => void
   modelName?: string
   sidebarHeader?: React.ReactNode
-  onCallPromptAgent?: (userInput: string, stage: string) => void
-  isCallingPromptAgent?: boolean
 
   activePresetId?: string
   lastNonChatPresetId?: string
@@ -160,8 +158,6 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => 
     onShowSettings,
     modelName,
     sidebarHeader,
-    onCallPromptAgent,
-    isCallingPromptAgent,
     activePresetId,
     lastNonChatPresetId,
     onReturnToMainWithContent,
@@ -612,7 +608,7 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => 
                                     }
                                  }}
                                  className="w-full bg-gray-900 border border-gray-600 rounded-lg pl-9 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2 text-xs md:text-sm focus:border-[var(--theme-color)] focus:ring-1 focus:ring-[var(--theme-color)] outline-none transition-all"
-                                 placeholder="AI 助手：请给我一些关于..."
+                                 placeholder="输入创作指令，或点击右侧 AI 按钮优化..."
                               />
                            </div>
                            {isGenerating ? (

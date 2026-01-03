@@ -1,5 +1,4 @@
 import {
-  Bot,
   ChevronDown,
   Loader2,
   Plus,
@@ -8,8 +7,6 @@ import {
   X
 } from 'lucide-react'
 import React from 'react'
-import { AgentModelConfig } from '../types'
-
 interface GlobalSettingsModalProps {
   isOpen: boolean
   onClose: () => void
@@ -54,8 +51,6 @@ interface GlobalSettingsModalProps {
   setConsecutiveChapterCount: (val: number | '') => void
   concurrentOptimizationLimit: number | ''
   setConcurrentOptimizationLimit: (val: number | '') => void
-  agentModelConfig: AgentModelConfig
-  setAgentModelConfig: (config: AgentModelConfig) => void
 }
 
 export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
@@ -101,9 +96,7 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   consecutiveChapterCount,
   setConsecutiveChapterCount,
   concurrentOptimizationLimit,
-  setConcurrentOptimizationLimit,
-  agentModelConfig,
-  setAgentModelConfig
+  setConcurrentOptimizationLimit
 }) => {
   if (!isOpen) return null
 
@@ -311,37 +304,6 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
               </p>
             </div>
 
-            {/* Agent Specific Models */}
-            <div className="flex flex-col gap-2 pt-4 border-t border-gray-700">
-              <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                <Bot className="w-4 h-4 text-indigo-400" />
-                Agent 专用模型设置
-              </label>
-              <div className="space-y-3 mt-2">
-                {[
-                  { label: '导演 (规划) 模型', key: 'directorModel' },
-                  { label: '提示词 Agent (导师) 模型', key: 'promptAgentModel' },
-                  { label: '摘要生成模型', key: 'summaryModel' }
-                ].map((item) => (
-                  <div key={item.key} className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-gray-500 uppercase">{item.label}</label>
-                    <div className="relative">
-                      <select
-                        value={(agentModelConfig as any)[item.key] || ''}
-                        onChange={(e) => setAgentModelConfig({ ...agentModelConfig, [item.key]: e.target.value })}
-                        className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-xs focus:border-indigo-500 outline-none appearance-none text-gray-300"
-                      >
-                        <option value="">跟随默认模型</option>
-                        {modelList.map(m => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-2.5 w-3 h-3 text-gray-500 pointer-events-none" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
       </div>
