@@ -195,6 +195,317 @@ const NODE_CONFIGS: Record<NodeTypeKey, any> = {
   chapter: { typeLabel: '正文', icon: FileText, color: '#8b5cf6', defaultLabel: '生成章节正文', presetType: 'completion' },
 };
 
+// --- 子组件：配置面板 (实现性能隔离) ---
+interface ConfigPanelProps {
+  editingNode: WorkflowNode;
+  activeNovel: Novel | undefined;
+  allPresets: Record<string, GeneratorPreset[]>;
+  pendingFolders: string[];
+  globalConfig: any;
+  onUpdateNodeData: (nodeId: string, updates: Partial<WorkflowNodeData>) => void;
+  onDeleteNode: (nodeId: string) => void;
+  onClose: () => void;
+  onPreviewEntry: (entry: OutputEntry) => void;
+}
+
+const ConfigPanel = React.memo(({
+  editingNode,
+  activeNovel,
+  allPresets,
+  pendingFolders,
+  globalConfig,
+  onUpdateNodeData,
+  onDeleteNode,
+  onClose,
+  onPreviewEntry
+}: ConfigPanelProps) => {
+  // 核心优化：本地状态管理，仅在失去焦点或关闭时同步
+  const [localLabel, setLocalLabel] = useState(editingNode.data.label || '');
+  const [localFolderName, setLocalFolderName] = useState(editingNode.data.folderName || '');
+  const [localInstruction, setLocalInstruction] = useState(editingNode.data.instruction || '');
+  const [localTargetVolumeName, setLocalTargetVolumeName] = useState((editingNode.data.targetVolumeName as string) || '');
+
+  // 节点切换时更新本地状态
+  useEffect(() => {
+    setLocalLabel(editingNode.data.label || '');
+    setLocalFolderName(editingNode.data.folderName || '');
+    setLocalInstruction(editingNode.data.instruction || '');
+    setLocalTargetVolumeName((editingNode.data.targetVolumeName as string) || '');
+  }, [editingNode.id]);
+
+  const syncLocalToGlobal = () => {
+    onUpdateNodeData(editingNode.id, {
+      label: localLabel,
+      folderName: localFolderName,
+      instruction: localInstruction,
+      targetVolumeName: localTargetVolumeName
+    });
+  };
+
+  const toggleSetReference = (type: 'worldview' | 'character' | 'outline' | 'inspiration' | 'folder', setId: string) => {
+    const key = type === 'worldview' ? 'selectedWorldviewSets' :
+                type === 'character' ? 'selectedCharacterSets' :
+                type === 'outline' ? 'selectedOutlineSets' :
+                type === 'inspiration' ? 'selectedInspirationSets' : 'selectedReferenceFolders';
+    
+    const currentList = [...(editingNode.data[key] as string[])];
+    const newList = currentList.includes(setId)
+      ? currentList.filter(id => id !== setId)
+      : [...currentList, setId];
+      
+    onUpdateNodeData(editingNode.id, { [key]: newList });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-900 z-[130] flex flex-col animate-in slide-in-from-bottom duration-300">
+      <div className="p-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between sticky top-0 z-10">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg" style={{ backgroundColor: `${editingNode.data.color}20`, color: editingNode.data.color }}>
+            {(() => { const Icon = editingNode.data.icon; return <Icon className="w-5 h-5" /> })()}
+          </div>
+          <h3 className="font-bold text-gray-100 truncate max-w-[200px]">{localLabel || editingNode.data.label}</h3>
+        </div>
+        <button onClick={() => { syncLocalToGlobal(); onClose(); }} className="p-2 bg-gray-700 rounded-full text-gray-400">
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-6 space-y-8 pb-24 custom-scrollbar">
+        <div className="space-y-3">
+          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">模块名称</label>
+          <input
+            type="text"
+            value={localLabel}
+            onChange={(e) => setLocalLabel(e.target.value)}
+            onBlur={syncLocalToGlobal}
+            className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500 shadow-inner"
+          />
+        </div>
+
+        {(editingNode.data.typeKey === 'createFolder' || editingNode.data.typeKey === 'reuseDirectory') && (
+          <div className="space-y-3">
+            <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+              <Folder className="w-3.5 h-3.5" /> 关联目录名
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={localFolderName}
+                onChange={(e) => setLocalFolderName(e.target.value)}
+                onBlur={syncLocalToGlobal}
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500"
+                placeholder="输入文件夹名称..."
+              />
+              {editingNode.data.typeKey === 'reuseDirectory' && activeNovel && (
+                <select
+                  className="bg-gray-800 border border-gray-700 rounded-2xl px-2 text-xs text-gray-300 outline-none"
+                  onChange={(e) => {
+                    setLocalFolderName(e.target.value);
+                    onUpdateNodeData(editingNode.id, { folderName: e.target.value });
+                  }}
+                  value=""
+                >
+                  <option value="" disabled>选择...</option>
+                  {Array.from(new Set([
+                    ...(activeNovel.volumes?.map(v => v.title) || []),
+                    ...(activeNovel.worldviewSets?.map(s => s.name) || []),
+                    ...(activeNovel.characterSets?.map(s => s.name) || []),
+                    ...(activeNovel.outlineSets?.map(s => s.name) || [])
+                  ])).filter(Boolean).map(name => (
+                    <option key={name as string} value={name as string}>{name as string}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+        )}
+
+        {editingNode.data.presetType && (
+          <div className="space-y-3">
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+              <Cpu className="w-3.5 h-3.5" /> AI 预设
+            </label>
+            <div className="relative">
+              <select
+                value={editingNode.data.presetId as string}
+                onChange={(e) => onUpdateNodeData(editingNode.id, { presetId: e.target.value })}
+                className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none"
+              >
+                <option value="">-- 请选择预设 --</option>
+                {(allPresets[editingNode.data.presetType as string] || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+            </div>
+          </div>
+        )}
+
+        {editingNode.data.typeKey === 'chapter' && (
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Library className="w-3.5 h-3.5" /> 保存至分卷
+              </label>
+              <select
+                value={editingNode.data.targetVolumeId as string}
+                onChange={(e) => onUpdateNodeData(editingNode.id, { targetVolumeId: e.target.value })}
+                className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none"
+              >
+                <option value="">-- 自动匹配同名分卷 --</option>
+                <option value="NEW_VOLUME">+ 新建分卷...</option>
+                {activeNovel?.volumes.map(v => (
+                  <option key={v.id} value={v.id}>{v.title}</option>
+                ))}
+              </select>
+              {editingNode.data.targetVolumeId === 'NEW_VOLUME' && (
+                <input
+                  type="text"
+                  value={localTargetVolumeName}
+                  onChange={(e) => setLocalTargetVolumeName(e.target.value)}
+                  onBlur={syncLocalToGlobal}
+                  placeholder="输入新分卷名称..."
+                  className="w-full bg-gray-800 border border-indigo-900/40 rounded-2xl px-5 py-3 text-white text-xs outline-none focus:border-indigo-500"
+                />
+              )}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => onUpdateNodeData(editingNode.id, { autoOptimize: !editingNode.data.autoOptimize })}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.autoOptimize ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+              >
+                <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.autoOptimize ? 'bg-purple-500 animate-pulse' : 'bg-gray-600'}`} />
+                自动优化
+              </button>
+              <button
+                onClick={() => onUpdateNodeData(editingNode.id, { twoStepOptimization: !editingNode.data.twoStepOptimization })}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.twoStepOptimization ? 'bg-pink-500/20 text-pink-300 border-pink-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+              >
+                <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.twoStepOptimization ? 'bg-pink-500 animate-pulse' : 'bg-gray-600'}`} />
+                两阶段优化
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">创作指令 (User Prompt)</label>
+          <textarea
+            value={localInstruction}
+            onChange={(e) => setLocalInstruction(e.target.value)}
+            onBlur={syncLocalToGlobal}
+            className="w-full h-56 bg-gray-800 border border-gray-700 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed"
+            placeholder="在此输入具体要求..."
+          />
+        </div>
+
+        {editingNode.data.typeKey !== 'userInput' && activeNovel && (
+          <div className="space-y-6 pt-6 border-t border-gray-800">
+            <label className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+              <CheckSquare className="w-3.5 h-3.5" /> 关联参考资料集
+            </label>
+            
+            <div className="space-y-4">
+              {[
+                { label: '世界观', key: 'selectedWorldviewSets', sets: activeNovel.worldviewSets, icon: Globe, color: 'text-emerald-500' },
+                { label: '角色', key: 'selectedCharacterSets', sets: activeNovel.characterSets, icon: Users, color: 'text-orange-500' },
+                { label: '粗纲', key: 'selectedOutlineSets', sets: activeNovel.outlineSets, icon: LayoutList, color: 'text-pink-500' },
+                { label: '灵感', key: 'selectedInspirationSets', sets: activeNovel.inspirationSets, icon: Lightbulb, color: 'text-yellow-500' }
+              ].map(group => (
+                <div key={group.key} className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 space-y-2">
+                  <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
+                    <group.icon className={`w-3 h-3 ${group.color}`}/> {group.label}
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {group.sets?.map(set => {
+                      const isSelected = (editingNode.data[group.key] as string[]).includes(set.id);
+                      return (
+                        <button
+                          key={set.id}
+                          onClick={() => toggleSetReference(group.key.replace('selected', '').replace('Sets', '').toLowerCase() as any, set.id)}
+                          className={`px-3 py-2 rounded-xl text-xs transition-all border ${isSelected ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50 font-bold' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+                        >
+                          {set.name}
+                        </button>
+                      );
+                    })}
+                    {/* 显示计划中的文件夹 */}
+                    {pendingFolders.filter(name => !group.sets?.some((s: any) => s.name === name)).map(name => {
+                      const pendingId = `pending:${name}`;
+                      const isSelected = (editingNode.data[group.key] as string[]).includes(pendingId);
+                      return (
+                        <button
+                          key={pendingId}
+                          onClick={() => toggleSetReference(group.key.replace('selected', '').replace('Sets', '').toLowerCase() as any, pendingId)}
+                          className={`px-3 py-2 rounded-xl text-xs transition-all border border-dashed ${isSelected ? 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50 font-bold' : 'bg-gray-800/40 text-gray-500 border-gray-700'}`}
+                        >
+                          {name} (计划中)
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              <div className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 space-y-2">
+                <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
+                  <Folder className="w-3 h-3 text-blue-500"/> 参考资料库文件夹
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {activeNovel.referenceFolders?.map(folder => {
+                    const isSelected = (editingNode.data.selectedReferenceFolders as string[])?.includes(folder.id);
+                    return (
+                      <button
+                        key={folder.id}
+                        onClick={() => toggleSetReference('folder', folder.id)}
+                        className={`px-3 py-2 rounded-xl text-xs transition-all border ${isSelected ? 'bg-blue-600/20 text-blue-400 border-blue-500/50 font-bold' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+                      >
+                        {folder.name}
+                      </button>
+                    );
+                  })}
+                  {(!activeNovel.referenceFolders || activeNovel.referenceFolders.length === 0) && (
+                    <div className="text-[10px] text-gray-600 italic">暂无文件夹</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {(editingNode.data.outputEntries as OutputEntry[])?.length > 0 && (
+          <div className="space-y-4 pt-6 border-t border-gray-800">
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">产出 ({(editingNode.data.outputEntries as OutputEntry[]).length})</label>
+            <div className="space-y-3">
+              {(editingNode.data.outputEntries as OutputEntry[]).map(entry => (
+                <div key={entry.id} className="p-4 bg-gray-800 border border-gray-700 rounded-2xl flex items-center justify-between active:bg-gray-700" onClick={() => onPreviewEntry(entry)}>
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0">
+                      <FileText className="w-5 h-5 text-indigo-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-gray-200 truncate">{entry.title}</div>
+                      <div className="text-[10px] text-gray-500 truncate">{entry.content.substring(0, 40)}...</div>
+                    </div>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-gray-600 -rotate-90" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="p-6 bg-gray-800 border-t border-gray-700 sticky bottom-0 z-10 flex gap-4">
+        <button onClick={() => { if(confirm('确定要删除这个模块吗？')) { onDeleteNode(editingNode.id); } }} className="p-4 bg-red-900/20 text-red-400 rounded-2xl">
+          <Trash2 className="w-6 h-6" />
+        </button>
+        <button onClick={() => { syncLocalToGlobal(); onClose(); }} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">
+          保存并返回
+        </button>
+      </div>
+    </div>
+  );
+});
+
 export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
   const { isOpen, onClose, activeNovel, onSelectChapter, onUpdateNovel, onStartAutoWrite, globalConfig } = props;
   
@@ -214,12 +525,6 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
   const [stopRequested, setStopRequested] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OutputEntry | null>(null);
-
-  // 性能优化：配置面板本地状态，避免实时更新全局 nodes 导致的输入延迟
-  const [localLabel, setLocalLabel] = useState('');
-  const [localFolderName, setLocalFolderName] = useState('');
-  const [localInstruction, setLocalInstruction] = useState('');
-  const [localTargetVolumeName, setLocalTargetVolumeName] = useState('');
 
   const stopRequestedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -242,16 +547,6 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
     optimize: [],
     analysis: [],
   });
-
-  // 当切换编辑节点时，同步本地状态
-  useEffect(() => {
-    if (editingNode) {
-      setLocalLabel(editingNode.data.label || '');
-      setLocalFolderName(editingNode.data.folderName || '');
-      setLocalInstruction(editingNode.data.instruction || '');
-      setLocalTargetVolumeName((editingNode.data.targetVolumeName as string) || '');
-    }
-  }, [editingNodeId]);
 
   // 加载配置和数据
   useEffect(() => {
@@ -414,17 +709,6 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
 
   const updateNodeData = (nodeId: string, updates: Partial<WorkflowNodeData>) => {
     setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n));
-  };
-
-  const syncLocalToGlobal = () => {
-    if (editingNodeId) {
-      updateNodeData(editingNodeId, {
-        label: localLabel,
-        folderName: localFolderName,
-        instruction: localInstruction,
-        targetVolumeName: localTargetVolumeName
-      });
-    }
   };
 
   const handleSaveWorkflow = () => {
@@ -1225,260 +1509,20 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
 
       {/* 配置面板 */}
       {editingNodeId && editingNode && (
-        <div className="fixed inset-0 bg-gray-900 z-[130] flex flex-col animate-in slide-in-from-bottom duration-300">
-          <div className="p-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between sticky top-0 z-10">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg" style={{ backgroundColor: `${editingNode.data.color}20`, color: editingNode.data.color }}>{(() => { const Icon = editingNode.data.icon; return <Icon className="w-5 h-5" /> })()}</div>
-              <h3 className="font-bold text-gray-100 truncate max-w-[200px]">{editingNode.data.label}</h3>
-            </div>
-            <button onClick={() => setEditingNodeId(null)} className="p-2 bg-gray-700 rounded-full text-gray-400"><X className="w-5 h-5" /></button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-6 space-y-8 pb-24 custom-scrollbar">
-            <div className="space-y-3">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">模块名称</label>
-              <input
-                type="text"
-                value={localLabel}
-                onChange={(e) => setLocalLabel(e.target.value)}
-                onBlur={syncLocalToGlobal}
-                className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500 shadow-inner"
-              />
-            </div>
-
-            {(editingNode.data.typeKey === 'createFolder' || editingNode.data.typeKey === 'reuseDirectory') && (
-              <div className="space-y-3">
-                <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
-                  <Folder className="w-3.5 h-3.5" /> 关联目录名
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={localFolderName}
-                    onChange={(e) => setLocalFolderName(e.target.value)}
-                    onBlur={syncLocalToGlobal}
-                    className="flex-1 bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500"
-                    placeholder="输入文件夹名称..."
-                  />
-                  {editingNode.data.typeKey === 'reuseDirectory' && activeNovel && (
-                    <select
-                      className="bg-gray-800 border border-gray-700 rounded-2xl px-2 text-xs text-gray-300 outline-none"
-                      onChange={(e) => {
-                        setLocalFolderName(e.target.value);
-                        updateNodeData(editingNode.id, { folderName: e.target.value });
-                      }}
-                      value=""
-                    >
-                      <option value="" disabled>选择...</option>
-                      {Array.from(new Set([
-                        ...(activeNovel.volumes?.map(v => v.title) || []),
-                        ...(activeNovel.worldviewSets?.map(s => s.name) || []),
-                        ...(activeNovel.characterSets?.map(s => s.name) || []),
-                        ...(activeNovel.outlineSets?.map(s => s.name) || [])
-                      ])).filter(Boolean).map(name => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              </div>
-            )}
-            {editingNode.data.presetType && (
-              <div className="space-y-3">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2"><Cpu className="w-3.5 h-3.5" /> AI 预设</label>
-                <div className="relative">
-                  <select value={editingNode.data.presetId} onChange={(e) => updateNodeData(editingNode.id, { presetId: e.target.value })} className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none">
-                    <option value="">-- 请选择预设 --</option>
-                    {(allPresets[editingNode.data.presetType as string] || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
-                </div>
-              </div>
-            )}
-            {editingNode.data.typeKey === 'chapter' && (
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Library className="w-3.5 h-3.5" /> 保存至分卷
-                  </label>
-                  <select
-                    value={editingNode.data.targetVolumeId as string}
-                    onChange={(e) => updateNodeData(editingNode.id, { targetVolumeId: e.target.value })}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none"
-                  >
-                    <option value="">-- 自动匹配同名分卷 --</option>
-                    <option value="NEW_VOLUME">+ 新建分卷...</option>
-                    {activeNovel?.volumes.map(v => (
-                      <option key={v.id} value={v.id}>{v.title}</option>
-                    ))}
-                  </select>
-                  {editingNode.data.targetVolumeId === 'NEW_VOLUME' && (
-                    <input
-                      type="text"
-                      value={localTargetVolumeName}
-                      onChange={(e) => setLocalTargetVolumeName(e.target.value)}
-                      onBlur={syncLocalToGlobal}
-                      placeholder="输入新分卷名称..."
-                      className="w-full bg-gray-800 border border-indigo-900/40 rounded-2xl px-5 py-3 text-white text-xs outline-none focus:border-indigo-500"
-                    />
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={() => {
-                      const newVal = !editingNode.data.autoOptimize;
-                      updateNodeData(editingNode.id, { autoOptimize: newVal });
-                      if (globalConfig?.updateAutoOptimize) {
-                        globalConfig.updateAutoOptimize(newVal);
-                      }
-                    }}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.autoOptimize ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-                  >
-                    <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.autoOptimize ? 'bg-purple-500 animate-pulse' : 'bg-gray-600'}`} />
-                    自动优化
-                  </button>
-                  <button
-                    onClick={() => {
-                      const newVal = !editingNode.data.twoStepOptimization;
-                      updateNodeData(editingNode.id, { twoStepOptimization: newVal });
-                      if (globalConfig?.updateTwoStepOptimization) {
-                        globalConfig.updateTwoStepOptimization(newVal);
-                      }
-                    }}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.twoStepOptimization ? 'bg-pink-500/20 text-pink-300 border-pink-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-                  >
-                    <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.twoStepOptimization ? 'bg-pink-500 animate-pulse' : 'bg-gray-600'}`} />
-                    两阶段优化
-                  </button>
-                </div>
-              </div>
-            )}
-            <div className="space-y-3">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">创作指令 (User Prompt)</label>
-              <textarea
-                value={localInstruction}
-                onChange={(e) => setLocalInstruction(e.target.value)}
-                onBlur={syncLocalToGlobal}
-                className="w-full h-56 bg-gray-800 border border-gray-700 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed"
-                placeholder="在此输入具体要求..."
-              />
-            </div>
-
-            {editingNode.data.typeKey !== 'userInput' && activeNovel && (
-              <div className="space-y-6 pt-6 border-t border-gray-800">
-                <label className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-2">
-                  <CheckSquare className="w-3.5 h-3.5" /> 关联参考资料集
-                </label>
-                
-                <div className="space-y-4">
-                  {[
-                    { label: '世界观', key: 'selectedWorldviewSets', sets: activeNovel.worldviewSets, icon: Globe, color: 'text-emerald-500' },
-                    { label: '角色', key: 'selectedCharacterSets', sets: activeNovel.characterSets, icon: Users, color: 'text-orange-500' },
-                    { label: '粗纲', key: 'selectedOutlineSets', sets: activeNovel.outlineSets, icon: LayoutList, color: 'text-pink-500' },
-                    { label: '灵感', key: 'selectedInspirationSets', sets: activeNovel.inspirationSets, icon: Lightbulb, color: 'text-yellow-500' }
-                  ].map(group => (
-                    <div key={group.key} className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 space-y-2">
-                      <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
-                        <group.icon className={`w-3 h-3 ${group.color}`}/> {group.label}
-                      </div>
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {group.sets?.map(set => {
-                          const isSelected = (editingNode.data[group.key] as string[]).includes(set.id);
-                          return (
-                            <button
-                              key={set.id}
-                              onClick={() => {
-                                const list = [...(editingNode.data[group.key] as string[])];
-                                const newList = list.includes(set.id) ? list.filter(id => id !== set.id) : [...list, set.id];
-                                updateNodeData(editingNode.id, { [group.key]: newList });
-                              }}
-                              className={`px-3 py-2 rounded-xl text-xs transition-all border ${isSelected ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50 font-bold' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-                            >
-                              {set.name}
-                            </button>
-                          );
-                        })}
-                        {/* 显示计划中的文件夹 */}
-                        {pendingFolders.filter(name => !group.sets?.some((s: any) => s.name === name)).map(name => {
-                          const pendingId = `pending:${name}`;
-                          const isSelected = (editingNode.data[group.key] as string[]).includes(pendingId);
-                          return (
-                            <button
-                              key={pendingId}
-                              onClick={() => {
-                                const list = [...(editingNode.data[group.key] as string[])];
-                                const newList = list.includes(pendingId) ? list.filter(id => id !== pendingId) : [...list, pendingId];
-                                updateNodeData(editingNode.id, { [group.key]: newList });
-                              }}
-                              className={`px-3 py-2 rounded-xl text-xs transition-all border border-dashed ${isSelected ? 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50 font-bold' : 'bg-gray-800/40 text-gray-500 border-gray-700'}`}
-                            >
-                              {name} (计划中)
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* 参考资料库文件夹选择 */}
-                  <div className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 space-y-2">
-                    <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
-                      <Folder className="w-3 h-3 text-blue-500"/> 参考资料库文件夹
-                    </div>
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {activeNovel.referenceFolders?.map(folder => {
-                        const isSelected = (editingNode.data.selectedReferenceFolders as string[])?.includes(folder.id);
-                        return (
-                          <button
-                            key={folder.id}
-                            onClick={() => {
-                              const list = [...(editingNode.data.selectedReferenceFolders as string[] || [])];
-                              const newList = list.includes(folder.id) ? list.filter(id => id !== folder.id) : [...list, folder.id];
-                              updateNodeData(editingNode.id, { selectedReferenceFolders: newList });
-                            }}
-                            className={`px-3 py-2 rounded-xl text-xs transition-all border ${isSelected ? 'bg-blue-600/20 text-blue-400 border-blue-500/50 font-bold' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-                          >
-                            {folder.name}
-                          </button>
-                        );
-                      })}
-                      {(!activeNovel.referenceFolders || activeNovel.referenceFolders.length === 0) && (
-                        <div className="text-[10px] text-gray-600 italic">暂无文件夹</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            {editingNode.data.outputEntries?.length > 0 && (
-              <div className="space-y-4 pt-6 border-t border-gray-800">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">产出 ({editingNode.data.outputEntries.length})</label>
-                <div className="space-y-3">
-                  {editingNode.data.outputEntries.map(entry => (
-                    <div key={entry.id} className="p-4 bg-gray-800 border border-gray-700 rounded-2xl flex items-center justify-between active:bg-gray-700" onClick={() => setPreviewEntry(entry)}>
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0"><FileText className="w-5 h-5 text-indigo-400" /></div>
-                        <div className="min-w-0"><div className="text-sm font-bold text-gray-200 truncate">{entry.title}</div><div className="text-[10px] text-gray-500 truncate">{entry.content.substring(0, 40)}...</div></div>
-                      </div>
-                      <ChevronDown className="w-4 h-4 text-gray-600 -rotate-90" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="p-6 bg-gray-800 border-t border-gray-700 sticky bottom-0 z-10 flex gap-4">
-            <button onClick={() => { if(confirm('确定要删除这个模块吗？')) { setNodes(nds => nds.filter(n => n.id !== editingNodeId)); setEditingNodeId(null); } }} className="p-4 bg-red-900/20 text-red-400 rounded-2xl"><Trash2 className="w-6 h-6" /></button>
-            <button
-              onClick={() => {
-                syncLocalToGlobal();
-                setEditingNodeId(null);
-              }}
-              className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold"
-            >
-              保存并返回
-            </button>
-          </div>
-        </div>
+        <ConfigPanel
+          editingNode={editingNode}
+          activeNovel={activeNovel}
+          allPresets={allPresets}
+          pendingFolders={pendingFolders}
+          globalConfig={globalConfig}
+          onUpdateNodeData={updateNodeData}
+          onDeleteNode={(id) => {
+            setNodes(nds => nds.filter(n => n.id !== id));
+            setEditingNodeId(null);
+          }}
+          onClose={() => setEditingNodeId(null)}
+          onPreviewEntry={setPreviewEntry}
+        />
       )}
 
       {/* 预览预览 */}
