@@ -1199,11 +1199,18 @@ function App() {
     localStorage.setItem('bigSummaryPrompt', bigSummaryPrompt)
   }, [longTextMode, contextScope, smallSummaryInterval, bigSummaryInterval, smallSummaryPrompt, bigSummaryPrompt])
 
-  // Persistence
+  // Persistence - 增加防抖处理，避免频繁写入导致的卡顿
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
     if (novels.length > 0) {
-      storage.saveNovels(novels).catch(e => console.error('Failed to save novels', e))
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        storage.saveNovels(novels).catch(e => console.error('Failed to save novels', e));
+      }, 1000);
     }
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
   }, [novels])
 
   useEffect(() => {
@@ -1341,7 +1348,7 @@ function App() {
         s.indices([...s.currentIndices, index])
         newIds = currentIds.includes(setId) ? currentIds : [...currentIds, setId]
       }
-      s.id(newIds.length > 0 ? newIds : null)
+      s.id((newIds.length > 0 ? newIds : null) as any)
     } else {
       if (s.currentId !== setId) {
         s.id(setId)
@@ -1388,7 +1395,7 @@ function App() {
         s.indices([...s.currentIndices, index])
         newIds = currentIds.includes(setId) ? currentIds : [...currentIds, setId]
       }
-      s.id(newIds.length > 0 ? newIds : null)
+      s.id((newIds.length > 0 ? newIds : null) as any)
     } else {
       if (s.currentId !== setId) {
         s.id(setId)
@@ -6875,7 +6882,7 @@ ${taskDescription}`
                           }}
                           activePresetId={activeInspirationPresetId}
                           lastNonChatPresetId={lastNonChatInspirationPresetId}
-                          onSetActivePresetId={setActiveInspirationPresetId}
+                          onSetActivePresetId={(id: any) => setActiveInspirationPresetId(id)}
                           selectedWorldviewSetId={selectedWorldviewSetIdForModules}
                           selectedWorldviewIndices={selectedWorldviewIndicesForModules}
                           onSelectWorldviewSet={setSelectedWorldviewSetIdForModules}
@@ -7102,14 +7109,14 @@ ${taskDescription}`
                           onReturnToMainWithContent={(content) => {
                              setUserPrompt(content);
                           }}
-                          onSetActivePresetId={setActiveWorldviewPresetId}
+                          onSetActivePresetId={(id: any) => setActiveWorldviewPresetId(id)}
                           selectedWorldviewSetId={selectedWorldviewSetIdForModules}
                           selectedWorldviewIndices={selectedWorldviewIndicesForModules}
                           onSelectWorldviewSet={setSelectedWorldviewSetIdForModules}
                           onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
                           showWorldviewSelector={showWorldviewSelectorForModules}
                           onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
-                          selectedReferenceType={selectedReferenceTypeForModules}
+                          selectedReferenceType={selectedReferenceTypeForModules as any}
                           selectedReferenceIndices={selectedReferenceIndicesForModules}
                           onSelectReferenceSet={setSelectedReferenceTypeForModules}
                           onToggleReferenceItem={(setId, idx) => handleToggleModuleReferenceItem('reference', setId, idx)}
@@ -7224,14 +7231,14 @@ ${taskDescription}`
                           onReturnToMainWithContent={(content) => {
                              setUserPrompt(content);
                           }}
-                          onSetActivePresetId={setActiveOutlinePresetId}
+                          onSetActivePresetId={(id: any) => setActiveOutlinePresetId(id)}
                           selectedWorldviewSetId={selectedWorldviewSetIdForModules}
                           selectedWorldviewIndices={selectedWorldviewIndicesForModules}
                           onSelectWorldviewSet={setSelectedWorldviewSetIdForModules}
                           onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
                           showWorldviewSelector={showWorldviewSelectorForModules}
                           onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
-                          selectedReferenceType={selectedReferenceTypeForModules}
+                          selectedReferenceType={selectedReferenceTypeForModules as any}
                           selectedReferenceIndices={selectedReferenceIndicesForModules}
                           onSelectReferenceSet={setSelectedReferenceTypeForModules}
                           onToggleReferenceItem={(setId, idx) => handleToggleModuleReferenceItem('reference', setId, idx)}
@@ -9286,7 +9293,7 @@ ${taskDescription}`
             },
             updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
             updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
-          }}
+          } as any}
           onUpdateNovel={(updatedNovel: Novel) => {
             setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));
           }}
@@ -9345,7 +9352,7 @@ ${taskDescription}`
           updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
           updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
           updateAsyncOptimize: (val: boolean) => setAsyncOptimize(val),
-        }}
+        } as any}
         onUpdateNovel={(updatedNovel) => {
           setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));
         }}

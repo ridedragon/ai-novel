@@ -974,9 +974,17 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
       // 使用 localNovel 跟踪执行过程中的最新状态
       let localNovel = { ...activeNovel };
       const updateLocalAndGlobal = async (newNovel: Novel) => {
-        localNovel = newNovel;
+        // 核心修复：合并状态时保留 UI 特有的折叠状态
+        const mergedNovel: Novel = {
+          ...newNovel,
+          volumes: newNovel.volumes.map(v => {
+            const existingVol = activeNovel.volumes.find(ev => ev.id === v.id);
+            return existingVol ? { ...v, collapsed: existingVol.collapsed } : v;
+          })
+        };
+        localNovel = mergedNovel;
         if (onUpdateNovel) {
-          onUpdateNovel(newNovel);
+          onUpdateNovel(mergedNovel);
         }
       };
 
