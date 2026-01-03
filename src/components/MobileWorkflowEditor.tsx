@@ -1403,12 +1403,16 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
               localNovel = n; // 实时同步本地副本
               updateLocalAndGlobal(n);
             },
-            async (id, content) => {
-              // 这里需要确保 localNovel 是最新的
+            async (id, content, updatedNovel) => {
+              // 1. 优先使用引擎传递的最新状态
+              if (updatedNovel) {
+                localNovel = updatedNovel;
+              }
+              // 2. 执行全局完成回调（触发总结生成等异步副作用）并捕获返回的最终状态
               if (globalConfig.onChapterComplete) {
                 const result = await globalConfig.onChapterComplete(id, content);
-                if (result && typeof result === 'object' && result.chapters) {
-                  localNovel = result;
+                if (result && typeof result === 'object' && (result as Novel).chapters) {
+                  localNovel = result as Novel;
                 }
               }
               setNodes(nds => nds.map(n => {
@@ -1416,12 +1420,12 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
                   const novel = (localNovel as Novel);
                   
                   // --- 修复：在长文模式下，获取所有相关的章节和总结 ---
-                  // 这里的逻辑改为：找出该节点 targetVolumeId 下的所有章节、小总结、大总结
                   const targetVolId = n.data.targetVolumeId || finalVolumeId;
-                  const volumeChapters = novel.chapters.filter(c => c.volumeId === targetVolId);
+                  // 核心修复：仅展示内容不为空的章节，避免占位符干扰，并确保包含小总结和大总结
+                  const volumeChapters = novel.chapters.filter(c => c.volumeId === targetVolId && c.content && c.content.trim().length > 0);
                   
                   const newEntries: OutputEntry[] = volumeChapters.map(c => ({
-                    id: c.subtype ? `${c.subtype}-${c.id}` : `chapter-${c.id}`,
+                    id: (c.subtype === 'small_summary' || c.subtype === 'big_summary') ? `${c.subtype}-${c.id}` : `chapter-${c.id}`,
                     title: c.title,
                     content: c.content || '',
                     versions: c.versions,
@@ -1430,12 +1434,14 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
 
                   // 排序：严格按照章节在小说中的实际索引顺序展示
                   const sortedEntries = newEntries.sort((a, b) => {
-                    const indexA = novel.chapters.findIndex(c =>
-                      (c.subtype ? `${c.subtype}-${c.id}` : `chapter-${c.id}`) === a.id
-                    );
-                    const indexB = novel.chapters.findIndex(c =>
-                      (c.subtype ? `${c.subtype}-${c.id}` : `chapter-${c.id}`) === b.id
-                    );
+                    const indexA = novel.chapters.findIndex(c => {
+                      const cid = (c.subtype === 'small_summary' || c.subtype === 'big_summary') ? `${c.subtype}-${c.id}` : `chapter-${c.id}`;
+                      return cid === a.id;
+                    });
+                    const indexB = novel.chapters.findIndex(c => {
+                      const cid = (c.subtype === 'small_summary' || c.subtype === 'big_summary') ? `${c.subtype}-${c.id}` : `chapter-${c.id}`;
+                      return cid === b.id;
+                    });
                     return indexA - indexB;
                   });
 
@@ -1443,6 +1449,9 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
                 }
                 return n;
               }));
+
+              // 核心修复：必须返回最新的 localNovel 给引擎，解决手机端状态覆盖问题
+              return localNovel;
             },
             finalVolumeId, false, selectedOutlineSetId
           );
