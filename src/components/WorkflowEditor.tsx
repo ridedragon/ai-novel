@@ -91,6 +91,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   targetVolumeName?: string;
   autoOptimize?: boolean;
   twoStepOptimization?: boolean;
+  asyncOptimize?: boolean;
 }
 
 export type WorkflowNode = Node<WorkflowNodeData>;
@@ -387,6 +388,10 @@ export interface WorkflowEditorProps {
     onChapterComplete: (chapterId: number, content: string) => Promise<any>;
     updateAutoOptimize?: (val: boolean) => void;
     updateTwoStepOptimization?: (val: boolean) => void;
+    updateAsyncOptimize?: (val: boolean) => void;
+    asyncOptimize?: boolean;
+    contextChapterCount?: number;
+    maxConcurrentOptimizations?: number;
   };
 }
 
@@ -568,7 +573,7 @@ const NodePropertiesModal = ({
                     )}
                   </div>
                 </div>
-                <div className="flex items-end gap-4 pb-1">
+                <div className="flex flex-wrap items-end gap-2 pb-1">
                   <button
                     onClick={() => {
                       const newVal = !node.data.autoOptimize;
@@ -594,6 +599,20 @@ const NodePropertiesModal = ({
                   >
                     <div className={`w-3 h-3 rounded-full ${node.data.twoStepOptimization ? 'bg-pink-500 animate-pulse' : 'bg-gray-600'}`} />
                     两阶段优化
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newVal = !node.data.asyncOptimize;
+                      updateNodeData(node.id, { asyncOptimize: newVal });
+                      if (globalConfig?.updateAsyncOptimize) {
+                        globalConfig.updateAsyncOptimize(newVal);
+                      }
+                    }}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${node.data.asyncOptimize ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+                    title="优化和正文创作分开进行，提高效率"
+                  >
+                    <div className={`w-3 h-3 rounded-full ${node.data.asyncOptimize ? 'bg-indigo-500 animate-pulse' : 'bg-gray-600'}`} />
+                    异步并行优化
                   </button>
                 </div>
               </div>
@@ -1245,6 +1264,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         presetName: '',
         instruction: '',
         folderName: '',
+        asyncOptimize: globalConfig?.asyncOptimize || false,
         selectedWorldviewSets: [],
         selectedCharacterSets: [],
         selectedOutlineSets: [],
@@ -1882,6 +1902,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             globalCreationPrompt: globalConfig.globalCreationPrompt,
             longTextMode: globalConfig.longTextMode,
             autoOptimize: node.data.autoOptimize || globalConfig.autoOptimize,
+            asyncOptimize: node.data.asyncOptimize || globalConfig.asyncOptimize,
+            contextChapterCount: globalConfig.contextChapterCount,
+            maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
             consecutiveChapterCount: globalConfig.consecutiveChapterCount || 1,
             smallSummaryInterval: globalConfig.smallSummaryInterval,
             bigSummaryInterval: globalConfig.bigSummaryInterval,
@@ -1897,7 +1920,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             optimizePresets: globalConfig.optimizePresets,
             activeOptimizePresetId: globalConfig.activeOptimizePresetId,
             analysisPresets: globalConfig.analysisPresets,
-            activeAnalysisPresetId: globalConfig.activeAnalysisPresetId
+            activeAnalysisPresetId: globalConfig.activeAnalysisPresetId,
+            asyncOptimize: node.data.asyncOptimize || globalConfig.asyncOptimize,
+            contextChapterCount: globalConfig.contextChapterCount,
+            maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
           }, localNovel);
 
           // 4. 计算起始索引

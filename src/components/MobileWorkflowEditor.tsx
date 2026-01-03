@@ -393,6 +393,19 @@ const ConfigPanel = React.memo(({
                 <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.twoStepOptimization ? 'bg-pink-500 animate-pulse' : 'bg-gray-600'}`} />
                 两阶段优化
               </button>
+              <button
+                onClick={() => {
+                  const newVal = !editingNode.data.asyncOptimize;
+                  onUpdateNodeData(editingNode.id, { asyncOptimize: newVal });
+                  if (globalConfig?.updateAsyncOptimize) {
+                    globalConfig.updateAsyncOptimize(newVal);
+                  }
+                }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.asyncOptimize ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+              >
+                <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.asyncOptimize ? 'bg-indigo-500 animate-pulse' : 'bg-gray-600'}`} />
+                异步并行
+              </button>
             </div>
           </div>
         )}
@@ -1325,6 +1338,9 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             smallSummaryPrompt: globalConfig.smallSummaryPrompt,
             bigSummaryPrompt: globalConfig.bigSummaryPrompt,
             outlineModel: globalConfig.outlineModel,
+            asyncOptimize: node.data.asyncOptimize || globalConfig.asyncOptimize,
+            contextChapterCount: globalConfig.contextChapterCount,
+            maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
           };
 
           const engine = new AutoWriteEngine({
@@ -1333,7 +1349,10 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             optimizePresets: globalConfig.optimizePresets,
             activeOptimizePresetId: globalConfig.activeOptimizePresetId,
             analysisPresets: globalConfig.analysisPresets,
-            activeAnalysisPresetId: globalConfig.activeAnalysisPresetId
+            activeAnalysisPresetId: globalConfig.activeAnalysisPresetId,
+            asyncOptimize: node.data.asyncOptimize || globalConfig.asyncOptimize,
+            contextChapterCount: globalConfig.contextChapterCount,
+            maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
           }, localNovel);
 
           let writeStartIndex = 0;

@@ -58,11 +58,12 @@ export const getStoryChapters = (chapters: Chapter[]) => chapters.filter(c => !c
 export const getChapterContext = (
   targetNovel: Novel | undefined,
   targetChapter: Chapter | undefined,
-  config: { longTextMode: boolean; contextScope: string },
+  config: { longTextMode: boolean; contextScope: string; contextChapterCount?: number },
 ) => {
   if (!targetNovel || !targetChapter) return '';
 
   const chapters = targetNovel.chapters;
+  const contextChapterCount = config.contextChapterCount || 1;
   let contextContent = '';
 
   if (config.longTextMode) {
@@ -96,48 +97,29 @@ export const getChapterContext = (
         return true;
       });
 
-      let bigEnd = 0;
-      const relevantBig = bigSummaries
-        .filter(bs => {
-          if (!bs.summaryRange) return false;
-          const { end } = parseRange(bs.summaryRange);
-          return end < currentNum;
+      // 1. 收集所有结束于当前章之前的总结 (不进行大总结吃小总结的过滤，保留细节)
+      const relevantSummaries = chapters
+        .filter(c => (c.subtype === 'big_summary' || c.subtype === 'small_summary') && c.summaryRange)
+        .filter(s => {
+          if (filterVolumeId) return s.volumeId === filterVolumeId;
+          if (filterUncategorized) return !s.volumeId;
+          return true;
         })
-        .sort((a, b) => {
-          return parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start;
-        });
+        .filter(s => parseRange(s.summaryRange!).end < currentNum)
+        .sort((a, b) => parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start);
 
-      relevantBig.forEach(bs => {
-        contextContent += `【剧情大纲 (${bs.title})】：\n${bs.content}\n\n`;
-        const { end } = parseRange(bs.summaryRange!);
-        if (end > bigEnd) bigEnd = end;
+      let maxSummarizedIdx = 0;
+      relevantSummaries.forEach(s => {
+        const typeStr = s.subtype === 'big_summary' ? '剧情大纲' : '剧情概要';
+        contextContent += `【${typeStr} (${s.title})】：\n${s.content}\n\n`;
+        const { end } = parseRange(s.summaryRange!);
+        if (end > maxSummarizedIdx) maxSummarizedIdx = end;
       });
 
-      let smallSummaries = chapters.filter(c => c.subtype === 'small_summary');
-      smallSummaries = smallSummaries.filter(ss => {
-        if (filterVolumeId) return ss.volumeId === filterVolumeId;
-        if (filterUncategorized) return !ss.volumeId;
-        return true;
-      });
-
-      let smallEnd = bigEnd;
-      const relevantSmall = smallSummaries
-        .filter(ss => {
-          if (!ss.summaryRange) return false;
-          const { start, end } = parseRange(ss.summaryRange);
-          return start > bigEnd && end < currentNum;
-        })
-        .sort((a, b) => {
-          const ra = parseRange(a.summaryRange!);
-          const rb = parseRange(b.summaryRange!);
-          return ra.start - rb.start;
-        });
-
-      relevantSmall.forEach(ss => {
-        contextContent += `【剧情概要 (${ss.title})】：\n${ss.content}\n\n`;
-        const { end } = parseRange(ss.summaryRange!);
-        if (end > smallEnd) smallEnd = end;
-      });
+      // 2. 确定正文发送范围
+      // 策略：发送 (maxSummarizedIdx - contextChapterCount) 之后的所有正文内容
+      // 这样既包含了总结后的新正文，也包含了总结末尾指定深度的旧正文细节
+      const storyStartNum = Math.max(1, maxSummarizedIdx - (contextChapterCount - 1));
 
       const previousStoryChapters = storyChapters.filter((c, idx) => {
         if (filterVolumeId && c.volumeId !== filterVolumeId) return false;
@@ -145,8 +127,10 @@ export const getChapterContext = (
 
         const cNum = idx + 1;
         if (cNum >= currentNum) return false;
-        if (cNum > smallEnd) return true;
-        if (cNum === currentNum - 1) return true;
+
+        // 发送范围：从 (总结边界 - 深度) 开始，直到当前章之前
+        if (cNum >= storyStartNum) return true;
+
         return false;
       });
 
@@ -169,6 +153,7 @@ export const getChapterContext = (
     const currentIdx = volumeChapters.findIndex(c => c.id === targetChapter.id);
 
     if (currentIdx !== -1) {
+      // 非长上下文模式：无视深度设置，发送全部分卷章节 (符合反馈期望)
       const previousChapters = volumeChapters.slice(0, currentIdx);
       contextContent = previousChapters.map(c => `### ${c.title}\n${getEffectiveChapterContent(c)}`).join('\n\n');
       if (contextContent) contextContent += '\n\n';

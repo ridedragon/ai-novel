@@ -853,7 +853,10 @@ function App() {
   const [plotOutlineModel, setPlotOutlineModel] = useState(() => localStorage.getItem('plotOutlineModel') || '')
   const [optimizeModel, setOptimizeModel] = useState(() => localStorage.getItem('optimizeModel') || '')
   const [analysisModel, setAnalysisModel] = useState(() => localStorage.getItem('analysisModel') || '')
-  
+  const [contextChapterCount, setContextChapterCount] = useState<number | ''>(() => {
+    const val = localStorage.getItem('contextChapterCount')
+    return val ? parseInt(val) : ''
+  })
 
   const [modelList, setModelList] = useState<string[]>(() => {
     try {
@@ -876,8 +879,9 @@ function App() {
     localStorage.setItem('plotOutlineModel', plotOutlineModel)
     localStorage.setItem('optimizeModel', optimizeModel)
     localStorage.setItem('analysisModel', analysisModel)
+    localStorage.setItem('contextChapterCount', String(contextChapterCount))
     localStorage.setItem('modelList', JSON.stringify(modelList))
-  }, [apiKey, baseUrl, model, outlineModel, characterModel, worldviewModel, inspirationModel, plotOutlineModel, optimizeModel, analysisModel, modelList])
+  }, [apiKey, baseUrl, model, outlineModel, characterModel, worldviewModel, inspirationModel, plotOutlineModel, optimizeModel, analysisModel, modelList, contextChapterCount])
 
   const handleAddModel = () => {
     if (newModelInput.trim()) {
@@ -1166,6 +1170,7 @@ function App() {
   const concurrentOptimizationLimitRef = useRef(concurrentOptimizationLimit)
 
   // Optimization Queue
+  const [asyncOptimize, setAsyncOptimize] = useState(() => localStorage.getItem('asyncOptimize') === 'true')
   const [optimizationQueue, setOptimizationQueue] = useState<number[]>([])
   const optimizationQueueRef = useRef<number[]>([])
 
@@ -1178,7 +1183,8 @@ function App() {
     concurrentOptimizationLimitRef.current = concurrentOptimizationLimit
     localStorage.setItem('consecutiveChapterCount', String(consecutiveChapterCount))
     localStorage.setItem('concurrentOptimizationLimit', String(concurrentOptimizationLimit))
-  }, [consecutiveChapterCount, concurrentOptimizationLimit])
+    localStorage.setItem('asyncOptimize', String(asyncOptimize))
+  }, [consecutiveChapterCount, concurrentOptimizationLimit, asyncOptimize])
 
   useEffect(() => {
     longTextModeRef.current = longTextMode
@@ -6237,6 +6243,8 @@ ${taskDescription}`
           setConsecutiveChapterCount={setConsecutiveChapterCount}
           concurrentOptimizationLimit={concurrentOptimizationLimit}
           setConcurrentOptimizationLimit={setConcurrentOptimizationLimit}
+          contextChapterCount={contextChapterCount}
+          setContextChapterCount={setContextChapterCount}
         />
 
         {/* Create Novel Modal (List View) */}
@@ -7698,6 +7706,8 @@ ${taskDescription}`
         setConsecutiveChapterCount={setConsecutiveChapterCount}
         concurrentOptimizationLimit={concurrentOptimizationLimit}
         setConcurrentOptimizationLimit={setConcurrentOptimizationLimit}
+        contextChapterCount={contextChapterCount}
+        setContextChapterCount={setContextChapterCount}
       />
 
       {/* Advanced Settings Panel ("对话补全源") */}
@@ -9256,6 +9266,9 @@ ${taskDescription}`
             autoOptimize,
             twoStepOptimization,
             consecutiveChapterCount: Number(consecutiveChapterCount),
+            contextChapterCount: Number(contextChapterCount) || 1,
+            maxConcurrentOptimizations: Number(concurrentOptimizationLimit) || 3,
+            asyncOptimize,
             smallSummaryInterval: Number(smallSummaryInterval),
             bigSummaryInterval: Number(bigSummaryInterval),
             smallSummaryPrompt,
@@ -9311,6 +9324,9 @@ ${taskDescription}`
           autoOptimize,
           twoStepOptimization,
           consecutiveChapterCount: Number(consecutiveChapterCount),
+          contextChapterCount: Number(contextChapterCount) || 1,
+          maxConcurrentOptimizations: Number(concurrentOptimizationLimit) || 3,
+          asyncOptimize,
           smallSummaryInterval: Number(smallSummaryInterval),
           bigSummaryInterval: Number(bigSummaryInterval),
           smallSummaryPrompt,
@@ -9328,6 +9344,7 @@ ${taskDescription}`
           },
           updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
           updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
+          updateAsyncOptimize: (val: boolean) => setAsyncOptimize(val),
         }}
         onUpdateNovel={(updatedNovel) => {
           setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));

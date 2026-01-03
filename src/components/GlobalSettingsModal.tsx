@@ -53,6 +53,8 @@ interface GlobalSettingsModalProps {
   setConsecutiveChapterCount: (val: number | '') => void
   concurrentOptimizationLimit: number | ''
   setConcurrentOptimizationLimit: (val: number | '') => void
+  contextChapterCount: number | ''
+  setContextChapterCount: (val: number | '') => void
 }
 
 export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
@@ -100,7 +102,9 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   consecutiveChapterCount,
   setConsecutiveChapterCount,
   concurrentOptimizationLimit,
-  setConcurrentOptimizationLimit
+  setConcurrentOptimizationLimit,
+  contextChapterCount,
+  setContextChapterCount
 }) => {
   if (!isOpen) return null
 
@@ -258,6 +262,23 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                     onChange={(e) => setBigSummaryInterval(parseInt(e.target.value) || 6)}
                     className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 mt-2">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-400">上下文参考章节数 (回看正文深度)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={contextChapterCount}
+                    onChange={(e) => setContextChapterCount(e.target.value === '' ? '' : parseInt(e.target.value))}
+                    className="bg-gray-900 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                    placeholder="默认参考前 1 章正文"
+                  />
+                  <p className="text-[10px] text-gray-500">
+                    控制 AI 创作时能看到多少章之前的完整正文细节。增加此值会消耗更多 Token，但能提高连贯性。
+                  </p>
                 </div>
               </div>
 

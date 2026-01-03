@@ -27,6 +27,9 @@ export interface AutoWriteConfig {
   analysisPresets?: GeneratorPreset[];
   activeAnalysisPresetId?: string;
   onChapterComplete?: (chapterId: number, content: string) => Promise<void>;
+  contextChapterCount?: number; // 上下文参考章节数
+  maxConcurrentOptimizations?: number; // 最大并行优化数
+  asyncOptimize?: boolean; // 异步并行优化模式
 }
 
 export interface AutoWriteStatus {

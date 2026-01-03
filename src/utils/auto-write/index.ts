@@ -9,6 +9,7 @@ export class AutoWriteEngine {
   private novel: Novel;
   private abortController: AbortController | null = null;
   private isRunning: boolean = false;
+  private activeOptimizationTasks = new Map<number, AbortController>();
 
   constructor(config: AutoWriteConfig, novel: Novel) {
     this.config = config;
@@ -20,6 +21,9 @@ export class AutoWriteEngine {
     if (this.abortController) {
       this.abortController.abort();
     }
+    // 中止所有正在进行的异步优化任务
+    this.activeOptimizationTasks.forEach(controller => controller.abort());
+    this.activeOptimizationTasks.clear();
   }
 
   public async run(
@@ -133,6 +137,7 @@ export class AutoWriteEngine {
           const rawContext = getChapterContext(this.novel, firstChapterInBatch, {
             longTextMode: this.config.longTextMode,
             contextScope: 'all', // Default to all for now
+            contextChapterCount: this.config.contextChapterCount,
           });
 
           const scripts = getActiveScripts();
@@ -280,12 +285,19 @@ export class AutoWriteEngine {
             const content = finalContents[i];
 
             if (content && content.trim() && (this.config.autoOptimize || this.config.twoStepOptimization)) {
-              await this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate);
+              if (this.config.asyncOptimize) {
+                // 异步模式：不等待优化完成，立即进行下一章或上报完成
+                this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate);
+                await onChapterComplete(chapterId, content);
+              } else {
+                // 线性模式：等待优化完成
+                await this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate);
+                const updatedChapter = this.novel.chapters.find(c => c.id === chapterId);
+                await onChapterComplete(chapterId, updatedChapter?.content || content);
+              }
+            } else {
+              await onChapterComplete(chapterId, content);
             }
-
-            // 获取最新的章节状态（可能已被优化）
-            const updatedChapter = this.novel.chapters.find(c => c.id === chapterId);
-            await onChapterComplete(chapterId, updatedChapter?.content || content);
           }
 
           success = true;
@@ -320,6 +332,22 @@ export class AutoWriteEngine {
     onStatusUpdate: (status: string) => void,
     onNovelUpdate: (novel: Novel) => void,
   ) {
+    // 并发控制
+    const maxConcurrent = this.config.maxConcurrentOptimizations || 3;
+    if (this.activeOptimizationTasks.size >= maxConcurrent) {
+      // 如果超过最大并发，且是异步模式，则等待一段时间重试或跳过（这里简单处理：如果是线性模式会自然等待，异步模式则简单排队）
+      if (this.config.asyncOptimize) {
+        let waitCount = 0;
+        while (this.activeOptimizationTasks.size >= maxConcurrent && this.isRunning && waitCount < 30) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          waitCount++;
+        }
+      }
+    }
+
+    const optimizationAbortController = new AbortController();
+    this.activeOptimizationTasks.set(chapterId, optimizationAbortController);
+
     const activePreset =
       this.config.optimizePresets?.find(p => p.id === this.config.activeOptimizePresetId) ||
       this.config.optimizePresets?.[0];
@@ -356,7 +384,7 @@ export class AutoWriteEngine {
               messages: analysisMessages,
               temperature: analysisPreset.temperature ?? 1.0,
             } as any,
-            { signal: this.abortController?.signal },
+            { signal: optimizationAbortController.signal },
           );
 
           currentAnalysisResult = completion.choices[0]?.message?.content || '';
@@ -398,7 +426,7 @@ export class AutoWriteEngine {
           messages: messages,
           temperature: activePreset.temperature ?? 1.0,
         } as any,
-        { signal: this.abortController?.signal },
+        { signal: optimizationAbortController.signal },
       );
 
       const optimizedContent = completion.choices[0]?.message?.content || '';
@@ -428,8 +456,14 @@ export class AutoWriteEngine {
         };
         onNovelUpdate(this.novel);
       }
-    } catch (e) {
-      terminal.error(`[AutoWrite Optimize] Optimization failed: ${e}`);
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        terminal.log(`[AutoWrite Optimize] Optimization for chapter ${chapterId} aborted.`);
+      } else {
+        terminal.error(`[AutoWrite Optimize] Optimization failed for chapter ${chapterId}: ${e}`);
+      }
+    } finally {
+      this.activeOptimizationTasks.delete(chapterId);
     }
   }
 }
