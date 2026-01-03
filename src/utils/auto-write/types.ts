@@ -15,12 +15,18 @@ export interface AutoWriteConfig {
   globalCreationPrompt?: string;
   longTextMode: boolean;
   autoOptimize: boolean;
+  twoStepOptimization?: boolean;
   consecutiveChapterCount: number;
   smallSummaryInterval: number;
   bigSummaryInterval: number;
   smallSummaryPrompt: string;
   bigSummaryPrompt: string;
   outlineModel: string;
+  optimizePresets?: GeneratorPreset[];
+  activeOptimizePresetId?: string;
+  analysisPresets?: GeneratorPreset[];
+  activeAnalysisPresetId?: string;
+  onChapterComplete?: (chapterId: number, content: string) => Promise<void>;
 }
 
 export interface AutoWriteStatus {

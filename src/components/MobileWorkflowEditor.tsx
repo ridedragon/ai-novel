@@ -57,6 +57,8 @@ interface OutputEntry {
   id: string;
   title: string;
   content: string;
+  versions?: any[];
+  analysisResult?: string;
 }
 
 // --- 移动端优化节点组件 ---
@@ -1203,7 +1205,14 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             outlineModel: globalConfig.outlineModel,
           };
 
-          const engine = new AutoWriteEngine(engineConfig, localNovel);
+          const engine = new AutoWriteEngine({
+            ...engineConfig,
+            twoStepOptimization: node.data.twoStepOptimization,
+            optimizePresets: globalConfig.optimizePresets,
+            activeOptimizePresetId: globalConfig.activeOptimizePresetId,
+            analysisPresets: globalConfig.analysisPresets,
+            activeAnalysisPresetId: globalConfig.activeAnalysisPresetId
+          }, localNovel);
 
           let writeStartIndex = 0;
           const items = currentSet?.items || [];
@@ -1224,15 +1233,25 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
 
           await engine.run(items, writeStartIndex, globalConfig.prompts.filter(p => p.active), globalConfig.getActiveScripts,
             (s) => updateNodeData(node.id, { label: `创作中: ${s}` }),
-            (n) => updateLocalAndGlobal(n),
+            (n) => {
+              localNovel = n; // 实时同步本地副本
+              updateLocalAndGlobal(n);
+            },
             async (id, content) => {
+              // 这里需要确保 localNovel 是最新的
               if (globalConfig.onChapterComplete) await globalConfig.onChapterComplete(id, content);
               setNodes(nds => nds.map(n => {
                 if (n.id === node.id) {
                   const novel = (localNovel as Novel);
                   const chapter = novel.chapters.find(c => c.id === id);
                   const title = chapter?.title || `第${id}章`;
-                  const newEntry: OutputEntry = { id: `chapter-${id}`, title: title, content: content };
+                  const newEntry: OutputEntry = {
+                    id: `chapter-${id}`,
+                    title: title,
+                    content: content,
+                    versions: chapter?.versions,
+                    analysisResult: chapter?.analysisResult
+                  };
                   const otherEntries = (n.data.outputEntries || []).filter(e => e.id !== `chapter-${id}`);
                   return { ...n, data: { ...n.data, outputEntries: [...otherEntries, newEntry].sort((a,b) => {
                     const idA = parseInt(a.id.replace('chapter-', '') || '0');

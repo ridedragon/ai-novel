@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import terminal from 'virtual:terminal';
-import { Novel, OutlineItem, PromptItem, RegexScript } from '../../types';
+import { ChapterVersion, Novel, OutlineItem, PromptItem, RegexScript } from '../../types';
 import { buildWorldInfoContext, getChapterContext, processTextWithRegex } from './core';
 import { AutoWriteConfig } from './types';
 
@@ -248,17 +248,44 @@ export class AutoWriteEngine {
 
           finalContents = finalContents.map(c => processTextWithRegex(c, scripts, 'output'));
 
+          // 这里的更新逻辑非常关键，需要初始化 versions
+          const baseTime = Date.now();
           this.novel = {
             ...this.novel,
             chapters: this.novel.chapters.map(c => {
               const bIdx = batchItems.findIndex(b => b.id === c.id);
-              return bIdx !== -1 ? { ...c, content: finalContents[bIdx] || '' } : c;
+              if (bIdx !== -1) {
+                const content = finalContents[bIdx] || '';
+                const originalVersion: ChapterVersion = {
+                  id: `v_${baseTime}_orig_${c.id}`,
+                  content: content,
+                  timestamp: baseTime,
+                  type: 'original',
+                };
+                return {
+                  ...c,
+                  content: content,
+                  versions: [originalVersion],
+                  activeVersionId: originalVersion.id,
+                };
+              }
+              return c;
             }),
           };
           onNovelUpdate(this.novel);
 
+          // 执行优化逻辑
           for (let i = 0; i < batchItems.length; i++) {
-            await onChapterComplete(batchItems[i].id, finalContents[i]);
+            const chapterId = batchItems[i].id;
+            const content = finalContents[i];
+
+            if (content && content.trim() && (this.config.autoOptimize || this.config.twoStepOptimization)) {
+              await this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate);
+            }
+
+            // 获取最新的章节状态（可能已被优化）
+            const updatedChapter = this.novel.chapters.find(c => c.id === chapterId);
+            await onChapterComplete(chapterId, updatedChapter?.content || content);
           }
 
           success = true;
@@ -284,6 +311,125 @@ export class AutoWriteEngine {
     if (this.isRunning) {
       onStatusUpdate('创作完成！');
       this.isRunning = false;
+    }
+  }
+
+  private async optimizeChapter(
+    chapterId: number,
+    sourceContent: string,
+    onStatusUpdate: (status: string) => void,
+    onNovelUpdate: (novel: Novel) => void,
+  ) {
+    const activePreset =
+      this.config.optimizePresets?.find(p => p.id === this.config.activeOptimizePresetId) ||
+      this.config.optimizePresets?.[0];
+    if (!activePreset) return;
+
+    onStatusUpdate(`正在优化章节...`);
+    const baseTime = Date.now();
+    let currentAnalysisResult = '';
+
+    const openai = new OpenAI({
+      apiKey: this.config.apiKey,
+      baseURL: this.config.baseUrl,
+      dangerouslyAllowBrowser: true,
+    });
+
+    // Phase 1: Analysis
+    if (this.config.twoStepOptimization) {
+      try {
+        const analysisPreset =
+          this.config.analysisPresets?.find(p => p.id === this.config.activeAnalysisPresetId) ||
+          this.config.analysisPresets?.[0];
+        if (analysisPreset) {
+          onStatusUpdate(`正在分析章节建议...`);
+          const analysisMessages: any[] = analysisPreset.prompts
+            .filter(p => p.enabled)
+            .map(p => ({
+              role: p.role,
+              content: p.content.replace('{{content}}', sourceContent).replace('{{input}}', ''),
+            }));
+
+          const completion = await openai.chat.completions.create(
+            {
+              model: this.config.model,
+              messages: analysisMessages,
+              temperature: analysisPreset.temperature ?? 1.0,
+            } as any,
+            { signal: this.abortController?.signal },
+          );
+
+          currentAnalysisResult = completion.choices[0]?.message?.content || '';
+
+          this.novel = {
+            ...this.novel,
+            chapters: this.novel.chapters.map(c =>
+              c.id === chapterId ? { ...c, analysisResult: currentAnalysisResult } : c,
+            ),
+          };
+          onNovelUpdate(this.novel);
+        }
+      } catch (e) {
+        terminal.error(`[AutoWrite Optimize] Analysis failed: ${e}`);
+      }
+    }
+
+    // Phase 2: Optimization
+    try {
+      let isAnalysisUsed = false;
+      const messages: any[] = activePreset.prompts
+        .filter(p => p.enabled)
+        .map(p => {
+          let content = p.content.replace('{{content}}', sourceContent).replace('{{input}}', '');
+          if (currentAnalysisResult && content.includes('{{analysis}}')) {
+            content = content.replace('{{analysis}}', currentAnalysisResult);
+            isAnalysisUsed = true;
+          }
+          return { role: p.role, content };
+        });
+
+      if (currentAnalysisResult && !isAnalysisUsed) {
+        messages.push({ role: 'user', content: `请基于以下修改建议优化正文：\n\n${currentAnalysisResult}` });
+      }
+
+      const completion = await openai.chat.completions.create(
+        {
+          model: this.config.model,
+          messages: messages,
+          temperature: activePreset.temperature ?? 1.0,
+        } as any,
+        { signal: this.abortController?.signal },
+      );
+
+      const optimizedContent = completion.choices[0]?.message?.content || '';
+      if (optimizedContent) {
+        const optVersion: ChapterVersion = {
+          id: `v_${baseTime}_opt_${chapterId}`,
+          content: optimizedContent,
+          timestamp: baseTime,
+          type: 'optimized',
+        };
+
+        this.novel = {
+          ...this.novel,
+          chapters: this.novel.chapters.map(c => {
+            if (c.id === chapterId) {
+              const versions = [...(c.versions || [])];
+              versions.push(optVersion);
+              return {
+                ...c,
+                content: optimizedContent,
+                versions: versions,
+                activeVersionId: optVersion.id,
+              };
+            }
+            return c;
+          }),
+        };
+        onNovelUpdate(this.novel);
+      }
+    } catch (e) {
+      terminal.error(`[AutoWrite Optimize] Optimization failed: ${e}`);
     }
   }
 }

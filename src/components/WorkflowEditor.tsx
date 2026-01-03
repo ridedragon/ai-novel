@@ -65,6 +65,8 @@ interface OutputEntry {
   id: string;
   title: string;
   content: string;
+  versions?: any[];
+  analysisResult?: string;
 }
 
 export interface WorkflowNodeData extends Record<string, unknown> {
@@ -1330,7 +1332,14 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           };
 
           // 4. 初始化引擎
-          const engine = new AutoWriteEngine(engineConfig, localNovel);
+          const engine = new AutoWriteEngine({
+            ...engineConfig,
+            twoStepOptimization: node.data.twoStepOptimization,
+            optimizePresets: globalConfig.optimizePresets,
+            activeOptimizePresetId: globalConfig.activeOptimizePresetId,
+            analysisPresets: globalConfig.analysisPresets,
+            activeAnalysisPresetId: globalConfig.activeAnalysisPresetId
+          }, localNovel);
 
           // 4. 计算起始索引
           let writeStartIndex = 0;
@@ -1361,6 +1370,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               updateNodeData(node.id, { label: `创作中: ${status}` });
             },
             (updatedNovel) => {
+              localNovel = updatedNovel; // 实时同步本地副本
               updateLocalAndGlobal(updatedNovel);
             },
             async (chapterId, content) => {
@@ -1379,7 +1389,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                   const newEntry: OutputEntry = {
                     id: `chapter-${chapterId}`,
                     title: title,
-                    content: content
+                    content: content,
+                    versions: chapter?.versions,
+                    analysisResult: chapter?.analysisResult
                   };
                   
                   // 改进排序：根据小说中实际的章节顺序进行排序

@@ -473,7 +473,17 @@ const buildReferenceContext = (
 }
 
 const ensureChapterVersions = (chapter: Chapter): Chapter => {
-  if (chapter.versions && chapter.versions.length > 0) return chapter
+  if (chapter.versions && chapter.versions.length > 0) {
+    // 深度修复：确保 activeVersionId 指向有效的版本
+    const activeVersion = chapter.versions.find(v => v.id === chapter.activeVersionId);
+    if (!activeVersion) {
+      return {
+        ...chapter,
+        activeVersionId: chapter.versions[chapter.versions.length - 1].id
+      }
+    }
+    return chapter
+  }
 
   const versions: ChapterVersion[] = []
   const baseTime = Date.now()
@@ -497,7 +507,7 @@ const ensureChapterVersions = (chapter: Chapter): Chapter => {
   }
 
   const activeId = (chapter.showingVersion === 'optimized' && chapter.optimizedContent) && versions[1]
-    ? versions[1].id 
+    ? versions[1].id
     : versions[0].id
 
   return {
@@ -9230,6 +9240,7 @@ ${taskDescription}`
             globalCreationPrompt,
             longTextMode,
             autoOptimize,
+            twoStepOptimization,
             consecutiveChapterCount: Number(consecutiveChapterCount),
             smallSummaryInterval: Number(smallSummaryInterval),
             bigSummaryInterval: Number(bigSummaryInterval),
@@ -9237,12 +9248,13 @@ ${taskDescription}`
             bigSummaryPrompt,
             prompts,
             getActiveScripts,
+            optimizePresets,
+            activeOptimizePresetId,
+            analysisPresets,
+            activeAnalysisPresetId,
             onChapterComplete: async (chapterId: number, content: string) => {
               if (longTextModeRef.current) {
                 await checkAndGenerateSummary(chapterId, content);
-              }
-              if (autoOptimizeRef.current) {
-                setOptimizationQueue(prev => [...prev, chapterId]);
               }
             },
             updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
@@ -9283,6 +9295,7 @@ ${taskDescription}`
           globalCreationPrompt,
           longTextMode,
           autoOptimize,
+          twoStepOptimization,
           consecutiveChapterCount: Number(consecutiveChapterCount),
           smallSummaryInterval: Number(smallSummaryInterval),
           bigSummaryInterval: Number(bigSummaryInterval),
@@ -9290,12 +9303,13 @@ ${taskDescription}`
           bigSummaryPrompt,
           prompts,
           getActiveScripts,
+          optimizePresets,
+          activeOptimizePresetId,
+          analysisPresets,
+          activeAnalysisPresetId,
           onChapterComplete: async (chapterId, content) => {
             if (longTextModeRef.current) {
               await checkAndGenerateSummary(chapterId, content);
-            }
-            if (autoOptimizeRef.current) {
-              setOptimizationQueue(prev => [...prev, chapterId]);
             }
           },
           updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
