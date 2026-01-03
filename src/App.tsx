@@ -1311,8 +1311,8 @@ function App() {
         
         // 检查是否还有该类型的其他索引，如果没有了则从Id列表中移除
         const stillHasThisType = remainingIndices.some(idx => {
-           if (setId === 'folder') return !!novel?.referenceFolders?.[idx]
-           if (setId === 'file') return !!novel?.referenceFiles?.[idx]
+           if (setId === 'folder') return !!activeNovel?.referenceFolders?.[idx]
+           if (setId === 'file') return !!activeNovel?.referenceFiles?.[idx]
            return false
         })
         if (!stillHasThisType) {
@@ -1358,8 +1358,8 @@ function App() {
         s.indices(remainingIndices)
         
         const stillHasThisType = remainingIndices.some(idx => {
-           if (setId === 'folder') return !!novel?.referenceFolders?.[idx]
-           if (setId === 'file') return !!novel?.referenceFiles?.[idx]
+           if (setId === 'folder') return !!activeNovel?.referenceFolders?.[idx]
+           if (setId === 'file') return !!activeNovel?.referenceFiles?.[idx]
            return false
         })
         if (!stillHasThisType) {

@@ -2,9 +2,11 @@ import {
   addEdge,
   Background,
   BackgroundVariant,
+  BaseEdge,
   Connection,
   Controls,
   Edge,
+  getBezierPath,
   Handle,
   NodeProps,
   Panel,
@@ -20,10 +22,14 @@ import {
   ChevronDown,
   Copy,
   Cpu,
+  Download,
+  Edit2,
   FileText,
+  Folder,
   FolderPlus,
   Globe,
   LayoutList,
+  Library,
   Lightbulb,
   MessageSquare,
   Play,
@@ -31,6 +37,7 @@ import {
   Settings2,
   Square,
   Trash2,
+  Upload,
   User,
   Users,
   Workflow,
@@ -43,6 +50,8 @@ import { AutoWriteEngine } from '../utils/auto-write';
 import { WorkflowData, WorkflowEditorProps, WorkflowNode, WorkflowNodeData } from './WorkflowEditor';
 
 // --- 类型定义 ---
+
+// 结构化的生成内容条目
 interface OutputEntry {
   id: string;
   title: string;
@@ -54,18 +63,24 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
   const Icon = data.icon;
   const color = data.color;
 
+  const refCount = (data.selectedWorldviewSets?.length || 0) +
+                   (data.selectedCharacterSets?.length || 0) +
+                   (data.selectedOutlineSets?.length || 0) +
+                   (data.selectedInspirationSets?.length || 0) +
+                   (data.selectedReferenceFolders?.length || 0);
+
   const getStatusColor = () => {
     switch (data.status) {
-      case 'executing': return 'border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] animate-pulse';
-      case 'completed': return 'border-green-500 shadow-[0_0_5px_rgba(16,185,129,0.3)]';
-      case 'failed': return 'border-red-500 shadow-[0_0_5px_rgba(239,68,68,0.3)]';
+      case 'executing': return 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] animate-pulse';
+      case 'completed': return 'border-green-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]';
+      case 'failed': return 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]';
       default: return selected ? 'border-[var(--theme-color)] ring-2 ring-[var(--theme-color)]/20 shadow-[var(--theme-color)]/10' : 'border-gray-700';
     }
   };
 
   return (
-    <div className={`px-3 py-2 shadow-xl rounded-lg border-2 bg-gray-800 transition-all ${getStatusColor()}`} style={{ width: '160px' }}>
-      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500 border-2 border-gray-800" />
+    <div className={`px-3 py-2 shadow-xl rounded-lg border-2 bg-gray-800 transition-all ${getStatusColor()}`} style={{ width: '180px' }}>
+      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-gray-600 border-2 border-gray-800" />
       <div className="flex items-center gap-2">
         <div className="p-1.5 rounded-md shrink-0" style={{ backgroundColor: `${color}20`, color: color }}>
           {Icon && <Icon className="w-4 h-4" />}
@@ -73,13 +88,85 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
         <div className="min-w-0 flex-1">
           <div className="text-[8px] font-bold text-gray-500 uppercase tracking-widest leading-none mb-0.5 flex items-center justify-between">
             {data.typeLabel}
+            {data.status === 'executing' && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>}
             {data.status === 'completed' && <CheckSquare className="w-2.5 h-2.5 text-green-500" />}
           </div>
           <div className="text-[11px] font-semibold text-gray-100 truncate">{data.label}</div>
         </div>
       </div>
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-indigo-500 border-2 border-gray-800" />
+      
+      {refCount > 0 && (
+        <div className="mt-1.5 pt-1.5 border-t border-gray-700/50 flex items-center gap-1 text-[8px] text-emerald-400">
+          <Library className="w-2.5 h-2.5" />
+          <span>引用 {refCount} 个资料集</span>
+        </div>
+      )}
+
+      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-gray-600 border-2 border-gray-800" />
     </div>
+  );
+};
+
+const CoolEdge = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+  selected,
+  animated,
+}: any) => {
+  const [edgePath] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetPosition,
+    targetX,
+    targetY,
+  });
+
+  const COLORS = {
+    primary: 'var(--workflow-edge-color, var(--theme-color, #6366f1))',
+    glow: selected ? 'var(--workflow-edge-color, var(--theme-color, #6366f1))' : 'var(--workflow-edge-color-dark, var(--theme-color-hover, #4f46e5))',
+  };
+
+  return (
+    <>
+      <path
+        id={`${id}-glow`}
+        d={edgePath}
+        fill="none"
+        stroke={COLORS.glow}
+        strokeWidth={selected ? 6 : 3}
+        strokeOpacity={0.2}
+        style={{ filter: 'blur(4px)' }}
+      />
+      <BaseEdge
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={{
+          ...style,
+          stroke: COLORS.primary,
+          strokeWidth: selected ? 2.5 : 1.5,
+          strokeOpacity: 0.8,
+        }}
+      />
+      {(animated || selected) && (
+        <circle r="2.5" fill="#fff" className="animate-[move_3s_linear_infinite]">
+          <animateMotion path={edgePath} dur="3s" repeatCount="indefinite" />
+        </circle>
+      )}
+      <style>{`
+        @keyframes move {
+          from { offset-distance: 0%; }
+          to { offset-distance: 100%; }
+        }
+      `}</style>
+    </>
   );
 };
 
@@ -87,11 +174,16 @@ const nodeTypes = {
   custom: CustomNode,
 };
 
+const edgeTypes = {
+  custom: CoolEdge,
+};
+
 // --- 配置定义 ---
-type NodeTypeKey = 'createFolder' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter';
+type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter';
 
 const NODE_CONFIGS: Record<NodeTypeKey, any> = {
   createFolder: { typeLabel: '目录', icon: FolderPlus, color: '#818cf8', defaultLabel: '初始化目录', presetType: null },
+  reuseDirectory: { typeLabel: '复用', icon: Folder, color: '#fbbf24', defaultLabel: '切换目录节点', presetType: null },
   userInput: { typeLabel: '输入', icon: User, color: '#3b82f6', defaultLabel: '全局输入', presetType: null },
   aiChat: { typeLabel: '聊天', icon: MessageSquare, color: '#a855f7', defaultLabel: '自由对话', presetType: 'chat' },
   inspiration: { typeLabel: '灵感', icon: Lightbulb, color: '#eab308', defaultLabel: '生成灵感', presetType: 'inspiration' },
@@ -103,7 +195,7 @@ const NODE_CONFIGS: Record<NodeTypeKey, any> = {
 };
 
 export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
-  const { isOpen, onClose, activeNovel, onSelectChapter, onUpdateNovel, globalConfig } = props;
+  const { isOpen, onClose, activeNovel, onSelectChapter, onUpdateNovel, onStartAutoWrite, globalConfig } = props;
   
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -112,20 +204,37 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
   
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showWorkflowMenu, setShowWorkflowMenu] = useState(false);
+  const [isEditingWorkflowName, setIsEditingWorkflowName] = useState(false);
+  const [newWorkflowName, setNewWorkflowName] = useState('');
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentNodeIndex, setCurrentNodeIndex] = useState<number>(-1);
+  const [stopRequested, setStopRequested] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OutputEntry | null>(null);
 
+  const stopRequestedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isInitialLoadRef = useRef(true);
-  const stopRequestedRef = useRef(false);
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
 
-  const [allPresets, setAllPresets] = useState<Record<string, GeneratorPreset[]>>({});
+  // 获取工作流中所有“初始化目录”节点定义的文件夹名
+  const pendingFolders = nodes
+    .filter(n => n.data.typeKey === 'createFolder' && n.data.folderName)
+    .map(n => n.data.folderName);
+
+  const [allPresets, setAllPresets] = useState<Record<string, GeneratorPreset[]>>({
+    outline: [],
+    character: [],
+    worldview: [],
+    inspiration: [],
+    plotOutline: [],
+    completion: [],
+    optimize: [],
+    analysis: [],
+  });
 
   // 加载配置和数据
   useEffect(() => {
@@ -142,26 +251,94 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
 
     const savedWorkflows = localStorage.getItem('novel_workflows');
     const lastActiveId = localStorage.getItem('active_workflow_id');
-    let loadedWorkflows: WorkflowData[] = savedWorkflows ? JSON.parse(savedWorkflows) : [];
-    if (loadedWorkflows.length === 0) {
-      loadedWorkflows = [{ id: 'default', name: '默认工作流', nodes: [], edges: [], lastModified: Date.now() }];
-    }
-    setWorkflows(loadedWorkflows);
-    const targetId = lastActiveId && loadedWorkflows.find(w => w.id === lastActiveId) ? lastActiveId : loadedWorkflows[0].id;
-    setActiveWorkflowId(targetId);
     
-    const workflow = loadedWorkflows.find(w => w.id === targetId);
+    let loadedWorkflows: WorkflowData[] = [];
+    if (savedWorkflows) {
+      try {
+        loadedWorkflows = JSON.parse(savedWorkflows);
+      } catch (e) {
+        console.error('Failed to load workflows', e);
+      }
+    }
+
+    if (loadedWorkflows.length === 0) {
+      const oldWorkflow = localStorage.getItem('novel_workflow');
+      if (oldWorkflow) {
+        try {
+          const { nodes: oldNodes, edges: oldEdges } = JSON.parse(oldWorkflow);
+          loadedWorkflows = [{
+            id: 'default',
+            name: '默认工作流',
+            nodes: oldNodes,
+            edges: oldEdges,
+            lastModified: Date.now()
+          }];
+        } catch (e) {}
+      } else {
+        loadedWorkflows = [{
+          id: 'default',
+          name: '默认工作流',
+          nodes: [],
+          edges: [],
+          lastModified: Date.now()
+        }];
+      }
+    }
+
+    setWorkflows(loadedWorkflows);
+    
+    const targetId = lastActiveId && loadedWorkflows.find(w => w.id === lastActiveId)
+      ? lastActiveId
+      : loadedWorkflows[0].id;
+    
+    setActiveWorkflowId(targetId);
+    loadWorkflow(targetId, loadedWorkflows);
+    isInitialLoadRef.current = false;
+  }, [isOpen, activeNovel]);
+
+  const loadWorkflow = (id: string, workflowList: WorkflowData[]) => {
+    if (isRunning) return;
+    const workflow = workflowList.find(w => w.id === id);
     if (workflow) {
-      setNodes((workflow.nodes || []).map(n => ({
-        ...n,
-        data: { ...n.data, icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon }
-      })));
+      const restoredNodes = (workflow.nodes || []).map((n: WorkflowNode) => {
+        const workflowFolderName = (workflow.nodes || []).find(node => node.data.typeKey === 'createFolder')?.data.folderName;
+        const filterLegacyRefs = (list: string[] | undefined, type: 'worldview' | 'character' | 'outline' | 'inspiration') => {
+          if (!list) return [];
+          return list.filter(setId => {
+            if (!setId || typeof setId !== 'string') return false;
+            if (setId.startsWith('pending:')) return false;
+            if (activeNovel && workflowFolderName) {
+              let sets: any[] = [];
+              if (type === 'worldview') sets = activeNovel.worldviewSets || [];
+              else if (type === 'character') sets = activeNovel.characterSets || [];
+              else if (type === 'outline') sets = activeNovel.outlineSets || [];
+              else if (type === 'inspiration') sets = activeNovel.inspirationSets || [];
+              const targetSet = sets.find(s => s.id === setId);
+              if (targetSet && targetSet.name === workflowFolderName) return false;
+            }
+            return true;
+          });
+        };
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon,
+            selectedWorldviewSets: filterLegacyRefs(n.data.selectedWorldviewSets, 'worldview'),
+            selectedCharacterSets: filterLegacyRefs(n.data.selectedCharacterSets, 'character'),
+            selectedOutlineSets: filterLegacyRefs(n.data.selectedOutlineSets, 'outline'),
+            selectedInspirationSets: filterLegacyRefs(n.data.selectedInspirationSets, 'inspiration'),
+            selectedReferenceFolders: n.data.selectedReferenceFolders || [],
+            outputEntries: n.data.outputEntries || [],
+          }
+        };
+      });
+      setNodes(restoredNodes);
       setEdges(workflow.edges || []);
-      setCurrentNodeIndex(workflow.currentNodeIndex ?? -1);
+      setCurrentNodeIndex(workflow.currentNodeIndex !== undefined ? workflow.currentNodeIndex : -1);
       setIsPaused(workflow.currentNodeIndex !== undefined && workflow.currentNodeIndex !== -1);
     }
-    isInitialLoadRef.current = false;
-  }, [isOpen]);
+  };
 
   // 自动保存
   useEffect(() => {
@@ -171,7 +348,10 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
     localStorage.setItem('active_workflow_id', activeWorkflowId);
   }, [nodes, edges, currentNodeIndex, activeWorkflowId, isOpen]);
 
-  const onConnect = useCallback((params: Connection) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
+  const onConnect = useCallback(
+    (params: Connection) => setEdges((eds) => addEdge({ ...params, type: 'custom', animated: false }, eds)),
+    [setEdges]
+  );
 
   const addNewNode = (typeKey: NodeTypeKey) => {
     const config = NODE_CONFIGS[typeKey];
@@ -221,17 +401,82 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
 
   const switchWorkflow = (id: string) => {
     setActiveWorkflowId(id);
-    const workflow = workflows.find(w => w.id === id);
-    if (workflow) {
-      setNodes((workflow.nodes || []).map(n => ({
-        ...n,
-        data: { ...n.data, icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon }
-      })));
-      setEdges(workflow.edges || []);
-      setCurrentNodeIndex(workflow.currentNodeIndex ?? -1);
-      setIsPaused(workflow.currentNodeIndex !== undefined && workflow.currentNodeIndex !== -1);
-    }
+    loadWorkflow(id, workflows);
     setShowWorkflowMenu(false);
+  };
+
+  const createNewWorkflow = () => {
+    const newId = `wf_${Date.now()}`;
+    const newWf: WorkflowData = {
+      id: newId,
+      name: `新工作流 ${workflows.length + 1}`,
+      nodes: [],
+      edges: [],
+      lastModified: Date.now()
+    };
+    const updated = [...workflows, newWf];
+    setWorkflows(updated);
+    switchWorkflow(newId);
+  };
+
+  const deleteWorkflow = (id: string) => {
+    if (workflows.length <= 1) {
+      setError('无法删除最后一个工作流');
+      return;
+    }
+    if (confirm('确定要删除这个工作流吗？')) {
+      const updated = workflows.filter(w => w.id !== id);
+      setWorkflows(updated);
+      if (activeWorkflowId === id) {
+        switchWorkflow(updated[0].id);
+      }
+    }
+  };
+
+  const renameWorkflow = (id: string, newName: string) => {
+    if (!newName.trim()) return;
+    setWorkflows(prev => prev.map(w => w.id === id ? { ...w, name: newName } : w));
+    setIsEditingWorkflowName(false);
+  };
+
+  const exportWorkflow = (id: string) => {
+    const workflow = workflows.find(w => w.id === id);
+    if (!workflow) return;
+    const exportData = {
+      ...workflow,
+      nodes: workflow.nodes.map(n => ({
+        ...n,
+        data: { ...n.data, status: 'pending', outputEntries: [] }
+      })),
+      currentNodeIndex: -1
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${workflow.name}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const importWorkflow = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const imported = JSON.parse(event.target?.result as string) as WorkflowData;
+        if (!imported.nodes || !imported.edges) throw new Error('无效格式');
+        const newId = `wf_imported_${Date.now()}`;
+        const newWf: WorkflowData = { ...imported, id: newId, name: `${imported.name} (导入)`, lastModified: Date.now() };
+        setWorkflows(prev => [...prev, newWf]);
+        switchWorkflow(newId);
+      } catch (err: any) { setError(`导入失败: ${err.message}`); }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   // --- 拓扑排序 ---
@@ -264,47 +509,102 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
 
   // --- 执行引擎 ---
   const runWorkflow = async (startIndex: number = 0) => {
-    if (!globalConfig?.apiKey) { setError('请先配置 API Key'); return; }
-    setIsRunning(true); setIsPaused(false); setError(null); stopRequestedRef.current = false;
+    if (!globalConfig?.apiKey) {
+      setError('请先在主设置中配置 API Key');
+      return;
+    }
+    
+    setIsRunning(true);
+    setIsPaused(false);
+    setStopRequested(false);
+    setError(null);
+    stopRequestedRef.current = false;
     abortControllerRef.current = new AbortController();
     
     try {
       if (!activeNovel) return;
+
+      // 使用 localNovel 跟踪执行过程中的最新状态
       let localNovel = { ...activeNovel };
       const updateLocalAndGlobal = async (newNovel: Novel) => {
         localNovel = newNovel;
-        if (onUpdateNovel) onUpdateNovel(newNovel);
+        if (onUpdateNovel) {
+          onUpdateNovel(newNovel);
+        }
       };
 
       const sortedNodes = getOrderedNodes();
+      
+      // 重置后续节点的执行状态
       if (startIndex === 0) {
         setNodes(nds => nds.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } })));
+        setEdges(eds => eds.map(e => ({ ...e, animated: false })));
       }
 
-      let accumContext = '';
-      let lastNodeOutput = ''; // 累积的前序节点产出
-      let currentWorkflowFolder = '';
+      const resolvePendingRef = (list: string[], sets: any[] | undefined) => {
+        if (!list) return [];
+        return list.map(id => {
+          if (id && typeof id === 'string' && id.startsWith('pending:')) {
+            const folderName = id.replace('pending:', '');
+            const matched = sets?.find(s => s.name === folderName);
+            return matched ? matched.id : id;
+          }
+          return id;
+        });
+      };
 
+      let accumContext = ''; // 累积全局和常驻上下文
+      let lastNodeOutput = ''; // 累积的前序节点产出
+      let currentWorkflowFolder = ''; // 当前工作流确定的文件夹名
+
+      // 如果是从中间开始，需要重建上下文
       if (startIndex > 0) {
         for (let j = 0; j < startIndex; j++) {
           const prevNode = sortedNodes[j];
-          if (prevNode.data.typeKey === 'createFolder') currentWorkflowFolder = prevNode.data.folderName;
-          else if (prevNode.data.typeKey === 'userInput') accumContext += `【全局输入】：\n${prevNode.data.instruction}\n\n`;
-          
-          if (prevNode.data.outputEntries?.length > 0) {
+          if (prevNode.data.typeKey === 'createFolder') {
+            currentWorkflowFolder = prevNode.data.folderName;
+          } else if (prevNode.data.typeKey === 'userInput') {
+            accumContext += `【全局输入】：\n${prevNode.data.instruction}\n\n`;
+          }
+          // 获取上一个执行完的节点的产出作为 lastNodeOutput
+          if (prevNode.data.outputEntries && prevNode.data.outputEntries.length > 0) {
             lastNodeOutput += `【${prevNode.data.typeLabel}输出】：\n${prevNode.data.outputEntries[0].content}\n\n`;
           }
         }
       }
-
+      
       for (let i = startIndex; i < sortedNodes.length; i++) {
-        if (stopRequestedRef.current) { setIsPaused(true); setCurrentNodeIndex(i); break; }
+        if (stopRequestedRef.current) {
+          setIsPaused(true);
+          setCurrentNodeIndex(i);
+          break;
+        }
+
         const node = sortedNodes[i];
         setCurrentNodeIndex(i);
-        updateNodeData(node.id, { status: 'executing' });
+        
+        // 更新节点状态为正在执行
+        setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'executing' } } : n));
+        
+        // 让指向该节点的连线产生动画效果
+        setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: true } : e));
 
-        if (node.data.typeKey === 'createFolder') {
-          currentWorkflowFolder = node.data.folderName;
+        // 视觉反馈增强
+        if (node.data.typeKey === 'userInput' || node.data.typeKey === 'createFolder') {
+          await new Promise(resolve => setTimeout(resolve, 600));
+        }
+
+        // 处理创建文件夹节点
+        if (node.data.typeKey === 'createFolder' || node.data.typeKey === 'reuseDirectory') {
+          if (node.data.folderName) {
+            currentWorkflowFolder = node.data.folderName;
+          }
+          
+          if (node.data.typeKey === 'reuseDirectory') {
+             setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+             continue;
+          }
+
           if (currentWorkflowFolder) {
             const createSetIfNotExist = (sets: any[] | undefined, name: string, creator: () => any) => {
               const existing = sets?.find(s => s.name === name);
@@ -312,72 +612,410 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
               const newSet = creator();
               return { id: newSet.id, isNew: true, set: newSet };
             };
+
             const updatedNovel = { ...localNovel };
             let changed = false;
-            const volumeResult = createSetIfNotExist(updatedNovel.volumes, currentWorkflowFolder, () => ({ id: `vol_${Date.now()}`, title: currentWorkflowFolder, collapsed: false }));
-            if (volumeResult.isNew) { updatedNovel.volumes = [...(updatedNovel.volumes || []), volumeResult.set]; changed = true; }
-            const worldviewResult = createSetIfNotExist(updatedNovel.worldviewSets, currentWorkflowFolder, () => ({ id: `wv_${Date.now()}`, name: currentWorkflowFolder, entries: [] }));
-            if (worldviewResult.isNew) { updatedNovel.worldviewSets = [...(updatedNovel.worldviewSets || []), worldviewResult.set]; changed = true; }
-            const characterResult = createSetIfNotExist(updatedNovel.characterSets, currentWorkflowFolder, () => ({ id: `char_${Date.now()}`, name: currentWorkflowFolder, characters: [] }));
-            if (characterResult.isNew) { updatedNovel.characterSets = [...(updatedNovel.characterSets || []), characterResult.set]; changed = true; }
-            const outlineResult = createSetIfNotExist(updatedNovel.outlineSets, currentWorkflowFolder, () => ({ id: `out_${Date.now()}`, name: currentWorkflowFolder, items: [] }));
-            if (outlineResult.isNew) { updatedNovel.outlineSets = [...(updatedNovel.outlineSets || []), outlineResult.set]; changed = true; }
-            if (changed) await updateLocalAndGlobal(updatedNovel);
+
+            // 自动创建与目录名称相同的分卷
+            const volumeResult = createSetIfNotExist(updatedNovel.volumes, currentWorkflowFolder, () => ({
+              id: `vol_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+              title: currentWorkflowFolder,
+              collapsed: false,
+            }));
+            if (volumeResult.isNew) {
+              updatedNovel.volumes = [...(updatedNovel.volumes || []), volumeResult.set];
+              changed = true;
+            }
+
+            const worldviewResult = createSetIfNotExist(updatedNovel.worldviewSets, currentWorkflowFolder, () => ({
+              id: `wv_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+              name: currentWorkflowFolder,
+              entries: [],
+            }));
+            if (worldviewResult.isNew) {
+              updatedNovel.worldviewSets = [...(updatedNovel.worldviewSets || []), worldviewResult.set];
+              changed = true;
+            }
+
+            const characterResult = createSetIfNotExist(updatedNovel.characterSets, currentWorkflowFolder, () => ({
+              id: `char_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+              name: currentWorkflowFolder,
+              characters: [],
+            }));
+            if (characterResult.isNew) {
+              updatedNovel.characterSets = [...(updatedNovel.characterSets || []), characterResult.set];
+              changed = true;
+            }
+
+            const outlineResult = createSetIfNotExist(updatedNovel.outlineSets, currentWorkflowFolder, () => ({
+              id: `out_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+              name: currentWorkflowFolder,
+              items: [],
+            }));
+            if (outlineResult.isNew) {
+              updatedNovel.outlineSets = [...(updatedNovel.outlineSets || []), outlineResult.set];
+              changed = true;
+            }
+
+            const inspirationResult = createSetIfNotExist(updatedNovel.inspirationSets, currentWorkflowFolder, () => ({
+              id: `insp_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+              name: currentWorkflowFolder,
+              items: [],
+            }));
+            if (inspirationResult.isNew) {
+              updatedNovel.inspirationSets = [...(updatedNovel.inspirationSets || []), inspirationResult.set];
+              changed = true;
+            }
+
+            const plotOutlineResult = createSetIfNotExist(updatedNovel.plotOutlineSets, currentWorkflowFolder, () => ({
+              id: `plot_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+              name: currentWorkflowFolder,
+              items: [],
+            }));
+            if (plotOutlineResult.isNew) {
+              updatedNovel.plotOutlineSets = [...(updatedNovel.plotOutlineSets || []), plotOutlineResult.set];
+              changed = true;
+            }
+
+            if (changed) {
+              await updateLocalAndGlobal(updatedNovel);
+            }
+
+            setNodes(nds => nds.map(n => ({
+              ...n,
+              data: {
+                ...n.data,
+                targetVolumeId: (n.data.typeKey === 'chapter' && (!n.data.targetVolumeId || n.data.targetVolumeId === ''))
+                  ? volumeResult.id
+                  : n.data.targetVolumeId
+              }
+            })));
           }
-          updateNodeData(node.id, { status: 'completed' });
+          // 更新节点状态为已完成
+          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;
         }
 
         if (node.data.typeKey === 'userInput') {
           accumContext += `【全局输入】：\n${node.data.instruction}\n\n`;
-          updateNodeData(node.id, { status: 'completed' });
+          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;
         }
 
-        const preset = allPresets[node.data.presetType as string]?.find(p => p.id === node.data.presetId) || allPresets[node.data.presetType as string]?.[0];
-        
-        if (node.data.typeKey === 'chapter') {
-          if (!globalConfig) throw new Error('缺失配置');
-          const outlineSet = localNovel.outlineSets?.find(s => s.name === currentWorkflowFolder) || localNovel.outlineSets?.[0];
-          if (!outlineSet?.items?.length) throw new Error('大纲集为空');
-          
-          const engine = new AutoWriteEngine({
-            apiKey: globalConfig.apiKey, baseUrl: globalConfig.baseUrl, model: globalConfig.model,
-            contextLength: globalConfig.contextLength, maxReplyLength: globalConfig.maxReplyLength,
-            temperature: globalConfig.temperature, stream: globalConfig.stream, maxRetries: globalConfig.maxRetries,
-            systemPrompt: localNovel.systemPrompt || '你是一个专业的小说家。',
-            globalCreationPrompt: globalConfig.globalCreationPrompt, longTextMode: globalConfig.longTextMode,
-            autoOptimize: node.data.autoOptimize || globalConfig.autoOptimize, consecutiveChapterCount: globalConfig.consecutiveChapterCount || 1,
-            smallSummaryInterval: globalConfig.smallSummaryInterval, bigSummaryInterval: globalConfig.bigSummaryInterval,
-            smallSummaryPrompt: globalConfig.smallSummaryPrompt, bigSummaryPrompt: globalConfig.bigSummaryPrompt,
-            outlineModel: globalConfig.outlineModel,
-          }, localNovel);
+        // 获取对应类型的预设
+        let typePresets = allPresets[node.data.presetType as string] || [];
+        if (node.data.typeKey === 'aiChat') {
+          typePresets = Object.values(allPresets).flat();
+        }
 
-          await engine.run(outlineSet.items, 0, globalConfig.prompts.filter(p => p.active), globalConfig.getActiveScripts, 
+        let preset = typePresets.find(p => p.id === node.data.presetId);
+        if (!preset && node.data.typeKey !== 'aiChat') {
+          preset = typePresets[0];
+          if (!preset) continue;
+        }
+
+        // 构建参考资料上下文
+        let refContext = '';
+        let selectedWorldview = resolvePendingRef([...(node.data.selectedWorldviewSets || [])], localNovel.worldviewSets);
+        let selectedCharacters = resolvePendingRef([...(node.data.selectedCharacterSets || [])], localNovel.characterSets);
+        let selectedOutlines = resolvePendingRef([...(node.data.selectedOutlineSets || [])], localNovel.outlineSets);
+        let selectedInspirations = resolvePendingRef([...(node.data.selectedInspirationSets || [])], localNovel.inspirationSets);
+        let selectedFolders = [...(node.data.selectedReferenceFolders || [])];
+
+        selectedWorldview.forEach(id => {
+            const set = localNovel.worldviewSets?.find(s => s.id === id);
+            if (set) refContext += `【参考世界观 (${set.name})】：\n${set.entries.map(e => `· ${e.item}: ${e.setting}`).join('\n')}\n`;
+        });
+        selectedCharacters.forEach(id => {
+            const set = localNovel.characterSets?.find(s => s.id === id);
+            if (set) refContext += `【参考角色 (${set.name})】：\n${set.characters.map(c => `· ${c.name}: ${c.bio}`).join('\n')}\n`;
+        });
+        selectedOutlines.forEach(id => {
+            const set = localNovel.outlineSets?.find(s => s.id === id);
+            if (set) refContext += `【参考粗纲 (${set.name})】：\n${set.items.map(i => `· ${i.title}: ${i.summary}`).join('\n')}\n`;
+        });
+        selectedInspirations.forEach(id => {
+            const set = localNovel.inspirationSets?.find(s => s.id === id);
+            if (set) refContext += `【参考灵感 (${set.name})】：\n${set.items.map(i => `· ${i.title}: ${i.content}`).join('\n')}\n`;
+        });
+        selectedFolders.forEach(folderId => {
+            const folder = localNovel.referenceFolders?.find(f => f.id === folderId);
+            if (folder) {
+                const folderFiles = localNovel.referenceFiles?.filter(f => f.parentId === folderId) || [];
+                folderFiles.forEach(f => {
+                    const isText = f.type.startsWith('text/') || f.name.endsWith('.md') || f.name.endsWith('.txt');
+                    if (isText) refContext += `· 文件: ${f.name}\n内容: ${f.content}\n---\n`;
+                });
+            }
+        });
+
+        const isDuplicate = lastNodeOutput && refContext.includes(lastNodeOutput.substring(0, 100));
+        const finalContext = `${refContext}${accumContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
+        
+        let messages: any[] = [];
+        
+        if (node.data.typeKey === 'aiChat' && !preset) {
+            messages = [{ role: 'user', content: `${finalContext}要求：${node.data.instruction || '请继续生成'}` }];
+        } else if (preset) {
+          if (node.data.typeKey === 'chapter') {
+            const completionPreset = preset as any;
+            messages = (completionPreset.prompts || [])
+              .filter((p: any) => p.active)
+              .map((p: any) => ({
+                role: p.role,
+                content: p.content.replace('{{context}}', finalContext).replace('{{input}}', node.data.instruction)
+              }));
+          } else {
+            messages = (preset.prompts || [])
+              .filter(p => p.enabled)
+              .map(p => ({
+                role: p.role,
+                content: p.content.replace('{{context}}', finalContext).replace('{{input}}', node.data.instruction)
+              }));
+          }
+        }
+
+        if (messages.length === 0) messages.push({ role: 'user', content: node.data.instruction || '请生成内容' });
+
+        // 处理正文生成节点
+        if (node.data.typeKey === 'chapter') {
+          if (!globalConfig) throw new Error('缺失全局配置');
+
+          let selectedOutlineSetId = node.data.selectedOutlineSets && node.data.selectedOutlineSets.length > 0
+            ? resolvePendingRef([node.data.selectedOutlineSets[0]], localNovel.outlineSets)[0]
+            : null;
+
+          if (!selectedOutlineSetId || selectedOutlineSetId.startsWith('pending:')) {
+             const matched = localNovel.outlineSets?.find(s => s.name === currentWorkflowFolder);
+             if (matched) selectedOutlineSetId = matched.id;
+          }
+
+          let currentSet = localNovel.outlineSets?.find(s => s.id === selectedOutlineSetId);
+          if (!currentSet || !currentSet.items || currentSet.items.length === 0) {
+            const fallbackSet = localNovel.outlineSets?.[localNovel.outlineSets.length - 1];
+            if (fallbackSet && fallbackSet.items && fallbackSet.items.length > 0 && (!currentWorkflowFolder || fallbackSet.name === currentWorkflowFolder)) {
+              currentSet = fallbackSet;
+            } else {
+              throw new Error(`未关联大纲集或关联的大纲集内容为空`);
+            }
+          }
+
+          let finalVolumeId = node.data.targetVolumeId as string;
+          const latestVolumes = localNovel.volumes || [];
+          if (finalVolumeId && finalVolumeId !== 'NEW_VOLUME') {
+            const exists = latestVolumes.some(v => v.id === finalVolumeId);
+            if (!exists) finalVolumeId = '';
+          }
+          if (!finalVolumeId || finalVolumeId === '') {
+            const matchedVol = latestVolumes.find(v => v.title === currentWorkflowFolder);
+            if (matchedVol) {
+              finalVolumeId = matchedVol.id;
+              updateNodeData(node.id, { targetVolumeId: finalVolumeId });
+            }
+          }
+          if (!finalVolumeId || finalVolumeId === '') {
+            if (latestVolumes.length > 0) {
+              finalVolumeId = latestVolumes[0].id;
+              updateNodeData(node.id, { targetVolumeId: finalVolumeId });
+            }
+          }
+
+          if (finalVolumeId === 'NEW_VOLUME' && node.data.targetVolumeName) {
+            const newVolume = {
+              id: `vol_${Date.now()}`,
+              title: node.data.targetVolumeName as string,
+              collapsed: false
+            };
+            const updatedNovel = { ...localNovel, volumes: [...(localNovel.volumes || []), newVolume] };
+            finalVolumeId = newVolume.id;
+            updateLocalAndGlobal(updatedNovel);
+            updateNodeData(node.id, { targetVolumeId: finalVolumeId, targetVolumeName: '' });
+          }
+
+          const nodeApiConfig = (preset as any)?.apiConfig || {};
+          const engineConfig = {
+            apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
+            baseUrl: nodeApiConfig.baseUrl || globalConfig.baseUrl,
+            model: nodeApiConfig.model || globalConfig.model,
+            contextLength: (preset as any)?.contextLength || globalConfig.contextLength,
+            maxReplyLength: (preset as any)?.maxReplyLength || globalConfig.maxReplyLength,
+            temperature: (preset as any)?.temperature ?? globalConfig.temperature,
+            topP: (preset as any)?.topP ?? globalConfig.topP,
+            topK: (preset as any)?.topK ?? globalConfig.topK,
+            stream: (preset as any)?.stream ?? globalConfig.stream,
+            maxRetries: globalConfig.maxRetries,
+            systemPrompt: localNovel.systemPrompt || '你是一个专业的小说家。',
+            globalCreationPrompt: globalConfig.globalCreationPrompt,
+            longTextMode: globalConfig.longTextMode,
+            autoOptimize: node.data.autoOptimize || globalConfig.autoOptimize,
+            consecutiveChapterCount: globalConfig.consecutiveChapterCount || 1,
+            smallSummaryInterval: globalConfig.smallSummaryInterval,
+            bigSummaryInterval: globalConfig.bigSummaryInterval,
+            smallSummaryPrompt: globalConfig.smallSummaryPrompt,
+            bigSummaryPrompt: globalConfig.bigSummaryPrompt,
+            outlineModel: globalConfig.outlineModel,
+          };
+
+          const engine = new AutoWriteEngine(engineConfig, localNovel);
+
+          let writeStartIndex = 0;
+          const items = currentSet?.items || [];
+          for (let k = 0; k < items.length; k++) {
+            const item = items[k];
+            const existingChapter = localNovel.chapters.find(c => c.title === item.title);
+            if (!existingChapter || !existingChapter.content || existingChapter.content.trim().length === 0) {
+              writeStartIndex = k;
+              break;
+            }
+            if (k === items.length - 1) writeStartIndex = items.length;
+          }
+
+          if (writeStartIndex >= items.length) {
+            setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+            continue;
+          }
+
+          await engine.run(items, writeStartIndex, globalConfig.prompts.filter(p => p.active), globalConfig.getActiveScripts,
             (s) => updateNodeData(node.id, { label: `创作中: ${s}` }),
             (n) => updateLocalAndGlobal(n),
-            async (id, content) => { if (globalConfig.onChapterComplete) await globalConfig.onChapterComplete(id, content); },
-            localNovel.volumes?.find(v => v.title === currentWorkflowFolder)?.id
+            async (id, content) => {
+              if (globalConfig.onChapterComplete) await globalConfig.onChapterComplete(id, content);
+              setNodes(nds => nds.map(n => {
+                if (n.id === node.id) {
+                  const novel = (localNovel as Novel);
+                  const chapter = novel.chapters.find(c => c.id === id);
+                  const title = chapter?.title || `第${id}章`;
+                  const newEntry: OutputEntry = { id: `chapter-${id}`, title: title, content: content };
+                  const otherEntries = (n.data.outputEntries || []).filter(e => e.id !== `chapter-${id}`);
+                  return { ...n, data: { ...n.data, outputEntries: [...otherEntries, newEntry].sort((a,b) => {
+                    const idA = parseInt(a.id.replace('chapter-', '') || '0');
+                    const idB = parseInt(b.id.replace('chapter-', '') || '0');
+                    return idA - idB;
+                  }) } };
+                }
+                return n;
+              }));
+            },
+            finalVolumeId, false, selectedOutlineSetId
           );
-          updateNodeData(node.id, { status: 'completed', label: NODE_CONFIGS.chapter.defaultLabel });
+          updateNodeData(node.id, { label: NODE_CONFIGS.chapter.defaultLabel });
+          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;
         }
 
-        const openai = new OpenAI({ apiKey: globalConfig.apiKey, baseURL: globalConfig.baseUrl, dangerouslyAllowBrowser: true });
-        
-        // 增加去重逻辑 (参考 PC 端)
-        const isDuplicate = lastNodeOutput && node.data.instruction && node.data.instruction.includes(lastNodeOutput.substring(0, 100));
-        const finalContext = `${accumContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
-        
-        const messages = [{ role: 'user' as const, content: `${finalContext}要求：${node.data.instruction || preset?.name || '生成内容'}` }];
-        
+        const nodeApiConfig = preset?.apiConfig || {};
+        const openai = new OpenAI({
+          apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
+          baseURL: nodeApiConfig.baseUrl || globalConfig.baseUrl,
+          dangerouslyAllowBrowser: true
+        });
+
         const completion = await openai.chat.completions.create({
-          model: globalConfig.model, messages, temperature: preset?.temperature ?? 1.0,
-        }, { signal: abortControllerRef.current?.signal });
+          model: nodeApiConfig.model || globalConfig.model,
+          messages,
+          temperature: preset?.temperature ?? globalConfig.temperature,
+          top_p: preset?.topP ?? globalConfig.topP,
+          top_k: (preset as any)?.topK ?? globalConfig.topK,
+        } as any, { signal: abortControllerRef.current?.signal });
 
         const result = completion.choices[0]?.message?.content || '';
-        const entry: OutputEntry = { id: Date.now().toString(), title: '生成结果', content: result };
-        updateNodeData(node.id, { status: 'completed', outputEntries: [entry, ...(node.data.outputEntries || [])] });
+        
+        // 6. 结构化解析 AI 输出并更新节点产物
+        let entriesToStore: { title: string; content: string }[] = [];
+        
+        try {
+          // 增强型 JSON 提取逻辑
+          let potentialJson = result.trim();
+          const firstBracket = potentialJson.indexOf('[');
+          const firstBrace = potentialJson.indexOf('{');
+          let start = -1;
+          let end = -1;
+
+          if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+            start = firstBracket;
+            end = potentialJson.lastIndexOf(']');
+          } else if (firstBrace !== -1) {
+            start = firstBrace;
+            end = potentialJson.lastIndexOf('}');
+          }
+
+          if (start !== -1 && end !== -1 && end > start) {
+            potentialJson = potentialJson.substring(start, end + 1);
+          }
+          potentialJson = potentialJson.replace(/```json\s*|```\s*/g, '').trim();
+
+          const parsed = JSON.parse(potentialJson);
+          
+          const extractEntries = (data: any): {title: string, content: string}[] => {
+            if (!data) return [];
+            if (Array.isArray(data)) {
+              return data.map(item => {
+                if (typeof item === 'string') return { title: `项 ${new Date().toLocaleTimeString()}`, content: item };
+                if (typeof item !== 'object' || item === null) return { title: '未命名', content: String(item) };
+                const title = String(item.item || item.name || item.title || item.label || item.key || item.header || item.chapter || Object.keys(item)[0] || '未命名');
+                const content = String(item.setting || item.bio || item.summary || item.content || item.description || item.value || item.plot || (typeof item === 'object' ? JSON.stringify(item) : item));
+                return { title, content };
+              });
+            }
+            if (typeof data === 'object') {
+              const arrayKey = Object.keys(data).find(k => Array.isArray(data[k]));
+              if (arrayKey) return extractEntries(data[arrayKey]);
+              return Object.entries(data).map(([k, v]) => ({
+                title: k,
+                content: typeof v === 'string' ? v : JSON.stringify(v)
+              }));
+            }
+            return [];
+          };
+
+          entriesToStore = extractEntries(parsed);
+        } catch (e) {
+          entriesToStore = [{
+            title: `生成结果 ${new Date().toLocaleTimeString()}`,
+            content: result
+          }];
+        }
+
+        const newEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({ id: `${Date.now()}-${idx}`, title: e.title, content: e.content }));
+        updateNodeData(node.id, { status: 'completed', outputEntries: [...newEntries, ...(node.data.outputEntries || [])] });
+
+        // 持久化到 Novel
+        if (currentWorkflowFolder) {
+          const folderName = currentWorkflowFolder;
+          let updatedNovelState = { ...localNovel };
+          let novelChanged = false;
+          
+          const updateSets = (sets: any[] | undefined, type: string) => {
+            const targetSet = sets?.find(s => s.name === folderName);
+            if (targetSet) {
+              const newItems = [...(type === 'worldview' ? targetSet.entries : type === 'character' ? targetSet.characters : targetSet.items)];
+              entriesToStore.forEach(e => {
+                const titleKey = type === 'worldview' ? 'item' : type === 'character' ? 'name' : 'title';
+                const contentKey = type === 'worldview' ? 'setting' : type === 'character' ? 'bio' : (type === 'plotOutline' ? 'description' : (type === 'inspiration' ? 'content' : 'summary'));
+                const idx = newItems.findIndex((ni: any) => ni[titleKey] === e.title);
+                const newItem = { [titleKey]: e.title, [contentKey]: e.content };
+                if (type === 'plotOutline' && idx === -1) (newItem as any).id = `plot_${Date.now()}`;
+                if (idx !== -1) newItems[idx] = { ...newItems[idx], ...newItem };
+                else newItems.push(newItem);
+              });
+              novelChanged = true;
+              return sets?.map(s => s.id === targetSet.id ? { ...s, [type === 'worldview' ? 'entries' : type === 'character' ? 'characters' : 'items']: newItems } : s);
+            }
+            return sets;
+          };
+
+          if (node.data.typeKey === 'worldview') updatedNovelState.worldviewSets = updateSets(updatedNovelState.worldviewSets, 'worldview');
+          else if (node.data.typeKey === 'characters') updatedNovelState.characterSets = updateSets(updatedNovelState.characterSets, 'character');
+          else if (node.data.typeKey === 'outline') updatedNovelState.outlineSets = updateSets(updatedNovelState.outlineSets, 'outline');
+          else if (node.data.typeKey === 'inspiration') updatedNovelState.inspirationSets = updateSets(updatedNovelState.inspirationSets, 'inspiration');
+          else if (node.data.typeKey === 'plotOutline') updatedNovelState.plotOutlineSets = updateSets(updatedNovelState.plotOutlineSets, 'plotOutline');
+
+          if (novelChanged) await updateLocalAndGlobal(updatedNovelState);
+        }
+
         lastNodeOutput += `【${node.data.typeLabel}输出】：\n${result}\n\n`;
       }
       if (!stopRequestedRef.current) { setCurrentNodeIndex(-1); setIsRunning(false); }
@@ -395,27 +1033,65 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
     <div className="fixed inset-0 bg-gray-900 z-[100] flex flex-col animate-in fade-in duration-200 overflow-hidden">
       {/* 顶部工具栏 */}
       <div className="p-3 bg-gray-800 border-b border-gray-700 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2">
-          <Workflow className="w-5 h-5 text-indigo-400" />
-          <div className="relative">
-            <button onClick={() => setShowWorkflowMenu(!showWorkflowMenu)} className="font-bold text-sm text-gray-100 flex items-center gap-1">
-              {workflows.find(w => w.id === activeWorkflowId)?.name || '选择工作流'}
-              <ChevronDown className="w-3 h-3" />
-            </button>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <Workflow className="w-5 h-5 text-indigo-400 shrink-0" />
+          <div className="relative min-w-0 flex-1">
+            {isEditingWorkflowName ? (
+              <input
+                autoFocus
+                type="text"
+                value={newWorkflowName}
+                onChange={(e) => setNewWorkflowName(e.target.value)}
+                onBlur={() => renameWorkflow(activeWorkflowId, newWorkflowName)}
+                onKeyDown={(e) => e.key === 'Enter' && renameWorkflow(activeWorkflowId, newWorkflowName)}
+                className="bg-gray-700 border border-indigo-500 rounded px-2 py-1 text-xs text-white outline-none w-full"
+              />
+            ) : (
+              <div className="flex items-center gap-1 min-w-0">
+                <button onClick={() => setShowWorkflowMenu(!showWorkflowMenu)} className="font-bold text-sm text-gray-100 flex items-center gap-1 min-w-0">
+                  <span className="truncate">{workflows.find(w => w.id === activeWorkflowId)?.name || '选择工作流'}</span>
+                  <ChevronDown className="w-3 h-3 shrink-0" />
+                </button>
+                <button
+                  onClick={() => {
+                    setNewWorkflowName(workflows.find(w => w.id === activeWorkflowId)?.name || '');
+                    setIsEditingWorkflowName(true);
+                  }}
+                  className="p-1 text-gray-500"
+                >
+                  <Edit2 className="w-3 h-3" />
+                </button>
+              </div>
+            )}
             {showWorkflowMenu && (
               <div className="absolute top-full left-0 mt-2 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl py-2 z-50 animate-in slide-in-from-top-2 duration-200">
-                {workflows.map(wf => (
-                  <button key={wf.id} onClick={() => switchWorkflow(wf.id)} className={`w-full text-left px-4 py-3 text-sm ${activeWorkflowId === wf.id ? 'bg-indigo-600/20 text-indigo-400' : 'text-gray-300'}`}>{wf.name}</button>
-                ))}
+                <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                  {workflows.map(wf => (
+                    <div key={wf.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-700">
+                      <button onClick={() => switchWorkflow(wf.id)} className={`flex-1 text-left text-sm truncate ${activeWorkflowId === wf.id ? 'text-indigo-400' : 'text-gray-300'}`}>{wf.name}</button>
+                      <button onClick={(e) => { e.stopPropagation(); deleteWorkflow(wf.id); }} className="p-1 text-gray-500 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-gray-700 mt-2 pt-2 px-2 space-y-1">
+                  <button onClick={createNewWorkflow} className="w-full text-left px-3 py-2 text-xs text-indigo-400 font-bold flex items-center gap-2"><Plus className="w-4 h-4" /> 创建新工作流</button>
+                  <label className="w-full text-left px-3 py-2 text-xs text-emerald-400 font-bold flex items-center gap-2 cursor-pointer"><Upload className="w-4 h-4" /> 导入工作流<input type="file" accept=".json" onChange={importWorkflow} className="hidden" /></label>
+                  <button onClick={() => exportWorkflow(activeWorkflowId)} className="w-full text-left px-3 py-2 text-xs text-amber-400 font-bold flex items-center gap-2"><Download className="w-4 h-4" /> 导出当前工作流</button>
+                </div>
               </div>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 shrink-0">
           {isRunning ? (
-            <button onClick={stopWorkflow} className="text-red-500 p-1"><Square className="w-5 h-5 fill-current" /></button>
+            <button onClick={stopWorkflow} className="bg-red-600/20 text-red-500 p-2 rounded-lg border border-red-500/20"><Square className="w-4 h-4 fill-current" /></button>
+          ) : isPaused && currentNodeIndex !== -1 ? (
+            <div className="flex items-center gap-1">
+              <button onClick={() => runWorkflow(currentNodeIndex)} className="bg-blue-600/20 text-blue-500 p-2 rounded-lg border border-blue-500/20"><Play className="w-4 h-4 fill-current" /></button>
+              <button onClick={() => runWorkflow(0)} className="text-[10px] text-gray-400 px-2">重开</button>
+            </div>
           ) : (
-            <button onClick={() => runWorkflow(currentNodeIndex === -1 ? 0 : currentNodeIndex)} className="text-green-500 p-1"><Play className="w-5 h-5 fill-current" /></button>
+            <button onClick={() => runWorkflow(0)} disabled={nodes.length === 0} className="bg-green-600/20 text-green-500 p-2 rounded-lg border border-green-500/20 disabled:opacity-50"><Play className="w-4 h-4 fill-current" /></button>
           )}
           <button onClick={onClose} className="p-1 text-gray-400"><X className="w-6 h-6" /></button>
         </div>
@@ -431,9 +1107,10 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
           onConnect={onConnect}
           onNodeClick={(_, node) => setEditingNodeId(node.id)}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           colorMode="dark"
-          defaultEdgeOptions={{ style: { strokeWidth: 4, stroke: '#6366f1' }, animated: true }}
+          defaultEdgeOptions={{ type: 'custom', animated: false }}
         >
           <Background color="#333" gap={25} variant={BackgroundVariant.Dots} />
           <Controls showInteractive={false} position="bottom-right" className="m-4 scale-125" />
@@ -491,6 +1168,40 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">模块名称</label>
               <input type="text" value={editingNode.data.label} onChange={(e) => updateNodeData(editingNode.id, { label: e.target.value })} className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500 shadow-inner" />
             </div>
+
+            {(editingNode.data.typeKey === 'createFolder' || editingNode.data.typeKey === 'reuseDirectory') && (
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Folder className="w-3.5 h-3.5" /> 关联目录名
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={editingNode.data.folderName}
+                    onChange={(e) => updateNodeData(editingNode.id, { folderName: e.target.value })}
+                    className="flex-1 bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500"
+                    placeholder="输入文件夹名称..."
+                  />
+                  {editingNode.data.typeKey === 'reuseDirectory' && activeNovel && (
+                    <select
+                      className="bg-gray-800 border border-gray-700 rounded-2xl px-2 text-xs text-gray-300 outline-none"
+                      onChange={(e) => updateNodeData(editingNode.id, { folderName: e.target.value })}
+                      value=""
+                    >
+                      <option value="" disabled>选择...</option>
+                      {Array.from(new Set([
+                        ...(activeNovel.volumes?.map(v => v.title) || []),
+                        ...(activeNovel.worldviewSets?.map(s => s.name) || []),
+                        ...(activeNovel.characterSets?.map(s => s.name) || []),
+                        ...(activeNovel.outlineSets?.map(s => s.name) || [])
+                      ])).filter(Boolean).map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+            )}
             {editingNode.data.presetType && (
               <div className="space-y-3">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2"><Cpu className="w-3.5 h-3.5" /> AI 预设</label>
@@ -504,39 +1215,143 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
               </div>
             )}
             {editingNode.data.typeKey === 'chapter' && (
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => {
-                    const newVal = !editingNode.data.autoOptimize;
-                    updateNodeData(editingNode.id, { autoOptimize: newVal });
-                    if (globalConfig?.updateAutoOptimize) {
-                      globalConfig.updateAutoOptimize(newVal);
-                    }
-                  }}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.autoOptimize ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-                >
-                  <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.autoOptimize ? 'bg-purple-500 animate-pulse' : 'bg-gray-600'}`} />
-                  自动优化
-                </button>
-                <button
-                  onClick={() => {
-                    const newVal = !editingNode.data.twoStepOptimization;
-                    updateNodeData(editingNode.id, { twoStepOptimization: newVal });
-                    if (globalConfig?.updateTwoStepOptimization) {
-                      globalConfig.updateTwoStepOptimization(newVal);
-                    }
-                  }}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.twoStepOptimization ? 'bg-pink-500/20 text-pink-300 border-pink-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-                >
-                  <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.twoStepOptimization ? 'bg-pink-500 animate-pulse' : 'bg-gray-600'}`} />
-                  两阶段优化
-                </button>
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Library className="w-3.5 h-3.5" /> 保存至分卷
+                  </label>
+                  <select
+                    value={editingNode.data.targetVolumeId as string}
+                    onChange={(e) => updateNodeData(editingNode.id, { targetVolumeId: e.target.value })}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none"
+                  >
+                    <option value="">-- 自动匹配同名分卷 --</option>
+                    {activeNovel?.volumes.map(v => (
+                      <option key={v.id} value={v.id}>{v.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => {
+                      const newVal = !editingNode.data.autoOptimize;
+                      updateNodeData(editingNode.id, { autoOptimize: newVal });
+                      if (globalConfig?.updateAutoOptimize) {
+                        globalConfig.updateAutoOptimize(newVal);
+                      }
+                    }}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.autoOptimize ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+                  >
+                    <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.autoOptimize ? 'bg-purple-500 animate-pulse' : 'bg-gray-600'}`} />
+                    自动优化
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newVal = !editingNode.data.twoStepOptimization;
+                      updateNodeData(editingNode.id, { twoStepOptimization: newVal });
+                      if (globalConfig?.updateTwoStepOptimization) {
+                        globalConfig.updateTwoStepOptimization(newVal);
+                      }
+                    }}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.twoStepOptimization ? 'bg-pink-500/20 text-pink-300 border-pink-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+                  >
+                    <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.twoStepOptimization ? 'bg-pink-500 animate-pulse' : 'bg-gray-600'}`} />
+                    两阶段优化
+                  </button>
+                </div>
               </div>
             )}
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">创作指令 (User Prompt)</label>
               <textarea value={editingNode.data.instruction} onChange={(e) => updateNodeData(editingNode.id, { instruction: e.target.value })} className="w-full h-56 bg-gray-800 border border-gray-700 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed" placeholder="在此输入具体要求..." />
             </div>
+
+            {editingNode.data.typeKey !== 'userInput' && activeNovel && (
+              <div className="space-y-6 pt-6 border-t border-gray-800">
+                <label className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                  <CheckSquare className="w-3.5 h-3.5" /> 关联参考资料集
+                </label>
+                
+                <div className="space-y-4">
+                  {[
+                    { label: '世界观', key: 'selectedWorldviewSets', sets: activeNovel.worldviewSets, icon: Globe, color: 'text-emerald-500' },
+                    { label: '角色', key: 'selectedCharacterSets', sets: activeNovel.characterSets, icon: Users, color: 'text-orange-500' },
+                    { label: '粗纲', key: 'selectedOutlineSets', sets: activeNovel.outlineSets, icon: LayoutList, color: 'text-pink-500' },
+                    { label: '灵感', key: 'selectedInspirationSets', sets: activeNovel.inspirationSets, icon: Lightbulb, color: 'text-yellow-500' }
+                  ].map(group => (
+                    <div key={group.key} className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 space-y-2">
+                      <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
+                        <group.icon className={`w-3 h-3 ${group.color}`}/> {group.label}
+                      </div>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {group.sets?.map(set => {
+                          const isSelected = (editingNode.data[group.key] as string[]).includes(set.id);
+                          return (
+                            <button
+                              key={set.id}
+                              onClick={() => {
+                                const list = [...(editingNode.data[group.key] as string[])];
+                                const newList = list.includes(set.id) ? list.filter(id => id !== set.id) : [...list, set.id];
+                                updateNodeData(editingNode.id, { [group.key]: newList });
+                              }}
+                              className={`px-3 py-2 rounded-xl text-xs transition-all border ${isSelected ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50 font-bold' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+                            >
+                              {set.name}
+                            </button>
+                          );
+                        })}
+                        {/* 显示计划中的文件夹 */}
+                        {pendingFolders.filter(name => !group.sets?.some((s: any) => s.name === name)).map(name => {
+                          const pendingId = `pending:${name}`;
+                          const isSelected = (editingNode.data[group.key] as string[]).includes(pendingId);
+                          return (
+                            <button
+                              key={pendingId}
+                              onClick={() => {
+                                const list = [...(editingNode.data[group.key] as string[])];
+                                const newList = list.includes(pendingId) ? list.filter(id => id !== pendingId) : [...list, pendingId];
+                                updateNodeData(editingNode.id, { [group.key]: newList });
+                              }}
+                              className={`px-3 py-2 rounded-xl text-xs transition-all border border-dashed ${isSelected ? 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50 font-bold' : 'bg-gray-800/40 text-gray-500 border-gray-700'}`}
+                            >
+                              {name} (计划中)
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* 参考资料库文件夹选择 */}
+                  <div className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 space-y-2">
+                    <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 pb-1 border-b border-gray-700/30">
+                      <Folder className="w-3 h-3 text-blue-500"/> 参考资料库文件夹
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {activeNovel.referenceFolders?.map(folder => {
+                        const isSelected = (editingNode.data.selectedReferenceFolders as string[])?.includes(folder.id);
+                        return (
+                          <button
+                            key={folder.id}
+                            onClick={() => {
+                              const list = [...(editingNode.data.selectedReferenceFolders as string[] || [])];
+                              const newList = list.includes(folder.id) ? list.filter(id => id !== folder.id) : [...list, folder.id];
+                              updateNodeData(editingNode.id, { selectedReferenceFolders: newList });
+                            }}
+                            className={`px-3 py-2 rounded-xl text-xs transition-all border ${isSelected ? 'bg-blue-600/20 text-blue-400 border-blue-500/50 font-bold' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+                          >
+                            {folder.name}
+                          </button>
+                        );
+                      })}
+                      {(!activeNovel.referenceFolders || activeNovel.referenceFolders.length === 0) && (
+                        <div className="text-[10px] text-gray-600 italic">暂无文件夹</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {editingNode.data.outputEntries?.length > 0 && (
               <div className="space-y-4 pt-6 border-t border-gray-800">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">产出 ({editingNode.data.outputEntries.length})</label>
@@ -555,7 +1370,7 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             )}
           </div>
           <div className="p-6 bg-gray-800 border-t border-gray-700 sticky bottom-0 z-10 flex gap-4">
-            <button onClick={() => { setNodes(nds => nds.filter(n => n.id !== editingNodeId)); setEditingNodeId(null); }} className="p-4 bg-red-900/20 text-red-400 rounded-2xl"><Trash2 className="w-6 h-6" /></button>
+            <button onClick={() => { if(confirm('确定要删除这个模块吗？')) { setNodes(nds => nds.filter(n => n.id !== editingNodeId)); setEditingNodeId(null); } }} className="p-4 bg-red-900/20 text-red-400 rounded-2xl"><Trash2 className="w-6 h-6" /></button>
             <button onClick={() => setEditingNodeId(null)} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">保存并返回</button>
           </div>
         </div>
@@ -566,7 +1381,23 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         <div className="fixed inset-0 bg-gray-900 z-[200] flex flex-col animate-in fade-in duration-200">
           <div className="p-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between sticky top-0 z-10">
             <div className="flex items-center gap-3 overflow-hidden"><FileText className="w-5 h-5 text-indigo-400 shrink-0" /><h3 className="font-bold text-gray-100 truncate pr-4">{previewEntry.title}</h3></div>
-            <button onClick={() => setPreviewEntry(null)} className="p-2 bg-gray-700 rounded-full"><X className="w-5 h-5" /></button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const chapterId = parseInt(previewEntry.id.replace('chapter-', ''), 10);
+                  if (!isNaN(chapterId) && onSelectChapter) {
+                    setEditingNodeId(null);
+                    setPreviewEntry(null);
+                    onSelectChapter(chapterId);
+                    onClose();
+                  }
+                }}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold"
+              >
+                跳转
+              </button>
+              <button onClick={() => setPreviewEntry(null)} className="p-2 bg-gray-700 rounded-full"><X className="w-5 h-5" /></button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-6 whitespace-pre-wrap text-gray-300 leading-relaxed font-mono text-sm">{previewEntry.content}</div>
           <div className="p-6 bg-gray-800 border-t border-gray-700 flex gap-4">
