@@ -68,6 +68,13 @@ interface PlotOutlineManagerProps {
   onToggleOutlineItem: (setId: string, index: number) => void
   showOutlineSelector: boolean
   onToggleOutlineSelector: (open: boolean) => void
+
+  selectedReferenceType: string | null
+  selectedReferenceIndices: number[]
+  onSelectReferenceSet: (id: string | null) => void
+  onToggleReferenceItem: (setId: string, index: number) => void
+  showReferenceSelector: boolean
+  onToggleReferenceSelector: (open: boolean) => void
 }
 
 const TreeItem: React.FC<{
@@ -185,7 +192,13 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => 
     onSelectOutlineSet,
     onToggleOutlineItem,
     showOutlineSelector,
-    onToggleOutlineSelector
+    onToggleOutlineSelector,
+    selectedReferenceType,
+    selectedReferenceIndices,
+    onSelectReferenceSet,
+    onToggleReferenceItem,
+    showReferenceSelector,
+    onToggleReferenceSelector
   } = props
 
   const [showChat, setShowChat] = useState(false)
@@ -548,7 +561,21 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => 
                               isOpen={showWorldviewSelector}
                               onToggleOpen={(open) => {
                                  onToggleWorldviewSelector(open);
-                                 if (open) { onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
+                                 if (open) { onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); onToggleReferenceSelector(false); }
+                              }}
+                           />
+
+                           <ReferenceSelector
+                              novel={novel}
+                              type="reference"
+                              selectedSetId={selectedReferenceType}
+                              selectedItemIndices={selectedReferenceIndices}
+                              onSelectSet={onSelectReferenceSet}
+                              onToggleItem={onToggleReferenceItem}
+                              isOpen={showReferenceSelector}
+                              onToggleOpen={(open) => {
+                                 onToggleReferenceSelector(open);
+                                 if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
                               }}
                            />
 
@@ -562,7 +589,7 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => 
                               isOpen={showCharacterSelector}
                               onToggleOpen={(open) => {
                                  onToggleCharacterSelector(open);
-                                 if (open) { onToggleWorldviewSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
+                                 if (open) { onToggleWorldviewSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); onToggleReferenceSelector(false); }
                               }}
                            />
 
@@ -576,7 +603,7 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => 
                               isOpen={showInspirationSelector}
                               onToggleOpen={(open) => {
                                  onToggleInspirationSelector(open);
-                                 if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleOutlineSelector(false); }
+                                 if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleOutlineSelector(false); onToggleReferenceSelector(false); }
                               }}
                            />
 
@@ -590,7 +617,7 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => 
                               isOpen={showOutlineSelector}
                               onToggleOpen={(open) => {
                                  onToggleOutlineSelector(open);
-                                 if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); }
+                                 if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleReferenceSelector(false); }
                               }}
                            />
                         </div>
@@ -717,7 +744,21 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => 
                                  isOpen={showWorldviewSelector}
                                  onToggleOpen={(open) => {
                                     onToggleWorldviewSelector(open);
-                                    if (open) { onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
+                                    if (open) { onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); onToggleReferenceSelector(false); }
+                                 }}
+                              />
+
+                              <ReferenceSelector
+                                 novel={novel}
+                                 type="reference"
+                                 selectedSetId={selectedReferenceType}
+                                 selectedItemIndices={selectedReferenceIndices}
+                                 onSelectSet={onSelectReferenceSet}
+                                 onToggleItem={onToggleReferenceItem}
+                                 isOpen={showReferenceSelector}
+                                 onToggleOpen={(open) => {
+                                    onToggleReferenceSelector(open);
+                                    if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
                                  }}
                               />
 
@@ -731,7 +772,7 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => 
                                  isOpen={showCharacterSelector}
                                  onToggleOpen={(open) => {
                                     onToggleCharacterSelector(open);
-                                    if (open) { onToggleWorldviewSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); }
+                                    if (open) { onToggleWorldviewSelector(false); onToggleInspirationSelector(false); onToggleOutlineSelector(false); onToggleReferenceSelector(false); }
                                  }}
                               />
 
@@ -745,7 +786,7 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => 
                                  isOpen={showInspirationSelector}
                                  onToggleOpen={(open) => {
                                     onToggleInspirationSelector(open);
-                                    if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleOutlineSelector(false); }
+                                    if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleOutlineSelector(false); onToggleReferenceSelector(false); }
                                  }}
                               />
 
@@ -759,7 +800,7 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => 
                                  isOpen={showOutlineSelector}
                                  onToggleOpen={(open) => {
                                     onToggleOutlineSelector(open);
-                                    if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); }
+                                    if (open) { onToggleWorldviewSelector(false); onToggleCharacterSelector(false); onToggleInspirationSelector(false); onToggleReferenceSelector(false); }
                                  }}
                               />
                            </div>

@@ -497,6 +497,36 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
                 </div>
               </div>
             )}
+            {editingNode.data.typeKey === 'chapter' && (
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => {
+                    const newVal = !editingNode.data.autoOptimize;
+                    updateNodeData(editingNode.id, { autoOptimize: newVal });
+                    if (globalConfig?.updateAutoOptimize) {
+                      globalConfig.updateAutoOptimize(newVal);
+                    }
+                  }}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.autoOptimize ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+                >
+                  <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.autoOptimize ? 'bg-purple-500 animate-pulse' : 'bg-gray-600'}`} />
+                  自动优化
+                </button>
+                <button
+                  onClick={() => {
+                    const newVal = !editingNode.data.twoStepOptimization;
+                    updateNodeData(editingNode.id, { twoStepOptimization: newVal });
+                    if (globalConfig?.updateTwoStepOptimization) {
+                      globalConfig.updateTwoStepOptimization(newVal);
+                    }
+                  }}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.twoStepOptimization ? 'bg-pink-500/20 text-pink-300 border-pink-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
+                >
+                  <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.twoStepOptimization ? 'bg-pink-500 animate-pulse' : 'bg-gray-600'}`} />
+                  两阶段优化
+                </button>
+              </div>
+            )}
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">创作指令 (User Prompt)</label>
               <textarea value={editingNode.data.instruction} onChange={(e) => updateNodeData(editingNode.id, { instruction: e.target.value })} className="w-full h-56 bg-gray-800 border border-gray-700 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed" placeholder="在此输入具体要求..." />

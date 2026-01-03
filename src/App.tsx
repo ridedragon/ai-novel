@@ -358,10 +358,15 @@ const buildReferenceContext = (
   inspirationSetId: string | null,
   inspirationIndices: number[],
   outlineSetId: string | null,
-  outlineIndices: number[]
+  outlineIndices: number[],
+  referenceType: string | null | string[] = null,
+  referenceIndices: number[] = []
 ) => {
   if (!novel) return ''
   let context = ''
+
+  // 统一处理多选setId
+  const referenceTypes = Array.isArray(referenceType) ? referenceType : (referenceType ? [referenceType] : [])
 
   // Worldview
   if (worldviewSetId) {
@@ -433,6 +438,35 @@ const buildReferenceContext = (
       }
       context += '\n'
     }
+  }
+
+  // Reference Library
+  if (referenceTypes.length > 0 && referenceIndices.length > 0) {
+    context += `【参考资料库】：\n`
+    
+    // 如果是多选模式（文件夹和文件可能同时存在）
+    if (referenceTypes.includes('file')) {
+      referenceIndices.forEach(idx => {
+        const file = novel.referenceFiles?.[idx]
+        if (file) {
+          context += `· 文件 (${file.name}): ${file.content.length > 2000 ? file.content.slice(0, 2000) + '...' : file.content}\n`
+        }
+      })
+    }
+    
+    if (referenceTypes.includes('folder')) {
+      referenceIndices.forEach(idx => {
+        const folder = novel.referenceFolders?.[idx]
+        if (folder) {
+          context += `· 文件夹 (${folder.name})：\n`
+          const folderFiles = novel.referenceFiles?.filter(f => f.parentId === folder.id)
+          folderFiles?.forEach(file => {
+            context += `  - ${file.name}: ${file.content.length > 1000 ? file.content.slice(0, 1000) + '...' : file.content}\n`
+          })
+        }
+      })
+    }
+    context += '\n'
   }
 
   return context
@@ -1203,6 +1237,9 @@ function App() {
   
   const [selectedOutlineSetIdForChat, setSelectedOutlineSetIdForChat] = useState<string | null>(null)
   const [selectedOutlineIndicesForChat, setSelectedOutlineIndicesForChat] = useState<number[]>([])
+  
+  const [selectedReferenceTypeForChat, setSelectedReferenceTypeForChat] = useState<string | null | string[]>(null)
+  const [selectedReferenceIndicesForChat, setSelectedReferenceIndicesForChat] = useState<number[]>([])
 
   // Module Reference Selection State (Shared by all managers)
   const [selectedWorldviewSetIdForModules, setSelectedWorldviewSetIdForModules] = useState<string | null>(null)
@@ -1213,50 +1250,108 @@ function App() {
   const [selectedInspirationIndicesForModules, setSelectedInspirationIndicesForModules] = useState<number[]>([])
   const [selectedOutlineSetIdForModules, setSelectedOutlineSetIdForModules] = useState<string | null>(null)
   const [selectedOutlineIndicesForModules, setSelectedOutlineIndicesForModules] = useState<number[]>([])
+  
+  const [selectedReferenceTypeForModules, setSelectedReferenceTypeForModules] = useState<string | null | string[]>(null)
+  const [selectedReferenceIndicesForModules, setSelectedReferenceIndicesForModules] = useState<number[]>([])
 
   const [showWorldviewSelectorForModules, setShowWorldviewSelectorForModules] = useState(false)
   const [showCharacterSelectorForModules, setShowCharacterSelectorForModules] = useState(false)
   const [showInspirationSelectorForModules, setShowInspirationSelectorForModules] = useState(false)
   const [showOutlineSelectorForModules, setShowOutlineSelectorForModules] = useState(false)
+  const [showReferenceSelectorForModules, setShowReferenceSelectorForModules] = useState(false)
 
-  const handleToggleModuleReferenceItem = (type: 'worldview' | 'character' | 'inspiration' | 'outline', setId: string, index: number) => {
+  const handleToggleModuleReferenceItem = (type: 'worldview' | 'character' | 'inspiration' | 'outline' | 'reference', setId: string, index: number) => {
     const setters = {
       worldview: { id: setSelectedWorldviewSetIdForModules, indices: setSelectedWorldviewIndicesForModules, currentId: selectedWorldviewSetIdForModules, currentIndices: selectedWorldviewIndicesForModules },
       character: { id: setSelectedCharacterSetIdForModules, indices: setSelectedCharacterIndicesForModules, currentId: selectedCharacterSetIdForModules, currentIndices: selectedCharacterIndicesForModules },
       inspiration: { id: setSelectedInspirationSetIdForModules, indices: setSelectedInspirationIndicesForModules, currentId: selectedInspirationSetIdForModules, currentIndices: selectedInspirationIndicesForModules },
-      outline: { id: setSelectedOutlineSetIdForModules, indices: setSelectedOutlineIndicesForModules, currentId: selectedOutlineSetIdForModules, currentIndices: selectedOutlineIndicesForModules }
+      outline: { id: setSelectedOutlineSetIdForModules, indices: setSelectedOutlineIndicesForModules, currentId: selectedOutlineSetIdForModules, currentIndices: selectedOutlineIndicesForModules },
+      reference: { id: setSelectedReferenceTypeForModules, indices: setSelectedReferenceIndicesForModules, currentId: selectedReferenceTypeForModules, currentIndices: selectedReferenceIndicesForModules }
     }
 
     const s = setters[type]
-    if (s.currentId !== setId) {
-      s.id(setId)
-      s.indices([index])
-    } else {
+    if (type === 'reference') {
+      // 资料库支持跨类型(setId)多选，例如同时选了文件和文件夹
+      let newIds: string[] = []
+      const currentIds = Array.isArray(s.currentId) ? s.currentId : (s.currentId ? [s.currentId] : [])
+      
       if (s.currentIndices.includes(index)) {
-        s.indices(s.currentIndices.filter(i => i !== index))
+        const remainingIndices = s.currentIndices.filter(i => i !== index)
+        s.indices(remainingIndices)
+        
+        // 检查是否还有该类型的其他索引，如果没有了则从Id列表中移除
+        const stillHasThisType = remainingIndices.some(idx => {
+           if (setId === 'folder') return !!novel?.referenceFolders?.[idx]
+           if (setId === 'file') return !!novel?.referenceFiles?.[idx]
+           return false
+        })
+        if (!stillHasThisType) {
+          newIds = currentIds.filter(id => id !== setId)
+        } else {
+          newIds = currentIds
+        }
       } else {
         s.indices([...s.currentIndices, index])
+        newIds = currentIds.includes(setId) ? currentIds : [...currentIds, setId]
+      }
+      s.id(newIds.length > 0 ? newIds : null)
+    } else {
+      if (s.currentId !== setId) {
+        s.id(setId)
+        s.indices([index])
+      } else {
+        if (s.currentIndices.includes(index)) {
+          s.indices(s.currentIndices.filter(i => i !== index))
+        } else {
+          s.indices([...s.currentIndices, index])
+        }
       }
     }
   }
 
-  const handleToggleReferenceItem = (type: 'worldview' | 'character' | 'inspiration' | 'outline', setId: string, index: number) => {
+  const handleToggleReferenceItem = (type: 'worldview' | 'character' | 'inspiration' | 'outline' | 'reference', setId: string, index: number) => {
     const setters = {
       worldview: { id: setSelectedWorldviewSetIdForChat, indices: setSelectedWorldviewIndicesForChat, currentId: selectedWorldviewSetIdForChat, currentIndices: selectedWorldviewIndicesForChat },
       character: { id: setSelectedCharacterSetIdForChat, indices: setSelectedCharacterIndicesForChat, currentId: selectedCharacterSetIdForChat, currentIndices: selectedCharacterIndicesForChat },
       inspiration: { id: setSelectedInspirationSetIdForChat, indices: setSelectedInspirationIndicesForChat, currentId: selectedInspirationSetIdForChat, currentIndices: selectedInspirationIndicesForChat },
-      outline: { id: setSelectedOutlineSetIdForChat, indices: setSelectedOutlineIndicesForChat, currentId: selectedOutlineSetIdForChat, currentIndices: selectedOutlineIndicesForChat }
+      outline: { id: setSelectedOutlineSetIdForChat, indices: setSelectedOutlineIndicesForChat, currentId: selectedOutlineSetIdForChat, currentIndices: selectedOutlineIndicesForChat },
+      reference: { id: setSelectedReferenceTypeForChat, indices: setSelectedReferenceIndicesForChat, currentId: selectedReferenceTypeForChat, currentIndices: selectedReferenceIndicesForChat }
     }
 
     const s = setters[type]
-    if (s.currentId !== setId) {
-      s.id(setId)
-      s.indices([index])
-    } else {
+    if (type === 'reference') {
+      let newIds: string[] = []
+      const currentIds = Array.isArray(s.currentId) ? s.currentId : (s.currentId ? [s.currentId] : [])
+      
       if (s.currentIndices.includes(index)) {
-        s.indices(s.currentIndices.filter(i => i !== index))
+        const remainingIndices = s.currentIndices.filter(i => i !== index)
+        s.indices(remainingIndices)
+        
+        const stillHasThisType = remainingIndices.some(idx => {
+           if (setId === 'folder') return !!novel?.referenceFolders?.[idx]
+           if (setId === 'file') return !!novel?.referenceFiles?.[idx]
+           return false
+        })
+        if (!stillHasThisType) {
+          newIds = currentIds.filter(id => id !== setId)
+        } else {
+          newIds = currentIds
+        }
       } else {
         s.indices([...s.currentIndices, index])
+        newIds = currentIds.includes(setId) ? currentIds : [...currentIds, setId]
+      }
+      s.id(newIds.length > 0 ? newIds : null)
+    } else {
+      if (s.currentId !== setId) {
+        s.id(setId)
+        s.indices([index])
+      } else {
+        if (s.currentIndices.includes(index)) {
+          s.indices(s.currentIndices.filter(i => i !== index))
+        } else {
+          s.indices([...s.currentIndices, index])
+        }
       }
     }
   }
@@ -6705,6 +6800,12 @@ ${taskDescription}`
                           onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
                           showWorldviewSelector={showWorldviewSelectorForModules}
                           onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
+                          selectedReferenceType={selectedReferenceTypeForModules}
+                          selectedReferenceIndices={selectedReferenceIndicesForModules}
+                          onSelectReferenceSet={setSelectedReferenceTypeForModules}
+                          onToggleReferenceItem={(setId, idx) => handleToggleModuleReferenceItem('reference', setId, idx)}
+                          showReferenceSelector={showReferenceSelectorForModules}
+                          onToggleReferenceSelector={setShowReferenceSelectorForModules}
                           selectedCharacterSetId={selectedCharacterSetIdForModules}
                           selectedCharacterIndices={selectedCharacterIndicesForModules}
                           onSelectCharacterSet={setSelectedCharacterSetIdForModules}
@@ -6866,6 +6967,12 @@ ${taskDescription}`
                           onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
                           showWorldviewSelector={showWorldviewSelectorForModules}
                           onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
+                          selectedReferenceType={selectedReferenceTypeForModules}
+                          selectedReferenceIndices={selectedReferenceIndicesForModules}
+                          onSelectReferenceSet={setSelectedReferenceTypeForModules}
+                          onToggleReferenceItem={(setId, idx) => handleToggleModuleReferenceItem('reference', setId, idx)}
+                          showReferenceSelector={showReferenceSelectorForModules}
+                          onToggleReferenceSelector={setShowReferenceSelectorForModules}
                           selectedCharacterSetId={selectedCharacterSetIdForModules}
                           selectedCharacterIndices={selectedCharacterIndicesForModules}
                           onSelectCharacterSet={setSelectedCharacterSetIdForModules}
@@ -6920,6 +7027,12 @@ ${taskDescription}`
                           onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
                           showWorldviewSelector={showWorldviewSelectorForModules}
                           onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
+                          selectedReferenceType={selectedReferenceTypeForModules}
+                          selectedReferenceIndices={selectedReferenceIndicesForModules}
+                          onSelectReferenceSet={setSelectedReferenceTypeForModules}
+                          onToggleReferenceItem={(setId, idx) => handleToggleModuleReferenceItem('reference', setId, idx)}
+                          showReferenceSelector={showReferenceSelectorForModules}
+                          onToggleReferenceSelector={setShowReferenceSelectorForModules}
                           selectedCharacterSetId={selectedCharacterSetIdForModules}
                           selectedCharacterIndices={selectedCharacterIndicesForModules}
                           onSelectCharacterSet={setSelectedCharacterSetIdForModules}
@@ -7036,6 +7149,12 @@ ${taskDescription}`
                           onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
                           showWorldviewSelector={showWorldviewSelectorForModules}
                           onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
+                          selectedReferenceType={selectedReferenceTypeForModules}
+                          selectedReferenceIndices={selectedReferenceIndicesForModules}
+                          onSelectReferenceSet={setSelectedReferenceTypeForModules}
+                          onToggleReferenceItem={(setId, idx) => handleToggleModuleReferenceItem('reference', setId, idx)}
+                          showReferenceSelector={showReferenceSelectorForModules}
+                          onToggleReferenceSelector={setShowReferenceSelectorForModules}
                           selectedCharacterSetId={selectedCharacterSetIdForModules}
                           selectedCharacterIndices={selectedCharacterIndicesForModules}
                           onSelectCharacterSet={setSelectedCharacterSetIdForModules}
@@ -7183,6 +7302,12 @@ ${taskDescription}`
                           onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
                           showWorldviewSelector={showWorldviewSelectorForModules}
                           onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
+                          selectedReferenceType={selectedReferenceTypeForModules}
+                          selectedReferenceIndices={selectedReferenceIndicesForModules}
+                          onSelectReferenceSet={setSelectedReferenceTypeForModules}
+                          onToggleReferenceItem={(setId, idx) => handleToggleModuleReferenceItem('reference', setId, idx)}
+                          showReferenceSelector={showReferenceSelectorForModules}
+                          onToggleReferenceSelector={setShowReferenceSelectorForModules}
                           selectedCharacterSetId={selectedCharacterSetIdForModules}
                           selectedCharacterIndices={selectedCharacterIndicesForModules}
                           onSelectCharacterSet={setSelectedCharacterSetIdForModules}
@@ -9065,7 +9190,9 @@ ${taskDescription}`
               if (autoOptimizeRef.current) {
                 setOptimizationQueue(prev => [...prev, chapterId]);
               }
-            }
+            },
+            updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
+            updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
           }}
           onUpdateNovel={(updatedNovel: Novel) => {
             setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));
@@ -9114,7 +9241,9 @@ ${taskDescription}`
             if (autoOptimizeRef.current) {
               setOptimizationQueue(prev => [...prev, chapterId]);
             }
-          }
+          },
+          updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
+          updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
         }}
         onUpdateNovel={(updatedNovel) => {
           setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));
