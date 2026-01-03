@@ -2,9 +2,12 @@ import {
   addEdge,
   Background,
   BackgroundVariant,
+  BaseEdge,
   Connection,
   Controls,
   Edge,
+  EdgeProps,
+  getBezierPath,
   Handle,
   Node,
   NodeProps,
@@ -45,6 +48,7 @@ import {
 } from 'lucide-react';
 import OpenAI from 'openai';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import terminal from 'virtual:terminal';
 import { GeneratorPreset, Novel, PromptItem, RegexScript } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
 
@@ -157,8 +161,113 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
   );
 };
 
+const CoolEdge = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+  selected,
+  animated,
+}: EdgeProps) => {
+  const [edgePath] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetPosition,
+    targetX,
+    targetY,
+  });
+
+  // 颜色配置 - 支持独立自定义或跟随系统主题色
+  // 优先级：用户定义的 CSS 变量 > 系统主题色 > 默认紫色
+  // 用户可以在不修改源码的情况下，通过在外部 CSS 中定义 --workflow-edge-color 来单独更改连接线颜色
+  const COLORS = {
+    primary: 'var(--workflow-edge-color, var(--theme-color, #6366f1))',
+    secondary: 'var(--workflow-edge-color-dark, var(--theme-color-hover, #4f46e5))',
+    highlight: 'var(--workflow-edge-color-light, var(--theme-color-light, #818cf8))',
+    core: selected ? '#fff' : 'var(--workflow-edge-color-light, var(--theme-color-light, #818cf8))',
+    glow: selected ? 'var(--workflow-edge-color, var(--theme-color, #6366f1))' : 'var(--workflow-edge-color-dark, var(--theme-color-hover, #4f46e5))',
+  };
+
+  return (
+    <>
+      {/* 底部发光层 - 最宽且模糊 */}
+      <path
+        id={`${id}-glow-outer`}
+        d={edgePath}
+        fill="none"
+        stroke={COLORS.glow}
+        strokeWidth={selected ? 8 : 4}
+        strokeOpacity={selected ? 0.3 : 0.15}
+        style={{ filter: 'blur(6px)' }}
+      />
+      {/* 中间核心层 - 较窄且明亮 */}
+      <path
+        id={`${id}-glow-inner`}
+        d={edgePath}
+        fill="none"
+        stroke={selected ? COLORS.highlight : COLORS.primary}
+        strokeWidth={selected ? 4 : 2.5}
+        strokeOpacity={selected ? 0.8 : 0.6}
+        style={{ filter: 'blur(2px)' }}
+      />
+      {/* 核心线条 */}
+      <BaseEdge
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={{
+          ...style,
+          stroke: COLORS.core,
+          strokeWidth: selected ? 2 : 1.5,
+        }}
+      />
+      {/* 科技感动画粒子 - 仅在选中或运行状态下更明显，这里默认加一点微弱的流动感 */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="#fff"
+        strokeWidth={1.5}
+        strokeDasharray="4, 16"
+        strokeLinecap="round"
+        className="animate-[dash_3s_linear_infinite]"
+        style={{
+          opacity: selected ? 0.8 : 0.3,
+          filter: 'drop-shadow(0 0 2px #fff)',
+        }}
+      />
+      
+      {/* 如果是 animated (比如执行中)，添加一个快速流动的光点 */}
+      {animated && (
+        <circle r="3" fill="#fff" className="animate-[move_2s_linear_infinite]">
+          <animateMotion path={edgePath} dur="2s" repeatCount="indefinite" />
+        </circle>
+      )}
+
+      <style>{`
+        @keyframes dash {
+          from { stroke-dashoffset: 40; }
+          to { stroke-dashoffset: 0; }
+        }
+        @keyframes move {
+          from { offset-distance: 0%; }
+          to { offset-distance: 100%; }
+        }
+      `}</style>
+    </>
+  );
+};
+
 const nodeTypes = {
   custom: CustomNode,
+};
+
+const edgeTypes = {
+  custom: CoolEdge,
 };
 
 // --- 配置定义 ---
@@ -259,6 +368,8 @@ export interface WorkflowEditorProps {
     contextLength: number;
     maxReplyLength: number;
     temperature: number;
+    topP: number;
+    topK: number;
     stream: boolean;
     maxRetries: number;
     globalCreationPrompt: string;
@@ -395,6 +506,13 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
     const workflow = workflowList.find(w => w.id === id);
     if (workflow) {
+      // 兼容存量边数据：确保所有边都使用新的 'custom' 类型
+      const restoredEdges = (workflow.edges || []).map(edge => ({
+        ...edge,
+        type: 'custom',
+        animated: edge.animated || false
+      }));
+
       const restoredNodes = (workflow.nodes || []).map((n: WorkflowNode) => {
         // 判定并过滤旧数据中遗留的自动勾选引用
         // 逻辑：如果 ID 是 'pending:' 开头，或者该资料集的名称与当前工作流定义的目录名一致，
@@ -439,7 +557,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         };
       });
       setNodes(restoredNodes);
-      setEdges(workflow.edges || []);
+      setEdges(restoredEdges);
       setCurrentNodeIndex(workflow.currentNodeIndex !== undefined ? workflow.currentNodeIndex : -1);
       
       // 只有当有明确的执行进度且未在运行时，才设为暂停状态以便恢复
@@ -591,7 +709,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   }, [isRunning]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
+    (params: Connection) => setEdges((eds) => addEdge({ ...params, type: 'custom', animated: false }, eds)),
     [setEdges]
   );
 
@@ -830,6 +948,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       // 重置后续节点的执行状态
       if (startIndex === 0) {
         setNodes(nds => nds.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } })));
+        setEdges(eds => eds.map(e => ({ ...e, animated: false })));
         // 同步清空快照
         sortedNodes = sortedNodes.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } }));
       }
@@ -867,6 +986,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         // 更新节点状态为正在执行
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'executing' } } : n));
         
+        // 让指向该节点的连线产生动画效果
+        setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: true } : e));
+
         // 视觉反馈增强：为非 AI 调用节点增加最小执行感，确保用户能看到脉冲发光提示
         if (node.data.typeKey === 'userInput' || node.data.typeKey === 'createFolder') {
           await new Promise(resolve => setTimeout(resolve, 600));
@@ -975,6 +1097,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           }
           // 更新节点状态为已完成
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          // 停止入线动画
+          setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;
         }
 
@@ -982,6 +1106,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           accumContext += `【全局输入】：\n${node.data.instruction}\n\n`;
           // 更新节点状态为已完成
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          // 停止入线动画
+          setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;
         }
 
@@ -1178,15 +1304,18 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             updateNodeData(node.id, { targetVolumeId: finalVolumeId, targetVolumeName: '' });
           }
 
-          // 3. 初始化引擎
-          const engine = new AutoWriteEngine({
-            apiKey: globalConfig.apiKey,
-            baseUrl: globalConfig.baseUrl,
-            model: globalConfig.model,
-            contextLength: globalConfig.contextLength,
-            maxReplyLength: globalConfig.maxReplyLength,
-            temperature: globalConfig.temperature,
-            stream: globalConfig.stream,
+          // 3. 确定配置 (优先使用预设配置)
+          const nodeApiConfig = (preset as any)?.apiConfig || {};
+          const engineConfig = {
+            apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
+            baseUrl: nodeApiConfig.baseUrl || globalConfig.baseUrl,
+            model: nodeApiConfig.model || globalConfig.model,
+            contextLength: (preset as any)?.contextLength || globalConfig.contextLength,
+            maxReplyLength: (preset as any)?.maxReplyLength || globalConfig.maxReplyLength,
+            temperature: (preset as any)?.temperature ?? globalConfig.temperature,
+            topP: (preset as any)?.topP ?? globalConfig.topP,
+            topK: (preset as any)?.topK ?? globalConfig.topK,
+            stream: (preset as any)?.stream ?? globalConfig.stream,
             maxRetries: globalConfig.maxRetries,
             systemPrompt: localNovel.systemPrompt || '你是一个专业的小说家。',
             globalCreationPrompt: globalConfig.globalCreationPrompt,
@@ -1198,7 +1327,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             smallSummaryPrompt: globalConfig.smallSummaryPrompt,
             bigSummaryPrompt: globalConfig.bigSummaryPrompt,
             outlineModel: globalConfig.outlineModel,
-          }, localNovel);
+          };
+
+          // 4. 初始化引擎
+          const engine = new AutoWriteEngine(engineConfig, localNovel);
 
           // 4. 计算起始索引
           let writeStartIndex = 0;
@@ -1279,6 +1411,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
           updateNodeData(node.id, { label: NODE_CONFIGS.chapter.defaultLabel });
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          // 停止入线动画
+          setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;
         }
 
@@ -1290,12 +1424,23 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           dangerouslyAllowBrowser: true
         });
 
+        terminal.log(`
+>> AI REQUEST [工作流: ${node.data.typeLabel}]
+>> -----------------------------------------------------------
+>> Model:       ${nodeApiConfig.model || globalConfig.model}
+>> Temperature: ${preset?.temperature ?? globalConfig.temperature}
+>> Top P:       ${preset?.topP ?? globalConfig.topP}
+>> Top K:       ${(preset as any)?.topK ?? globalConfig.topK}
+>> -----------------------------------------------------------
+        `);
+
         const completion = await openai.chat.completions.create({
           model: nodeApiConfig.model || globalConfig.model,
           messages,
-          temperature: preset?.temperature ?? 1.0,
-          top_p: preset?.topP ?? 1.0,
-        }, { signal: abortControllerRef.current?.signal });
+          temperature: preset?.temperature ?? globalConfig.temperature,
+          top_p: preset?.topP ?? globalConfig.topP,
+          top_k: (preset as any)?.topK ?? globalConfig.topK,
+        } as any, { signal: abortControllerRef.current?.signal });
 
         let result = completion.choices[0]?.message?.content || '';
         
@@ -1505,6 +1650,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
         // 更新节点状态为已完成 (确保在 novel 更新后同步更新节点状态，避免竞争)
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+        // 停止入线动画
+        setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
       }
       
       if (!stopRequestedRef.current) {
@@ -1764,6 +1911,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             onNodeClick={onNodeClick}
             onEdgeClick={onEdgeClick}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             fitView
             colorMode="dark"
           >

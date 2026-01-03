@@ -12,6 +12,8 @@ interface GlobalSettingsModalProps {
   onClose: () => void
   themeColor: string
   setThemeColor: (color: string) => void
+  workflowEdgeColor: string
+  setWorkflowEdgeColor: (color: string) => void
   apiKey: string
   setApiKey: (key: string) => void
   baseUrl: string
@@ -58,6 +60,8 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   onClose,
   themeColor,
   setThemeColor,
+  workflowEdgeColor,
+  setWorkflowEdgeColor,
   apiKey,
   setApiKey,
   baseUrl,
@@ -127,6 +131,25 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                 Reset
               </button>
             </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-300">工作流连接线颜色 (可选)</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={workflowEdgeColor}
+                onChange={(e) => setWorkflowEdgeColor(e.target.value)}
+                className="h-10 w-20 bg-transparent border border-gray-700 rounded cursor-pointer"
+              />
+              <span className="text-sm text-gray-400">{workflowEdgeColor || '未设置 (跟随主题)'}</span>
+              <button
+                onClick={() => setWorkflowEdgeColor('')}
+                className="text-xs text-[var(--theme-color-light)] hover:text-[var(--theme-color)] underline"
+              >
+                Reset
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-500">不设置则默认跟随系统主题色。</p>
           </div>
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-gray-300">API Key</label>

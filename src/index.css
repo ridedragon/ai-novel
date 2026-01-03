@@ -3,6 +3,12 @@
 @tailwind utilities;
 
 :root {
+  /* 工作流编辑器连接线颜色自定义 */
+  /* 如果您不想更改系统主题色，可以单独修改这里的变量来改变连接线颜色 */
+  /* --workflow-edge-color: #10b981; */ /* 示例：翡翠绿 */
+  /* --workflow-edge-color-dark: #059669; */
+  /* --workflow-edge-color-light: #34d399; */
+
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;

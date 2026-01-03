@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import terminal from 'virtual:terminal';
 import { Novel, OutlineItem, PromptItem, RegexScript } from '../../types';
 import { buildWorldInfoContext, getChapterContext, processTextWithRegex } from './core';
 import { AutoWriteConfig } from './types';
@@ -110,6 +111,16 @@ export class AutoWriteEngine {
 
       while (attempt < maxAttempts && this.isRunning) {
         try {
+          terminal.log(`
+>> AI REQUEST [全自动正文创作]
+>> -----------------------------------------------------------
+>> Model:       ${this.config.model}
+>> Temperature: ${this.config.temperature}
+>> Top P:       ${this.config.topP}
+>> Top K:       ${this.config.topK}
+>> -----------------------------------------------------------
+          `);
+
           const openai = new OpenAI({
             apiKey: this.config.apiKey,
             baseURL: this.config.baseUrl,
@@ -169,8 +180,10 @@ export class AutoWriteEngine {
               messages: messages,
               stream: this.config.stream,
               temperature: this.config.temperature,
+              top_p: this.config.topP,
+              top_k: this.config.topK,
               max_tokens: Math.round(batchMaxTokens),
-            },
+            } as any,
             {
               signal: this.abortController?.signal,
             },

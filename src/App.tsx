@@ -507,6 +507,19 @@ const ensureChapterVersions = (chapter: Chapter): Chapter => {
   }
 }
 
+// Helper: Pretty print AI parameters to terminal (PowerShell)
+const logAiParams = (module: string, model: string, temperature: number, topP: number, topK: number) => {
+    terminal.log(`
+>> AI REQUEST [${module}]
+>> -----------------------------------------------------------
+>> Model:       ${model}
+>> Temperature: ${temperature}
+>> Top P:       ${topP}
+>> Top K:       ${topK}
+>> -----------------------------------------------------------
+    `);
+}
+
 // Helper: Sanitize JSON string (handle unescaped newlines in strings)
 const sanitizeJsonString = (content: string): string => {
     let result = ''
@@ -800,6 +813,23 @@ function App() {
     root.style.setProperty('--theme-color-hover', adjustColor(themeColor, -0.2)) // Darker
     root.style.setProperty('--theme-color-light', adjustColor(themeColor, 0.2)) // Lighter
   }, [themeColor])
+
+  // Workflow Edge Color Settings
+  const [workflowEdgeColor, setWorkflowEdgeColor] = useState(() => localStorage.getItem('workflowEdgeColor') || '')
+
+  useEffect(() => {
+    localStorage.setItem('workflowEdgeColor', workflowEdgeColor)
+    const root = document.documentElement
+    if (workflowEdgeColor) {
+      root.style.setProperty('--workflow-edge-color', workflowEdgeColor)
+      root.style.setProperty('--workflow-edge-color-dark', adjustColor(workflowEdgeColor, -0.2))
+      root.style.setProperty('--workflow-edge-color-light', adjustColor(workflowEdgeColor, 0.2))
+    } else {
+      root.style.removeProperty('--workflow-edge-color')
+      root.style.removeProperty('--workflow-edge-color-dark')
+      root.style.removeProperty('--workflow-edge-color-light')
+    }
+  }, [workflowEdgeColor])
 
   // API Settings
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('apiKey') || '')
@@ -2994,6 +3024,8 @@ function App() {
     // For now, let's assume no explicit abort button for single item regeneration (user can just wait or reload).
     
     try {
+        logAiParams('大纲单章重生成', apiConfig.model, activePreset.temperature ?? 1.0, activePreset.topP ?? 1.0, activePreset.topK ?? 200);
+
         const openai = new OpenAI({
           apiKey: apiConfig.apiKey,
           baseURL: apiConfig.baseUrl,
@@ -3143,6 +3175,8 @@ function App() {
         if (outlineAbortControllerRef.current?.signal.aborted) break
         terminal.log(`[Outline] Attempt ${attempt + 1}/${maxAttempts} started...`)
         const apiConfig = getApiConfig(activePreset.apiConfig, outlineModel)
+
+        logAiParams('章节大纲生成', apiConfig.model, activePreset.temperature ?? 1.0, activePreset.topP ?? 1.0, activePreset.topK ?? 200);
 
         const openai = new OpenAI({
           apiKey: apiConfig.apiKey,
@@ -3479,6 +3513,8 @@ function App() {
         const activePreset = characterPresets.find(p => p.id === currentPresetId) || characterPresets[0]
         const apiConfig = getApiConfig(activePreset.apiConfig, characterModel)
 
+        logAiParams('角色档案生成', apiConfig.model, activePreset.temperature ?? 1.0, activePreset.topP ?? 1.0, activePreset.topK ?? 200);
+
         const openai = new OpenAI({
           apiKey: apiConfig.apiKey,
           baseURL: apiConfig.baseUrl,
@@ -3803,6 +3839,8 @@ function App() {
         const activePreset = inspirationPresets.find(p => p.id === currentPresetId) || inspirationPresets[0]
         const apiConfig = getApiConfig(activePreset.apiConfig, inspirationModel)
 
+        logAiParams('灵感脑洞生成', apiConfig.model, activePreset.temperature ?? 1.0, activePreset.topP ?? 1.0, activePreset.topK ?? 200);
+
         const openai = new OpenAI({
           apiKey: apiConfig.apiKey,
           baseURL: apiConfig.baseUrl,
@@ -4036,6 +4074,8 @@ function App() {
         terminal.log(`[Worldview] Attempt ${attempt + 1}/${maxAttempts} started...`)
         const activePreset = worldviewPresets.find(p => p.id === currentPresetId) || worldviewPresets[0]
         const apiConfig = getApiConfig(activePreset.apiConfig, worldviewModel)
+
+        logAiParams('世界观设定生成', apiConfig.model, activePreset.temperature ?? 1.0, activePreset.topP ?? 1.0, activePreset.topK ?? 200);
 
         const openai = new OpenAI({
           apiKey: apiConfig.apiKey,
@@ -4298,6 +4338,8 @@ function App() {
       try {
         if (controller.signal.aborted) break
         terminal.log(`[PlotOutline] Attempt ${attempt + 1}/${maxAttempts} started...`)
+        logAiParams('剧情粗纲生成', apiConfig.model, activePreset.temperature ?? 1.0, activePreset.topP ?? 1.0, activePreset.topK ?? 200);
+
         const openai = new OpenAI({
           apiKey: apiConfig.apiKey,
           baseURL: apiConfig.baseUrl,
@@ -4735,6 +4777,8 @@ function App() {
                 const analysisPreset = analysisPresets.find(p => p.id === activeAnalysisPresetId) || analysisPresets[0]
                 const apiConfig = getApiConfig(analysisPreset.apiConfig, analysisModel)
 
+                logAiParams('润色前分析', apiConfig.model, analysisPreset.temperature ?? 1.0, analysisPreset.topP ?? 1.0, analysisPreset.topK ?? 200);
+
                 const openai = new OpenAI({
                     apiKey: apiConfig.apiKey,
                     baseURL: apiConfig.baseUrl,
@@ -4806,6 +4850,8 @@ function App() {
         terminal.log(`[Optimize] Attempt ${attempt + 1}/${maxAttempts} started...`)
         const activePreset = optimizePresets.find(p => p.id === activeOptimizePresetId) || optimizePresets[0]
         const apiConfig = getApiConfig(activePreset.apiConfig, optimizeModel)
+
+        logAiParams('正文润色优化', apiConfig.model, activePreset.temperature ?? 1.0, activePreset.topP ?? 1.0, activePreset.topK ?? 200);
 
         const openai = new OpenAI({
           apiKey: apiConfig.apiKey,
@@ -5483,6 +5529,8 @@ ${taskDescription}`
         terminal.log(`[Generate] Attempt ${attempt + 1}/${maxAttempts} started...`)
         
         const config = getApiConfig(presetApiConfig, '')
+
+        logAiParams('对话续写生成', config.model, temperature, topP, topK);
 
         const openai = new OpenAI({
           apiKey: config.apiKey,
@@ -6169,6 +6217,8 @@ ${taskDescription}`
           setSmallSummaryPrompt={setSmallSummaryPrompt}
           bigSummaryPrompt={bigSummaryPrompt}
           setBigSummaryPrompt={setBigSummaryPrompt}
+          workflowEdgeColor={workflowEdgeColor}
+          setWorkflowEdgeColor={setWorkflowEdgeColor}
           handleScanSummaries={handleScanSummaries}
           isLoading={isLoading}
           consecutiveChapterCount={consecutiveChapterCount}
@@ -7616,6 +7666,8 @@ ${taskDescription}`
         setSmallSummaryPrompt={setSmallSummaryPrompt}
         bigSummaryPrompt={bigSummaryPrompt}
         setBigSummaryPrompt={setBigSummaryPrompt}
+        workflowEdgeColor={workflowEdgeColor}
+        setWorkflowEdgeColor={setWorkflowEdgeColor}
         handleScanSummaries={handleScanSummaries}
         isLoading={isLoading}
         consecutiveChapterCount={consecutiveChapterCount}
@@ -9171,6 +9223,8 @@ ${taskDescription}`
             contextLength,
             maxReplyLength,
             temperature,
+            topP,
+            topK,
             stream,
             maxRetries,
             globalCreationPrompt,
@@ -9205,7 +9259,7 @@ ${taskDescription}`
           activeNovel={activeNovel}
         onSelectChapter={(id) => {
           setActiveChapterId(id)
-          setLeftPanelActiveTab('chapters')
+          setShowOutline(false)
         }}
         onStartAutoWrite={startAutoWriting}
         globalConfig={{
@@ -9222,6 +9276,8 @@ ${taskDescription}`
           contextLength,
           maxReplyLength,
           temperature,
+          topP,
+          topK,
           stream,
           maxRetries,
           globalCreationPrompt,

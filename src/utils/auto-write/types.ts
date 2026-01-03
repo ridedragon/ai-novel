@@ -7,6 +7,8 @@ export interface AutoWriteConfig {
   contextLength: number;
   maxReplyLength: number;
   temperature: number;
+  topP?: number;
+  topK?: number;
   stream: boolean;
   maxRetries: number;
   systemPrompt: string;
