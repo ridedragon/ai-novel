@@ -33,14 +33,14 @@ export const checkAndGenerateSummary = async (
   config: SummaryConfig,
   log: (msg: string) => void,
   errorLog: (msg: string) => void,
-) => {
+): Promise<Novel | undefined> => {
   const { apiKey, baseUrl, model, smallSummaryInterval, bigSummaryInterval, smallSummaryPrompt, bigSummaryPrompt } =
     config;
 
   if (!apiKey || !targetNovelId) return;
 
   const currentNovel = novels.find(n => n.id === targetNovelId);
-  if (!currentNovel) return;
+  if (!currentNovel) return undefined;
 
   // Snapshot of chapters for this generation session
   // This snapshot will be updated locally as we generate new summaries
@@ -73,6 +73,8 @@ export const checkAndGenerateSummary = async (
 
   const sInterval = Number(smallSummaryInterval) || 3;
   const bInterval = Number(bigSummaryInterval) || 6;
+
+  let lastUpdatedNovel: Novel | undefined = undefined;
 
   const generate = async (type: 'small' | 'big', start: number, end: number, lastChapterId: number) => {
     const rangeStr = `${start}-${end}`;
@@ -144,7 +146,9 @@ export const checkAndGenerateSummary = async (
           setNovels(prevNovels =>
             prevNovels.map(n => {
               if (n.id === targetNovelId) {
-                return { ...n, chapters: updater(n.chapters) };
+                const updatedNovel = { ...n, chapters: updater(n.chapters) };
+                lastUpdatedNovel = updatedNovel;
+                return updatedNovel;
               }
               return n;
             }),
@@ -234,6 +238,8 @@ export const checkAndGenerateSummary = async (
       await generate('small', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
     }
   }
+
+  return lastUpdatedNovel;
 
   // Check Big Summary Trigger (Volume Based)
   if (currentCountInVolume % bInterval === 0) {

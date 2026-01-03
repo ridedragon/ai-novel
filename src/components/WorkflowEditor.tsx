@@ -384,7 +384,7 @@ export interface WorkflowEditorProps {
     bigSummaryPrompt: string;
     prompts: PromptItem[];
     getActiveScripts: () => RegexScript[];
-    onChapterComplete: (chapterId: number, content: string) => Promise<void>;
+    onChapterComplete: (chapterId: number, content: string) => Promise<any>;
     updateAutoOptimize?: (val: boolean) => void;
     updateTwoStepOptimization?: (val: boolean) => void;
   };
@@ -1375,7 +1375,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             },
             async (chapterId, content) => {
               if (globalConfig.onChapterComplete) {
-                await globalConfig.onChapterComplete(chapterId, content);
+                const result = await globalConfig.onChapterComplete(chapterId, content);
+                if (result && typeof result === 'object' && result.chapters) {
+                  localNovel = result;
+                }
               }
               // 实时更新正文生成节点的 outputEntries，以便用户查看
               setNodes(nds => nds.map(n => {

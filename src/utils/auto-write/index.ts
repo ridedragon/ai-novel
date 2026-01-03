@@ -29,7 +29,7 @@ export class AutoWriteEngine {
     getActiveScripts: () => RegexScript[],
     onStatusUpdate: (status: string) => void,
     onNovelUpdate: (novel: Novel) => void,
-    onChapterComplete: (chapterId: number, content: string) => Promise<void>,
+    onChapterComplete: (chapterId: number, content: string, updatedNovel?: Novel) => Promise<Novel | void>,
     targetVolumeId?: string,
     includeFullOutline: boolean = false,
     outlineSetId: string | null = null,

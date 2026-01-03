@@ -5764,7 +5764,7 @@ ${taskDescription}`
   const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string, targetNovelId: string = activeNovelId || '') => {
     if (!longTextModeRef.current) return
 
-    await checkAndGenerateSummaryUtil(
+    return await checkAndGenerateSummaryUtil(
       targetChapterId,
       currentContent,
       targetNovelId,
@@ -6475,9 +6475,15 @@ ${taskDescription}`
                           >
                             <button
                               onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
-                              className="bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate"
+                              className={`bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate ${chapter.subtype === 'small_summary' || chapter.subtype === 'big_summary' ? 'italic text-[var(--theme-color-light)]' : ''}`}
                             >
-                              <FileText className="w-4 h-4 shrink-0 opacity-70" />
+                              {chapter.subtype === 'small_summary' ? (
+                                <LayoutList className="w-4 h-4 shrink-0 text-blue-400" />
+                              ) : chapter.subtype === 'big_summary' ? (
+                                <BookOpen className="w-4 h-4 shrink-0 text-amber-400" />
+                              ) : (
+                                <FileText className="w-4 h-4 shrink-0 opacity-70" />
+                              )}
                               <span className="truncate">{chapter.title}</span>
                             </button>
                             
@@ -6535,9 +6541,15 @@ ${taskDescription}`
                   >
                     <button
                       onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
-                      className="bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate"
+                      className={`bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate ${chapter.subtype === 'small_summary' || chapter.subtype === 'big_summary' ? 'italic text-[var(--theme-color-light)]' : ''}`}
                     >
-                      <FileText className={`w-4 h-4 shrink-0 ${chapter.logicScore !== undefined ? (chapter.logicScore > 80 ? 'text-green-400' : chapter.logicScore > 60 ? 'text-yellow-400' : 'text-red-400') : 'opacity-70'}`} />
+                      {chapter.subtype === 'small_summary' ? (
+                        <LayoutList className="w-4 h-4 shrink-0 text-blue-400" />
+                      ) : chapter.subtype === 'big_summary' ? (
+                        <BookOpen className="w-4 h-4 shrink-0 text-amber-400" />
+                      ) : (
+                        <FileText className={`w-4 h-4 shrink-0 ${chapter.logicScore !== undefined ? (chapter.logicScore > 80 ? 'text-green-400' : chapter.logicScore > 60 ? 'text-yellow-400' : 'text-red-400') : 'opacity-70'}`} />
+                      )}
                       <span className="truncate">{chapter.title}</span>
                       {chapter.logicScore !== undefined && (
                         <span className={`ml-1 text-[10px] px-1 rounded ${chapter.logicScore > 80 ? 'bg-green-900/30 text-green-500' : chapter.logicScore > 60 ? 'bg-yellow-900/30 text-yellow-500' : 'bg-red-900/30 text-red-500'}`}>
@@ -9254,7 +9266,7 @@ ${taskDescription}`
             activeAnalysisPresetId,
             onChapterComplete: async (chapterId: number, content: string) => {
               if (longTextModeRef.current) {
-                await checkAndGenerateSummary(chapterId, content);
+                return await checkAndGenerateSummary(chapterId, content);
               }
             },
             updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
@@ -9309,7 +9321,7 @@ ${taskDescription}`
           activeAnalysisPresetId,
           onChapterComplete: async (chapterId, content) => {
             if (longTextModeRef.current) {
-              await checkAndGenerateSummary(chapterId, content);
+              return await checkAndGenerateSummary(chapterId, content);
             }
           },
           updateAutoOptimize: (val: boolean) => setAutoOptimize(val),

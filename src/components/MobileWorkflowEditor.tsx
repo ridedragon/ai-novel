@@ -1239,7 +1239,12 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             },
             async (id, content) => {
               // 这里需要确保 localNovel 是最新的
-              if (globalConfig.onChapterComplete) await globalConfig.onChapterComplete(id, content);
+              if (globalConfig.onChapterComplete) {
+                const result = await globalConfig.onChapterComplete(id, content);
+                if (result && typeof result === 'object' && result.chapters) {
+                  localNovel = result;
+                }
+              }
               setNodes(nds => nds.map(n => {
                 if (n.id === node.id) {
                   const novel = (localNovel as Novel);
