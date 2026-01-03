@@ -9027,7 +9027,7 @@ ${taskDescription}`
           isOpen={showWorkflowEditor}
           onClose={() => setShowWorkflowEditor(false)}
           activeNovel={activeNovel}
-          onSelectChapter={(id) => {
+          onSelectChapter={(id: number) => {
             setActiveChapterId(id)
             setShowWorkflowEditor(false)
           }}
@@ -9058,7 +9058,7 @@ ${taskDescription}`
             bigSummaryPrompt,
             prompts,
             getActiveScripts,
-            onChapterComplete: async (chapterId, content) => {
+            onChapterComplete: async (chapterId: number, content: string) => {
               if (longTextModeRef.current) {
                 await checkAndGenerateSummary(chapterId, content);
               }
@@ -9067,7 +9067,7 @@ ${taskDescription}`
               }
             }
           }}
-          onUpdateNovel={(updatedNovel) => {
+          onUpdateNovel={(updatedNovel: Novel) => {
             setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));
           }}
         />
