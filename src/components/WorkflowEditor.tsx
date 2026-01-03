@@ -1959,7 +1959,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               localNovel = updatedNovel; // 实时同步本地副本
               updateLocalAndGlobal(updatedNovel);
             },
-            async (chapterId, content) => {
+            async (chapterId, content, updatedNovel) => {
+              if (updatedNovel) {
+                localNovel = updatedNovel;
+              }
               if (globalConfig.onChapterComplete) {
                 const result = await globalConfig.onChapterComplete(chapterId, content);
                 if (result && typeof result === 'object' && result.chapters) {

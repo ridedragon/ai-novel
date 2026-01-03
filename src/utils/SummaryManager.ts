@@ -74,7 +74,7 @@ export const checkAndGenerateSummary = async (
   const sInterval = Number(smallSummaryInterval) || 3;
   const bInterval = Number(bigSummaryInterval) || 6;
 
-  let lastUpdatedNovel: Novel | undefined = undefined;
+  let lastUpdatedNovel: Novel | undefined = currentNovel;
 
   const generate = async (type: 'small' | 'big', start: number, end: number, lastChapterId: number) => {
     const rangeStr = `${start}-${end}`;
@@ -239,8 +239,6 @@ export const checkAndGenerateSummary = async (
     }
   }
 
-  return lastUpdatedNovel;
-
   // Check Big Summary Trigger (Volume Based)
   if (currentCountInVolume % bInterval === 0) {
     const batchStartVolIndex = indexInVolume - bInterval + 1;
@@ -252,4 +250,6 @@ export const checkAndGenerateSummary = async (
       await generate('big', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
     }
   }
+
+  return lastUpdatedNovel;
 };

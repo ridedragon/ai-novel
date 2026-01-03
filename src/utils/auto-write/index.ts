@@ -298,15 +298,15 @@ export class AutoWriteEngine {
               if (this.config.asyncOptimize) {
                 // 异步模式：不等待优化完成，立即进行下一章或上报完成
                 this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate);
-                await onChapterComplete(chapterId, content);
+                await onChapterComplete(chapterId, content, this.novel);
               } else {
                 // 线性模式：等待优化完成
                 await this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate);
                 const updatedChapter = this.novel.chapters.find(c => c.id === chapterId);
-                await onChapterComplete(chapterId, updatedChapter?.content || content);
+                await onChapterComplete(chapterId, updatedChapter?.content || content, this.novel);
               }
             } else {
-              await onChapterComplete(chapterId, content);
+              await onChapterComplete(chapterId, content, this.novel);
             }
           }
 
