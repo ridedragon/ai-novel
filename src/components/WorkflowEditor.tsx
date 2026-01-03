@@ -39,7 +39,8 @@ import {
 } from 'lucide-react';
 import OpenAI from 'openai';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { GeneratorPreset, Novel } from '../types';
+import { GeneratorPreset, Novel, PromptItem, RegexScript } from '../types';
+import { AutoWriteEngine } from '../utils/auto-write';
 
 // --- 类型定义 ---
 
@@ -217,6 +218,7 @@ export interface WorkflowEditorProps {
   isOpen: boolean;
   onClose: () => void;
   activeNovel: Novel | undefined;
+  onSelectChapter?: (chapterId: number) => void;
   onUpdateNovel?: (novel: Novel) => void;
   onStartAutoWrite?: (outlineSetId?: string | null) => void;
   globalConfig?: {
@@ -230,11 +232,27 @@ export interface WorkflowEditorProps {
     plotOutlineModel: string;
     optimizeModel: string;
     analysisModel: string;
+    contextLength: number;
+    maxReplyLength: number;
+    temperature: number;
+    stream: boolean;
+    maxRetries: number;
+    globalCreationPrompt: string;
+    longTextMode: boolean;
+    autoOptimize: boolean;
+    consecutiveChapterCount: number;
+    smallSummaryInterval: number;
+    bigSummaryInterval: number;
+    smallSummaryPrompt: string;
+    bigSummaryPrompt: string;
+    prompts: PromptItem[];
+    getActiveScripts: () => RegexScript[];
+    onChapterComplete: (chapterId: number, content: string) => Promise<void>;
   };
 }
 
 export const WorkflowEditor = (props: WorkflowEditorProps) => {
-  const { isOpen, onClose, activeNovel, onUpdateNovel, onStartAutoWrite, globalConfig } = props;
+  const { isOpen, onClose, activeNovel, onSelectChapter, onUpdateNovel, onStartAutoWrite, globalConfig } = props;
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -245,6 +263,7 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
   const [stopRequested, setStopRequested] = useState(false);
   const [edgeToDelete, setEdgeToDelete] = useState<Edge | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewEntry, setPreviewEntry] = useState<OutputEntry | null>(null);
 
   const stopRequestedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -294,8 +313,8 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
           ...n,
           data: {
             ...n.data,
-            // 恢复时将“执行中”状态重置为“待处理”或“已完成/已失败”
-            status: n.data.status === 'executing' ? 'pending' : n.data.status,
+            // 恢复时保持原有状态，确保“执行中”状态能维持发光效果
+            status: n.data.status,
             icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon,
             selectedWorldviewSets: n.data.selectedWorldviewSets || [],
             selectedCharacterSets: n.data.selectedCharacterSets || [],
@@ -323,6 +342,17 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
       localStorage.setItem('novel_workflow', JSON.stringify(workflow));
     }
   }, [nodes, edges, currentNodeIndex]);
+
+  // 只有在组件真正卸载（如切换页面）时才中止执行
+  // 关闭弹窗（isOpen 变为 false）不应停止执行，实现后台运行
+  useEffect(() => {
+    return () => {
+      // 这里的清理函数在组件卸载时执行
+      if (stopRequestedRef.current === false && isRunning) {
+        stopWorkflow();
+      }
+    };
+  }, [isRunning]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -486,6 +516,58 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
     localStorage.setItem('novel_workflow', JSON.stringify(workflow));
   };
 
+  // 拓扑排序函数：根据连线确定执行顺序
+  const getOrderedNodes = useCallback(() => {
+    const adjacencyList = new Map<string, string[]>();
+    const inDegree = new Map<string, number>();
+    
+    nodes.forEach(node => {
+      adjacencyList.set(node.id, []);
+      inDegree.set(node.id, 0);
+    });
+    
+    edges.forEach(edge => {
+      if (adjacencyList.has(edge.source) && adjacencyList.has(edge.target)) {
+        adjacencyList.get(edge.source)?.push(edge.target);
+        inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
+      }
+    });
+    
+    const queue: string[] = [];
+    // 找到所有起始节点（入度为0），并按坐标排序作为初始顺序
+    const startNodes = nodes.filter(n => (inDegree.get(n.id) || 0) === 0)
+                           .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+    
+    startNodes.forEach(n => queue.push(n.id));
+    
+    const result: string[] = [];
+    const currentInDegree = new Map(inDegree);
+
+    while (queue.length > 0) {
+      const uId = queue.shift()!;
+      result.push(uId);
+      
+      const neighbors = adjacencyList.get(uId) || [];
+      // 对邻居按坐标排序以保持执行稳定性
+      const sortedNeighbors = neighbors
+        .map(id => nodes.find(n => n.id === id)!)
+        .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+
+      sortedNeighbors.forEach(v => {
+        const newDegree = (currentInDegree.get(v.id) || 0) - 1;
+        currentInDegree.set(v.id, newDegree);
+        if (newDegree === 0) queue.push(v.id);
+      });
+    }
+    
+    // 补全那些因为循环引用或孤立而被遗漏的节点
+    const orderedNodes = result.map(id => nodes.find(n => n.id === id)!);
+    const remainingNodes = nodes.filter(n => !result.includes(n.id))
+                               .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+    
+    return [...orderedNodes, ...remainingNodes];
+  }, [nodes, edges]);
+
   // --- 自动化执行引擎 (AI 调用) ---
   const runWorkflow = async (startIndex: number = 0) => {
     if (!globalConfig?.apiKey) {
@@ -505,17 +587,21 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
 
       // 使用 localNovel 跟踪执行过程中的最新状态，避免闭包捕获 stale props
       let localNovel = { ...activeNovel };
-      const updateLocalAndGlobal = (newNovel: Novel) => {
+      const updateLocalAndGlobal = async (newNovel: Novel) => {
         localNovel = newNovel;
-        onUpdateNovel?.(newNovel);
+        // 强制触发持久化，确保在异步执行过程中数据不丢失
+        if (onUpdateNovel) {
+          onUpdateNovel(newNovel);
+        }
       };
 
-      // 简单排序执行：按 Y 轴位置顺序执行
-      const sortedNodes = [...nodes].sort((a, b) => a.position.y - b.position.y);
+      let sortedNodes = getOrderedNodes();
       
       // 重置后续节点的执行状态
       if (startIndex === 0) {
-        setNodes(nds => nds.map(n => ({ ...n, data: { ...n.data, status: 'pending' } })));
+        setNodes(nds => nds.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } })));
+        // 同步清空快照
+        sortedNodes = sortedNodes.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } }));
       }
 
       let accumContext = ''; // 累积全局和常驻上下文
@@ -550,13 +636,19 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
         
         // 更新节点状态为正在执行
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'executing' } } : n));
+        
+        // 视觉反馈增强：为非 AI 调用节点增加最小执行感，确保用户能看到脉冲发光提示
+        if (node.data.typeKey === 'userInput' || node.data.typeKey === 'createFolder') {
+          await new Promise(resolve => setTimeout(resolve, 600));
+        }
+
         // 处理创建文件夹节点
         if (node.data.typeKey === 'createFolder') {
           currentWorkflowFolder = node.data.folderName;
           if (currentWorkflowFolder) {
             const createSetIfNotExist = (sets: any[] | undefined, name: string, creator: () => any) => {
               const existing = sets?.find(s => s.name === name);
-              if (existing) return { id: existing.id, isNew: false };
+              if (existing) return { id: existing.id, isNew: false, set: existing };
               const newSet = creator();
               return { id: newSet.id, isNew: true, set: newSet };
             };
@@ -615,14 +707,31 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
             }
 
             if (changed) {
-              updateLocalAndGlobal(updatedNovel);
+              await updateLocalAndGlobal(updatedNovel);
             }
+
+            // 关键修复：目录创建后，立即更新工作流中所有引用该“计划中”目录的节点，将其转换为真实 ID
+            const oldPendingId = `pending:${currentWorkflowFolder}`;
+            setNodes(nds => nds.map(n => ({
+              ...n,
+              data: {
+                ...n.data,
+                selectedWorldviewSets: (n.data.selectedWorldviewSets as string[] || []).map(id => id === oldPendingId ? worldviewResult.id : id),
+                selectedCharacterSets: (n.data.selectedCharacterSets as string[] || []).map(id => id === oldPendingId ? characterResult.id : id),
+                selectedOutlineSets: (n.data.selectedOutlineSets as string[] || []).map(id => id === oldPendingId ? outlineResult.id : id),
+                selectedInspirationSets: (n.data.selectedInspirationSets as string[] || []).map(id => id === oldPendingId ? inspirationResult.id : id),
+              }
+            })));
           }
+          // 更新节点状态为已完成
+          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
           continue;
         }
 
         if (node.data.typeKey === 'userInput') {
           accumContext += `【全局输入】：\n${node.data.instruction}\n\n`;
+          // 更新节点状态为已完成
+          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
           continue;
         }
 
@@ -652,10 +761,10 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
         // 核心逻辑：解析 pending: 引用
         const resolvePendingRef = (list: string[], sets: any[] | undefined) => {
           return list.map(id => {
-            if (id.startsWith('pending:')) {
+            if (id && typeof id === 'string' && id.startsWith('pending:')) {
               const folderName = id.replace('pending:', '');
               const matched = sets?.find(s => s.name === folderName);
-              return matched ? matched.id : id; // 如果还没建立，保留原样（会跳过渲染）
+              return matched ? matched.id : id;
             }
             return id;
           });
@@ -735,7 +844,160 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
 
         if (messages.length === 0) messages.push({ role: 'user', content: node.data.instruction || '请生成内容' });
 
-        // 4. 调用 AI
+        // 4. 处理正文生成节点 (使用专用的 AutoWriteEngine，跳过通用的单次 AI 调用)
+        if (node.data.typeKey === 'chapter') {
+          if (!globalConfig) {
+            throw new Error('缺失全局配置');
+          }
+
+          // 1. 寻找匹配的大纲集
+          let selectedOutlineSetId = node.data.selectedOutlineSets && node.data.selectedOutlineSets.length > 0
+            ? resolvePendingRef([node.data.selectedOutlineSets[0]], localNovel.outlineSets)[0]
+            : null;
+
+          // 如果节点没选大纲集，尝试自动匹配当前工作目录对应的大纲集
+          if (!selectedOutlineSetId || selectedOutlineSetId.startsWith('pending:')) {
+             const matched = localNovel.outlineSets?.find(s => s.name === currentWorkflowFolder);
+             if (matched) selectedOutlineSetId = matched.id;
+          }
+
+          let currentSet = localNovel.outlineSets?.find(s => s.id === selectedOutlineSetId);
+          
+          if (node.data.typeKey === 'chapter') {
+            if (!currentSet || !currentSet.items || currentSet.items.length === 0) {
+              // 最后尝试：如果仍然没找到，但有正在执行的工作流目录，可能大纲集刚被创建但状态未同步
+              const fallbackSet = localNovel.outlineSets?.[localNovel.outlineSets.length - 1];
+              if (fallbackSet && fallbackSet.items && fallbackSet.items.length > 0 && (!currentWorkflowFolder || fallbackSet.name === currentWorkflowFolder)) {
+                currentSet = fallbackSet;
+              } else {
+                throw new Error(`未关联大纲集或关联的大纲集(${currentSet?.name || '未知'})内容为空。请检查：1. 前置大纲节点是否已成功运行 2. 节点属性中是否已勾选对应的大纲集`);
+              }
+            }
+          }
+
+          // 2. 处理分卷逻辑：如果是新建分卷，先在小说中创建它
+          let finalVolumeId = node.data.targetVolumeId as string;
+          if (finalVolumeId === 'NEW_VOLUME' && node.data.targetVolumeName) {
+            const newVolume = {
+              id: `vol_${Date.now()}`,
+              title: node.data.targetVolumeName as string,
+              collapsed: false
+            };
+            const updatedNovel: Novel = {
+              ...localNovel as Novel,
+              volumes: [...(localNovel.volumes || []), newVolume]
+            };
+            finalVolumeId = newVolume.id;
+            updateLocalAndGlobal(updatedNovel);
+            // 同步更新节点数据，防止重复创建且让 UI 反馈正确
+            updateNodeData(node.id, { targetVolumeId: finalVolumeId, targetVolumeName: '' });
+          }
+
+          // 3. 初始化引擎
+          const engine = new AutoWriteEngine({
+            apiKey: globalConfig.apiKey,
+            baseUrl: globalConfig.baseUrl,
+            model: globalConfig.model,
+            contextLength: globalConfig.contextLength,
+            maxReplyLength: globalConfig.maxReplyLength,
+            temperature: globalConfig.temperature,
+            stream: globalConfig.stream,
+            maxRetries: globalConfig.maxRetries,
+            systemPrompt: localNovel.systemPrompt || '你是一个专业的小说家。',
+            globalCreationPrompt: globalConfig.globalCreationPrompt,
+            longTextMode: globalConfig.longTextMode,
+            autoOptimize: node.data.autoOptimize || globalConfig.autoOptimize,
+            consecutiveChapterCount: globalConfig.consecutiveChapterCount || 1,
+            smallSummaryInterval: globalConfig.smallSummaryInterval,
+            bigSummaryInterval: globalConfig.bigSummaryInterval,
+            smallSummaryPrompt: globalConfig.smallSummaryPrompt,
+            bigSummaryPrompt: globalConfig.bigSummaryPrompt,
+            outlineModel: globalConfig.outlineModel,
+          }, localNovel);
+
+          // 4. 计算起始索引
+          let writeStartIndex = 0;
+          const items = currentSet?.items || [];
+          for (let k = 0; k < items.length; k++) {
+            const item = items[k];
+            const existingChapter = localNovel.chapters.find(c => c.title === item.title);
+            if (!existingChapter || !existingChapter.content || existingChapter.content.trim().length === 0) {
+              writeStartIndex = k;
+              break;
+            }
+            if (k === items.length - 1) writeStartIndex = items.length;
+          }
+
+          if (writeStartIndex >= items.length) {
+            setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+            continue;
+          }
+
+          // 4. 执行自动化创作
+          await engine.run(
+            items,
+            writeStartIndex,
+            globalConfig.prompts.filter(p => p.active),
+            globalConfig.getActiveScripts,
+            (status) => {
+              // 更新节点标签以显示进度
+              updateNodeData(node.id, { label: `创作中: ${status}` });
+            },
+            (updatedNovel) => {
+              updateLocalAndGlobal(updatedNovel);
+            },
+            async (chapterId, content) => {
+              if (globalConfig.onChapterComplete) {
+                await globalConfig.onChapterComplete(chapterId, content);
+              }
+              // 实时更新正文生成节点的 outputEntries，以便用户查看
+              setNodes(nds => nds.map(n => {
+                if (n.id === node.id) {
+                  const novel = (localNovel as Novel);
+                  const chapter = novel.chapters.find(c => c.id === chapterId);
+                  const title = chapter?.title || `第${chapterId}章`;
+                  
+                  const existingEntries = n.data.outputEntries || [];
+                  const otherEntries = existingEntries.filter(e => e.id !== `chapter-${chapterId}`);
+                  const newEntry: OutputEntry = {
+                    id: `chapter-${chapterId}`,
+                    title: title,
+                    content: content
+                  };
+                  
+                  // 改进排序：根据小说中实际的章节顺序进行排序
+                  const updatedEntries = [...otherEntries, newEntry];
+                  const sortedEntries = updatedEntries.sort((a, b) => {
+                    const idA = parseInt(a.id.replace('chapter-', '') || '0', 10);
+                    const idB = parseInt(b.id.replace('chapter-', '') || '0', 10);
+                    const indexA = novel.chapters.findIndex(c => c.id === idA);
+                    const indexB = novel.chapters.findIndex(c => c.id === idB);
+                    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                    return idA - idB;
+                  });
+
+                  return {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      outputEntries: sortedEntries
+                    }
+                  };
+                }
+                return n;
+              }));
+            },
+            finalVolumeId,
+            false,
+            selectedOutlineSetId
+          );
+
+          updateNodeData(node.id, { label: NODE_CONFIGS.chapter.defaultLabel });
+          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          continue;
+        }
+
+        // 5. 调用 AI (针对设定生成、AI 聊天等节点)
         const nodeApiConfig = preset?.apiConfig || {};
         const openai = new OpenAI({
           apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
@@ -752,64 +1014,7 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
 
         let result = completion.choices[0]?.message?.content || '';
         
-        // 4.1 处理自动优化和两阶段优化 (仅针对正文生成节点)
-        if (node.data.typeKey === 'chapter' && (node.data.autoOptimize || node.data.twoStepOptimization)) {
-          let analysisResult = '';
-          
-          // Phase 1: Analysis (if two-step optimization enabled)
-          if (node.data.twoStepOptimization) {
-            const analysisPresets = allPresets.analysis || [];
-            const analysisPreset = analysisPresets[0]; // 默认使用第一个分析预设
-            if (analysisPreset) {
-              const analysisMessages = analysisPreset.prompts
-                .filter(p => p.enabled)
-                .map(p => ({
-                  role: p.role,
-                  content: p.content
-                    .replace('{{content}}', result)
-                    .replace('{{input}}', node.data.instruction)
-                }));
-              
-              const analysisCompletion = await openai.chat.completions.create({
-                model: analysisPreset.apiConfig?.model || globalConfig.analysisModel || globalConfig.model,
-                messages: analysisMessages,
-                temperature: analysisPreset.temperature ?? 1.0,
-              }, { signal: abortControllerRef.current?.signal });
-              analysisResult = analysisCompletion.choices[0]?.message?.content || '';
-            }
-          }
-
-          // Phase 2: Optimization
-          if (node.data.autoOptimize || node.data.twoStepOptimization) {
-            const optimizePresets = allPresets.optimize || [];
-            const optimizePreset = optimizePresets[0]; // 默认使用第一个优化预设
-            if (optimizePreset) {
-              const optimizeMessages = optimizePreset.prompts
-                .filter(p => p.enabled)
-                .map(p => {
-                  let content = p.content
-                    .replace('{{content}}', result)
-                    .replace('{{input}}', node.data.instruction);
-                  if (analysisResult) {
-                    content = content.replace('{{analysis}}', analysisResult);
-                    if (!content.includes(analysisResult) && !p.content.includes('{{analysis}}')) {
-                      content += `\n\n【AI 修改建议】：\n${analysisResult}`;
-                    }
-                  }
-                  return { role: p.role, content };
-                });
-
-              const optimizeCompletion = await openai.chat.completions.create({
-                model: optimizePreset.apiConfig?.model || globalConfig.optimizeModel || globalConfig.model,
-                messages: optimizeMessages,
-                temperature: optimizePreset.temperature ?? 1.0,
-              }, { signal: abortControllerRef.current?.signal });
-              result = optimizeCompletion.choices[0]?.message?.content || result;
-            }
-          }
-        }
-
-        // 5. 结构化解析 AI 输出并更新节点产物
+        // 6. 结构化解析 AI 输出并更新节点产物
         let entriesToStore: { title: string; content: string }[] = [];
         
         try {
@@ -841,24 +1046,30 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
           
           // 深度标准化条目提取：精准匹配各设定集的字段名
           const extractEntries = (data: any): {title: string, content: string}[] => {
+            if (!data) return [];
+            
             // 如果是数组，根据内容结构智能提取
             if (Array.isArray(data)) {
               return data.map(item => {
                 if (typeof item === 'string') return { title: `项 ${new Date().toLocaleTimeString()}`, content: item };
+                if (typeof item !== 'object' || item === null) return { title: '未命名', content: String(item) };
                 
-                // 智能优先级匹配
-                const title = String(item.item || item.name || item.title || item.label || item.key || Object.keys(item)[0] || '未命名');
-                const content = String(item.setting || item.bio || item.summary || item.content || item.description || item.value || (typeof item === 'object' ? JSON.stringify(item) : item));
+                // 智能优先级匹配标题/键名
+                const title = String(item.item || item.name || item.title || item.label || item.key || item.header || item.chapter || Object.keys(item)[0] || '未命名');
+                // 智能优先级匹配内容/设定
+                const content = String(item.setting || item.bio || item.summary || item.content || item.description || item.value || item.plot || (typeof item === 'object' ? JSON.stringify(item) : item));
                 
                 return { title, content };
               });
             }
             
             // 如果是对象，递归寻找数组，或者将对象本身视为单条记录/键值对
-            if (typeof data === 'object' && data !== null) {
+            if (typeof data === 'object') {
+              // 某些模型会返回 { "entries": [...] } 或 { "characters": [...] }
               const arrayKey = Object.keys(data).find(k => Array.isArray(data[k]));
               if (arrayKey) return extractEntries(data[arrayKey]);
               
+              // 如果没有嵌套数组，则将对象的键值对视为条目
               return Object.entries(data).map(([k, v]) => ({
                 title: k,
                 content: typeof v === 'string' ? v : JSON.stringify(v)
@@ -884,117 +1095,119 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
 
         updateNodeData(node.id, { outputEntries: [...newEntries, ...(node.data.outputEntries || [])] });
 
-        // 5.1 处理生成内容持久化存储
+        // 7. 处理生成内容持久化存储
         let updatedNovelState = { ...localNovel };
         let novelChanged = false;
 
-        if (node.data.typeKey === 'chapter') {
-          // 逻辑变更：不再在工作流中生成单章，而是直接触发主界面的“开始自动化创作”逻辑
-          if (onStartAutoWrite) {
-            setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
-            setIsRunning(false);
-            onClose(); // 关闭工作流编辑器，回到主界面查看自动化创作
-            // 稍作延迟确保 UI 关闭平滑
-            setTimeout(() => {
-              onStartAutoWrite();
-            }, 100);
-            return; // 终止工作流后续节点，由自动化创作接管
-          } else {
-            setError('无法触发自动化创作：回调函数未定义。');
-            setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'failed' } } : n));
-            setIsRunning(false);
-            return;
-          }
-        } else if (node.data.folderName || currentWorkflowFolder) {
-          // 其他类型：优先使用节点绑定的目录名，其次使用工作流全局确定的目录名
+        if (node.data.folderName || currentWorkflowFolder) {
           const folderName = node.data.folderName || currentWorkflowFolder;
           
+          // 查找匹配的设定集 ID（由于可能存在重名，优先通过逻辑关联）
+          const findTargetSet = (sets: any[] | undefined) => {
+            // 尝试通过名称匹配
+            return sets?.find(s => s.name === folderName);
+          };
+
           if (node.data.typeKey === 'worldview') {
-            updatedNovelState = {
-              ...updatedNovelState,
-              worldviewSets: updatedNovelState.worldviewSets?.map(s => {
-                if (s.name === folderName) {
-                  // 去重式更新：如果 title 相同，则覆盖内容，否则追加
-                  const newEntries = [...s.entries];
-                  entriesToStore.forEach(e => {
-                    const idx = newEntries.findIndex(ne => ne.item === e.title);
-                    if (idx !== -1) newEntries[idx] = { item: e.title, setting: e.content };
-                    else newEntries.push({ item: e.title, setting: e.content });
-                  });
-                  return { ...s, entries: newEntries };
-                }
-                return s;
-              })
-            };
-            novelChanged = true;
+            const targetSet = findTargetSet(updatedNovelState.worldviewSets);
+            if (targetSet) {
+              updatedNovelState = {
+                ...updatedNovelState,
+                worldviewSets: updatedNovelState.worldviewSets?.map(s => {
+                  if (s.id === targetSet.id) {
+                    const newEntries = [...s.entries];
+                    entriesToStore.forEach(e => {
+                      const idx = newEntries.findIndex(ne => ne.item === e.title);
+                      if (idx !== -1) newEntries[idx] = { item: e.title, setting: e.content };
+                      else newEntries.push({ item: e.title, setting: e.content });
+                    });
+                    return { ...s, entries: newEntries };
+                  }
+                  return s;
+                })
+              };
+              novelChanged = true;
+            }
           } else if (node.data.typeKey === 'characters') {
-            updatedNovelState = {
-              ...updatedNovelState,
-              characterSets: updatedNovelState.characterSets?.map(s => {
-                if (s.name === folderName) {
-                  const newChars = [...s.characters];
-                  entriesToStore.forEach(e => {
-                    const idx = newChars.findIndex(nc => nc.name === e.title);
-                    if (idx !== -1) newChars[idx] = { name: e.title, bio: e.content };
-                    else newChars.push({ name: e.title, bio: e.content });
-                  });
-                  return { ...s, characters: newChars };
-                }
-                return s;
-              })
-            };
-            novelChanged = true;
+            const targetSet = findTargetSet(updatedNovelState.characterSets);
+            if (targetSet) {
+              updatedNovelState = {
+                ...updatedNovelState,
+                characterSets: updatedNovelState.characterSets?.map(s => {
+                  if (s.id === targetSet.id) {
+                    const newChars = [...s.characters];
+                    entriesToStore.forEach(e => {
+                      const idx = newChars.findIndex(nc => nc.name === e.title);
+                      if (idx !== -1) newChars[idx] = { name: e.title, bio: e.content };
+                      else newChars.push({ name: e.title, bio: e.content });
+                    });
+                    return { ...s, characters: newChars };
+                  }
+                  return s;
+                })
+              };
+              novelChanged = true;
+            }
           } else if (node.data.typeKey === 'outline') {
-            updatedNovelState = {
-              ...updatedNovelState,
-              outlineSets: updatedNovelState.outlineSets?.map(s => {
-                if (s.name === folderName) {
-                  const newItems = [...s.items];
-                  entriesToStore.forEach(e => {
-                    const idx = newItems.findIndex(ni => ni.title === e.title);
-                    if (idx !== -1) newItems[idx] = { title: e.title, summary: e.content };
-                    else newItems.push({ title: e.title, summary: e.content });
-                  });
-                  return { ...s, items: newItems };
-                }
-                return s;
-              })
-            };
-            novelChanged = true;
+            const targetSet = findTargetSet(updatedNovelState.outlineSets);
+            if (targetSet) {
+              updatedNovelState = {
+                ...updatedNovelState,
+                outlineSets: updatedNovelState.outlineSets?.map(s => {
+                  if (s.id === targetSet.id) {
+                    const newItems = [...s.items];
+                    entriesToStore.forEach(e => {
+                      const idx = newItems.findIndex(ni => ni.title === e.title);
+                      if (idx !== -1) newItems[idx] = { title: e.title, summary: e.content };
+                      else newItems.push({ title: e.title, summary: e.content });
+                    });
+                    return { ...s, items: newItems };
+                  }
+                  return s;
+                })
+              };
+              novelChanged = true;
+            }
           } else if (node.data.typeKey === 'inspiration') {
-            updatedNovelState = {
-              ...updatedNovelState,
-              inspirationSets: updatedNovelState.inspirationSets?.map(s => {
-                if (s.name === folderName) {
-                  const newItems = [...s.items];
-                  entriesToStore.forEach(e => {
-                    const idx = newItems.findIndex(ni => ni.title === e.title);
-                    if (idx !== -1) newItems[idx] = { title: e.title, content: e.content };
-                    else newItems.push({ title: e.title, content: e.content });
-                  });
-                  return { ...s, items: newItems };
-                }
-                return s;
-              })
-            };
-            novelChanged = true;
+            const targetSet = findTargetSet(updatedNovelState.inspirationSets);
+            if (targetSet) {
+              updatedNovelState = {
+                ...updatedNovelState,
+                inspirationSets: updatedNovelState.inspirationSets?.map(s => {
+                  if (s.id === targetSet.id) {
+                    const newItems = [...s.items];
+                    entriesToStore.forEach(e => {
+                      const idx = newItems.findIndex(ni => ni.title === e.title);
+                      if (idx !== -1) newItems[idx] = { title: e.title, content: e.content };
+                      else newItems.push({ title: e.title, content: e.content });
+                    });
+                    return { ...s, items: newItems };
+                  }
+                  return s;
+                })
+              };
+              novelChanged = true;
+            }
           } else if (node.data.typeKey === 'plotOutline') {
-            updatedNovelState = {
-              ...updatedNovelState,
-              plotOutlineSets: updatedNovelState.plotOutlineSets?.map(s => {
-                if (s.name === folderName) {
-                  const newItems = [...s.items];
-                  entriesToStore.forEach((e, idx) => {
-                    const existIdx = newItems.findIndex(ni => ni.title === e.title);
-                    if (existIdx !== -1) newItems[existIdx] = { ...newItems[existIdx], description: e.content };
-                    else newItems.push({ id: `plot_${Date.now()}_${idx}`, title: e.title, description: e.content, type: 'scene' });
-                  });
-                  return { ...s, items: newItems };
-                }
-                return s;
-              })
-            };
-            novelChanged = true;
+            const targetSet = findTargetSet(updatedNovelState.plotOutlineSets);
+            if (targetSet) {
+              updatedNovelState = {
+                ...updatedNovelState,
+                plotOutlineSets: updatedNovelState.plotOutlineSets?.map(s => {
+                  if (s.id === targetSet.id) {
+                    const newItems = [...s.items];
+                    entriesToStore.forEach((e, idx) => {
+                      const existIdx = newItems.findIndex(ni => ni.title === e.title);
+                      if (existIdx !== -1) newItems[existIdx] = { ...newItems[existIdx], description: e.content };
+                      else newItems.push({ id: `plot_${Date.now()}_${idx}`, title: e.title, description: e.content, type: 'scene' });
+                    });
+                    return { ...s, items: newItems };
+                  }
+                  return s;
+                })
+              };
+              novelChanged = true;
+            }
           }
         }
 
@@ -1006,7 +1219,7 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
         lastNodeOutput = `【${node.data.typeLabel}输出】：\n${result}`;
         // 注意：不累加到 accumContext，这样下下个节点就拿不到这个输出了
 
-        // 更新节点状态为已完成
+        // 更新节点状态为已完成 (确保在 novel 更新后同步更新节点状态，避免竞争)
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
       }
       
@@ -1021,8 +1234,8 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
       }
       console.error(e);
       // 更新当前节点状态为失败
-      const sortedNodes = [...nodes].sort((a, b) => a.position.y - b.position.y);
-      const failedNode = sortedNodes[currentNodeIndex];
+      const currentOrder = getOrderedNodes();
+      const failedNode = currentOrder[currentNodeIndex];
       if (failedNode) {
         setNodes(nds => nds.map(n => n.id === failedNode.id ? { ...n, data: { ...n.data, status: 'failed' } } : n));
       }
@@ -1062,7 +1275,7 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[130] bg-indigo-600/90 border border-indigo-400 px-4 py-2 rounded-full flex items-center gap-3 shadow-2xl animate-in zoom-in-95 duration-300 backdrop-blur-md">
             <span className="w-2 h-2 rounded-full bg-white animate-ping" />
             <span className="text-xs font-bold text-white tracking-wide">
-              正在执行: {nodes.sort((a, b) => a.position.y - b.position.y)[currentNodeIndex]?.data.typeLabel}
+              正在执行: {getOrderedNodes()[currentNodeIndex]?.data.typeLabel}
             </span>
           </div>
         )}
@@ -1498,18 +1711,52 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
                 <div className="space-y-4 pt-6 border-t border-gray-700/30">
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                      <Workflow className="w-3.5 h-3.5" /> 生成内容列表 (Output Entries)
+                      <Workflow className="w-3.5 h-3.5" /> {editingNode.data.typeKey === 'chapter' ? '章节生成列表' : '生成内容列表 (Output Entries)'}
                     </label>
-                    <button
-                      onClick={addEntry}
-                      className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
-                    >
-                      <Plus className="w-3 h-3" /> 新增条目
-                    </button>
+                    {editingNode.data.typeKey !== 'chapter' && (
+                      <button
+                        onClick={addEntry}
+                        className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
+                      >
+                        <Plus className="w-3 h-3" /> 新增条目
+                      </button>
+                    )}
                   </div>
                   
                   <div className="space-y-4">
-                    {(editingNode.data.outputEntries || []).map((entry) => (
+                    {editingNode.data.typeKey === 'chapter' && (
+                      <div className="grid grid-cols-1 gap-2">
+                        {(editingNode.data.outputEntries || []).map((entry) => (
+                          <div
+                            key={entry.id}
+                            className="bg-[#161922] border border-gray-700/50 rounded-lg p-3 hover:bg-[#1a1d29] transition-colors group/chapter cursor-pointer flex items-center justify-between"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setPreviewEntry(entry);
+                            }}
+                          >
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <div className="w-8 h-8 rounded bg-indigo-500/10 flex items-center justify-center shrink-0">
+                                <FileText className="w-4 h-4 text-indigo-400" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-gray-200 truncate">{entry.title}</div>
+                                <div className="text-[10px] text-gray-500 truncate">{entry.content.replace(/\s+/g, ' ').substring(0, 60)}...</div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="px-3 py-1 bg-indigo-600/20 text-indigo-400 rounded text-[10px] font-bold group-hover/chapter:bg-indigo-600 group-hover/chapter:text-white transition-all whitespace-nowrap"
+                            >
+                              查看正文
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {editingNode.data.typeKey !== 'chapter' && (editingNode.data.outputEntries || []).map((entry) => (
                       <div key={entry.id} className="bg-[#161922] border border-gray-700/50 rounded-xl overflow-hidden shadow-lg group/entry">
                         <div className="bg-[#1a1d29] px-4 py-2 border-b border-gray-700/50 flex items-center justify-between">
                           <input
@@ -1555,6 +1802,63 @@ export const WorkflowEditor = (props: WorkflowEditorProps) => {
                 >
                   <Trash2 className="w-4 h-4" /> 删除模块
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- 章节正文预览弹窗 --- */}
+        {previewEntry && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+            <div
+              className="absolute inset-0"
+              onClick={() => setPreviewEntry(null)}
+            />
+            <div className="relative w-full max-w-4xl max-h-[90vh] bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-gray-800 bg-gray-800/50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-500/10 rounded-lg">
+                    <FileText className="w-5 h-5 text-indigo-400" />
+                  </div>
+                  <h4 className="text-lg font-bold text-gray-100">{previewEntry.title}</h4>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const chapterId = parseInt(previewEntry.id.replace('chapter-', ''), 10);
+                      if (!isNaN(chapterId) && onSelectChapter) {
+                        setEditingNodeId(null);
+                        setPreviewEntry(null);
+                        onSelectChapter(chapterId);
+                        onClose();
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold transition-all active:scale-95"
+                  >
+                    跳转到编辑器
+                  </button>
+                  <button
+                    onClick={() => setPreviewEntry(null)}
+                    className="p-2 hover:bg-gray-800 rounded-full text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-gray-900">
+                <div className="max-w-2xl mx-auto">
+                  <div className="prose prose-invert prose-indigo max-w-none">
+                    {previewEntry.content.split('\n').map((para, i) => (
+                      <p key={i} className="mb-4 text-gray-300 leading-relaxed text-lg text-justify">
+                        {para}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="px-6 py-3 border-t border-gray-800 bg-gray-800/30 text-[10px] text-gray-500 flex justify-between">
+                <span>预览模式 - 内容仅供参考</span>
+                <span>共 {previewEntry.content.length} 字</span>
               </div>
             </div>
           </div>

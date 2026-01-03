@@ -5219,8 +5219,17 @@ ${taskDescription}`
 
   const startAutoWriting = (outlineSetId?: string | null) => {
      // 如果外部指定了 ID，优先使用，否则使用当前 UI 选中的 ID
-     const effectiveId = (outlineSetId && typeof outlineSetId === 'string') ? outlineSetId : activeOutlineSetId;
+     let effectiveId = (outlineSetId && typeof outlineSetId === 'string') ? outlineSetId : activeOutlineSetId;
      
+     // 兜底逻辑：如果没有选中 ID，尝试自动选择第一个有内容的大纲集
+     if (!effectiveId && activeNovel?.outlineSets) {
+        const firstValidSet = activeNovel.outlineSets.find(s => s.items && s.items.length > 0);
+        if (firstValidSet) {
+            effectiveId = firstValidSet.id;
+            handleSetActiveOutlineSetId(effectiveId); // 同步到 UI 状态
+        }
+     }
+
      const currentSet = activeNovel?.outlineSets?.find(s => s.id === effectiveId)
      if (!currentSet || currentSet.items.length === 0) {
         setError('请先生成或选择一个有效的大纲')
@@ -7458,6 +7467,8 @@ ${taskDescription}`
         setWorldviewModel={setWorldviewModel}
         inspirationModel={inspirationModel}
         setInspirationModel={setInspirationModel}
+        plotOutlineModel={plotOutlineModel}
+        setPlotOutlineModel={setPlotOutlineModel}
         optimizeModel={optimizeModel}
         setOptimizeModel={setOptimizeModel}
         analysisModel={analysisModel}
@@ -7471,8 +7482,6 @@ ${taskDescription}`
         bigSummaryPrompt={bigSummaryPrompt}
         setBigSummaryPrompt={setBigSummaryPrompt}
         handleScanSummaries={handleScanSummaries}
-        plotOutlineModel={plotOutlineModel}
-        setPlotOutlineModel={setPlotOutlineModel}
         isLoading={isLoading}
         consecutiveChapterCount={consecutiveChapterCount}
         setConsecutiveChapterCount={setConsecutiveChapterCount}
@@ -9007,6 +9016,10 @@ ${taskDescription}`
         isOpen={showWorkflowEditor}
         onClose={() => setShowWorkflowEditor(false)}
         activeNovel={activeNovel}
+        onSelectChapter={(id) => {
+          setActiveChapterId(id)
+          setLeftPanelActiveTab('chapters')
+        }}
         onStartAutoWrite={startAutoWriting}
         globalConfig={{
           apiKey,
@@ -9018,7 +9031,30 @@ ${taskDescription}`
           inspirationModel,
           plotOutlineModel,
           optimizeModel,
-          analysisModel
+          analysisModel,
+          contextLength,
+          maxReplyLength,
+          temperature,
+          stream,
+          maxRetries,
+          globalCreationPrompt,
+          longTextMode,
+          autoOptimize,
+          consecutiveChapterCount: Number(consecutiveChapterCount),
+          smallSummaryInterval: Number(smallSummaryInterval),
+          bigSummaryInterval: Number(bigSummaryInterval),
+          smallSummaryPrompt,
+          bigSummaryPrompt,
+          prompts,
+          getActiveScripts,
+          onChapterComplete: async (chapterId, content) => {
+            if (longTextModeRef.current) {
+              await checkAndGenerateSummary(chapterId, content);
+            }
+            if (autoOptimizeRef.current) {
+              setOptimizationQueue(prev => [...prev, chapterId]);
+            }
+          }
         }}
         onUpdateNovel={(updatedNovel) => {
           setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));
