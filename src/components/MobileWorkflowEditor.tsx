@@ -215,6 +215,12 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
   const [error, setError] = useState<string | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OutputEntry | null>(null);
 
+  // 性能优化：配置面板本地状态，避免实时更新全局 nodes 导致的输入延迟
+  const [localLabel, setLocalLabel] = useState('');
+  const [localFolderName, setLocalFolderName] = useState('');
+  const [localInstruction, setLocalInstruction] = useState('');
+  const [localTargetVolumeName, setLocalTargetVolumeName] = useState('');
+
   const stopRequestedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isInitialLoadRef = useRef(true);
@@ -236,6 +242,16 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
     optimize: [],
     analysis: [],
   });
+
+  // 当切换编辑节点时，同步本地状态
+  useEffect(() => {
+    if (editingNode) {
+      setLocalLabel(editingNode.data.label || '');
+      setLocalFolderName(editingNode.data.folderName || '');
+      setLocalInstruction(editingNode.data.instruction || '');
+      setLocalTargetVolumeName((editingNode.data.targetVolumeName as string) || '');
+    }
+  }, [editingNodeId]);
 
   // 加载配置和数据
   useEffect(() => {
@@ -398,6 +414,17 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
 
   const updateNodeData = (nodeId: string, updates: Partial<WorkflowNodeData>) => {
     setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n));
+  };
+
+  const syncLocalToGlobal = () => {
+    if (editingNodeId) {
+      updateNodeData(editingNodeId, {
+        label: localLabel,
+        folderName: localFolderName,
+        instruction: localInstruction,
+        targetVolumeName: localTargetVolumeName
+      });
+    }
   };
 
   const handleSaveWorkflow = () => {
@@ -1209,7 +1236,13 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
           <div className="flex-1 overflow-y-auto p-6 space-y-8 pb-24 custom-scrollbar">
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">模块名称</label>
-              <input type="text" value={editingNode.data.label} onChange={(e) => updateNodeData(editingNode.id, { label: e.target.value })} className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500 shadow-inner" />
+              <input
+                type="text"
+                value={localLabel}
+                onChange={(e) => setLocalLabel(e.target.value)}
+                onBlur={syncLocalToGlobal}
+                className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500 shadow-inner"
+              />
             </div>
 
             {(editingNode.data.typeKey === 'createFolder' || editingNode.data.typeKey === 'reuseDirectory') && (
@@ -1220,15 +1253,19 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    value={editingNode.data.folderName}
-                    onChange={(e) => updateNodeData(editingNode.id, { folderName: e.target.value })}
+                    value={localFolderName}
+                    onChange={(e) => setLocalFolderName(e.target.value)}
+                    onBlur={syncLocalToGlobal}
                     className="flex-1 bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500"
                     placeholder="输入文件夹名称..."
                   />
                   {editingNode.data.typeKey === 'reuseDirectory' && activeNovel && (
                     <select
                       className="bg-gray-800 border border-gray-700 rounded-2xl px-2 text-xs text-gray-300 outline-none"
-                      onChange={(e) => updateNodeData(editingNode.id, { folderName: e.target.value })}
+                      onChange={(e) => {
+                        setLocalFolderName(e.target.value);
+                        updateNodeData(editingNode.id, { folderName: e.target.value });
+                      }}
                       value=""
                     >
                       <option value="" disabled>选择...</option>
@@ -1269,10 +1306,21 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
                     className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none"
                   >
                     <option value="">-- 自动匹配同名分卷 --</option>
+                    <option value="NEW_VOLUME">+ 新建分卷...</option>
                     {activeNovel?.volumes.map(v => (
                       <option key={v.id} value={v.id}>{v.title}</option>
                     ))}
                   </select>
+                  {editingNode.data.targetVolumeId === 'NEW_VOLUME' && (
+                    <input
+                      type="text"
+                      value={localTargetVolumeName}
+                      onChange={(e) => setLocalTargetVolumeName(e.target.value)}
+                      onBlur={syncLocalToGlobal}
+                      placeholder="输入新分卷名称..."
+                      className="w-full bg-gray-800 border border-indigo-900/40 rounded-2xl px-5 py-3 text-white text-xs outline-none focus:border-indigo-500"
+                    />
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <button
@@ -1306,7 +1354,13 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             )}
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">创作指令 (User Prompt)</label>
-              <textarea value={editingNode.data.instruction} onChange={(e) => updateNodeData(editingNode.id, { instruction: e.target.value })} className="w-full h-56 bg-gray-800 border border-gray-700 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed" placeholder="在此输入具体要求..." />
+              <textarea
+                value={localInstruction}
+                onChange={(e) => setLocalInstruction(e.target.value)}
+                onBlur={syncLocalToGlobal}
+                className="w-full h-56 bg-gray-800 border border-gray-700 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed"
+                placeholder="在此输入具体要求..."
+              />
             </div>
 
             {editingNode.data.typeKey !== 'userInput' && activeNovel && (
@@ -1414,7 +1468,15 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
           </div>
           <div className="p-6 bg-gray-800 border-t border-gray-700 sticky bottom-0 z-10 flex gap-4">
             <button onClick={() => { if(confirm('确定要删除这个模块吗？')) { setNodes(nds => nds.filter(n => n.id !== editingNodeId)); setEditingNodeId(null); } }} className="p-4 bg-red-900/20 text-red-400 rounded-2xl"><Trash2 className="w-6 h-6" /></button>
-            <button onClick={() => setEditingNodeId(null)} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">保存并返回</button>
+            <button
+              onClick={() => {
+                syncLocalToGlobal();
+                setEditingNodeId(null);
+              }}
+              className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold"
+            >
+              保存并返回
+            </button>
           </div>
         </div>
       )}
