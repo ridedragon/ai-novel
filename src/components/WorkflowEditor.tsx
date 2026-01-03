@@ -1481,62 +1481,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         // 同步清空快照
         sortedNodes = sortedNodes.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } }));
 
-        // --- 核心修复：重新开始时清除关联目录下的内容 ---
-        // 查找第一个定义了目录名的节点（无论是创建还是复用）
-        const firstDirNode = getOrderedNodes().find(n => (n.data.typeKey === 'createFolder' || n.data.typeKey === 'reuseDirectory') && n.data.folderName);
-        const workflowFolderName = firstDirNode?.data.folderName;
-
-        if (workflowFolderName && onUpdateNovel) {
-          const updatedNovel = { ...localNovel };
-          let novelChanged = false;
-
-          // 清理世界观
-          if (updatedNovel.worldviewSets) {
-            updatedNovel.worldviewSets = updatedNovel.worldviewSets.map(s =>
-              s.name === workflowFolderName ? { ...s, entries: [] } : s
-            );
-            novelChanged = true;
-          }
-          // 清理角色
-          if (updatedNovel.characterSets) {
-            updatedNovel.characterSets = updatedNovel.characterSets.map(s =>
-              s.name === workflowFolderName ? { ...s, characters: [] } : s
-            );
-            novelChanged = true;
-          }
-          // 清理粗纲
-          if (updatedNovel.outlineSets) {
-            updatedNovel.outlineSets = updatedNovel.outlineSets.map(s =>
-              s.name === workflowFolderName ? { ...s, items: [] } : s
-            );
-            novelChanged = true;
-          }
-          // 清理灵感
-          if (updatedNovel.inspirationSets) {
-            updatedNovel.inspirationSets = updatedNovel.inspirationSets.map(s =>
-              s.name === workflowFolderName ? { ...s, items: [] } : s
-            );
-            novelChanged = true;
-          }
-          // 清理剧情粗纲
-          if (updatedNovel.plotOutlineSets) {
-            updatedNovel.plotOutlineSets = updatedNovel.plotOutlineSets.map(s =>
-              s.name === workflowFolderName ? { ...s, items: [] } : s
-            );
-            novelChanged = true;
-          }
-          // 清理相关章节 (根据分卷名称匹配)
-          const targetVolume = updatedNovel.volumes?.find(v => v.title === workflowFolderName);
-          if (targetVolume) {
-            updatedNovel.chapters = (updatedNovel.chapters || []).filter(c => c.volumeId !== targetVolume.id);
-            novelChanged = true;
-          }
-
-          if (novelChanged) {
-            localNovel = updatedNovel;
-            onUpdateNovel(updatedNovel);
-          }
-        }
+        // 重新开始时仅清理节点内部产出状态，不再干涉全局资料集和分卷章节
       }
 
       let accumContext = ''; // 累积全局和常驻上下文
@@ -1982,7 +1927,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                   // --- 修复：在长文模式下，获取所有相关的章节和总结 ---
                   const targetVolId = n.data.targetVolumeId || finalVolumeId;
                   // 这里必须要包含 subtype 存在的章节（即小总结和大总结）
-                  const volumeChapters = novel.chapters.filter(c => c.volumeId === targetVolId);
+                  // 核心修复：仅展示内容不为空的章节。
+                  // 这样在点击重新开始后（outputEntries已清空），只有新生成内容的章节才会出现在列表中，避免旧章节干扰。
+                  const volumeChapters = novel.chapters.filter(c => c.volumeId === targetVolId && c.content && c.content.trim().length > 0);
                   
                   const newEntries: OutputEntry[] = volumeChapters.map(c => ({
                     // 注意：这里 ID 的构造必须和下方排序逻辑中的查找 ID 一致
