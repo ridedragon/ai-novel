@@ -198,21 +198,17 @@ const NODE_CONFIGS: Record<NodeTypeKey, any> = {
 };
 
 // --- 性能优化输入组件 ---
-const OptimizedInput = ({ value, onChange, onBlur, className, placeholder, type = "text" }: any) => {
-  const [localValue, setLocalValue] = useState(value);
-  
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
+const OptimizedInput = ({ value, onChange, className, placeholder, type = "text" }: any) => {
+  // 使用 defaultValue 实现非受控组件，彻底避免打字时的 React 渲染干扰
   return (
     <input
+      key={value} // 当值从外部彻底改变时（如切换节点）重新挂载
       type={type}
-      value={localValue}
-      onChange={(e) => setLocalValue(e.target.value)}
+      defaultValue={value}
       onBlur={(e) => {
-        onChange(e.target.value);
-        if (onBlur) onBlur(e);
+        if (e.target.value !== value) {
+          onChange(e.target.value);
+        }
       }}
       className={className}
       placeholder={placeholder}
@@ -220,20 +216,15 @@ const OptimizedInput = ({ value, onChange, onBlur, className, placeholder, type 
   );
 };
 
-const OptimizedTextarea = ({ value, onChange, onBlur, className, placeholder }: any) => {
-  const [localValue, setLocalValue] = useState(value);
-  
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
+const OptimizedTextarea = ({ value, onChange, className, placeholder }: any) => {
   return (
     <textarea
-      value={localValue}
-      onChange={(e) => setLocalValue(e.target.value)}
+      key={value}
+      defaultValue={value}
       onBlur={(e) => {
-        onChange(e.target.value);
-        if (onBlur) onBlur(e);
+        if (e.target.value !== value) {
+          onChange(e.target.value);
+        }
       }}
       className={className}
       placeholder={placeholder}
@@ -1432,6 +1423,17 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
 
         lastNodeOutput += `【${node.data.typeLabel}输出】：\n${result}\n\n`;
       }
+      
+      // 强制清理所有节点的执行状态，确保动画停止
+      setNodes(nds => nds.map(n => ({
+        ...n,
+        data: {
+          ...n.data,
+          status: n.data.status === 'executing' ? 'completed' : n.data.status
+        }
+      })));
+      setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+
       if (!stopRequestedRef.current) { setCurrentNodeIndex(-1); setIsRunning(false); }
     } catch (e: any) {
       if (e.name !== 'AbortError') setError(`执行失败: ${e.message}`);
@@ -1521,7 +1523,7 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
       </div>
 
       {/* 画布 */}
-      <div className="flex-1 relative bg-[#1a1a1a]">
+      <div className={`flex-1 relative bg-[#1a1a1a] ${editingNodeId ? 'invisible h-0' : 'visible'}`}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
