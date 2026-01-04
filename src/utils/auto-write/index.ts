@@ -209,7 +209,7 @@ export class AutoWriteEngine {
 
           if (this.config.stream) {
             for await (const chunk of response) {
-              if (!this.isRunning) throw new Error('Aborted');
+              if (!this.isRunning || this.abortController?.signal.aborted) throw new Error('Aborted');
               const content = chunk.choices[0]?.delta?.content || '';
               fullGeneratedContent += content;
 
@@ -411,9 +411,14 @@ export class AutoWriteEngine {
       onStatusUpdate(`正在完成最后的优化 (${this.activeOptimizationTasks.size}个任务)...`);
       // 增加超时保护，防止因为网络问题导致某些任务挂起，从而死锁工作流节点状态
       let waitStart = Date.now();
-      const MAX_WAIT = 120000; // 最多等待 2 分钟
+      const MAX_WAIT = 300000; // 最多等待 5 分钟 (应对长章节或网络慢的情况)
 
-      while (this.activeOptimizationTasks.size > 0 && this.isRunning && Date.now() - waitStart < MAX_WAIT) {
+      while (
+        this.activeOptimizationTasks.size > 0 &&
+        this.isRunning &&
+        !this.abortController?.signal.aborted &&
+        Date.now() - waitStart < MAX_WAIT
+      ) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
@@ -521,6 +526,8 @@ export class AutoWriteEngine {
     }
 
     // Phase 2: Optimization
+    if (!this.isRunning || optimizationAbortController.signal.aborted) return;
+
     try {
       let isAnalysisUsed = false;
       const messages: any[] = activePreset.prompts
@@ -597,7 +604,8 @@ export class AutoWriteEngine {
         onNovelUpdate(this.novel);
       }
     } catch (e: any) {
-      if (e.name === 'AbortError') {
+      const isAbort = e.name === 'AbortError' || e.message === 'Request was aborted.' || e.message === 'Aborted';
+      if (isAbort) {
         terminal.log(`[AutoWrite Optimize] Optimization for chapter ${chapterId} aborted.`);
       } else {
         terminal.error(`[AutoWrite Optimize] Optimization failed for chapter ${chapterId}: ${e}`);

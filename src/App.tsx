@@ -4862,7 +4862,8 @@ function App() {
                 break
 
             } catch (err: any) {
-                if (err.name === 'AbortError' || err.message === 'Aborted') {
+                const isAbort = err.name === 'AbortError' || err.message === 'Request was aborted.' || err.message === 'Aborted';
+                if (isAbort) {
                     terminal.log('[Optimize] Analysis aborted.')
                     break
                 }
@@ -4924,6 +4925,12 @@ function App() {
           })
           .filter(m => m.content && m.content.trim())
         
+        // Phase 2 中断检查
+        if (abortController.signal.aborted) {
+             handleStopOptimize(idToUse)
+             return
+        }
+
         // If analysis result exists but wasn't used in placeholder, append to the last user message
         if (currentAnalysisResult && !isAnalysisUsed) {
              let lastUserIdx = -1
@@ -4991,7 +4998,8 @@ function App() {
         break // Success
 
       } catch (err: any) {
-        if (err.name === 'AbortError' || err.message === 'Aborted') {
+        const isAbort = err.name === 'AbortError' || err.message === 'Request was aborted.' || err.message === 'Aborted';
+        if (isAbort) {
             terminal.log('[Optimize] Process aborted.')
             break
         }
@@ -5488,7 +5496,8 @@ ${taskDescription}`
         break
 
       } catch (err: any) {
-         if (err.name === 'AbortError' || err.message === 'Aborted' || !isAutoWritingRef.current) {
+         const isAbort = err.name === 'AbortError' || err.message === 'Request was aborted.' || err.message === 'Aborted' || !isAutoWritingRef.current;
+         if (isAbort) {
              terminal.log('[AutoWrite] Process aborted.')
              return
          }
@@ -5856,7 +5865,8 @@ ${taskDescription}`
         break // Success, exit loop
 
       } catch (err: any) {
-        if (err.name === 'AbortError' || err.message === 'Aborted') {
+        const isAbort = err.name === 'AbortError' || err.message === 'Request was aborted.' || err.message === 'Aborted';
+        if (isAbort) {
             terminal.log('[Generate] Process aborted.')
             break
         }
