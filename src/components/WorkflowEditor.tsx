@@ -529,13 +529,13 @@ const NodePropertiesModal = ({
           {node.data.presetType && (
             <div className="space-y-3 pt-6 border-t border-gray-700/30">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                <Cpu className="w-3.5 h-3.5" /> 调用系统预设
+                <Cpu className="w-3.5 h-3.5" /> 基础模板 (调用系统预设)
               </label>
               <div className="relative">
                 <select
                   value={node.data.presetId as string}
                   onChange={(e) => {
-                    const presets = allPresets[node.data.presetType as string] || [];
+                    const presets = Object.values(allPresets).flat();
                     const preset = presets.find(p => p.id === e.target.value);
                     updateNodeData(node.id, {
                       presetId: e.target.value,
@@ -544,18 +544,21 @@ const NodePropertiesModal = ({
                   }}
                   className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none appearance-none cursor-pointer transition-all"
                 >
-                  <option value="">-- {node.data.typeKey === 'aiChat' ? '使用主设置模型' : '请选择生成预设'} --</option>
+                  <option value="">-- 不使用预设模板 (使用主设置) --</option>
                   {node.data.typeKey === 'aiChat'
                     ? Object.values(allPresets).flat().map(p => (
                         <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认模型'})</option>
                       ))
                     : (allPresets[node.data.presetType as string] || []).map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
+                        <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认'})</option>
                       ))
                   }
                 </select>
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
               </div>
+              <p className="text-[10px] text-gray-500 leading-relaxed">
+                * 选择预设将加载该预设定义的提示词和模型。
+              </p>
             </div>
           )}
 
@@ -563,7 +566,7 @@ const NodePropertiesModal = ({
             <div className="space-y-4 pt-6 border-t border-gray-700/30">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                  <Wand2 className="w-3.5 h-3.5 text-amber-400" /> 节点特定 AI 配置
+                  <Wand2 className="w-3.5 h-3.5 text-amber-400" /> 强制自定义 (覆盖所有设置)
                 </label>
                 <button
                   onClick={() => {
@@ -573,7 +576,7 @@ const NodePropertiesModal = ({
                   }}
                   className={`text-[10px] px-2 py-1 rounded transition-all font-bold uppercase tracking-wider ${node.data.overrideAiConfig ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-gray-700 text-gray-400 hover:text-gray-200'}`}
                 >
-                  {node.data.overrideAiConfig ? '已启用重写' : '启用独立配置'}
+                  {node.data.overrideAiConfig ? '已开启重写' : '开启自定义'}
                 </button>
               </div>
 
@@ -588,7 +591,7 @@ const NodePropertiesModal = ({
                           onChange={(e) => updateNodeData(node.id, { model: e.target.value })}
                           className="w-full bg-[#161922] border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-100 focus:border-indigo-500 outline-none appearance-none"
                         >
-                          <option value="">跟随全局/预设模型</option>
+                          <option value="">跟随系统默认 (或模板设置)</option>
                           {globalConfig?.modelList?.map((m: string) => (
                             <option key={m} value={m}>{m}</option>
                           ))}

@@ -342,13 +342,13 @@ const ConfigPanel = React.memo(({
         {editingNode.data.presetType && (
           <div className="space-y-3">
             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-              <Cpu className="w-3.5 h-3.5" /> AI 预设
+              <Cpu className="w-3.5 h-3.5" /> 基础模板 (调用系统预设)
             </label>
             <div className="relative">
               <select
                 value={editingNode.data.presetId as string}
                 onChange={(e) => {
-                  const presets = allPresets[editingNode.data.presetType as string] || [];
+                  const presets = Object.values(allPresets).flat();
                   const preset = presets.find(p => p.id === e.target.value);
                   onUpdateNodeData(editingNode.id, {
                     presetId: e.target.value,
@@ -357,18 +357,19 @@ const ConfigPanel = React.memo(({
                 }}
                 className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none"
               >
-                <option value="">-- {editingNode.data.typeKey === 'aiChat' ? '使用主设置模型' : '请选择生成预设'} --</option>
+                <option value="">-- 不使用预设模板 (使用主设置) --</option>
                 {editingNode.data.typeKey === 'aiChat'
                   ? Object.values(allPresets).flat().map(p => (
                       <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认'})</option>
                     ))
                   : (allPresets[editingNode.data.presetType as string] || []).map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
+                      <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认'})</option>
                     ))
                 }
               </select>
               <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
             </div>
+            <p className="text-[8px] text-gray-500 italic px-1">* 预设包含其定义的提示词和模型设置。</p>
           </div>
         )}
 
@@ -376,13 +377,13 @@ const ConfigPanel = React.memo(({
           <div className="space-y-4 pt-4 border-t border-gray-800">
             <div className="flex items-center justify-between">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                <Wand2 className="w-3.5 h-3.5 text-amber-400" /> 独立 AI 配置
+                <Wand2 className="w-3.5 h-3.5 text-amber-400" /> 强制自定义 (覆盖所有)
               </label>
               <button
                 onClick={() => onUpdateNodeData(editingNode.id, { overrideAiConfig: !editingNode.data.overrideAiConfig })}
                 className={`text-[10px] px-3 py-1.5 rounded-full transition-all font-bold ${editingNode.data.overrideAiConfig ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-gray-700 text-gray-400'}`}
               >
-                {editingNode.data.overrideAiConfig ? '已启用' : '点击启用'}
+                {editingNode.data.overrideAiConfig ? '已开启重写' : '开启自定义'}
               </button>
             </div>
 
@@ -396,7 +397,7 @@ const ConfigPanel = React.memo(({
                       onChange={(e) => onUpdateNodeData(editingNode.id, { model: e.target.value })}
                       className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-xs text-white outline-none appearance-none"
                     >
-                      <option value="">跟随全局/预设模型</option>
+                      <option value="">跟随系统默认 (或模板设置)</option>
                       {globalConfig?.modelList?.map((m: string) => (
                         <option key={m} value={m}>{m}</option>
                       ))}
@@ -453,8 +454,9 @@ const ConfigPanel = React.memo(({
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] text-gray-400 uppercase tracking-widest">对话提示词 (Prompts)</label>
                     <button
-                      onClick={() => setIsEditingPrompts(true)}
-                      className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-bold"
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setIsEditingPrompts(true); }}
+                      className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-bold p-2 -m-2"
                     >
                       <Edit2 className="w-3 h-3" /> 编辑管理
                     </button>
