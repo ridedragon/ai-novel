@@ -543,6 +543,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   const [isPaused, setIsPaused] = useState(false);
   const [currentNodeIndex, setCurrentNodeIndex] = useState<number>(-1);
   const [stopRequested, setStopRequested] = useState(false);
+  const [edgeToDelete, setEdgeToDelete] = useState<Edge | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OutputEntry | null>(null);
 
@@ -719,6 +720,18 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     (params: Connection) => setEdges((eds) => addEdge({ ...params, type: 'custom', animated: false }, eds)),
     [setEdges]
   );
+
+  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    event.stopPropagation();
+    setEdgeToDelete(edge);
+  }, []);
+
+  const confirmDeleteEdge = useCallback(() => {
+    if (edgeToDelete) {
+      setEdges((eds) => eds.filter((e) => e.id !== edgeToDelete.id));
+      setEdgeToDelete(null);
+    }
+  }, [edgeToDelete, setEdges]);
 
   const addNewNode = (typeKey: NodeTypeKey) => {
     const config = NODE_CONFIGS[typeKey];
@@ -1732,6 +1745,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeClick={(_, node) => setEditingNodeId(node.id)}
+          onEdgeClick={onEdgeClick}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
@@ -1825,6 +1839,37 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           <div className="p-6 bg-gray-800 border-t border-gray-700 flex gap-4">
             <button onClick={() => { navigator.clipboard.writeText(previewEntry.content); }} className="flex-1 py-4 bg-gray-700 text-gray-200 rounded-2xl font-bold flex items-center justify-center gap-2"><Copy className="w-5 h-5" /> 复制内容</button>
             <button onClick={() => setPreviewEntry(null)} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">关闭预览</button>
+          </div>
+        </div>
+      )}
+
+      {/* --- 连线删除确认弹窗 --- */}
+      {edgeToDelete && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="p-3 bg-red-500/10 rounded-full">
+                <Trash2 className="w-6 h-6 text-red-500" />
+              </div>
+              <div>
+                <h4 className="text-lg font-bold text-gray-100">删除连线？</h4>
+                <p className="text-sm text-gray-400">确定要断开这两个模块之间的连接吗？</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setEdgeToDelete(null)}
+                className="flex-1 px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-sm font-medium transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmDeleteEdge}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-red-900/20 transition-all active:scale-95"
+              >
+                确认删除
+              </button>
+            </div>
           </div>
         </div>
       )}
