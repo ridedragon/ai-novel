@@ -1440,103 +1440,126 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 >> -----------------------------------------------------------
         `);
 
-        const completion = await openai.chat.completions.create({
-          model: finalModel,
-          messages,
-          temperature: preset?.temperature ?? globalConfig.temperature,
-          top_p: preset?.topP ?? globalConfig.topP,
-          top_k: (preset as any)?.topK ?? globalConfig.topK,
-        } as any, { signal: abortControllerRef.current?.signal });
-
-        const result = completion.choices[0]?.message?.content || '';
-        if (!result || result.trim().length === 0) {
-          throw new Error('AI 返回内容为空，已终止工作流。请检查网络或模型配置。');
-        }
-        terminal.log(`[Workflow Output] ${node.data.typeLabel} - ${node.data.label}:\n${result.slice(0, 500)}${result.length > 500 ? '...' : ''}`);
-        
-        // 6. 结构化解析 AI 输出并更新节点产物
+        let result = '';
         let entriesToStore: { title: string; content: string }[] = [];
-        
-        try {
-          // 极致鲁棒的 JSON 提取与清理逻辑
-          const cleanAndParseJSON = (text: string) => {
-            let processed = text.trim();
-            
-            // 移除 Markdown 标记
-            processed = processed.replace(/```json\s*([\s\S]*?)```/gi, '$1')
-                                 .replace(/```\s*([\s\S]*?)```/gi, '$1')
-                                 .replace(/\[\/?JSON\]/gi, '');
+        let retryCount = 0;
+        const maxRetries = 2; // 总共尝试 3 次
+        let isSuccess = false;
 
-            // 寻找 JSON 边界
-            const firstBracket = processed.indexOf('[');
-            const firstBrace = processed.indexOf('{');
-            let start = -1;
-            if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) start = firstBracket;
-            else if (firstBrace !== -1) start = firstBrace;
+        while (retryCount <= maxRetries && !isSuccess) {
+          if (retryCount > 0) {
+            terminal.log(`[Mobile Workflow Retry] 节点 ${node.data.label} JSON 解析失败，正在进行第 ${retryCount} 次重试...`);
+            updateNodeData(node.id, { label: `重试中(${retryCount}/${maxRetries}): ${node.data.typeLabel}` });
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
 
-            if (start !== -1) {
-              const lastBracket = processed.lastIndexOf(']');
-              const lastBrace = processed.lastIndexOf('}');
-              const end = Math.max(lastBracket, lastBrace);
-              if (end > start) {
-                processed = processed.substring(start, end + 1);
+          const completion = await openai.chat.completions.create({
+            model: finalModel,
+            messages,
+            temperature: preset?.temperature ?? globalConfig.temperature,
+            top_p: preset?.topP ?? globalConfig.topP,
+            top_k: (preset as any)?.topK ?? globalConfig.topK,
+          } as any, { signal: abortControllerRef.current?.signal });
+
+          result = completion.choices[0]?.message?.content || '';
+          if (!result || result.trim().length === 0) {
+            throw new Error('AI 返回内容为空，已终止工作流。请检查网络或模型配置。');
+          }
+          terminal.log(`[Workflow Output] ${node.data.typeLabel} - ${node.data.label}:\n${result.slice(0, 500)}${result.length > 500 ? '...' : ''}`);
+          
+          // 6. 结构化解析 AI 输出并更新节点产物
+          try {
+            // 极致鲁棒的 JSON 提取与清理逻辑
+            const cleanAndParseJSON = (text: string) => {
+              let processed = text.trim();
+              
+              // 移除 Markdown 标记
+              processed = processed.replace(/```json\s*([\s\S]*?)```/gi, '$1')
+                                   .replace(/```\s*([\s\S]*?)```/gi, '$1')
+                                   .replace(/\[\/?JSON\]/gi, '');
+
+              // 寻找 JSON 边界
+              const firstBracket = processed.indexOf('[');
+              const firstBrace = processed.indexOf('{');
+              let start = -1;
+              if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) start = firstBracket;
+              else if (firstBrace !== -1) start = firstBrace;
+
+              if (start !== -1) {
+                const lastBracket = processed.lastIndexOf(']');
+                const lastBrace = processed.lastIndexOf('}');
+                const end = Math.max(lastBracket, lastBrace);
+                if (end > start) {
+                  processed = processed.substring(start, end + 1);
+                }
               }
-            }
 
-            // 增强纠偏：修复常见的 LLM JSON 语法错误
-            const heuristicFix = (jsonStr: string) => {
-              return jsonStr
-                .replace(/":\s*:/g, '":') // 修复双冒号 "::"
-                .replace(/,\s*([\]}])/g, '$1') // 移除末尾多余逗号
-                .replace(/[\u0000-\u001F\u007F-\u009F]/g, ""); // 移除不可见控制字符
+              // 增强纠偏：修复常见的 LLM JSON 语法错误
+              const heuristicFix = (jsonStr: string) => {
+                return jsonStr
+                  .replace(/":\s*:/g, '":') // 修复双冒号 "::"
+                  .replace(/,\s*([\]}])/g, '$1') // 移除末尾多余逗号
+                  .replace(/[\u0000-\u001F\u007F-\u009F]/g, ""); // 移除不可见控制字符
+              };
+
+              try {
+                return JSON.parse(processed);
+              } catch (e: any) {
+                const fixed = heuristicFix(processed);
+                try {
+                  return JSON.parse(fixed);
+                } catch (e2: any) {
+                  // 打印详细错误上下文
+                  const errorPos = parseInt(e2.message.match(/at position (\d+)/)?.[1] || "0", 10);
+                  const context = fixed.substring(Math.max(0, errorPos - 50), Math.min(fixed.length, errorPos + 50));
+                  terminal.log(`[Mobile JSON Parse Error] ${e2.message}\nContext near error:\n...${context}...`);
+                  throw e2;
+                }
+              }
             };
 
-            try {
-              return JSON.parse(processed);
-            } catch (e: any) {
-              const fixed = heuristicFix(processed);
-              try {
-                return JSON.parse(fixed);
-              } catch (e2: any) {
-                // 打印详细错误上下文
-                const errorPos = parseInt(e2.message.match(/at position (\d+)/)?.[1] || "0", 10);
-                const context = fixed.substring(Math.max(0, errorPos - 50), Math.min(fixed.length, errorPos + 50));
-                terminal.log(`[Mobile JSON Parse Error] ${e2.message}\nContext near error:\n...${context}...`);
-                throw e2;
-              }
-            }
-          };
-
-          const parsed = cleanAndParseJSON(result);
-          
-          const extractEntries = (data: any): {title: string, content: string}[] => {
-            if (!data) return [];
+            const parsed = cleanAndParseJSON(result);
             
-            // 递归处理嵌套对象（如 { "outline": [...] }）
-            if (typeof data === 'object' && !Array.isArray(data)) {
-              const arrayKey = Object.keys(data).find(k => Array.isArray(data[k]));
-              if (arrayKey) return extractEntries(data[arrayKey]);
+            const extractEntries = (data: any): {title: string, content: string}[] => {
+              if (!data) return [];
+              
+              // 递归处理嵌套对象（如 { "outline": [...] }）
+              if (typeof data === 'object' && !Array.isArray(data)) {
+                const arrayKey = Object.keys(data).find(k => Array.isArray(data[k]));
+                if (arrayKey) return extractEntries(data[arrayKey]);
+              }
+
+              const items = Array.isArray(data) ? data : [data];
+              return items.map((item, idx) => {
+                if (typeof item === 'string') return { title: `条目 ${idx + 1}`, content: item };
+                if (typeof item !== 'object' || item === null) return { title: '未命名', content: String(item) };
+                
+                // 拓宽键名匹配范围
+                const title = String(item.title || item.chapter || item.name || item.item || item.label || item.header || Object.values(item)[0] || '未命名');
+                const content = String(item.summary || item.content || item.description || item.plot || item.setting || item.bio || item.value || Object.values(item)[1] || '');
+                
+                return { title, content };
+              });
+            };
+
+            entriesToStore = extractEntries(parsed);
+            isSuccess = true;
+          } catch (e) {
+            const jsonRequiredNodes = ['outline', 'plotOutline', 'characters', 'worldview'];
+            if (jsonRequiredNodes.includes(node.data.typeKey as string) && retryCount < maxRetries) {
+              retryCount++;
+              continue; // 触发重试
             }
+            entriesToStore = [{
+              title: `生成结果 ${new Date().toLocaleTimeString()}`,
+              content: result
+            }];
+            isSuccess = true;
+          }
+        }
 
-            const items = Array.isArray(data) ? data : [data];
-            return items.map((item, idx) => {
-              if (typeof item === 'string') return { title: `条目 ${idx + 1}`, content: item };
-              if (typeof item !== 'object' || item === null) return { title: '未命名', content: String(item) };
-              
-              // 拓宽键名匹配范围
-              const title = String(item.title || item.chapter || item.name || item.item || item.label || item.header || Object.values(item)[0] || '未命名');
-              const content = String(item.summary || item.content || item.description || item.plot || item.setting || item.bio || item.value || Object.values(item)[1] || '');
-              
-              return { title, content };
-            });
-          };
-
-          entriesToStore = extractEntries(parsed);
-        } catch (e) {
-          entriesToStore = [{
-            title: `生成结果 ${new Date().toLocaleTimeString()}`,
-            content: result
-          }];
+        if (retryCount > 0) {
+          updateNodeData(node.id, { label: node.data.label });
         }
 
         const newEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({ id: `${Date.now()}-${idx}`, title: e.title, content: e.content }));
