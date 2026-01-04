@@ -1315,7 +1315,7 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             longTextMode: globalConfig.longTextMode,
             autoOptimize: globalConfig.autoOptimize,
             twoStepOptimization: globalConfig.twoStepOptimization,
-            asyncOptimize: globalConfig.asyncOptimize,
+            asyncOptimize: globalConfig.asyncOptimize ?? true,
             contextChapterCount: globalConfig.contextChapterCount,
             maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
             consecutiveChapterCount: globalConfig.consecutiveChapterCount || 1,
@@ -1424,6 +1424,8 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
 >> Temperature: ${preset?.temperature ?? globalConfig.temperature}
 >> Top P:       ${preset?.topP ?? globalConfig.topP}
 >> Top K:       ${(preset as any)?.topK ?? globalConfig.topK}
+>> Max Tokens:  ${(preset as any)?.maxReplyLength || globalConfig.maxReplyLength}
+>> Stream:      ${(preset as any)?.stream ?? globalConfig.stream}
 >> -----------------------------------------------------------
         `);
 

@@ -9333,6 +9333,7 @@ ${taskDescription}`
             },
             updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
             updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
+            updateAsyncOptimize: (val: boolean) => setAsyncOptimize(val),
           } as any}
           onUpdateNovel={(updatedNovel: Novel) => {
             setNovels(prevNovels => {

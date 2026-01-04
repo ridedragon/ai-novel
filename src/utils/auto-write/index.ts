@@ -489,18 +489,22 @@ export class AutoWriteEngine {
             }));
 
           terminal.log(`
->> AI REQUEST [优化前分析]
+>> AI REQUEST [工作流: 优化前分析]
 >> -----------------------------------------------------------
->> Model:       ${this.config.model}
+>> Model:       ${this.config.analysisModel || this.config.model}
 >> Temperature: ${analysisPreset.temperature ?? 1.0}
+>> Top P:       ${analysisPreset.topP ?? 1.0}
+>> Top K:       ${analysisPreset.topK ?? 200}
 >> -----------------------------------------------------------
           `);
 
           const completion = await openai.chat.completions.create(
             {
-              model: this.config.model,
+              model: this.config.analysisModel || this.config.model,
               messages: analysisMessages,
               temperature: analysisPreset.temperature ?? 1.0,
+              top_p: analysisPreset.topP ?? 1.0,
+              top_k: analysisPreset.topK ?? 200,
             } as any,
             { signal: optimizationAbortController.signal },
           );
@@ -546,18 +550,22 @@ export class AutoWriteEngine {
       }
 
       terminal.log(`
->> AI REQUEST [正文优化/润色]
+>> AI REQUEST [工作流: 正文优化/润色]
 >> -----------------------------------------------------------
->> Model:       ${this.config.model}
+>> Model:       ${this.config.optimizeModel || this.config.model}
 >> Temperature: ${activePreset.temperature ?? 1.0}
+>> Top P:       ${activePreset.topP ?? 1.0}
+>> Top K:       ${activePreset.topK ?? 200}
 >> -----------------------------------------------------------
       `);
 
       const completion = await openai.chat.completions.create(
         {
-          model: this.config.model,
+          model: this.config.optimizeModel || this.config.model,
           messages: messages,
           temperature: activePreset.temperature ?? 1.0,
+          top_p: activePreset.topP ?? 1.0,
+          top_k: activePreset.topK ?? 200,
         } as any,
         { signal: optimizationAbortController.signal },
       );

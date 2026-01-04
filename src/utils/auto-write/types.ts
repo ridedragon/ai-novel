@@ -22,6 +22,8 @@ export interface AutoWriteConfig {
   smallSummaryPrompt: string;
   bigSummaryPrompt: string;
   outlineModel: string;
+  optimizeModel?: string;
+  analysisModel?: string;
   optimizePresets?: GeneratorPreset[];
   activeOptimizePresetId?: string;
   analysisPresets?: GeneratorPreset[];
