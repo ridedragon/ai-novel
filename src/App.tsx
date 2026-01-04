@@ -583,78 +583,102 @@ const sanitizeJsonString = (content: string): string => {
 
 // Helper to fix common JSON issues (newlines in strings, truncation)
 const sanitizeAndParseJson = (content: string): any[] | null => {
-    // 1. Sanitize Newlines in Strings
-    let result = sanitizeJsonString(content)
+    // 1. Preliminary Cleaning
+    let processed = content.trim();
+    // Remove Markdown code blocks if still present
+    processed = processed.replace(/```json\s*([\s\S]*?)```/gi, '$1').replace(/```\s*([\s\S]*?)```/gi, '$1');
+    // Remove [JSON] tags
+    processed = processed.replace(/\[\/?JSON\]/gi, '');
 
-    // 2. Try parsing sanitized string
-    try {
-        const parsed = JSON.parse(result)
-        if (Array.isArray(parsed)) return parsed
-        if (typeof parsed === 'object' && parsed !== null) return [parsed]
-    } catch (e) {
-        // 3. Handle Truncation: Try to recover valid JSON if it ends abruptly
-        
-        // Count braces to find where to close
-        let openBraces = 0
-        let openBrackets = 0
-        let inString = false
-        let isEscaped = false
-        let lastValidEnd = -1
+    // 2. Boundary Search
+    const startBracket = processed.indexOf('[');
+    const startBrace = processed.indexOf('{');
+    let start = -1;
+    if (startBracket !== -1 && startBrace !== -1) start = Math.min(startBracket, startBrace);
+    else if (startBracket !== -1) start = startBracket;
+    else if (startBrace !== -1) start = startBrace;
 
-        for (let i = 0; i < result.length; i++) {
-            const char = result[i]
-            if (inString) {
-                if (isEscaped) isEscaped = false
-                else if (char === '\\') isEscaped = true
-                else if (char === '"') inString = false
-            } else {
-                if (char === '"') inString = true
-                else if (char === '{') openBraces++
-                else if (char === '}') { openBraces--; lastValidEnd = i; }
-                else if (char === '[') openBrackets++
-                else if (char === ']') { openBrackets--; lastValidEnd = i; }
-            }
+    if (start !== -1) {
+        const endBracket = processed.lastIndexOf(']');
+        const endBrace = processed.lastIndexOf('}');
+        const end = Math.max(endBracket, endBrace);
+        if (end > start) {
+            processed = processed.substring(start, end + 1);
         }
+    }
 
-        // Try simple array closing first if it looks like a truncated array
-        if (openBrackets > 0 || openBraces > 0) {
-            let recoveryTry = result
-            if (inString) recoveryTry += '"'
-            
-            // Close all open braces and brackets in reverse order
-            // This is a bit complex to track perfectly without a stack,
-            // but for typical AI truncation at end of file:
-            const lastBrace = result.lastIndexOf('}')
-            const lastBracket = result.lastIndexOf(']')
-            const lastEnd = Math.max(lastBrace, lastBracket)
-            
-            if (lastEnd !== -1) {
-                let fix = result.substring(0, lastEnd + 1)
-                if (openBrackets > 0) fix += ']'
-                try {
-                    const parsed = JSON.parse(fix)
-                    if (Array.isArray(parsed)) return parsed
-                    if (typeof parsed === 'object' && parsed !== null) return [parsed]
-                } catch(e2) {}
+    // 3. Inner String Sanitization (handle unescaped newlines)
+    let result = sanitizeJsonString(processed);
+
+    // 4. Try parsing
+    try {
+        const parsed = JSON.parse(result);
+        if (Array.isArray(parsed)) return parsed;
+        if (typeof parsed === 'object' && parsed !== null) {
+            // Penetrate single-key objects that might wrap an array
+            const values = Object.values(parsed);
+            if (values.length === 1 && Array.isArray(values[0])) return values[0] as any[];
+            return [parsed];
+        }
+    } catch (e) {
+        // 5. Emergency fallback: strip ALL control characters (0-31) except whitespace
+        try {
+            // eslint-disable-next-line no-control-regex
+            const ultraClean = result.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+            const parsed = JSON.parse(ultraClean);
+            if (Array.isArray(parsed)) return parsed;
+            if (typeof parsed === 'object' && parsed !== null) return [parsed];
+        } catch (e2) {
+            // 6. Handle Truncation: Try to recover valid JSON if it ends abruptly
+            let openBraces = 0;
+            let openBrackets = 0;
+            let inString = false;
+            let isEscaped = false;
+            let lastValidEnd = -1;
+
+            for (let i = 0; i < result.length; i++) {
+                const char = result[i];
+                if (inString) {
+                    if (isEscaped) isEscaped = false;
+                    else if (char === '\\') isEscaped = true;
+                    else if (char === '"') inString = false;
+                } else {
+                    if (char === '"') inString = true;
+                    else if (char === '{') openBraces++;
+                    else if (char === '}') { openBraces--; lastValidEnd = i; }
+                    else if (char === '[') openBrackets++;
+                    else if (char === ']') { openBrackets--; lastValidEnd = i; }
+                }
+            }
+
+            if (openBrackets > 0 || openBraces > 0) {
+                const lastBrace = result.lastIndexOf('}');
+                const lastBracket = result.lastIndexOf(']');
+                const lastEnd = Math.max(lastBrace, lastBracket);
+                
+                if (lastEnd !== -1) {
+                    let fix = result.substring(0, lastEnd + 1);
+                    // Minimal attempt to close current open structures
+                    if (openBrackets > 0 && result[lastEnd] !== ']') fix += ']';
+                    try {
+                        const parsed = JSON.parse(fix);
+                        if (Array.isArray(parsed)) return parsed;
+                        if (typeof parsed === 'object' && parsed !== null) return [parsed];
+                    } catch(e3) {}
+                }
             }
         }
     }
     
-    return null
+    return null;
 }
 
 const safeParseJSONArray = (content: string): any[] => {
-  // 0. 预处理：尝试提取 Markdown 代码块中的内容
-  const markdownMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
-  if (markdownMatch && markdownMatch[1]) {
-      content = markdownMatch[1] // 使用代码块内部的内容
-  }
-
-  // 1. 尝试使用增强的 Sanitize 解析 (处理换行符和简单截断)
+  // 1. 尝试使用增强的 Sanitize 解析 (包含了边界搜索、控制字符清理、穿透逻辑)
   const sanitizedResult = sanitizeAndParseJson(content)
   if (sanitizedResult) return sanitizedResult
 
-  // 2. 尝试提取第一个完整的数组 [...] (使用括号计数，比正则更可靠)
+  // 2. 尝试提取第一个完整的数组 [...] (使用括号计数作为最后的后备手段)
   // 如果上面的 sanitize 失败了(可能是因为结构太乱)，我们尝试寻找干净的结构
   let braceCount = 0
   let startIndex = -1
@@ -796,8 +820,8 @@ const normalizeGeneratorResult = (data: any[], type: 'outline' | 'character' | '
 
         if (type === 'outline') {
             // Flexible matching for keys
-            const title = processField(item.title || item.chapter || item.name || item.header || Object.values(item)[0] || '')
-            const summary = processField(item.summary || item.content || item.description || item.plot || Object.values(item)[1] || '')
+            const title = processField(item.title || item.chapter || item.name || item.header || item.label || Object.values(item)[0] || '')
+            const summary = processField(item.summary || item.content || item.description || item.plot || item.setting || Object.values(item)[1] || '')
             return { title, summary }
         }
         
@@ -4454,13 +4478,17 @@ function App() {
           const rawData = safeParseJSONArray(content)
           // Transform items to support children if they don't have them
           const processItems = (items: any[]): PlotOutlineItem[] => {
-              return items.map(item => ({
-                  id: item.id || crypto.randomUUID(),
-                  title: item.title || item.name || '未命名',
-                  description: item.description || item.content || item.setting || '',
-                  type: item.type || '剧情',
-                  children: item.children ? processItems(item.children) : []
-              }))
+              if (!Array.isArray(items)) return [];
+              return items.map(item => {
+                  if (typeof item !== 'object' || !item) return null;
+                  return {
+                    id: item.id || crypto.randomUUID(),
+                    title: item.title || item.name || item.header || item.label || '未命名',
+                    description: item.description || item.content || item.setting || item.summary || item.plot || '',
+                    type: item.type || '剧情',
+                    children: item.children ? processItems(item.children) : []
+                  };
+              }).filter((i): i is PlotOutlineItem => i !== null);
           }
           const plotData = processItems(rawData)
 

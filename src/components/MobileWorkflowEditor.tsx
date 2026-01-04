@@ -1478,65 +1478,62 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         let entriesToStore: { title: string; content: string }[] = [];
         
         try {
-          // 增强型 JSON 提取逻辑
-          let potentialJson = result.trim();
-          
-          // 1. 预处理：清理模型可能输出的废弃标记
-          potentialJson = potentialJson.replace(/\[\/?JSON\]/gi, '').trim();
+          // 极致鲁棒的 JSON 提取与清理逻辑
+          const cleanAndParseJSON = (text: string) => {
+            let processed = text.trim();
+            
+            // 移除 Markdown 标记
+            processed = processed.replace(/```json\s*([\s\S]*?)```/gi, '$1')
+                                 .replace(/```\s*([\s\S]*?)```/gi, '$1')
+                                 .replace(/\[\/?JSON\]/gi, '');
 
-          // 2. 移除 Markdown 代码块标记（如果存在）
-          potentialJson = potentialJson.replace(/```json\s*([\s\S]*?)```/g, '$1')
-                                       .replace(/```\s*([\s\S]*?)```/g, '$1').trim();
+            // 寻找 JSON 边界
+            const firstBracket = processed.indexOf('[');
+            const firstBrace = processed.indexOf('{');
+            let start = -1;
+            if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) start = firstBracket;
+            else if (firstBrace !== -1) start = firstBrace;
 
-          const firstBracket = potentialJson.indexOf('[');
-          const firstBrace = potentialJson.indexOf('{');
-          let start = -1;
-          let end = -1;
-
-          if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
-            start = firstBracket;
-            end = potentialJson.lastIndexOf(']');
-          } else if (firstBrace !== -1) {
-            start = firstBrace;
-            end = potentialJson.lastIndexOf('}');
-          }
-
-          if (start !== -1 && end !== -1 && end >= start) {
-            potentialJson = potentialJson.substring(start, end + 1);
-          }
-
-          let parsed;
-          try {
-            parsed = JSON.parse(potentialJson);
-          } catch (e) {
-            const match = potentialJson.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
-            if (match) {
-              parsed = JSON.parse(match[0]);
-            } else {
-              throw e;
+            if (start !== -1) {
+              const lastBracket = processed.lastIndexOf(']');
+              const lastBrace = processed.lastIndexOf('}');
+              const end = Math.max(lastBracket, lastBrace);
+              if (end > start) {
+                processed = processed.substring(start, end + 1);
+              }
             }
-          }
+
+            try {
+              return JSON.parse(processed);
+            } catch (e) {
+              // 最后的尝试：清理可能导致解析失败的控制字符
+              processed = processed.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
+              return JSON.parse(processed);
+            }
+          };
+
+          const parsed = cleanAndParseJSON(result);
           
           const extractEntries = (data: any): {title: string, content: string}[] => {
             if (!data) return [];
-            if (Array.isArray(data)) {
-              return data.map(item => {
-                if (typeof item === 'string') return { title: `项 ${new Date().toLocaleTimeString()}`, content: item };
-                if (typeof item !== 'object' || item === null) return { title: '未命名', content: String(item) };
-                const title = String(item.item || item.name || item.title || item.label || item.key || item.header || item.chapter || Object.keys(item)[0] || '未命名');
-                const content = String(item.setting || item.bio || item.summary || item.content || item.description || item.value || item.plot || (typeof item === 'object' ? JSON.stringify(item) : item));
-                return { title, content };
-              });
-            }
-            if (typeof data === 'object') {
+            
+            // 递归处理嵌套对象（如 { "outline": [...] }）
+            if (typeof data === 'object' && !Array.isArray(data)) {
               const arrayKey = Object.keys(data).find(k => Array.isArray(data[k]));
               if (arrayKey) return extractEntries(data[arrayKey]);
-              return Object.entries(data).map(([k, v]) => ({
-                title: k,
-                content: typeof v === 'string' ? v : JSON.stringify(v)
-              }));
             }
-            return [];
+
+            const items = Array.isArray(data) ? data : [data];
+            return items.map((item, idx) => {
+              if (typeof item === 'string') return { title: `条目 ${idx + 1}`, content: item };
+              if (typeof item !== 'object' || item === null) return { title: '未命名', content: String(item) };
+              
+              // 拓宽键名匹配范围
+              const title = String(item.title || item.chapter || item.name || item.item || item.label || item.header || Object.values(item)[0] || '未命名');
+              const content = String(item.summary || item.content || item.description || item.plot || item.setting || item.bio || item.value || Object.values(item)[1] || '');
+              
+              return { title, content };
+            });
           };
 
           entriesToStore = extractEntries(parsed);
