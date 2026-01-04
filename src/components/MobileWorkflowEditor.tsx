@@ -985,62 +985,7 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         // 同步清空快照，防止历史记录累加
         sortedNodes = sortedNodes.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } }));
 
-        // --- 核心修复：重新开始时清除关联目录下的内容 ---
-        // 查找第一个定义了目录名的节点（无论是创建还是复用）
-        const firstDirNode = getOrderedNodes().find(n => (n.data.typeKey === 'createFolder' || n.data.typeKey === 'reuseDirectory') && n.data.folderName);
-        const workflowFolderName = firstDirNode?.data.folderName;
-
-        if (workflowFolderName && onUpdateNovel) {
-          const updatedNovel = { ...localNovel };
-          let novelChanged = false;
-
-          // 清理世界观
-          if (updatedNovel.worldviewSets) {
-            updatedNovel.worldviewSets = updatedNovel.worldviewSets.map(s =>
-              s.name === workflowFolderName ? { ...s, entries: [] } : s
-            );
-            novelChanged = true;
-          }
-          // 清理角色
-          if (updatedNovel.characterSets) {
-            updatedNovel.characterSets = updatedNovel.characterSets.map(s =>
-              s.name === workflowFolderName ? { ...s, characters: [] } : s
-            );
-            novelChanged = true;
-          }
-          // 清理粗纲
-          if (updatedNovel.outlineSets) {
-            updatedNovel.outlineSets = updatedNovel.outlineSets.map(s =>
-              s.name === workflowFolderName ? { ...s, items: [] } : s
-            );
-            novelChanged = true;
-          }
-          // 清理灵感
-          if (updatedNovel.inspirationSets) {
-            updatedNovel.inspirationSets = updatedNovel.inspirationSets.map(s =>
-              s.name === workflowFolderName ? { ...s, items: [] } : s
-            );
-            novelChanged = true;
-          }
-          // 清理剧情粗纲
-          if (updatedNovel.plotOutlineSets) {
-            updatedNovel.plotOutlineSets = updatedNovel.plotOutlineSets.map(s =>
-              s.name === workflowFolderName ? { ...s, items: [] } : s
-            );
-            novelChanged = true;
-          }
-          // 清理相关章节 (根据分卷名称匹配)
-          const targetVolume = updatedNovel.volumes?.find(v => v.title === workflowFolderName);
-          if (targetVolume) {
-            updatedNovel.chapters = (updatedNovel.chapters || []).filter(c => c.volumeId !== targetVolume.id);
-            novelChanged = true;
-          }
-
-          if (novelChanged) {
-            localNovel = updatedNovel;
-            onUpdateNovel(updatedNovel);
-          }
-        }
+        // 重新开始时仅清理节点内部产出状态，不再干涉全局资料集和分卷章节
       }
 
       const resolvePendingRef = (list: string[], sets: any[] | undefined) => {
@@ -1285,38 +1230,55 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         if (node.data.typeKey === 'chapter') {
           if (!globalConfig) throw new Error('缺失全局配置');
 
+          // 1. 寻找匹配的大纲集
           let selectedOutlineSetId = node.data.selectedOutlineSets && node.data.selectedOutlineSets.length > 0
             ? resolvePendingRef([node.data.selectedOutlineSets[0]], localNovel.outlineSets)[0]
             : null;
 
+          // 如果节点没选大纲集，尝试自动匹配当前工作目录对应的大纲集
           if (!selectedOutlineSetId || selectedOutlineSetId.startsWith('pending:')) {
              const matched = localNovel.outlineSets?.find(s => s.name === currentWorkflowFolder);
              if (matched) selectedOutlineSetId = matched.id;
           }
 
           let currentSet = localNovel.outlineSets?.find(s => s.id === selectedOutlineSetId);
-          if (!currentSet || !currentSet.items || currentSet.items.length === 0) {
-            const fallbackSet = localNovel.outlineSets?.[localNovel.outlineSets.length - 1];
-            if (fallbackSet && fallbackSet.items && fallbackSet.items.length > 0 && (!currentWorkflowFolder || fallbackSet.name === currentWorkflowFolder)) {
-              currentSet = fallbackSet;
-            } else {
-              throw new Error(`未关联大纲集或关联的大纲集内容为空`);
+          
+          if (node.data.typeKey === 'chapter') {
+            if (!currentSet || !currentSet.items || currentSet.items.length === 0) {
+              // 最后尝试：如果仍然没找到，但有正在执行的工作流目录，可能大纲集刚被创建但状态未同步
+              const fallbackSet = localNovel.outlineSets?.[localNovel.outlineSets.length - 1];
+              if (fallbackSet && fallbackSet.items && fallbackSet.items.length > 0 && (!currentWorkflowFolder || fallbackSet.name === currentWorkflowFolder)) {
+                currentSet = fallbackSet;
+              } else {
+                throw new Error(`未关联大纲集或关联的大纲集(${currentSet?.name || '未知'})内容为空。请检查：1. 前置大纲节点是否已成功运行 2. 节点属性中是否已勾选对应的大纲集`);
+              }
             }
           }
 
+          // 2. 确定最终分卷 ID (此处必须实时从 localNovel 中获取，确保能感知到刚创建的分卷)
           let finalVolumeId = node.data.targetVolumeId as string;
+          
+          // 获取最新的分卷列表（从执行中的内存状态获取）
           const latestVolumes = localNovel.volumes || [];
+
+          // 优先级 1: 如果节点已经显式关联了某个真实分卷 ID，且该分卷依然存在
           if (finalVolumeId && finalVolumeId !== 'NEW_VOLUME') {
             const exists = latestVolumes.some(v => v.id === finalVolumeId);
-            if (!exists) finalVolumeId = '';
+            if (!exists) finalVolumeId = ''; // 如果关联的分卷被删了，重置它
           }
+
+          // 优先级 2: 自动匹配逻辑 (针对“自动匹配分卷”模式)
           if (!finalVolumeId || finalVolumeId === '') {
+            // 尝试匹配与当前工作流文件夹同名的分卷
             const matchedVol = latestVolumes.find(v => v.title === currentWorkflowFolder);
             if (matchedVol) {
               finalVolumeId = matchedVol.id;
+              // 关键：必须立即将匹配到的 ID 写回节点状态，确保 AutoWriteEngine 拿到的是确定值
               updateNodeData(node.id, { targetVolumeId: finalVolumeId });
             }
           }
+
+          // 优先级 3: 兜底逻辑
           if (!finalVolumeId || finalVolumeId === '') {
             if (latestVolumes.length > 0) {
               finalVolumeId = latestVolumes[0].id;
@@ -1354,22 +1316,23 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             autoOptimize: globalConfig.autoOptimize,
             twoStepOptimization: globalConfig.twoStepOptimization,
             asyncOptimize: globalConfig.asyncOptimize,
+            contextChapterCount: globalConfig.contextChapterCount,
+            maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
             consecutiveChapterCount: globalConfig.consecutiveChapterCount || 1,
             smallSummaryInterval: globalConfig.smallSummaryInterval,
             bigSummaryInterval: globalConfig.bigSummaryInterval,
             smallSummaryPrompt: globalConfig.smallSummaryPrompt,
             bigSummaryPrompt: globalConfig.bigSummaryPrompt,
             outlineModel: globalConfig.outlineModel,
-            contextChapterCount: globalConfig.contextChapterCount,
             optimizeModel: globalConfig.optimizeModel,
             analysisModel: globalConfig.analysisModel,
             optimizePresets: globalConfig.optimizePresets,
             activeOptimizePresetId: globalConfig.activeOptimizePresetId,
             analysisPresets: globalConfig.analysisPresets,
             activeAnalysisPresetId: globalConfig.activeAnalysisPresetId,
-            maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
           };
 
+          // 4. 初始化引擎
           const engine = new AutoWriteEngine({
             ...engineConfig,
             contextChapterCount: globalConfig.contextChapterCount,
@@ -1392,39 +1355,43 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             continue;
           }
 
-          await engine.run(items, writeStartIndex, globalConfig.prompts.filter(p => p.active),
+          await engine.run(
+            items,
+            writeStartIndex,
+            globalConfig.prompts.filter(p => p.active),
             () => {
               // 核心修复：工作流执行时，必须根据当前节点所选的 AI 预设来合并正则脚本
               const baseScripts = globalConfig.getActiveScripts() || [];
               const presetScripts = (preset as any)?.regexScripts || [];
               return [...baseScripts, ...presetScripts];
             },
-            (s) => {
-              const displayStatus = s.includes('完成') ? s : `创作中: ${s}`;
+            (status) => {
+              // 更新节点标签以显示进度，如果状态包含“完成”则直接显示，否则增加“创作中”前缀
+              const displayStatus = status.includes('完成') ? status : `创作中: ${status}`;
               updateNodeData(node.id, { label: displayStatus });
             },
-            (n) => {
-              localNovel = n; // 实时同步本地副本
-              updateLocalAndGlobal(n);
+            (updatedNovel) => {
+              localNovel = updatedNovel; // 实时同步本地副本
+              updateLocalAndGlobal(updatedNovel);
             },
-            async (id, content, updatedNovel) => {
-              // 1. 优先使用引擎传递的最新状态
+            async (chapterId, content, updatedNovel) => {
               if (updatedNovel) {
                 localNovel = updatedNovel;
               }
-              // 2. 执行全局完成回调（触发总结生成等异步副作用）并捕获返回的最终状态
               if (globalConfig.onChapterComplete) {
-                const result = await (globalConfig.onChapterComplete as any)(id, content, updatedNovel);
+                const result = await (globalConfig.onChapterComplete as any)(chapterId, content, updatedNovel);
                 if (result && typeof result === 'object' && (result as Novel).chapters) {
                   localNovel = result as Novel;
                 }
               }
               // 正文生成节点不再维护 outputEntries 列表，因为内容直接写入目录
-
-              // 核心修复：必须返回最新的 localNovel 给引擎，解决手机端状态覆盖问题
+              // 核心修复：必须将最新的 localNovel 返回给引擎
               return localNovel;
             },
-            finalVolumeId, false, selectedOutlineSetId
+            finalVolumeId,
+            false,
+            selectedOutlineSetId,
+            abortControllerRef.current?.signal
           );
           updateNodeData(node.id, { label: NODE_CONFIGS.chapter.defaultLabel });
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
@@ -1601,7 +1568,30 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
     }
   };
 
-  const stopWorkflow = () => { stopRequestedRef.current = true; abortControllerRef.current?.abort(); setIsRunning(false); };
+  const stopWorkflow = () => {
+    // 停止时显式更新工作流列表并保存
+    const updatedWorkflows = workflows.map(w => {
+      if (w.id === activeWorkflowId) {
+        return {
+          ...w,
+          nodes,
+          edges,
+          currentNodeIndex,
+          lastModified: Date.now()
+        };
+      }
+      return w;
+    });
+    setWorkflows(updatedWorkflows);
+    localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
+    
+    setStopRequested(true);
+    stopRequestedRef.current = true;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setIsRunning(false);
+  };
 
   if (!isOpen) return null;
 
