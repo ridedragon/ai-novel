@@ -1212,11 +1212,6 @@ function App() {
   const concurrentOptimizationLimitRef = useRef(concurrentOptimizationLimit)
 
   // Optimization Queue
-  const [asyncOptimize, setAsyncOptimize] = useState(() => {
-    const saved = localStorage.getItem('asyncOptimize');
-    if (saved === null) return true; // 默认为开启
-    return saved === 'true';
-  })
   const [optimizationQueue, setOptimizationQueue] = useState<number[]>([])
   const optimizationQueueRef = useRef<number[]>([])
 
@@ -1229,8 +1224,7 @@ function App() {
     concurrentOptimizationLimitRef.current = concurrentOptimizationLimit
     localStorage.setItem('consecutiveChapterCount', String(consecutiveChapterCount))
     localStorage.setItem('concurrentOptimizationLimit', String(concurrentOptimizationLimit))
-    localStorage.setItem('asyncOptimize', String(asyncOptimize))
-  }, [consecutiveChapterCount, concurrentOptimizationLimit, asyncOptimize])
+  }, [consecutiveChapterCount, concurrentOptimizationLimit])
 
   useEffect(() => {
     longTextModeRef.current = longTextMode
@@ -9319,7 +9313,6 @@ ${taskDescription}`
             consecutiveChapterCount: Number(consecutiveChapterCount),
             contextChapterCount: Number(contextChapterCount) || 1,
             maxConcurrentOptimizations: Number(concurrentOptimizationLimit) || 3,
-            asyncOptimize,
             smallSummaryInterval: Number(smallSummaryInterval),
             bigSummaryInterval: Number(bigSummaryInterval),
             smallSummaryPrompt,
@@ -9337,7 +9330,6 @@ ${taskDescription}`
             },
             updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
             updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
-            updateAsyncOptimize: (val: boolean) => setAsyncOptimize(val),
           } as any}
           onUpdateNovel={(updatedNovel: Novel) => {
             setNovels(prevNovels => {
@@ -9459,7 +9451,6 @@ ${taskDescription}`
           consecutiveChapterCount: Number(consecutiveChapterCount),
           contextChapterCount: Number(contextChapterCount) || 1,
           maxConcurrentOptimizations: Number(concurrentOptimizationLimit) || 3,
-          asyncOptimize,
           smallSummaryInterval: Number(smallSummaryInterval),
           bigSummaryInterval: Number(bigSummaryInterval),
           smallSummaryPrompt,
@@ -9477,7 +9468,6 @@ ${taskDescription}`
           },
           updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
           updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
-          updateAsyncOptimize: (val: boolean) => setAsyncOptimize(val),
         } as any}
         onUpdateNovel={(updatedNovel: Novel) => {
           setNovels(prevNovels => {

@@ -373,26 +373,11 @@ export class AutoWriteEngine {
 
               // 联动“自动优化”按钮逻辑：如果配置开启，直接触发内部优化函数
               if (this.config.autoOptimize && this.isRunning) {
-                terminal.log(
-                  `[AutoWrite] Auto-optimization triggered for chapter ${chapterId}. Mode: ${
-                    this.config.asyncOptimize ? 'Async' : 'Sync'
-                  }`,
-                );
-                if (this.config.asyncOptimize) {
-                  // 异步模式：彻底不阻塞主流程，在后台执行优化。
-                  // 第十八次修复：强制传递空函数作为 statusUpdate，从物理上隔绝异步任务对主 UI 状态的干扰
-                  this.optimizeChapter(chapterId, content, () => {}, onNovelUpdate, getActiveScripts(), true);
-                } else {
-                  // 同步模式：等待优化完成后再继续
-                  await this.optimizeChapter(
-                    chapterId,
-                    content,
-                    onStatusUpdate,
-                    onNovelUpdate,
-                    getActiveScripts(),
-                    false,
-                  );
-                }
+                terminal.log(`[AutoWrite] Auto-optimization (background) triggered for chapter ${chapterId}.`);
+                // 第十九次修复：彻底移除 asyncOptimize 配置判定，强制将自动优化设为异步非阻塞。
+                // 自动优化（润色）任务现在永远在后台静默运行，绝对不会阻塞主创作流程。
+                // 同时强制传递空函数作为 statusUpdate，从物理上隔绝异步任务对主 UI 状态的干扰。
+                this.optimizeChapter(chapterId, content, () => {}, onNovelUpdate, getActiveScripts(), true);
               }
             }),
           );

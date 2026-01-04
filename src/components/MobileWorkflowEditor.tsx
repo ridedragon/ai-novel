@@ -1315,7 +1315,6 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             longTextMode: globalConfig.longTextMode,
             autoOptimize: globalConfig.autoOptimize,
             twoStepOptimization: globalConfig.twoStepOptimization,
-            asyncOptimize: globalConfig.asyncOptimize ?? true,
             contextChapterCount: globalConfig.contextChapterCount,
             maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
             consecutiveChapterCount: globalConfig.consecutiveChapterCount || 1,
@@ -1472,12 +1471,27 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
               }
             }
 
+            // 增强纠偏：修复常见的 LLM JSON 语法错误
+            const heuristicFix = (jsonStr: string) => {
+              return jsonStr
+                .replace(/":\s*:/g, '":') // 修复双冒号 "::"
+                .replace(/,\s*([\]}])/g, '$1') // 移除末尾多余逗号
+                .replace(/[\u0000-\u001F\u007F-\u009F]/g, ""); // 移除不可见控制字符
+            };
+
             try {
               return JSON.parse(processed);
-            } catch (e) {
-              // 最后的尝试：清理可能导致解析失败的控制字符
-              processed = processed.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
-              return JSON.parse(processed);
+            } catch (e: any) {
+              const fixed = heuristicFix(processed);
+              try {
+                return JSON.parse(fixed);
+              } catch (e2: any) {
+                // 打印详细错误上下文
+                const errorPos = parseInt(e2.message.match(/at position (\d+)/)?.[1] || "0", 10);
+                const context = fixed.substring(Math.max(0, errorPos - 50), Math.min(fixed.length, errorPos + 50));
+                terminal.log(`[Mobile JSON Parse Error] ${e2.message}\nContext near error:\n...${context}...`);
+                throw e2;
+              }
             }
           };
 
