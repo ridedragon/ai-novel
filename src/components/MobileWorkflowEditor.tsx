@@ -43,6 +43,7 @@ import {
   Upload,
   User,
   Users,
+  Wand2,
   Workflow,
   X
 } from 'lucide-react';
@@ -261,6 +262,8 @@ const ConfigPanel = React.memo(({
   onClose,
   onPreviewEntry
 }: ConfigPanelProps) => {
+  const [isEditingPrompts, setIsEditingPrompts] = useState(false);
+
   const handleUpdate = (updates: Partial<WorkflowNodeData>) => {
     onUpdateNodeData(editingNode.id, updates);
   };
@@ -344,14 +347,137 @@ const ConfigPanel = React.memo(({
             <div className="relative">
               <select
                 value={editingNode.data.presetId as string}
-                onChange={(e) => onUpdateNodeData(editingNode.id, { presetId: e.target.value })}
+                onChange={(e) => {
+                  const presets = allPresets[editingNode.data.presetType as string] || [];
+                  const preset = presets.find(p => p.id === e.target.value);
+                  onUpdateNodeData(editingNode.id, {
+                    presetId: e.target.value,
+                    presetName: preset?.name || ''
+                  });
+                }}
                 className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none"
               >
-                <option value="">-- 请选择预设 --</option>
-                {(allPresets[editingNode.data.presetType as string] || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                <option value="">-- {editingNode.data.typeKey === 'aiChat' ? '使用主设置模型' : '请选择生成预设'} --</option>
+                {editingNode.data.typeKey === 'aiChat'
+                  ? Object.values(allPresets).flat().map(p => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认'})</option>
+                    ))
+                  : (allPresets[editingNode.data.presetType as string] || []).map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))
+                }
               </select>
               <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
             </div>
+          </div>
+        )}
+
+        {editingNode.data.presetType && (
+          <div className="space-y-4 pt-4 border-t border-gray-800">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                <Wand2 className="w-3.5 h-3.5 text-amber-400" /> 独立 AI 配置
+              </label>
+              <button
+                onClick={() => onUpdateNodeData(editingNode.id, { overrideAiConfig: !editingNode.data.overrideAiConfig })}
+                className={`text-[10px] px-3 py-1.5 rounded-full transition-all font-bold ${editingNode.data.overrideAiConfig ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-gray-700 text-gray-400'}`}
+              >
+                {editingNode.data.overrideAiConfig ? '已启用' : '点击启用'}
+              </button>
+            </div>
+
+            {editingNode.data.overrideAiConfig && (
+              <div className="space-y-5 animate-in fade-in slide-in-from-top-2 duration-200 bg-gray-800/30 p-4 rounded-3xl border border-gray-700/50">
+                <div className="space-y-2">
+                  <label className="text-[10px] text-gray-400 uppercase">模型 (Model)</label>
+                  <div className="relative">
+                    <select
+                      value={editingNode.data.model as string || ''}
+                      onChange={(e) => onUpdateNodeData(editingNode.id, { model: e.target.value })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-xs text-white outline-none appearance-none"
+                    >
+                      <option value="">跟随全局/预设模型</option>
+                      {globalConfig?.modelList?.map((m: string) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500 pointer-events-none" />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] text-gray-400">多样性: {editingNode.data.temperature ?? 0.7}</label>
+                    <input
+                      type="range" min="0" max="2" step="0.1"
+                      value={editingNode.data.temperature ?? 0.7}
+                      onChange={(e) => onUpdateNodeData(editingNode.id, { temperature: parseFloat(e.target.value) })}
+                      className="w-full accent-indigo-500 h-1 bg-gray-700 rounded-lg appearance-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] text-gray-400">核采样: {editingNode.data.topP ?? 1}</label>
+                    <input
+                      type="range" min="0" max="1" step="0.05"
+                      value={editingNode.data.topP ?? 1}
+                      onChange={(e) => onUpdateNodeData(editingNode.id, { topP: parseFloat(e.target.value) })}
+                      className="w-full accent-indigo-500 h-1 bg-gray-700 rounded-lg appearance-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] text-gray-400">最大 Token</label>
+                    <OptimizedInput
+                      type="number"
+                      value={editingNode.data.maxTokens as number || ''}
+                      onChange={(val: string) => onUpdateNodeData(editingNode.id, { maxTokens: parseInt(val) || undefined })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-xs text-white outline-none"
+                      placeholder="默认"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] text-gray-400">Top K</label>
+                    <OptimizedInput
+                      type="number"
+                      value={editingNode.data.topK as number || ''}
+                      onChange={(val: string) => onUpdateNodeData(editingNode.id, { topK: parseInt(val) || undefined })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-xs text-white outline-none"
+                      placeholder="默认"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] text-gray-400 uppercase tracking-widest">对话提示词 (Prompts)</label>
+                    <button
+                      onClick={() => setIsEditingPrompts(true)}
+                      className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-bold"
+                    >
+                      <Edit2 className="w-3 h-3" /> 编辑管理
+                    </button>
+                  </div>
+                  <div
+                    onClick={() => setIsEditingPrompts(true)}
+                    className="w-full h-24 bg-gray-800 border border-gray-700 rounded-2xl p-4 text-xs text-gray-400 overflow-hidden font-mono"
+                  >
+                    {editingNode.data.promptItems && (editingNode.data.promptItems as any[]).length > 0 ? (
+                      (editingNode.data.promptItems as any[]).map((p, i) => (
+                        <div key={i} className="truncate mb-1 last:mb-0">
+                          <span className="text-indigo-500 font-bold">[{p.role}]</span> {p.content}
+                        </div>
+                      ))
+                    ) : editingNode.data.systemPrompt ? (
+                      <div className="truncate"><span className="text-indigo-500 font-bold">[system]</span> {editingNode.data.systemPrompt as string}</div>
+                    ) : (
+                      <span className="italic opacity-50">未设置提示词，点击管理...</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1327,15 +1453,19 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           const engineConfig = {
             apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
             baseUrl: nodeApiConfig.baseUrl || globalConfig.baseUrl,
-            model: nodeApiConfig.model || globalConfig.model,
+            model: node.data.overrideAiConfig && node.data.model ? node.data.model : (nodeApiConfig.model || globalConfig.model),
             contextLength: (preset as any)?.contextLength || globalConfig.contextLength,
-            maxReplyLength: (preset as any)?.maxReplyLength || globalConfig.maxReplyLength,
-            temperature: (preset as any)?.temperature ?? globalConfig.temperature,
-            topP: (preset as any)?.topP ?? globalConfig.topP,
-            topK: (preset as any)?.topK ?? globalConfig.topK,
+            maxReplyLength: node.data.overrideAiConfig && node.data.maxTokens ? node.data.maxTokens : ((preset as any)?.maxReplyLength || globalConfig.maxReplyLength),
+            temperature: node.data.overrideAiConfig && node.data.temperature !== undefined ? node.data.temperature : ((preset as any)?.temperature ?? globalConfig.temperature),
+            topP: node.data.overrideAiConfig && node.data.topP !== undefined ? node.data.topP : ((preset as any)?.topP ?? globalConfig.topP),
+            topK: node.data.overrideAiConfig && node.data.topK !== undefined ? node.data.topK : ((preset as any)?.topK ?? globalConfig.topK),
             stream: (preset as any)?.stream ?? globalConfig.stream,
             maxRetries: globalConfig.maxRetries,
-            systemPrompt: localNovel.systemPrompt || '你是一个专业的小说家。',
+            systemPrompt: node.data.overrideAiConfig
+              ? (node.data.promptItems && (node.data.promptItems as any[]).length > 0
+                  ? (node.data.promptItems as any[]).filter(p => p.enabled !== false && p.role === 'system').map(p => p.content).join('\n\n')
+                  : (node.data.systemPrompt as string || localNovel.systemPrompt || '你是一个专业的小说家。'))
+              : (localNovel.systemPrompt || '你是一个专业的小说家。'),
             globalCreationPrompt: globalConfig.globalCreationPrompt,
             longTextMode: globalConfig.longTextMode,
             autoOptimize: globalConfig.autoOptimize,
@@ -1433,7 +1563,34 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         else if (node.data.typeKey === 'inspiration') featureModel = globalConfig.inspirationModel;
         else if (node.data.typeKey === 'plotOutline') featureModel = globalConfig.plotOutlineModel;
 
-        const finalModel = nodeApiConfig.model || featureModel || globalConfig.model;
+        const finalModel = (node.data.overrideAiConfig && node.data.model) ? node.data.model : (nodeApiConfig.model || featureModel || globalConfig.model);
+        const finalTemperature = (node.data.overrideAiConfig && node.data.temperature !== undefined) ? node.data.temperature : (preset?.temperature ?? globalConfig.temperature);
+        const finalTopP = (node.data.overrideAiConfig && node.data.topP !== undefined) ? node.data.topP : (preset?.topP ?? globalConfig.topP);
+        const finalTopK = (node.data.overrideAiConfig && node.data.topK !== undefined) ? node.data.topK : ((preset as any)?.topK ?? globalConfig.topK);
+        const finalMaxTokens = (node.data.overrideAiConfig && node.data.maxTokens) ? node.data.maxTokens : ((preset as any)?.maxReplyLength || globalConfig.maxReplyLength);
+
+        // 如果设置了节点特定的提示词条目，优先使用
+        if (node.data.overrideAiConfig) {
+          const nodePromptItems = (node.data.promptItems as any[]) || [];
+          if (nodePromptItems.length > 0) {
+            // 如果使用了多条目系统，则替换整个 messages 列表
+            messages = nodePromptItems
+              .filter(p => p.enabled !== false)
+              .map(p => ({
+                role: p.role,
+                content: p.content
+                  .replace('{{context}}', finalContext)
+                  .replace('{{input}}', node.data.instruction)
+              }));
+          } else if (node.data.systemPrompt) {
+            // 兼容旧的单一 systemPrompt
+            if (messages.length > 0 && messages[0].role === 'system') {
+              messages[0] = { ...messages[0], content: node.data.systemPrompt as string };
+            } else {
+              messages.unshift({ role: 'system', content: node.data.systemPrompt as string });
+            }
+          }
+        }
 
         const openai = new OpenAI({
           apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
@@ -1445,11 +1602,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 >> AI REQUEST [工作流(移动端): ${node.data.typeLabel}]
 >> -----------------------------------------------------------
 >> Model:       ${finalModel}
->> Temperature: ${preset?.temperature ?? globalConfig.temperature}
->> Top P:       ${preset?.topP ?? globalConfig.topP}
->> Top K:       ${(preset as any)?.topK ?? globalConfig.topK}
->> Max Tokens:  ${(preset as any)?.maxReplyLength || globalConfig.maxReplyLength}
->> Stream:      ${(preset as any)?.stream ?? globalConfig.stream}
+>> Temperature: ${finalTemperature}
+>> Top P:       ${finalTopP}
+>> Top K:       ${finalTopK}
+>> Max Tokens:  ${finalMaxTokens || '默认'}
 >> -----------------------------------------------------------
         `);
 
@@ -1469,9 +1625,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           const completion = await openai.chat.completions.create({
             model: finalModel,
             messages,
-            temperature: preset?.temperature ?? globalConfig.temperature,
-            top_p: preset?.topP ?? globalConfig.topP,
-            top_k: (preset as any)?.topK ?? globalConfig.topK,
+            temperature: finalTemperature,
+            top_p: finalTopP,
+            top_k: finalTopK,
+            max_tokens: finalMaxTokens,
           } as any, { signal: abortControllerRef.current?.signal });
 
           result = completion.choices[0]?.message?.content || '';

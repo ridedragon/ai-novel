@@ -43,13 +43,14 @@ import {
   Upload,
   User,
   Users,
+  Wand2,
   Workflow,
   X
 } from 'lucide-react';
 import OpenAI from 'openai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
-import { GeneratorPreset, Novel, PromptItem, RegexScript } from '../types';
+import { GeneratorPreset, GeneratorPrompt, Novel, PromptItem, RegexScript } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
 
 // --- 类型定义 ---
@@ -89,6 +90,17 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   status?: 'pending' | 'executing' | 'completed' | 'failed';
   targetVolumeId?: string;
   targetVolumeName?: string;
+  // AI 节点特定设置
+  overrideAiConfig?: boolean;
+  model?: string;
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  maxTokens?: number;
+  systemPrompt?: string; // 保持兼容
+  promptItems?: GeneratorPrompt[]; // 新的多条目系统
+  presencePenalty?: number;
+  frequencyPenalty?: number;
 }
 
 export type WorkflowNode = Node<WorkflowNodeData>;
@@ -429,6 +441,8 @@ const NodePropertiesModal = ({
   const [localLabel, setLocalLabel] = useState(node.data.label);
   const [localFolderName, setLocalFolderName] = useState(node.data.folderName);
   const [localInstruction, setLocalInstruction] = useState(node.data.instruction);
+  const [showAdvancedAI, setShowAdvancedAI] = useState(false);
+  const [isEditingPrompts, setIsEditingPrompts] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -542,6 +556,119 @@ const NodePropertiesModal = ({
                 </select>
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
               </div>
+            </div>
+          )}
+
+          {node.data.presetType && (
+            <div className="space-y-4 pt-6 border-t border-gray-700/30">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                  <Wand2 className="w-3.5 h-3.5 text-amber-400" /> 节点特定 AI 配置
+                </label>
+                <button
+                  onClick={() => {
+                    const newVal = !node.data.overrideAiConfig;
+                    updateNodeData(node.id, { overrideAiConfig: newVal });
+                    if (newVal) setShowAdvancedAI(true);
+                  }}
+                  className={`text-[10px] px-2 py-1 rounded transition-all font-bold uppercase tracking-wider ${node.data.overrideAiConfig ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-gray-700 text-gray-400 hover:text-gray-200'}`}
+                >
+                  {node.data.overrideAiConfig ? '已启用重写' : '启用独立配置'}
+                </button>
+              </div>
+
+              {node.data.overrideAiConfig && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2 col-span-2">
+                      <label className="text-[10px] text-gray-400 uppercase">模型 (Model)</label>
+                      <div className="relative">
+                        <select
+                          value={node.data.model as string || ''}
+                          onChange={(e) => updateNodeData(node.id, { model: e.target.value })}
+                          className="w-full bg-[#161922] border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-100 focus:border-indigo-500 outline-none appearance-none"
+                        >
+                          <option value="">跟随全局/预设模型</option>
+                          {globalConfig?.modelList?.map((m: string) => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500 pointer-events-none" />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-gray-400 uppercase">多样性 (Temperature): {node.data.temperature ?? 0.7}</label>
+                      <input
+                        type="range" min="0" max="2" step="0.1"
+                        value={node.data.temperature ?? 0.7}
+                        onChange={(e) => updateNodeData(node.id, { temperature: parseFloat(e.target.value) })}
+                        className="w-full accent-indigo-500 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-gray-400 uppercase">核采样 (Top P): {node.data.topP ?? 1}</label>
+                      <input
+                        type="range" min="0" max="1" step="0.05"
+                        value={node.data.topP ?? 1}
+                        onChange={(e) => updateNodeData(node.id, { topP: parseFloat(e.target.value) })}
+                        className="w-full accent-indigo-500 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-gray-400 uppercase">最大长度 (Max Tokens)</label>
+                      <input
+                        type="number"
+                        value={node.data.maxTokens as number || ''}
+                        onChange={(e) => updateNodeData(node.id, { maxTokens: parseInt(e.target.value) || undefined })}
+                        placeholder="不填则不限制"
+                        className="w-full bg-[#161922] border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-100 outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-gray-400 uppercase">Top K</label>
+                      <input
+                        type="number"
+                        value={node.data.topK as number || ''}
+                        onChange={(e) => updateNodeData(node.id, { topK: parseInt(e.target.value) || undefined })}
+                        placeholder="默认"
+                        className="w-full bg-[#161922] border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-100 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] text-gray-400 uppercase">对话提示词 (Prompts)</label>
+                      <button
+                        onClick={() => setIsEditingPrompts(true)}
+                        className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-bold"
+                      >
+                        <Edit2 className="w-3 h-3" /> 编辑条目 ({(node.data.promptItems as any[])?.length || (node.data.systemPrompt ? 1 : 0)})
+                      </button>
+                    </div>
+                    <div
+                      onClick={() => setIsEditingPrompts(true)}
+                      className="w-full h-20 bg-[#161922] border border-gray-700 rounded-lg p-3 text-xs text-gray-400 hover:border-gray-600 cursor-pointer overflow-hidden font-mono"
+                    >
+                      {node.data.promptItems && (node.data.promptItems as any[]).length > 0 ? (
+                        (node.data.promptItems as any[]).map((p, i) => (
+                          <div key={i} className="truncate mb-1 last:mb-0">
+                            <span className="text-indigo-500 font-bold">[{p.role}]</span> {p.content}
+                          </div>
+                        ))
+                      ) : node.data.systemPrompt ? (
+                        <div className="truncate"><span className="text-indigo-500 font-bold">[system]</span> {node.data.systemPrompt as string}</div>
+                      ) : (
+                        <span className="italic opacity-50">未设置提示词，点击编辑...</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -824,6 +951,115 @@ const NodePropertiesModal = ({
           </button>
         </div>
       </div>
+
+      {/* --- 提示词条目管理弹窗 --- */}
+      {isEditingPrompts && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="absolute inset-0" onClick={() => setIsEditingPrompts(false)} />
+          <div className="relative w-full max-w-[700px] bg-[#1e2230] rounded-2xl shadow-2xl border border-gray-700 flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-gray-700/50 flex items-center justify-between bg-[#1a1d29]">
+              <div className="flex items-center gap-2.5 text-indigo-400">
+                <Wand2 className="w-5 h-5" />
+                <span className="font-bold text-gray-100 text-lg">编辑对话提示词</span>
+              </div>
+              <button onClick={() => setIsEditingPrompts(false)} className="p-1.5 hover:bg-gray-700/50 rounded-md text-gray-400 hover:text-white transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar bg-[#1e2230]">
+              {(() => {
+                const items = (node.data.promptItems as GeneratorPrompt[]) || (node.data.systemPrompt ? [{ id: 'default', role: 'system', content: node.data.systemPrompt as string, enabled: true }] : []);
+                
+                return (
+                  <>
+                    {items.length === 0 && (
+                      <div className="text-center py-12 border-2 border-dashed border-gray-800 rounded-2xl">
+                        <MessageSquare className="w-8 h-8 text-gray-700 mx-auto mb-3" />
+                        <p className="text-sm text-gray-500">暂无自定义提示词条目</p>
+                      </div>
+                    )}
+                    
+                    {items.map((item, idx) => (
+                      <div key={item.id || idx} className="bg-[#161922] border border-gray-700 rounded-xl overflow-hidden group/item">
+                        <div className="flex items-center justify-between px-4 py-2 bg-gray-800/50 border-b border-gray-700/50">
+                          <div className="flex items-center gap-3">
+                            <select
+                              value={item.role}
+                              onChange={(e) => {
+                                const newItems = [...items];
+                                newItems[idx] = { ...newItems[idx], role: e.target.value as any };
+                                updateNodeData(node.id, { promptItems: newItems });
+                              }}
+                              className="bg-indigo-500/10 text-indigo-400 text-[10px] font-bold uppercase tracking-widest border border-indigo-500/30 rounded px-2 py-1 outline-none"
+                            >
+                              <option value="system">System</option>
+                              <option value="user">User</option>
+                              <option value="assistant">Assistant</option>
+                            </select>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={item.enabled !== false}
+                                onChange={(e) => {
+                                  const newItems = [...items];
+                                  newItems[idx] = { ...newItems[idx], enabled: e.target.checked };
+                                  updateNodeData(node.id, { promptItems: newItems });
+                                }}
+                                className="w-3.5 h-3.5 rounded border-gray-700 bg-gray-900 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">启用</span>
+                            </label>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const newItems = items.filter((_, i) => i !== idx);
+                              updateNodeData(node.id, { promptItems: newItems });
+                            }}
+                            className="p-1 text-gray-500 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <textarea
+                          value={item.content}
+                          onChange={(e) => {
+                            const newItems = [...items];
+                            newItems[idx] = { ...newItems[idx], content: e.target.value };
+                            updateNodeData(node.id, { promptItems: newItems });
+                          }}
+                          placeholder="输入提示词内容... 支持 {{context}} 和 {{input}} 变量"
+                          className="w-full h-24 bg-transparent p-4 text-xs text-gray-300 focus:text-white outline-none resize-none font-mono leading-relaxed"
+                        />
+                      </div>
+                    ))}
+
+                    <button
+                      onClick={() => {
+                        const newItems = [...items, { id: `prompt-${Date.now()}`, role: 'user' as const, content: '', enabled: true }];
+                        updateNodeData(node.id, { promptItems: newItems });
+                      }}
+                      className="w-full py-4 border-2 border-dashed border-gray-700 rounded-xl text-gray-500 hover:text-indigo-400 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all flex items-center justify-center gap-2 font-bold text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      添加新的提示词条目
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+
+            <div className="p-5 border-t border-gray-700/50 bg-[#1a1d29] flex justify-end">
+              <button
+                onClick={() => setIsEditingPrompts(false)}
+                className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-indigo-900/20 transition-all active:scale-95"
+              >
+                完成
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1773,20 +2009,24 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             updateNodeData(node.id, { targetVolumeId: finalVolumeId, targetVolumeName: '' });
           }
 
-          // 3. 确定配置 (优先使用预设配置)
+          // 3. 确定配置 (优先使用节点配置，其次是预设配置)
           const nodeApiConfig = (preset as any)?.apiConfig || {};
           const engineConfig = {
             apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
             baseUrl: nodeApiConfig.baseUrl || globalConfig.baseUrl,
-            model: nodeApiConfig.model || globalConfig.model,
+            model: node.data.overrideAiConfig && node.data.model ? node.data.model : (nodeApiConfig.model || globalConfig.model),
             contextLength: (preset as any)?.contextLength || globalConfig.contextLength,
-            maxReplyLength: (preset as any)?.maxReplyLength || globalConfig.maxReplyLength,
-            temperature: (preset as any)?.temperature ?? globalConfig.temperature,
-            topP: (preset as any)?.topP ?? globalConfig.topP,
-            topK: (preset as any)?.topK ?? globalConfig.topK,
+            maxReplyLength: node.data.overrideAiConfig && node.data.maxTokens ? node.data.maxTokens : ((preset as any)?.maxReplyLength || globalConfig.maxReplyLength),
+            temperature: node.data.overrideAiConfig && node.data.temperature !== undefined ? node.data.temperature : ((preset as any)?.temperature ?? globalConfig.temperature),
+            topP: node.data.overrideAiConfig && node.data.topP !== undefined ? node.data.topP : ((preset as any)?.topP ?? globalConfig.topP),
+            topK: node.data.overrideAiConfig && node.data.topK !== undefined ? node.data.topK : ((preset as any)?.topK ?? globalConfig.topK),
             stream: (preset as any)?.stream ?? globalConfig.stream,
             maxRetries: globalConfig.maxRetries,
-            systemPrompt: localNovel.systemPrompt || '你是一个专业的小说家。',
+            systemPrompt: node.data.overrideAiConfig
+              ? (node.data.promptItems && (node.data.promptItems as any[]).length > 0
+                  ? (node.data.promptItems as any[]).filter(p => p.enabled !== false && p.role === 'system').map(p => p.content).join('\n\n')
+                  : (node.data.systemPrompt as string || localNovel.systemPrompt || '你是一个专业的小说家。'))
+              : (localNovel.systemPrompt || '你是一个专业的小说家。'),
             globalCreationPrompt: globalConfig.globalCreationPrompt,
             longTextMode: globalConfig.longTextMode,
             autoOptimize: globalConfig.autoOptimize,
@@ -1889,7 +2129,34 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         else if (node.data.typeKey === 'inspiration') featureModel = globalConfig.inspirationModel;
         else if (node.data.typeKey === 'plotOutline') featureModel = globalConfig.plotOutlineModel;
 
-        const finalModel = nodeApiConfig.model || featureModel || globalConfig.model;
+        const finalModel = (node.data.overrideAiConfig && node.data.model) ? node.data.model : (nodeApiConfig.model || featureModel || globalConfig.model);
+        const finalTemperature = (node.data.overrideAiConfig && node.data.temperature !== undefined) ? node.data.temperature : (preset?.temperature ?? globalConfig.temperature);
+        const finalTopP = (node.data.overrideAiConfig && node.data.topP !== undefined) ? node.data.topP : (preset?.topP ?? globalConfig.topP);
+        const finalTopK = (node.data.overrideAiConfig && node.data.topK !== undefined) ? node.data.topK : ((preset as any)?.topK ?? globalConfig.topK);
+        const finalMaxTokens = (node.data.overrideAiConfig && node.data.maxTokens) ? node.data.maxTokens : undefined;
+
+        // 如果设置了节点特定的提示词条目，优先使用
+        if (node.data.overrideAiConfig) {
+          const nodePromptItems = (node.data.promptItems as GeneratorPrompt[]) || [];
+          if (nodePromptItems.length > 0) {
+            // 如果使用了多条目系统，则替换整个 messages 列表
+            messages = nodePromptItems
+              .filter(p => p.enabled !== false)
+              .map(p => ({
+                role: p.role,
+                content: p.content
+                  .replace('{{context}}', finalContext)
+                  .replace('{{input}}', node.data.instruction)
+              }));
+          } else if (node.data.systemPrompt) {
+            // 兼容旧的单一 systemPrompt
+            if (messages.length > 0 && messages[0].role === 'system') {
+              messages[0] = { ...messages[0], content: node.data.systemPrompt as string };
+            } else {
+              messages.unshift({ role: 'system', content: node.data.systemPrompt as string });
+            }
+          }
+        }
 
         const openai = new OpenAI({
           apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
@@ -1915,18 +2182,20 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 >> AI REQUEST [工作流: ${node.data.typeLabel}] (尝试 ${retryCount + 1})
 >> -----------------------------------------------------------
 >> Model:       ${finalModel}
->> Temperature: ${preset?.temperature ?? globalConfig.temperature}
->> Top P:       ${preset?.topP ?? globalConfig.topP}
->> Top K:       ${(preset as any)?.topK ?? globalConfig.topK}
+>> Temperature: ${finalTemperature}
+>> Top P:       ${finalTopP}
+>> Top K:       ${finalTopK}
+>> Max Tokens:  ${finalMaxTokens || '默认'}
 >> -----------------------------------------------------------
           `);
 
           const completion = await openai.chat.completions.create({
             model: finalModel,
             messages,
-            temperature: preset?.temperature ?? globalConfig.temperature,
-            top_p: preset?.topP ?? globalConfig.topP,
-            top_k: (preset as any)?.topK ?? globalConfig.topK,
+            temperature: finalTemperature,
+            top_p: finalTopP,
+            top_k: finalTopK,
+            max_tokens: finalMaxTokens,
           } as any, { signal: abortControllerRef.current?.signal });
 
           result = completion.choices[0]?.message?.content || '';
