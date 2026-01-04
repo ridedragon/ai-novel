@@ -1315,7 +1315,7 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             longTextMode: globalConfig.longTextMode,
             autoOptimize: globalConfig.autoOptimize,
             twoStepOptimization: globalConfig.twoStepOptimization,
-            asyncOptimize: globalConfig.asyncOptimize,
+            asyncOptimize: globalConfig.asyncOptimize ?? true,
             contextChapterCount: globalConfig.contextChapterCount,
             maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
             consecutiveChapterCount: globalConfig.consecutiveChapterCount || 1,

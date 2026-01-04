@@ -360,38 +360,41 @@ export class AutoWriteEngine {
           onNovelUpdate(this.novel);
 
           // 上报章节完成并按需触发自动优化
-          for (let i = 0; i < batchItems.length; i++) {
-            const chapterId = batchItems[i].id;
-            const content = finalContents[i];
-            const resultNovel = await onChapterComplete(chapterId, content, this.novel);
-            if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
-              this.novel = resultNovel as Novel;
-            }
-
-            // 联动“自动优化”按钮逻辑：如果配置开启，直接触发内部优化函数
-            if (this.config.autoOptimize && this.isRunning) {
-              terminal.log(
-                `[AutoWrite] Auto-optimization triggered for chapter ${chapterId}. Mode: ${
-                  this.config.asyncOptimize ? 'Async' : 'Sync'
-                }`,
-              );
-              if (this.config.asyncOptimize) {
-                // 异步模式：彻底不阻塞主流程，在后台执行优化。
-                // 注意：这里不使用 await，让其在后台运行
-                this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate, getActiveScripts(), true);
-              } else {
-                // 同步模式：等待优化完成后再继续（或进入下一章）
-                await this.optimizeChapter(
-                  chapterId,
-                  content,
-                  onStatusUpdate,
-                  onNovelUpdate,
-                  getActiveScripts(),
-                  false,
-                );
+          // 优化：并行处理批次内的章节完成上报和自动优化投递，缩短批次间停顿感
+          await Promise.all(
+            batchItems.map(async (item, i) => {
+              const chapterId = item.id;
+              const content = finalContents[i];
+              
+              const resultNovel = await onChapterComplete(chapterId, content, this.novel);
+              if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
+                this.novel = resultNovel as Novel;
               }
-            }
-          }
+
+              // 联动“自动优化”按钮逻辑：如果配置开启，直接触发内部优化函数
+              if (this.config.autoOptimize && this.isRunning) {
+                terminal.log(
+                  `[AutoWrite] Auto-optimization triggered for chapter ${chapterId}. Mode: ${
+                    this.config.asyncOptimize ? 'Async' : 'Sync'
+                  }`,
+                );
+                if (this.config.asyncOptimize) {
+                  // 异步模式：彻底不阻塞主流程，在后台执行优化。
+                  this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate, getActiveScripts(), true);
+                } else {
+                  // 同步模式：等待优化完成后再继续
+                  await this.optimizeChapter(
+                    chapterId,
+                    content,
+                    onStatusUpdate,
+                    onNovelUpdate,
+                    getActiveScripts(),
+                    false,
+                  );
+                }
+              }
+            })
+          );
 
           success = true;
           startIndex += batchItems.length;
@@ -410,7 +413,8 @@ export class AutoWriteEngine {
       }
 
       if (this.isRunning) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // 缩短批次间等待时间，与电脑端一致，提升连贯感
+        await new Promise(resolve => setTimeout(resolve, 800));
       }
     }
 
@@ -454,7 +458,10 @@ export class AutoWriteEngine {
       this.config.optimizePresets?.[0];
     if (!activePreset) return;
 
-    onStatusUpdate(`优化中 (${this.activeOptimizationTasks.size}个任务)...`);
+    // 异步模式下禁止更新 UI 状态标签，防止干扰/覆盖主创作流程的状态
+    if (!isAsync) {
+      onStatusUpdate(`优化中 (${this.activeOptimizationTasks.size}个任务)...`);
+    }
     const baseTime = Date.now();
     let currentAnalysisResult = '';
 
@@ -471,7 +478,9 @@ export class AutoWriteEngine {
           this.config.analysisPresets?.find(p => p.id === this.config.activeAnalysisPresetId) ||
           this.config.analysisPresets?.[0];
         if (analysisPreset) {
-          onStatusUpdate(`优化分析中...`);
+          if (!isAsync) {
+            onStatusUpdate(`优化分析中...`);
+          }
           const analysisMessages: any[] = analysisPreset.prompts
             .filter(p => p.enabled)
             .map(p => ({
