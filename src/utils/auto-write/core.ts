@@ -119,7 +119,10 @@ export const getChapterContext = (
       // 2. 确定正文发送范围
       // 策略：发送 (maxSummarizedIdx - contextChapterCount) 之后的所有正文内容
       // 这样既包含了总结后的新正文，也包含了总结末尾指定深度的旧正文细节
-      const storyStartNum = Math.max(1, maxSummarizedIdx - (contextChapterCount - 1));
+      // 策略：确保深度为 1 时，至少能看到上一章。
+      // 发送 (maxSummarizedIdx - contextChapterCount + 1) 之后的所有正文内容。
+      // 如果 maxSummarizedIdx 是 3 (总结到第 3 章)，深度是 1，则 storyStartNum 为 3 - 1 + 1 = 3，包含第 3 章。
+      const storyStartNum = Math.max(1, maxSummarizedIdx - contextChapterCount + 1);
 
       const previousStoryChapters = storyChapters.filter((c, idx) => {
         if (filterVolumeId && c.volumeId !== filterVolumeId) return false;

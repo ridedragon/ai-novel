@@ -10,6 +10,7 @@ import {
 import OpenAI from 'openai'
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import terminal from 'virtual:terminal'
 import { Chapter, ChatMessage, Novel, PromptItem } from '../types'
 
 interface AIChatModalProps {
@@ -148,6 +149,13 @@ export function AIChatModal({
       // 添加当前的对话历史
       chatMessages.push(...newMessages.map(m => ({ role: m.role, content: m.content })))
 
+      terminal.log(`
+>> AI REQUEST [自由对话助手]
+>> -----------------------------------------------------------
+>> Model:       ${model}
+>> -----------------------------------------------------------
+      `);
+
       const response = await openai.chat.completions.create({
         model,
         messages: chatMessages,
@@ -168,6 +176,7 @@ export function AIChatModal({
           return updated
         })
       }
+      terminal.log(`[Chat Assistant Output]:\n${assistantContent.slice(0, 500)}${assistantContent.length > 500 ? '...' : ''}`);
     } catch (err: any) {
       if (err.name === 'AbortError') return
       console.error('Chat Error:', err)

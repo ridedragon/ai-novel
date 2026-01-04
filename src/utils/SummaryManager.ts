@@ -85,10 +85,10 @@ export const checkAndGenerateSummary = async (
     // Prepare Context using the Snapshot
     let sourceText = '';
     if (type === 'small') {
-      // Ensure we only include chapters from the target volume
+      // 容错性增强：除了目标分卷，也要考虑未分类章节，防止跨分卷移动后的总结关联失效
       const targetChapters = getSnapshotStoryChapters()
         .slice(start - 1, end)
-        .filter(c => c.volumeId === targetVolumeId);
+        .filter(c => c.volumeId === targetVolumeId || (!c.volumeId && !targetVolumeId));
 
       if (targetChapters.length === 0) return;
       sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${getStableContent(c)}`).join('\n\n');
@@ -99,7 +99,9 @@ export const checkAndGenerateSummary = async (
         .filter(c => {
           if (c.subtype !== 'small_summary' || !c.summaryRange) return false;
           const [s, e] = c.summaryRange.split('-').map(Number);
-          return s >= start && e <= end;
+          const rangeMatch = s >= start && e <= end;
+          const volumeMatch = c.volumeId === targetVolumeId || (!c.volumeId && !targetVolumeId);
+          return rangeMatch && volumeMatch;
         })
         .sort((a, b) => {
           const startA = parseInt(a.summaryRange!.split('-')[0]);
@@ -121,6 +123,14 @@ export const checkAndGenerateSummary = async (
       const openai = new OpenAI({ apiKey, baseURL: baseUrl, dangerouslyAllowBrowser: true });
       const prompt = type === 'small' ? smallSummaryPrompt : bigSummaryPrompt;
 
+      log(`
+>> AI REQUEST [章节总结生成: ${type === 'small' ? '小总结' : '大总结'}]
+>> -----------------------------------------------------------
+>> Model:       ${model}
+>> Range:       ${rangeStr}
+>> -----------------------------------------------------------
+      `);
+
       const completion = await openai.chat.completions.create({
         model: model,
         messages: [
@@ -131,6 +141,11 @@ export const checkAndGenerateSummary = async (
       });
 
       const summaryContent = completion.choices[0]?.message?.content || '';
+      log(
+        `[Summary Result] ${type} (${rangeStr}):\n${summaryContent.slice(0, 300)}${
+          summaryContent.length > 300 ? '...' : ''
+        }`,
+      );
       if (summaryContent) {
         const existingIndex = currentChaptersSnapshot.findIndex(
           c => c.subtype === subtype && c.summaryRange === rangeStr,
@@ -174,7 +189,61 @@ export const checkAndGenerateSummary = async (
         // Sync to Novel and React State
         const finalChapters = [...currentChaptersSnapshot];
         lastUpdatedNovel = { ...currentNovel, chapters: finalChapters };
-        setNovels(prevNovels => prevNovels.map(n => (n.id === targetNovelId ? { ...n, chapters: finalChapters } : n)));
+        // 核心修复：这里不再直接全量覆盖 prevNovels，
+        // 而是将生成的总结条目插入到最新的 prevNovels 章节列表中，
+        // 防止由于工作流执行速度过快导致的章节内容回滚或总结丢失。
+        setNovels(prevNovels =>
+          prevNovels.map(n => {
+            if (n.id !== targetNovelId) return n;
+
+            // 1. 识别新增的总结条目
+            const newSummaries = finalChapters.filter(
+              c =>
+                (c.subtype === 'small_summary' || c.subtype === 'big_summary') &&
+                !n.chapters.some(nc => nc.id === c.id),
+            );
+
+            if (newSummaries.length === 0) {
+              // 2. 如果没有新条目，仅更新现有总结的内容（如果 range 匹配）
+              const updatedChapters = n.chapters.map(nc => {
+                const match = finalChapters.find(fc => fc.id === nc.id && fc.subtype === nc.subtype);
+                return match ? { ...nc, content: match.content } : nc;
+              });
+              return { ...n, chapters: updatedChapters };
+            }
+
+            // 3. 将新总结插入到正确位置
+            const mergedChapters = [...n.chapters];
+            newSummaries.forEach(summary => {
+              // 寻找插入点：在 summaryRange 结束章节之后
+              const rangeEnd = parseInt(summary.summaryRange?.split('-')[1] || '0');
+              const storyChapters = mergedChapters.filter(c => !c.subtype || c.subtype === 'story');
+              const lastChapterInRange = storyChapters[rangeEnd - 1];
+
+              if (lastChapterInRange) {
+                const insertIdx = mergedChapters.findIndex(c => c.id === lastChapterInRange.id);
+                if (insertIdx !== -1) {
+                  // 往后找，跳过已有的总结
+                  let insertAt = insertIdx + 1;
+                  while (
+                    insertAt < mergedChapters.length &&
+                    (mergedChapters[insertAt].subtype === 'small_summary' ||
+                      mergedChapters[insertAt].subtype === 'big_summary')
+                  ) {
+                    insertAt++;
+                  }
+                  mergedChapters.splice(insertAt, 0, summary);
+                } else {
+                  mergedChapters.push(summary);
+                }
+              } else {
+                mergedChapters.push(summary);
+              }
+            });
+
+            return { ...n, chapters: mergedChapters };
+          }),
+        );
       }
     } catch (e) {
       console.error(e);

@@ -7,7 +7,6 @@ import {
   Bot,
   Check,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Code2,
   Copy,
@@ -34,7 +33,6 @@ import {
   Save,
   Settings,
   SlidersHorizontal,
-  StopCircle,
   ToggleLeft, ToggleRight,
   Trash2,
   Unlink,
@@ -46,9 +44,9 @@ import {
 } from 'lucide-react'
 import OpenAI from 'openai'
 import React, { useEffect, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
 import terminal from 'virtual:terminal'
 import { CharacterManager } from './components/CharacterManager'
+import { ChapterEditor } from './components/Editor/ChapterEditor'
 import { GlobalSettingsModal } from './components/GlobalSettingsModal'
 import { InspirationManager } from './components/InspirationManager'
 import { MobileWorkflowEditor } from './components/MobileWorkflowEditor'
@@ -857,6 +855,7 @@ function App() {
     const val = localStorage.getItem('contextChapterCount')
     return val ? parseInt(val) : ''
   })
+  const contextChapterCountRef = useRef(contextChapterCount)
 
   const [modelList, setModelList] = useState<string[]>(() => {
     try {
@@ -880,6 +879,7 @@ function App() {
     localStorage.setItem('optimizeModel', optimizeModel)
     localStorage.setItem('analysisModel', analysisModel)
     localStorage.setItem('contextChapterCount', String(contextChapterCount))
+    contextChapterCountRef.current = contextChapterCount
     localStorage.setItem('modelList', JSON.stringify(modelList))
   }, [apiKey, baseUrl, model, outlineModel, characterModel, worldviewModel, inspirationModel, plotOutlineModel, optimizeModel, analysisModel, modelList, contextChapterCount])
 
@@ -904,8 +904,19 @@ function App() {
   }
   
   // Novel State
-  const [novels, setNovels] = useState<Novel[]>([])
+  const [novels, _setNovels] = useState<Novel[]>([])
   
+  const novelsRef = useRef<Novel[]>([])
+  
+  // 统一状态更新包装器：确保 Ref 与 State 始终同步，彻底消除竞态隐患
+  const setNovels = React.useCallback((value: Novel[] | ((prev: Novel[]) => Novel[])) => {
+    _setNovels(prev => {
+      const next = typeof value === 'function' ? (value as any)(prev) : value;
+      novelsRef.current = next;
+      return next;
+    });
+  }, []);
+
   // Load novels async
   useEffect(() => {
     const loadNovels = async () => {
@@ -913,12 +924,7 @@ function App() {
       setNovels(loaded)
     }
     loadNovels()
-  }, [])
-
-  const novelsRef = useRef(novels)
-  useEffect(() => {
-      novelsRef.current = novels
-  }, [novels])
+  }, [setNovels])
 
   const [activeNovelId, setActiveNovelId] = useState<string | null>(null)
   const activeNovelIdRef = useRef(activeNovelId)
@@ -1410,18 +1416,7 @@ function App() {
     }
   }
   
-  // Scroll to top when active chapter changes
-  const contentScrollRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-
   useEffect(() => {
-    if (contentScrollRef.current) {
-      contentScrollRef.current.scrollTop = 0
-    }
-    if (textareaRef.current) {
-      textareaRef.current.scrollTop = 0
-    }
-    
     // Load Chapter-specific Settings
     if (activeChapterId) {
         // Use novelsRef to find the chapter to avoid dependency issues if needed, 
@@ -1785,17 +1780,19 @@ function App() {
   const volumes = activeNovel?.volumes || []
   const systemPrompt = activeNovel?.systemPrompt || '你是一个专业的小说家。请根据用户的要求创作小说，文笔要优美，情节要跌宕起伏。'
   
-  const setChapters = (value: Chapter[] | ((prev: Chapter[]) => Chapter[])) => {
+  const setChapters = React.useCallback((value: Chapter[] | ((prev: Chapter[]) => Chapter[])) => {
       if (!activeNovelId) return
-      setNovels(prevNovels => prevNovels.map(n => {
-          if (n.id === activeNovelId) {
-              const currentChapters = n.chapters
-              const newChapters = typeof value === 'function' ? value(currentChapters) : value
-              return { ...n, chapters: newChapters }
-          }
-          return n
-      }))
-  }
+      setNovels(prevNovels => {
+          return prevNovels.map(n => {
+              if (n.id === activeNovelId) {
+                  const currentChapters = n.chapters
+                  const newChapters = typeof value === 'function' ? (value as any)(currentChapters) : value
+                  return { ...n, chapters: newChapters }
+              }
+              return n
+          })
+      })
+  }, [activeNovelId, setNovels]);
 
   const setVolumes = (value: NovelVolume[]) => {
       if (!activeNovelId) return
@@ -4535,6 +4532,7 @@ function App() {
       if (!targetNovel || !targetChapter) return ''
       
       const chapters = targetNovel.chapters
+      const contextChapterCount = typeof contextChapterCountRef.current === 'number' ? contextChapterCountRef.current : 1
       let contextContent = ''
     
       if (longTextModeRef.current) {
@@ -4562,69 +4560,41 @@ function App() {
                    return { start: parseInt(parts[0]) || 0, end: parseInt(parts[1]) || 0 }
                }
                
-               // 1. Find latest Big Summary
-               let bigSummaries = chapters.filter(c => c.subtype === 'big_summary')
-               
-               // Apply Volume Filter
-               bigSummaries = bigSummaries.filter(bs => {
-                   if (filterVolumeId) return bs.volumeId === filterVolumeId
-                   if (filterUncategorized) return !bs.volumeId
-                   return true
-               })
-  
-               let bigEnd = 0
-               const relevantBig = bigSummaries.filter(bs => {
-                   if (!bs.summaryRange) return false
-                   const { end } = parseRange(bs.summaryRange)
-                   return end < currentNum
-               }).sort((a, b) => {
-                   return parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start
-               })
+               // 1. 收集所有结束于当前章之前的总结 (不进行大总结吃小总结的过滤，保留细节)
+               const relevantSummaries = chapters
+                 .filter(c => (c.subtype === 'big_summary' || c.subtype === 'small_summary') && c.summaryRange)
+                 .filter(s => {
+                   if (filterVolumeId) return s.volumeId === filterVolumeId;
+                   if (filterUncategorized) return !s.volumeId;
+                   return true;
+                 })
+                 .filter(s => parseRange(s.summaryRange!).end < currentNum)
+                 .sort((a, b) => parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start);
 
-               relevantBig.forEach(bs => {
-                   contextContent += `【剧情大纲 (${bs.title})】：\n${bs.content}\n\n`
-                   const { end } = parseRange(bs.summaryRange!)
-                   if (end > bigEnd) bigEnd = end
-               })
+               let maxSummarizedIdx = 0;
+               relevantSummaries.forEach(s => {
+                 const typeStr = s.subtype === 'big_summary' ? '剧情大纲' : '剧情概要';
+                 contextContent += `【${typeStr} (${s.title})】：\n${s.content}\n\n`;
+                 const { end } = parseRange(s.summaryRange!);
+                 if (end > maxSummarizedIdx) maxSummarizedIdx = end;
+               });
                
-               // 2. Find Small Summaries after Big Summary
-               let smallSummaries = chapters.filter(c => c.subtype === 'small_summary')
-               
-               // Apply Volume Filter
-               smallSummaries = smallSummaries.filter(ss => {
-                   if (filterVolumeId) return ss.volumeId === filterVolumeId
-                   if (filterUncategorized) return !ss.volumeId
-                   return true
-               })
-  
-               let smallEnd = bigEnd
-               
-               const relevantSmall = smallSummaries.filter(ss => {
-                   if (!ss.summaryRange) return false
-                   const { start, end } = parseRange(ss.summaryRange)
-                   return start > bigEnd && end < currentNum
-               }).sort((a, b) => {
-                   const ra = parseRange(a.summaryRange!)
-                   const rb = parseRange(b.summaryRange!)
-                   return ra.start - rb.start
-               })
-               
-               relevantSmall.forEach(ss => {
-                   contextContent += `【剧情概要 (${ss.title})】：\n${ss.content}\n\n`
-                   const { end } = parseRange(ss.summaryRange!)
-                   if (end > smallEnd) smallEnd = end
-               })
-               
-               // 3. Add Story Chapters
+               // 2. 确定正文发送范围
+               // 策略：确保深度为 1 时，至少能看到上一章细节内容。
+               // 发送 (maxSummarizedIdx - contextChapterCount + 1) 之后的所有正文内容。
+               const storyStartNum = Math.max(1, maxSummarizedIdx - contextChapterCount + 1);
+
                const previousStoryChapters = storyChapters.filter((c, idx) => {
                    // First apply volume filter
                    if (filterVolumeId && c.volumeId !== filterVolumeId) return false
                    if (filterUncategorized && c.volumeId) return false
-  
+   
                    const cNum = idx + 1
                    if (cNum >= currentNum) return false
-                   if (cNum > smallEnd) return true
-                   if (cNum === currentNum - 1) return true // Always include immediate previous chapter
+                   
+                   // 发送范围：从 (总结边界 - 深度 + 1) 开始，直到当前章之前
+                   if (cNum >= storyStartNum) return true;
+                   
                    return false
                })
                
@@ -4637,7 +4607,7 @@ function App() {
                       const idxB = storyChapters.findIndex(sc => sc.id === b.id)
                       return idxA - idxB
                   })
-  
+   
                uniqueChapters.forEach(c => {
                    contextContent += `### ${c.title}\n${getEffectiveChapterContent(c)}\n\n`
                })
@@ -4673,17 +4643,22 @@ function App() {
 
   // Optimize Function
   const handleOptimize = async (targetId?: number, initialContent?: string) => {
+    const idToUse = targetId ?? activeChapterId
+    
+    terminal.log(`[Optimize Clicked] targetId: ${targetId}, activeChapterId: ${activeChapterId}, idToUse: ${idToUse}`);
+
     const activePreset = optimizePresets.find(p => p.id === activeOptimizePresetId) || optimizePresets[0]
     const apiConfig = getApiConfig(activePreset.apiConfig, optimizeModel)
 
     if (!apiConfig.apiKey) {
+      terminal.error('[Optimize] Error: API Key is missing.');
       setError('请先配置 API Key')
       setShowSettings(true)
       return
     }
 
-    const idToUse = targetId ?? activeChapterId
     if (idToUse === null) {
+        terminal.error('[Optimize] Error: No chapter selected.');
         setError('请先选择或创建一个章节')
         return
     }
@@ -4693,21 +4668,24 @@ function App() {
         return
     }
 
-    let sourceContentToUse = initialContent
-    let currentChapter = chapters.find(c => c.id === idToUse)
-
-    if (sourceContentToUse === undefined) {
-         if (currentChapter) {
-             sourceContentToUse = currentChapter.content
-         } else if (activeNovelId) {
-             const currentNovel = novelsRef.current.find(n => n.id === activeNovelId)
-             currentChapter = currentNovel?.chapters.find(c => c.id === idToUse)
-             sourceContentToUse = currentChapter?.content
-         }
+    // 优先从 novelsRef 获取最新内容，防止由于异步状态更新导致的闭包过时（Stale Closure）
+    // 这样可以确保即使是在自动创作后紧接着进行的润色，也能获取到刚刚生成的正文
+    const currentNovel = novelsRef.current.find(n => n.id === activeNovelId)
+    const latestChapter = currentNovel?.chapters.find(c => c.id === idToUse)
+    
+    let sourceContentToUse = initialContent || latestChapter?.content
+    
+    // 深度检查：如果当前正文为空，尝试从历史版本中恢复原文
+    // 这解决了用户手动清除正文后点润色，或者由于某种竞态条件导致 content 属性暂时为空的问题
+    if (!sourceContentToUse || !sourceContentToUse.trim()) {
+        const originalVer = latestChapter?.versions?.find(v => v.type === 'original')
+        if (originalVer?.content) {
+            sourceContentToUse = originalVer.content
+        }
     }
 
-    if (!sourceContentToUse) {
-         // terminal.log('[Optimize] No content to optimize.')
+    if (!sourceContentToUse || !sourceContentToUse.trim()) {
+         terminal.error('[Optimize] Error: No content found to optimize (content is empty).');
          return
     }
     
@@ -4722,8 +4700,8 @@ function App() {
 
     // 检查是否有空的优化版本可复用
     let reusableVersionId: string | null = null
-    if (currentChapter && currentChapter.versions && currentChapter.versions.length > 0) {
-        const lastVer = currentChapter.versions[currentChapter.versions.length - 1]
+    if (latestChapter && latestChapter.versions && latestChapter.versions.length > 0) {
+        const lastVer = latestChapter.versions[latestChapter.versions.length - 1]
         // 如果最后一个版本是 optimized 类型且内容为空 (可能是上次失败或中断)
         if (lastVer.type === 'optimized' && !lastVer.content.trim()) {
             reusableVersionId = lastVer.id
@@ -4737,15 +4715,24 @@ function App() {
     const buildVersions = (currentVersions: ChapterVersion[] | undefined, newContent: string): ChapterVersion[] => {
         const versions = currentVersions ? [...currentVersions] : []
         
-        // 1. 确保有原文版本 (如果当前列表中没有 original 类型，则将 sourceContentToUse 作为原文插入)
-        const hasOriginal = versions.some(v => v.type === 'original')
-        if (!hasOriginal) {
+        // 1. 确保有有效的原文版本
+        const originalIndex = versions.findIndex(v => v.type === 'original')
+        if (originalIndex === -1) {
+            // 如果没有原文，插入当前正文作为原文
             versions.unshift({
                 id: `v_${baseTime}_orig`,
-                content: sourceContentToUse, 
+                content: sourceContentToUse || '',
                 timestamp: baseTime,
                 type: 'original'
             })
+        } else if (!versions[originalIndex].content.trim() && sourceContentToUse?.trim()) {
+            // 如果原文存在但为空，而当前有内容，则更新原文内容
+            // 解决用户创建空章后直接输入并点润色导致原文被锁定为空的问题
+            versions[originalIndex] = {
+                ...versions[originalIndex],
+                content: sourceContentToUse,
+                timestamp: baseTime
+            }
         }
 
         // 2. 处理优化版本
@@ -4778,7 +4765,9 @@ function App() {
                 ...c,
                 versions: newVersions,
                 activeVersionId: newVersionId,
-                content: ''
+                // 不再立即清空 content，防止界面瞬间闪烁/空白
+                // 等待 AI 真正开始输出（Phase 2）时再更新
+                content: c.content
             }
         }
         return c
@@ -4835,6 +4824,7 @@ function App() {
                 // Save analysis result to chapter
                 setChapters(prev => prev.map(c => c.id === idToUse ? { ...c, analysisResult: currentAnalysisResult } : c))
                 
+                terminal.log(`[Analysis Result] chapter ${idToUse}:\n${currentAnalysisResult.slice(0, 500)}${currentAnalysisResult.length > 500 ? '...' : ''}`)
                 terminal.log(`[Optimize] Analysis complete.`)
                 analysisSuccess = true
                 break
@@ -4963,6 +4953,7 @@ function App() {
            throw new Error("Empty response received")
         }
         
+        terminal.log(`[Optimization Result] chapter ${idToUse} length: ${newContent.length}`)
         terminal.log(`[Optimize] Attempt ${attempt + 1} successful.`)
         setUserPrompt('')
         break // Success
@@ -5057,34 +5048,38 @@ function App() {
     })
 
     // Apply placeholders
-    setNovels(prev => prev.map(n => {
-       if (n.id === novelId) {
-          const newChapters = [...n.chapters]
-          preparedBatch.forEach(batchItem => {
-              // 检查 ID 是否已存在
-              const existingById = newChapters.find(c => c.id === batchItem.id)
-              // 检查 Title 是否已存在 (双重保险，避免同名章节重复创建)
-              const existingByTitle = newChapters.find(c => c.title === batchItem.title)
-              
-              if (existingById) {
-                  // ID 存在，不做任何操作
-              } else if (existingByTitle) {
-                  // Title 存在但 ID 不同，复用该 ID
-                  batchItem.id = existingByTitle.id
-              } else {
-                  // 都不存在，创建新章节
-                  newChapters.push({
-                      id: batchItem.id,
-                      title: batchItem.title,
-                      content: '',
-                      volumeId: targetVolumeId
-                  })
-              }
-          })
-          return { ...n, chapters: newChapters }
-       }
-       return n
-    }))
+    setNovels(prev => {
+        const next = prev.map(n => {
+            if (n.id === novelId) {
+                const newChapters = [...n.chapters]
+                preparedBatch.forEach(batchItem => {
+                    // 检查 ID 是否已存在
+                    const existingById = newChapters.find(c => c.id === batchItem.id)
+                    // 检查 Title 是否已存在 (双重保险，避免同名章节重复创建)
+                    const existingByTitle = newChapters.find(c => c.title === batchItem.title)
+                    
+                    if (existingById) {
+                        // ID 存在，不做任何操作
+                    } else if (existingByTitle) {
+                        // Title 存在但 ID 不同，复用该 ID
+                        batchItem.id = existingByTitle.id
+                    } else {
+                        // 都不存在，创建新章节
+                        newChapters.push({
+                            id: batchItem.id,
+                            title: batchItem.title,
+                            content: '',
+                            volumeId: targetVolumeId
+                        })
+                    }
+                })
+                return { ...n, chapters: newChapters }
+            }
+            return n
+        })
+        novelsRef.current = next
+        return next
+    })
 
     const batchStatusStr = preparedBatch.map(b => b.title).join('、')
     setAutoWriteStatus(`正在创作：${batchStatusStr}`)
@@ -5214,29 +5209,61 @@ ${taskDescription}`
                   // or just not update state until done? 
                   // Users prefer seeing output.
                   // Let's update the first chapter with full content for now.
-                  setNovels(prev => prev.map(n => {
-                      if (n.id === novelId) {
-                          return {
-                              ...n,
-                              chapters: n.chapters.map(c => 
-                                  c.id === preparedBatch[0].id ? { ...c, content: fullGeneratedContent } : c
-                              )
+                  setNovels(prev => {
+                      const next = prev.map(n => {
+                          if (n.id === novelId) {
+                              return {
+                                  ...n,
+                                  chapters: n.chapters.map(c => {
+                                      if (c.id === preparedBatch[0].id) {
+                                          const withVersions = ensureChapterVersions({ ...c, content: fullGeneratedContent });
+                                          if (withVersions.activeVersionId && withVersions.versions) {
+                                              return {
+                                                  ...withVersions,
+                                                  versions: withVersions.versions.map(v =>
+                                                      v.id === withVersions.activeVersionId ? { ...v, content: fullGeneratedContent } : v
+                                                  )
+                                              };
+                                          }
+                                          return withVersions;
+                                      }
+                                      return c;
+                                  })
+                              }
                           }
-                      }
-                      return n
-                  }))
+                          return n
+                      });
+                      novelsRef.current = next;
+                      return next;
+                  })
               } else {
-                  setNovels(prev => prev.map(n => {
-                      if (n.id === novelId) {
-                          return {
-                              ...n,
-                              chapters: n.chapters.map(c => 
-                                  c.id === preparedBatch[0].id ? { ...c, content: fullGeneratedContent } : c
-                              )
+                  setNovels(prev => {
+                      const next = prev.map(n => {
+                          if (n.id === novelId) {
+                              return {
+                                  ...n,
+                                  chapters: n.chapters.map(c => {
+                                      if (c.id === preparedBatch[0].id) {
+                                          const withVersions = ensureChapterVersions({ ...c, content: fullGeneratedContent });
+                                          if (withVersions.activeVersionId && withVersions.versions) {
+                                              return {
+                                                  ...withVersions,
+                                                  versions: withVersions.versions.map(v =>
+                                                      v.id === withVersions.activeVersionId ? { ...v, content: fullGeneratedContent } : v
+                                                  )
+                                              };
+                                          }
+                                          return withVersions;
+                                      }
+                                      return c;
+                                  })
+                              }
                           }
-                      }
-                      return n
-                  }))
+                          return n
+                      });
+                      novelsRef.current = next;
+                      return next;
+                  })
               }
             }
         } else {
@@ -5322,7 +5349,9 @@ ${taskDescription}`
                         chapters: n.chapters.map(c => {
                             const batchIdx = preparedBatch.findIndex(b => b.id === c.id)
                             if (batchIdx !== -1) {
-                                return { ...c, content: finalContents[batchIdx] || '' }
+                                const newChapterContent = finalContents[batchIdx] || '';
+                                // 强制标准化数据结构，确保 versions 数组存在，从而在 UI 显示版本切换按钮
+                                return ensureChapterVersions({ ...c, content: newChapterContent });
                             }
                             return c
                         })
@@ -5656,68 +5685,47 @@ ${taskDescription}`
               if (content) hasReceivedContent = true
               newGeneratedContent += content
               
-              // Update chapter content in real-time
-              setChapters(prev => prev.map(c => 
-                c.id === activeChapterId 
-                  ? { 
-                      ...c, 
-                      content: currentContent + newGeneratedContent,
-                      versions: c.versions 
-                          ? c.versions.map(v => v.id === c.activeVersionId ? { ...v, content: currentContent + newGeneratedContent } : v) 
-                          : undefined
-                    }
-                  : c
-              ))
+              const fullRawContent = currentContent + newGeneratedContent
+              setChapters(prev => prev.map(c => {
+                  if (c.id === activeChapterId) {
+                    return { ...c, content: fullRawContent }
+                  }
+                  return c;
+                }))
             }
         } else {
             if (generateAbortControllerRef.current?.signal.aborted) throw new Error('Aborted')
             newGeneratedContent = response.choices[0]?.message?.content || ''
             if (newGeneratedContent) hasReceivedContent = true
-            
-            setChapters(prev => prev.map(c => 
-                c.id === activeChapterId 
-                  ? { 
-                      ...c, 
-                      content: currentContent + newGeneratedContent,
-                      versions: c.versions 
-                          ? c.versions.map(v => v.id === c.activeVersionId ? { ...v, content: currentContent + newGeneratedContent } : v) 
-                          : undefined
-                    }
-                  : c
-              ))
         }
         
         if (!hasReceivedContent) {
            throw new Error("Empty response received from AI")
         }
         
-        // Apply Output Regex to the FULL content generated in this turn
-        const finalGeneratedContent = processTextWithRegex(newGeneratedContent, scripts, 'output')
-        const fullFinalContent = currentContent + finalGeneratedContent
-        
-        if (finalGeneratedContent !== newGeneratedContent) {
-            setChapters(prev => prev.map(c => 
-              c.id === activeChapterId 
-                ? { 
-                    ...c, 
-                    content: fullFinalContent,
-                    versions: c.versions 
-                      ? c.versions.map(v => v.id === c.activeVersionId ? { ...v, content: fullFinalContent } : v) 
-                      : undefined
-                  }
-                : c
-            ))
-        }
+        const originalFullContent = currentContent + newGeneratedContent
+        const processedFullContent = currentContent + processTextWithRegex(newGeneratedContent, scripts, 'output')
+
+        setChapters(prev => prev.map(c => {
+          if (c.id === activeChapterId) {
+            return ensureChapterVersions({
+              ...c,
+              content: processedFullContent,
+              sourceContent: originalFullContent,
+            })
+          }
+          return c
+        }))
 
         // Trigger Summary Generation
         if (longTextModeRef.current && activeChapterId) {
-             checkAndGenerateSummary(activeChapterId, fullFinalContent)
+             checkAndGenerateSummary(activeChapterId, processedFullContent)
         }
 
         // Trigger Auto Optimize
         if (autoOptimizeRef.current && activeChapterId) {
              terminal.log(`[Generate] Auto-optimizing chapter ${activeChapterId}...`)
-             await handleOptimize(activeChapterId, fullFinalContent)
+             await handleOptimize(activeChapterId, processedFullContent)
         }
 
         terminal.log(`[Generate] Attempt ${attempt + 1} successful.`)
@@ -5763,27 +5771,30 @@ ${taskDescription}`
 
   const handleChapterContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newVal = e.target.value
-    setChapters(prev => prev.map(c => 
-      c.id === activeChapterId 
-        ? { ...c, 
-            content: newVal,
-            versions: c.versions 
-                ? c.versions.map(v => v.id === c.activeVersionId ? { ...v, content: newVal } : v)
-                : undefined
-          }
-        : c
-    ))
+    setChapters(prev => prev.map(c => {
+      if (c.id !== activeChapterId) return c;
+      
+      // 同步更新内容并确保版本数组存在，防止版本切换按钮消失
+      const updated = {
+        ...c,
+        content: newVal,
+        versions: c.versions
+            ? c.versions.map(v => v.id === c.activeVersionId ? { ...v, content: newVal } : v)
+            : undefined
+      };
+      return ensureChapterVersions(updated);
+    }))
   }
 
   // Summary Generation Helper
-  const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string, targetNovelId: string = activeNovelId || '') => {
+  const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string, targetNovelId: string = activeNovelId || '', updatedNovel?: Novel) => {
     if (!longTextModeRef.current) return
 
     return await checkAndGenerateSummaryUtil(
       targetChapterId,
       currentContent,
       targetNovelId,
-      novelsRef.current,
+      updatedNovel ? [updatedNovel] : novelsRef.current,
       setNovels,
       {
         apiKey,
@@ -6889,7 +6900,7 @@ ${taskDescription}`
                           onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
                           showWorldviewSelector={showWorldviewSelectorForModules}
                           onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
-                          selectedReferenceType={selectedReferenceTypeForModules}
+                          selectedReferenceType={selectedReferenceTypeForModules as any}
                           selectedReferenceIndices={selectedReferenceIndicesForModules}
                           onSelectReferenceSet={setSelectedReferenceTypeForModules}
                           onToggleReferenceItem={(setId, idx) => handleToggleModuleReferenceItem('reference', setId, idx)}
@@ -7056,7 +7067,7 @@ ${taskDescription}`
                           onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
                           showWorldviewSelector={showWorldviewSelectorForModules}
                           onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
-                          selectedReferenceType={selectedReferenceTypeForModules}
+                          selectedReferenceType={selectedReferenceTypeForModules as any}
                           selectedReferenceIndices={selectedReferenceIndicesForModules}
                           onSelectReferenceSet={setSelectedReferenceTypeForModules}
                           onToggleReferenceItem={(setId, idx) => handleToggleModuleReferenceItem('reference', setId, idx)}
@@ -7391,7 +7402,7 @@ ${taskDescription}`
                           onToggleWorldviewItem={(setId, idx) => handleToggleModuleReferenceItem('worldview', setId, idx)}
                           showWorldviewSelector={showWorldviewSelectorForModules}
                           onToggleWorldviewSelector={setShowWorldviewSelectorForModules}
-                          selectedReferenceType={selectedReferenceTypeForModules}
+                          selectedReferenceType={selectedReferenceTypeForModules as any}
                           selectedReferenceIndices={selectedReferenceIndicesForModules}
                           onSelectReferenceSet={setSelectedReferenceTypeForModules}
                           onToggleReferenceItem={(setId, idx) => handleToggleModuleReferenceItem('reference', setId, idx)}
@@ -7491,176 +7502,28 @@ ${taskDescription}`
              </div>
           </div>
         ) : (
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-900 flex flex-col">
-          {!activeChapter ? (
-             <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
-                <FileText className="w-16 h-16 mb-4 opacity-10" />
-                <p>暂无章节</p>
-                <p className="text-sm mt-2">请点击左侧"添加章节"开始创作</p>
-             </div>
-        ) : (
-            <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col">
-                <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-                <div className="flex flex-col gap-1">
-                  <h1 className="text-2xl font-bold text-gray-100 break-words">{activeChapter.title}</h1>
-                  <span className="text-xs text-gray-500">
-                    字数: {activeChapter.content ? activeChapter.content.length : 0}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    {/* Version Switcher */}
-                    {activeChapter.versions && activeChapter.versions.length > 1 && (
-                        <div className="bg-gray-800 border border-gray-600 rounded-lg flex items-center p-0.5 gap-1 mr-2">
-                            <button
-                                onClick={handlePrevVersion}
-                                disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
-                                className="p-1.5 text-gray-400 hover:text-[var(--theme-color)] disabled:opacity-30 transition-colors"
-                                title="上一版本"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            
-                            <div className="relative group">
-                                <button className="text-xs font-medium text-gray-300 px-2 py-1 hover:bg-gray-700 rounded transition-colors flex items-center gap-1">
-                                    <span className="max-w-[100px] truncate">
-                                        {(() => {
-                                            const v = activeChapter.versions?.find(v => v.id === activeChapter.activeVersionId)
-                                            if (!v) return '当前版本'
-                                            return v.type === 'original' ? '原文' : 
-                                                    v.type === 'optimized' ? '优化版 ' + (activeChapter.versions?.findIndex(ver => ver.id === v.id) || 0) : '编辑版'
-                                        })()}
-                                    </span>
-                                    <span className="text-gray-500">
-                                        ({(() => {
-                                            const versions = activeChapter.versions || []
-                                            const idx = versions.findIndex(v => v.id === activeChapter.activeVersionId)
-                                            return `${idx !== -1 ? idx + 1 : 1}/${Math.max(1, versions.length)}`
-                                        })()})
-                                    </span>
-                                </button>
-                                
-                                {/* Dropdown on Hover */}
-                                <div className="absolute top-full right-0 mt-1 w-56 bg-gray-800 border border-gray-600 rounded-lg shadow-xl overflow-hidden hidden group-hover:block z-30">
-                                    <div className="max-h-64 overflow-y-auto custom-scrollbar">
-                                    {activeChapter.versions?.map((v, idx) => (
-                                        <button
-                                            key={v.id}
-                                            onClick={() => {
-                                                setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, activeVersionId: v.id, content: v.content } : c))
-                                            }}
-                                            className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-gray-700 transition-colors border-b border-gray-700/50 last:border-0 ${activeChapter.activeVersionId === v.id ? 'text-[var(--theme-color)] bg-gray-700/30' : 'text-gray-300'}`}
-                                        >
-                                            <div className="flex flex-col gap-0.5">
-                                                <span className="font-medium">{v.type === 'original' ? '原文' : v.type === 'optimized' ? `优化版 ${idx}` : '用户编辑'}</span>
-                                                <span className="text-gray-500 text-[10px]">{new Date(v.timestamp).toLocaleTimeString()} · {v.content.length}字</span>
-                                            </div>
-                                            {activeChapter.activeVersionId === v.id && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)]"></div>}
-                                        </button>
-                                    ))}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={handleNextVersion}
-                                disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
-                                className="p-1.5 text-gray-400 hover:text-[var(--theme-color)] disabled:opacity-30 transition-colors"
-                                title="下一版本"
-                            >
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
-                        </div>
-                    )}
-
-                    <div 
-                        onClick={() => setAutoOptimize(!autoOptimize)}
-                        className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors select-none mr-2 ${
-                            autoOptimize ? 'bg-purple-500/10' : 'hover:bg-gray-800'
-                        }`}
-                        title="写作完成后自动进行优化"
-                    >
-                        <div className={`w-7 h-4 rounded-full relative transition-colors duration-200 ${autoOptimize ? 'bg-purple-500' : 'bg-gray-600'}`}>
-                            <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-all duration-200 ${autoOptimize ? 'left-3.5' : 'left-0.5'}`} />
-                        </div>
-                        <span className={`text-xs font-medium ${autoOptimize ? 'text-purple-300' : 'text-gray-500'}`}>自动</span>
-                    </div>
-
-                    {activeChapter && optimizingChapterIds.has(activeChapter.id) ? (
-                        <button 
-                            onClick={() => handleStopOptimize(activeChapter.id)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm border border-transparent bg-red-600 hover:bg-red-500 text-white shadow-red-500/20 border-red-500"
-                            title="停止优化"
-                        >
-                            <StopCircle className="w-3.5 h-3.5" />
-                            <span>停止</span>
-                        </button>
-                    ) : (
-                        <button 
-                            onClick={() => handleOptimize()}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm border border-transparent bg-purple-600 hover:bg-purple-500 text-white shadow-purple-500/20 border-purple-500 hover:shadow-purple-500/30 hover:-translate-y-0.5 active:translate-y-0"
-                            title="优化当前章节 (基于原文)"
-                        >
-                            <Wand2 className="w-3.5 h-3.5" />
-                            <span>润色</span>
-                        </button>
-                    )}
-
-                    <button 
-                        onClick={() => { setGeneratorSettingsType('optimize'); setShowGeneratorSettingsModal(true); }}
-                        className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
-                        title="优化提示词设置"
-                    >
-                        <Settings className="w-5 h-5" />
-                    </button>
-                    <button 
-                        onClick={() => setShowAnalysisResultModal(true)}
-                        className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
-                        title="查看本章分析"
-                    >
-                        <Eye className="w-5 h-5" />
-                    </button>
-                    <div className="w-px h-4 bg-gray-700 mx-1"></div>
-                    <button
-                        onClick={handleToggleEdit}
-                        className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
-                        title={isEditingChapter ? "保存/退出编辑" : "编辑章节内容"}
-                    >
-                        {isEditingChapter ? <Save className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
-                    </button>
-                </div>
-                </div>
-                
-                <div className="relative flex-1 flex flex-col min-h-0">
-                    {isEditingChapter ? (
-                        <textarea
-                            ref={textareaRef}
-                            value={activeChapter.content || ''}
-                            onChange={handleChapterContentChange}
-                            className="w-full h-full bg-gray-900 p-4 text-base leading-relaxed text-gray-200 outline-none resize-none font-mono"
-                            placeholder="在此处输入章节正文..."
-                        />
-                    ) : (
-                    <div ref={contentScrollRef} className="prose prose-invert prose-lg max-w-none overflow-y-auto custom-scrollbar pr-4 md:pr-24 [&_p]:my-0 [&_p]:min-h-[1rem] text-justify">
-                        {activeChapter.content ? (
-                        <ReactMarkdown>
-                          {activeChapter.content
-                            .replace(/<[^>]+>/g, '')
-                            .split('\n')
-                            .map(line => line.trim())
-                            .filter(line => line)
-                            .join('\n\n')}
-                        </ReactMarkdown>
-                        ) : (
-                        <div className="text-gray-500 italic">
-                            暂无内容，请在下方输入要求开始创作...
-                        </div>
-                        )}
-                    </div>
-                    )}
-                </div>
-            </div>
-          )}
-        </div>
+          <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-900 flex flex-col">
+            <ChapterEditor
+              activeChapter={activeChapter}
+              activeChapterId={activeChapterId}
+              isEditingChapter={isEditingChapter}
+              onToggleEdit={handleToggleEdit}
+              onChapterContentChange={handleChapterContentChange}
+              onOptimize={handleOptimize}
+              onStopOptimize={handleStopOptimize}
+              optimizingChapterIds={optimizingChapterIds}
+              activeOptimizePresetId={activeOptimizePresetId}
+              autoOptimize={autoOptimize}
+              setAutoOptimize={setAutoOptimize}
+              onShowAnalysisResult={() => setShowAnalysisResultModal(true)}
+              onShowOptimizeSettings={() => { setGeneratorSettingsType('optimize'); setShowGeneratorSettingsModal(true); }}
+              onPrevVersion={handlePrevVersion}
+              onNextVersion={handleNextVersion}
+              onSwitchVersion={(v) => {
+                setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, activeVersionId: v.id, content: v.content } : c))
+              }}
+            />
+          </div>
         )}
 
 
@@ -9286,16 +9149,88 @@ ${taskDescription}`
             activeOptimizePresetId,
             analysisPresets,
             activeAnalysisPresetId,
-            onChapterComplete: async (chapterId: number, content: string) => {
+            onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel) => {
               if (longTextModeRef.current) {
-                return await checkAndGenerateSummary(chapterId, content);
+                return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel);
               }
             },
             updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
             updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
           } as any}
           onUpdateNovel={(updatedNovel: Novel) => {
-            setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));
+            setNovels(prevNovels => {
+              const localNovelIndex = prevNovels.findIndex(n => n.id === updatedNovel.id);
+              if (localNovelIndex === -1) return prevNovels;
+
+              const localNovelsCopy = [...prevNovels];
+              const localNovel = { ...localNovelsCopy[localNovelIndex] };
+              
+              const allLocalChaptersMap = new Map(localNovel.chapters.map(c => [c.id, c]));
+
+              for (const remoteChapter of updatedNovel.chapters) {
+                const localChapter = allLocalChaptersMap.get(remoteChapter.id);
+
+                if (localChapter) {
+                  if ((localChapter.subtype === 'small_summary' || localChapter.subtype === 'big_summary') && localChapter.content?.trim()) {
+                      continue;
+                  }
+
+                  const combinedVersions = [...(localChapter.versions || []), ...(remoteChapter.versions || [])];
+                  let uniqueVersions = Array.from(new Map(combinedVersions.map(v => [v.id, v])).values());
+                  
+                  const originalVersions = uniqueVersions.filter(v => v.type === 'original');
+                  if (originalVersions.length > 1) {
+                      originalVersions.sort((a, b) => a.timestamp - b.timestamp);
+                      const oldestOriginal = originalVersions[0];
+                      uniqueVersions = uniqueVersions.filter(v => v.type !== 'original' || v.id === oldestOriginal.id);
+                  }
+                  uniqueVersions.sort((a, b) => a.timestamp - b.timestamp);
+
+                  const finalActiveVersionId = localChapter.activeVersionId && uniqueVersions.some(v => v.id === localChapter.activeVersionId)
+                      ? localChapter.activeVersionId
+                      : remoteChapter.activeVersionId;
+
+                  const finalContent = uniqueVersions.find(v => v.id === finalActiveVersionId)?.content || remoteChapter.content;
+                  
+                  allLocalChaptersMap.set(localChapter.id, {
+                    ...localChapter,
+                    ...remoteChapter,
+                    content: finalContent,
+                    versions: uniqueVersions,
+                    activeVersionId: finalActiveVersionId,
+                  });
+
+                } else {
+                  allLocalChaptersMap.set(remoteChapter.id, ensureChapterVersions(remoteChapter));
+                }
+              }
+
+              const finalChapters: Chapter[] = [];
+              const processedIds = new Set<number>();
+
+              for (const originalChapter of localNovel.chapters) {
+                  const updatedChapter = allLocalChaptersMap.get(originalChapter.id);
+                  if (updatedChapter) {
+                      finalChapters.push(updatedChapter);
+                      processedIds.add(updatedChapter.id);
+                  }
+              }
+
+              for (const remoteChapter of updatedNovel.chapters) {
+                  if (!processedIds.has(remoteChapter.id)) {
+                      finalChapters.push(allLocalChaptersMap.get(remoteChapter.id)!);
+                  }
+              }
+              
+              localNovelsCopy[localNovelIndex] = {
+                ...localNovel,
+                ...updatedNovel, // 优先保留传入的所有更新（包括设定集等）
+                chapters: finalChapters, // 章节使用特殊的合并策略
+                volumes: updatedNovel.volumes || localNovel.volumes,
+              };
+              
+              return localNovelsCopy;
+            });
           }}
         />
       ) : (
@@ -9344,17 +9279,89 @@ ${taskDescription}`
           activeOptimizePresetId,
           analysisPresets,
           activeAnalysisPresetId,
-          onChapterComplete: async (chapterId, content) => {
+          onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel) => {
             if (longTextModeRef.current) {
-              return await checkAndGenerateSummary(chapterId, content);
+              return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel);
             }
           },
           updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
           updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
           updateAsyncOptimize: (val: boolean) => setAsyncOptimize(val),
         } as any}
-        onUpdateNovel={(updatedNovel) => {
-          setNovels(prev => prev.map(n => n.id === updatedNovel.id ? updatedNovel : n));
+        onUpdateNovel={(updatedNovel: Novel) => {
+          setNovels(prevNovels => {
+            const localNovelIndex = prevNovels.findIndex(n => n.id === updatedNovel.id);
+            if (localNovelIndex === -1) return prevNovels;
+
+            const localNovelsCopy = [...prevNovels];
+            const localNovel = { ...localNovelsCopy[localNovelIndex] };
+            
+            const allLocalChaptersMap = new Map(localNovel.chapters.map(c => [c.id, c]));
+
+            for (const remoteChapter of updatedNovel.chapters) {
+              const localChapter = allLocalChaptersMap.get(remoteChapter.id);
+
+              if (localChapter) {
+                if ((localChapter.subtype === 'small_summary' || localChapter.subtype === 'big_summary') && localChapter.content?.trim()) {
+                    continue;
+                }
+
+                const combinedVersions = [...(localChapter.versions || []), ...(remoteChapter.versions || [])];
+                let uniqueVersions = Array.from(new Map(combinedVersions.map(v => [v.id, v])).values());
+                
+                const originalVersions = uniqueVersions.filter(v => v.type === 'original');
+                if (originalVersions.length > 1) {
+                    originalVersions.sort((a, b) => a.timestamp - b.timestamp);
+                    const oldestOriginal = originalVersions[0];
+                    uniqueVersions = uniqueVersions.filter(v => v.type !== 'original' || v.id === oldestOriginal.id);
+                }
+                uniqueVersions.sort((a, b) => a.timestamp - b.timestamp);
+
+                const finalActiveVersionId = localChapter.activeVersionId && uniqueVersions.some(v => v.id === localChapter.activeVersionId)
+                    ? localChapter.activeVersionId
+                    : remoteChapter.activeVersionId;
+
+                const finalContent = uniqueVersions.find(v => v.id === finalActiveVersionId)?.content || remoteChapter.content;
+                
+                allLocalChaptersMap.set(localChapter.id, {
+                  ...localChapter,
+                  ...remoteChapter,
+                  content: finalContent,
+                  versions: uniqueVersions,
+                  activeVersionId: finalActiveVersionId,
+                });
+
+              } else {
+                allLocalChaptersMap.set(remoteChapter.id, ensureChapterVersions(remoteChapter));
+              }
+            }
+
+            const finalChapters: Chapter[] = [];
+            const processedIds = new Set<number>();
+
+            for (const originalChapter of localNovel.chapters) {
+                const updatedChapter = allLocalChaptersMap.get(originalChapter.id);
+                if (updatedChapter) {
+                    finalChapters.push(updatedChapter);
+                    processedIds.add(updatedChapter.id);
+                }
+            }
+
+            for (const remoteChapter of updatedNovel.chapters) {
+                if (!processedIds.has(remoteChapter.id)) {
+                    finalChapters.push(allLocalChaptersMap.get(remoteChapter.id)!);
+                }
+            }
+            
+            localNovelsCopy[localNovelIndex] = {
+              ...localNovel,
+              ...updatedNovel, // 优先保留传入的所有更新
+              chapters: finalChapters,
+              volumes: updatedNovel.volumes || localNovel.volumes,
+            };
+            
+            return localNovelsCopy;
+          });
         }}
       />
       )}

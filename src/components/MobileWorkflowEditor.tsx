@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import OpenAI from 'openai';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import terminal from 'virtual:terminal';
 import { GeneratorPreset, Novel } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
 import { WorkflowData, WorkflowEditorProps, WorkflowNode, WorkflowNodeData } from './WorkflowEditor';
@@ -378,35 +379,6 @@ const ConfigPanel = React.memo(({
                 />
               )}
             </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => onUpdateNodeData(editingNode.id, { autoOptimize: !editingNode.data.autoOptimize })}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.autoOptimize ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-              >
-                <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.autoOptimize ? 'bg-purple-500 animate-pulse' : 'bg-gray-600'}`} />
-                自动优化
-              </button>
-              <button
-                onClick={() => onUpdateNodeData(editingNode.id, { twoStepOptimization: !editingNode.data.twoStepOptimization })}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.twoStepOptimization ? 'bg-pink-500/20 text-pink-300 border-pink-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-              >
-                <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.twoStepOptimization ? 'bg-pink-500 animate-pulse' : 'bg-gray-600'}`} />
-                两阶段优化
-              </button>
-              <button
-                onClick={() => {
-                  const newVal = !editingNode.data.asyncOptimize;
-                  onUpdateNodeData(editingNode.id, { asyncOptimize: newVal });
-                  if (globalConfig?.updateAsyncOptimize) {
-                    globalConfig.updateAsyncOptimize(newVal);
-                  }
-                }}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold transition-all border ${editingNode.data.asyncOptimize ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-              >
-                <div className={`w-2.5 h-2.5 rounded-full ${editingNode.data.asyncOptimize ? 'bg-indigo-500 animate-pulse' : 'bg-gray-600'}`} />
-                异步并行
-              </button>
-            </div>
           </div>
         )}
 
@@ -494,7 +466,17 @@ const ConfigPanel = React.memo(({
           </div>
         )}
 
-        {(editingNode.data.outputEntries as OutputEntry[])?.length > 0 && (
+        {editingNode.data.typeKey === 'chapter' ? (
+          <div className="space-y-4 pt-6 border-t border-gray-800">
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+              <FileText className="w-3.5 h-3.5 text-indigo-400" /> 生成产物说明
+            </label>
+            <div className="text-center py-10 bg-gray-800/50 rounded-[2.5rem] border border-dashed border-gray-700">
+              <p className="text-sm text-gray-400">章节已保存至小说目录</p>
+              <p className="text-[10px] text-gray-500 mt-1 px-10">请通过主界面的侧边栏查看和管理生成的章节内容。</p>
+            </div>
+          </div>
+        ) : (editingNode.data.outputEntries as OutputEntry[])?.length > 0 && (
           <div className="space-y-4 pt-6 border-t border-gray-800">
             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">产出 ({(editingNode.data.outputEntries as OutputEntry[]).length})</label>
             <div className="space-y-3">
@@ -506,7 +488,6 @@ const ConfigPanel = React.memo(({
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm font-bold text-gray-200 truncate">{entry.title}</div>
-                      <div className="text-[10px] text-gray-500 truncate">{entry.content.substring(0, 40)}...</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -566,6 +547,11 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
   const abortControllerRef = useRef<AbortController | null>(null);
   const isInitialLoadRef = useRef(true);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const activeNovelRef = useRef(activeNovel);
+
+  useEffect(() => {
+    activeNovelRef.current = activeNovel;
+  }, [activeNovel]);
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
 
@@ -975,10 +961,11 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
       let localNovel = { ...activeNovel };
       const updateLocalAndGlobal = async (newNovel: Novel) => {
         // 核心修复：合并状态时保留 UI 特有的折叠状态
+        const currentActiveNovel = activeNovelRef.current;
         const mergedNovel: Novel = {
           ...newNovel,
           volumes: newNovel.volumes.map(v => {
-            const existingVol = activeNovel.volumes.find(ev => ev.id === v.id);
+            const existingVol = currentActiveNovel?.volumes.find(ev => ev.id === v.id);
             return existingVol ? { ...v, collapsed: existingVol.collapsed } : v;
           })
         };
@@ -1122,7 +1109,7 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
 
           if (currentWorkflowFolder) {
             const createSetIfNotExist = (sets: any[] | undefined, name: string, creator: () => any) => {
-              const existing = sets?.find(s => s.name === name);
+              const existing = sets?.find(s => (s.name || s.title) === name);
               if (existing) return { id: existing.id, isNew: false, set: existing };
               const newSet = creator();
               return { id: newSet.id, isNew: true, set: newSet };
@@ -1364,28 +1351,19 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             systemPrompt: localNovel.systemPrompt || '你是一个专业的小说家。',
             globalCreationPrompt: globalConfig.globalCreationPrompt,
             longTextMode: globalConfig.longTextMode,
-            autoOptimize: node.data.autoOptimize || globalConfig.autoOptimize,
+            autoOptimize: globalConfig.autoOptimize,
             consecutiveChapterCount: globalConfig.consecutiveChapterCount || 1,
             smallSummaryInterval: globalConfig.smallSummaryInterval,
             bigSummaryInterval: globalConfig.bigSummaryInterval,
             smallSummaryPrompt: globalConfig.smallSummaryPrompt,
             bigSummaryPrompt: globalConfig.bigSummaryPrompt,
             outlineModel: globalConfig.outlineModel,
-            asyncOptimize: node.data.asyncOptimize || globalConfig.asyncOptimize,
             contextChapterCount: globalConfig.contextChapterCount,
-            maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
           };
 
           const engine = new AutoWriteEngine({
             ...engineConfig,
-            twoStepOptimization: node.data.twoStepOptimization,
-            optimizePresets: globalConfig.optimizePresets,
-            activeOptimizePresetId: globalConfig.activeOptimizePresetId,
-            analysisPresets: globalConfig.analysisPresets,
-            activeAnalysisPresetId: globalConfig.activeAnalysisPresetId,
-            asyncOptimize: node.data.asyncOptimize || globalConfig.asyncOptimize,
             contextChapterCount: globalConfig.contextChapterCount,
-            maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
           }, localNovel);
 
           let writeStartIndex = 0;
@@ -1405,8 +1383,17 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             continue;
           }
 
-          await engine.run(items, writeStartIndex, globalConfig.prompts.filter(p => p.active), globalConfig.getActiveScripts,
-            (s) => updateNodeData(node.id, { label: `创作中: ${s}` }),
+          await engine.run(items, writeStartIndex, globalConfig.prompts.filter(p => p.active),
+            () => {
+              // 核心修复：工作流执行时，必须根据当前节点所选的 AI 预设来合并正则脚本
+              const baseScripts = globalConfig.getActiveScripts() || [];
+              const presetScripts = (preset as any)?.regexScripts || [];
+              return [...baseScripts, ...presetScripts];
+            },
+            (s) => {
+              const displayStatus = s.includes('完成') ? s : `创作中: ${s}`;
+              updateNodeData(node.id, { label: displayStatus });
+            },
             (n) => {
               localNovel = n; // 实时同步本地副本
               updateLocalAndGlobal(n);
@@ -1418,45 +1405,12 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
               }
               // 2. 执行全局完成回调（触发总结生成等异步副作用）并捕获返回的最终状态
               if (globalConfig.onChapterComplete) {
-                const result = await globalConfig.onChapterComplete(id, content);
+                const result = await (globalConfig.onChapterComplete as any)(id, content, updatedNovel);
                 if (result && typeof result === 'object' && (result as Novel).chapters) {
                   localNovel = result as Novel;
                 }
               }
-              setNodes(nds => nds.map(n => {
-                if (n.id === node.id) {
-                  const novel = (localNovel as Novel);
-                  
-                  // --- 修复：在长文模式下，获取所有相关的章节和总结 ---
-                  const targetVolId = n.data.targetVolumeId || finalVolumeId;
-                  // 核心修复：仅展示内容不为空的章节，避免占位符干扰，并确保包含小总结和大总结
-                  const volumeChapters = novel.chapters.filter(c => c.volumeId === targetVolId && c.content && c.content.trim().length > 0);
-                  
-                  const newEntries: OutputEntry[] = volumeChapters.map(c => ({
-                    id: (c.subtype === 'small_summary' || c.subtype === 'big_summary') ? `${c.subtype}-${c.id}` : `chapter-${c.id}`,
-                    title: c.title,
-                    content: c.content || '',
-                    versions: c.versions,
-                    analysisResult: c.analysisResult
-                  }));
-
-                  // 排序：严格按照章节在小说中的实际索引顺序展示
-                  const sortedEntries = newEntries.sort((a, b) => {
-                    const indexA = novel.chapters.findIndex(c => {
-                      const cid = (c.subtype === 'small_summary' || c.subtype === 'big_summary') ? `${c.subtype}-${c.id}` : `chapter-${c.id}`;
-                      return cid === a.id;
-                    });
-                    const indexB = novel.chapters.findIndex(c => {
-                      const cid = (c.subtype === 'small_summary' || c.subtype === 'big_summary') ? `${c.subtype}-${c.id}` : `chapter-${c.id}`;
-                      return cid === b.id;
-                    });
-                    return indexA - indexB;
-                  });
-
-                  return { ...n, data: { ...n.data, outputEntries: sortedEntries } };
-                }
-                return n;
-              }));
+              // 正文生成节点不再维护 outputEntries 列表，因为内容直接写入目录
 
               // 核心修复：必须返回最新的 localNovel 给引擎，解决手机端状态覆盖问题
               return localNovel;
@@ -1470,14 +1424,35 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         }
 
         const nodeApiConfig = preset?.apiConfig || {};
+        
+        // 确定该功能模块对应的全局模型设置
+        let featureModel = globalConfig.model;
+        if (node.data.typeKey === 'outline') featureModel = globalConfig.outlineModel;
+        else if (node.data.typeKey === 'characters') featureModel = globalConfig.characterModel;
+        else if (node.data.typeKey === 'worldview') featureModel = globalConfig.worldviewModel;
+        else if (node.data.typeKey === 'inspiration') featureModel = globalConfig.inspirationModel;
+        else if (node.data.typeKey === 'plotOutline') featureModel = globalConfig.plotOutlineModel;
+
+        const finalModel = nodeApiConfig.model || featureModel || globalConfig.model;
+
         const openai = new OpenAI({
           apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
           baseURL: nodeApiConfig.baseUrl || globalConfig.baseUrl,
           dangerouslyAllowBrowser: true
         });
 
+        terminal.log(`
+>> AI REQUEST [工作流(移动端): ${node.data.typeLabel}]
+>> -----------------------------------------------------------
+>> Model:       ${finalModel}
+>> Temperature: ${preset?.temperature ?? globalConfig.temperature}
+>> Top P:       ${preset?.topP ?? globalConfig.topP}
+>> Top K:       ${(preset as any)?.topK ?? globalConfig.topK}
+>> -----------------------------------------------------------
+        `);
+
         const completion = await openai.chat.completions.create({
-          model: nodeApiConfig.model || globalConfig.model,
+          model: finalModel,
           messages,
           temperature: preset?.temperature ?? globalConfig.temperature,
           top_p: preset?.topP ?? globalConfig.topP,
@@ -1485,6 +1460,10 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         } as any, { signal: abortControllerRef.current?.signal });
 
         const result = completion.choices[0]?.message?.content || '';
+        if (!result || result.trim().length === 0) {
+          throw new Error('AI 返回内容为空，已终止工作流。请检查网络或模型配置。');
+        }
+        terminal.log(`[Workflow Output] ${node.data.typeLabel} - ${node.data.label}:\n${result.slice(0, 500)}${result.length > 500 ? '...' : ''}`);
         
         // 6. 结构化解析 AI 输出并更新节点产物
         let entriesToStore: { title: string; content: string }[] = [];
@@ -1492,6 +1471,14 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         try {
           // 增强型 JSON 提取逻辑
           let potentialJson = result.trim();
+          
+          // 1. 预处理：清理模型可能输出的废弃标记
+          potentialJson = potentialJson.replace(/\[\/?JSON\]/gi, '').trim();
+
+          // 2. 移除 Markdown 代码块标记（如果存在）
+          potentialJson = potentialJson.replace(/```json\s*([\s\S]*?)```/g, '$1')
+                                       .replace(/```\s*([\s\S]*?)```/g, '$1').trim();
+
           const firstBracket = potentialJson.indexOf('[');
           const firstBrace = potentialJson.indexOf('{');
           let start = -1;
@@ -1505,12 +1492,21 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             end = potentialJson.lastIndexOf('}');
           }
 
-          if (start !== -1 && end !== -1 && end > start) {
+          if (start !== -1 && end !== -1 && end >= start) {
             potentialJson = potentialJson.substring(start, end + 1);
           }
-          potentialJson = potentialJson.replace(/```json\s*|```\s*/g, '').trim();
 
-          const parsed = JSON.parse(potentialJson);
+          let parsed;
+          try {
+            parsed = JSON.parse(potentialJson);
+          } catch (e) {
+            const match = potentialJson.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+            if (match) {
+              parsed = JSON.parse(match[0]);
+            } else {
+              throw e;
+            }
+          }
           
           const extractEntries = (data: any): {title: string, content: string}[] => {
             if (!data) return [];

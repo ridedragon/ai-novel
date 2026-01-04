@@ -215,9 +215,37 @@ export class AutoWriteEngine {
               // Intermediate update for first chapter
               this.novel = {
                 ...this.novel,
-                chapters: this.novel.chapters.map(c =>
-                  c.id === batchItems[0].id ? { ...c, content: fullGeneratedContent } : c,
-                ),
+                chapters: this.novel.chapters.map(c => {
+                  if (c.id === batchItems[0].id) {
+                    const baseTime = Date.now();
+                    const updatedContent = fullGeneratedContent;
+
+                    // 确保流式传输中也有正确的 versions 结构，同步更新活跃版本内容
+                    if (!c.versions || c.versions.length === 0) {
+                      const originalVersion: ChapterVersion = {
+                        id: `v_${baseTime}_orig_${c.id}`,
+                        content: updatedContent,
+                        timestamp: baseTime,
+                        type: 'original',
+                      };
+                      return {
+                        ...c,
+                        content: updatedContent,
+                        versions: [originalVersion],
+                        activeVersionId: originalVersion.id,
+                      };
+                    } else {
+                      return {
+                        ...c,
+                        content: updatedContent,
+                        versions: c.versions.map(v =>
+                          v.id === c.activeVersionId ? { ...v, content: updatedContent } : v,
+                        ),
+                      };
+                    }
+                  }
+                  return c;
+                }),
               };
               onNovelUpdate(this.novel);
             }
@@ -289,33 +317,13 @@ export class AutoWriteEngine {
           };
           onNovelUpdate(this.novel);
 
-          // 执行优化逻辑
+          // 上报章节完成 (已移除自动优化逻辑)
           for (let i = 0; i < batchItems.length; i++) {
             const chapterId = batchItems[i].id;
             const content = finalContents[i];
-
-            if (content && content.trim() && (this.config.autoOptimize || this.config.twoStepOptimization)) {
-              if (this.config.asyncOptimize) {
-                // 异步模式：不等待优化完成，立即进行下一章或上报完成
-                this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate);
-                const resultNovel = await onChapterComplete(chapterId, content, this.novel);
-                if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
-                  this.novel = resultNovel as Novel;
-                }
-              } else {
-                // 线性模式：等待优化完成
-                await this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate);
-                const updatedChapter = this.novel.chapters.find(c => c.id === chapterId);
-                const resultNovel = await onChapterComplete(chapterId, updatedChapter?.content || content, this.novel);
-                if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
-                  this.novel = resultNovel as Novel;
-                }
-              }
-            } else {
-              const resultNovel = await onChapterComplete(chapterId, content, this.novel);
-              if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
-                this.novel = resultNovel as Novel;
-              }
+            const resultNovel = await onChapterComplete(chapterId, content, this.novel);
+            if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
+              this.novel = resultNovel as Novel;
             }
           }
 
@@ -328,6 +336,7 @@ export class AutoWriteEngine {
           if (attempt >= maxAttempts) {
             onStatusUpdate(`生成失败：${err.message}`);
             this.isRunning = false;
+            throw err; // 抛出错误以中止工作流，防止误跳到下一个节点
           } else {
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
@@ -342,8 +351,18 @@ export class AutoWriteEngine {
     // 等待所有异步优化任务完成，确保节点状态正确结束
     if (this.activeOptimizationTasks.size > 0 && this.isRunning) {
       onStatusUpdate(`正在完成最后的优化 (${this.activeOptimizationTasks.size}个任务)...`);
-      while (this.activeOptimizationTasks.size > 0 && this.isRunning) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+      // 增加超时保护，防止因为网络问题导致某些任务挂起，从而死锁工作流节点状态
+      let waitStart = Date.now();
+      const MAX_WAIT = 120000; // 最多等待 2 分钟
+
+      while (this.activeOptimizationTasks.size > 0 && this.isRunning && Date.now() - waitStart < MAX_WAIT) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      if (this.activeOptimizationTasks.size > 0) {
+        onStatusUpdate(`部分优化任务超时，已强制结束。`);
+        this.activeOptimizationTasks.forEach(controller => controller.abort());
+        this.activeOptimizationTasks.clear();
       }
     }
 
@@ -358,6 +377,7 @@ export class AutoWriteEngine {
     sourceContent: string,
     onStatusUpdate: (status: string) => void,
     onNovelUpdate: (novel: Novel) => void,
+    scripts: RegexScript[] = [],
   ) {
     // 并发控制
     const maxConcurrent = this.config.maxConcurrentOptimizations || 3;
@@ -405,6 +425,14 @@ export class AutoWriteEngine {
               content: p.content.replace('{{content}}', sourceContent).replace('{{input}}', ''),
             }));
 
+          terminal.log(`
+>> AI REQUEST [优化前分析]
+>> -----------------------------------------------------------
+>> Model:       ${this.config.model}
+>> Temperature: ${analysisPreset.temperature ?? 1.0}
+>> -----------------------------------------------------------
+          `);
+
           const completion = await openai.chat.completions.create(
             {
               model: this.config.model,
@@ -415,6 +443,11 @@ export class AutoWriteEngine {
           );
 
           currentAnalysisResult = completion.choices[0]?.message?.content || '';
+          terminal.log(
+            `[Analysis Result] chapter ${chapterId}:\n${currentAnalysisResult.slice(0, 500)}${
+              currentAnalysisResult.length > 500 ? '...' : ''
+            }`,
+          );
 
           this.novel = {
             ...this.novel,
@@ -447,6 +480,14 @@ export class AutoWriteEngine {
         messages.push({ role: 'user', content: `请基于以下修改建议优化正文：\n\n${currentAnalysisResult}` });
       }
 
+      terminal.log(`
+>> AI REQUEST [正文优化/润色]
+>> -----------------------------------------------------------
+>> Model:       ${this.config.model}
+>> Temperature: ${activePreset.temperature ?? 1.0}
+>> -----------------------------------------------------------
+      `);
+
       const completion = await openai.chat.completions.create(
         {
           model: this.config.model,
@@ -456,8 +497,12 @@ export class AutoWriteEngine {
         { signal: optimizationAbortController.signal },
       );
 
-      const optimizedContent = completion.choices[0]?.message?.content || '';
+      let optimizedContent = completion.choices[0]?.message?.content || '';
+      terminal.log(`[Optimization Result] chapter ${chapterId} length: ${optimizedContent.length}`);
       if (optimizedContent) {
+        // 核心修复：对优化后的正文也要应用正则脚本
+        optimizedContent = processTextWithRegex(optimizedContent, scripts, 'output');
+
         const optVersion: ChapterVersion = {
           id: `v_${baseTime}_opt_${chapterId}`,
           content: optimizedContent,
@@ -465,21 +510,28 @@ export class AutoWriteEngine {
           type: 'optimized',
         };
 
+        // 核心修复：异步任务返回时，不能直接解构 this.novel，
+        // 而是要将结果合并到当前最新的 this.novel 中，防止回滚在优化期间产生的总结
+        const updatedChapters = this.novel.chapters.map(c => {
+          if (c.id === chapterId) {
+            const versions = [...(c.versions || [])];
+            // 避免重复添加相同的优化版本
+            if (!versions.some(v => v.id === optVersion.id)) {
+              versions.push(optVersion);
+            }
+            return {
+              ...c,
+              content: optimizedContent,
+              versions: versions,
+              activeVersionId: optVersion.id,
+            };
+          }
+          return c;
+        });
+
         this.novel = {
           ...this.novel,
-          chapters: this.novel.chapters.map(c => {
-            if (c.id === chapterId) {
-              const versions = [...(c.versions || [])];
-              versions.push(optVersion);
-              return {
-                ...c,
-                content: optimizedContent,
-                versions: versions,
-                activeVersionId: optVersion.id,
-              };
-            }
-            return c;
-          }),
+          chapters: updatedChapters,
         };
         onNovelUpdate(this.novel);
       }

@@ -89,9 +89,6 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   status?: 'pending' | 'executing' | 'completed' | 'failed';
   targetVolumeId?: string;
   targetVolumeName?: string;
-  autoOptimize?: boolean;
-  twoStepOptimization?: boolean;
-  asyncOptimize?: boolean;
 }
 
 export type WorkflowNode = Node<WorkflowNodeData>;
@@ -120,7 +117,7 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
   const getStatusColor = () => {
     switch (data.status) {
       case 'executing': return 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] animate-pulse';
-      case 'completed': return 'border-green-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]';
+      case 'completed': return 'border-green-600/50 shadow-none'; // 移除发光效果，保持低调
       case 'failed': return 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]';
       default: return selected ? 'border-[var(--theme-color)] ring-2 ring-[var(--theme-color)]/20 shadow-[var(--theme-color)]/10' : 'border-gray-700';
     }
@@ -137,7 +134,7 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
           <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-none mb-1 flex items-center justify-between">
             {data.typeLabel}
             {data.status === 'executing' && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>}
-            {data.status === 'completed' && <CheckSquare className="w-3 h-3 text-green-500" />}
+            {/* 移除已完成状态的打钩图标，使其恢复普通外观 */}
           </div>
           <div className="text-sm font-semibold text-gray-100 truncate">{data.label}</div>
         </div>
@@ -578,48 +575,6 @@ const NodePropertiesModal = ({
                     )}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-end gap-2 pb-1">
-                  <button
-                    onClick={() => {
-                      const newVal = !node.data.autoOptimize;
-                      updateNodeData(node.id, { autoOptimize: newVal });
-                      if (globalConfig?.updateAutoOptimize) {
-                        globalConfig.updateAutoOptimize(newVal);
-                      }
-                    }}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${node.data.autoOptimize ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-                  >
-                    <div className={`w-3 h-3 rounded-full ${node.data.autoOptimize ? 'bg-purple-500 animate-pulse' : 'bg-gray-600'}`} />
-                    自动优化
-                  </button>
-                  <button
-                    onClick={() => {
-                      const newVal = !node.data.twoStepOptimization;
-                      updateNodeData(node.id, { twoStepOptimization: newVal });
-                      if (globalConfig?.updateTwoStepOptimization) {
-                        globalConfig.updateTwoStepOptimization(newVal);
-                      }
-                    }}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${node.data.twoStepOptimization ? 'bg-pink-500/20 text-pink-300 border-pink-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-                  >
-                    <div className={`w-3 h-3 rounded-full ${node.data.twoStepOptimization ? 'bg-pink-500 animate-pulse' : 'bg-gray-600'}`} />
-                    两阶段优化
-                  </button>
-                  <button
-                    onClick={() => {
-                      const newVal = !node.data.asyncOptimize;
-                      updateNodeData(node.id, { asyncOptimize: newVal });
-                      if (globalConfig?.updateAsyncOptimize) {
-                        globalConfig.updateAsyncOptimize(newVal);
-                      }
-                    }}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${node.data.asyncOptimize ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50' : 'bg-gray-800 text-gray-500 border-gray-700'}`}
-                    title="优化和正文创作分开进行，提高效率"
-                  >
-                    <div className={`w-3 h-3 rounded-full ${node.data.asyncOptimize ? 'bg-indigo-500 animate-pulse' : 'bg-gray-600'}`} />
-                    异步并行优化
-                  </button>
-                </div>
               </div>
             </div>
           )}
@@ -798,93 +753,63 @@ const NodePropertiesModal = ({
             />
           </div>
 
-          <div className="space-y-4 pt-6 border-t border-gray-700/30">
-            <div className="flex items-center justify-between">
+          {node.data.typeKey === 'chapter' ? (
+            <div className="space-y-4 pt-6 border-t border-gray-700/30">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                <Workflow className="w-3.5 h-3.5" /> {node.data.typeKey === 'chapter' ? '章节生成列表' : '生成内容列表 (Output Entries)'}
+                <FileText className="w-3.5 h-3.5 text-indigo-400" /> 生成产物说明
               </label>
-              {node.data.typeKey !== 'chapter' && (
+              <div className="text-center py-12 bg-[#161922] rounded-xl border border-dashed border-gray-700">
+                <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
+                  <BookOpen className="w-6 h-6 text-indigo-500" />
+                </div>
+                <p className="text-sm text-gray-300">章节内容已实时保存至侧边栏目录</p>
+                <p className="text-xs text-gray-500 mt-2 px-10 leading-relaxed">工作流执行过程中生成的正文会直接写入小说对应的分卷中，您可以在主界面左侧的目录树中点击查看、编辑或手动优化这些章节。</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 pt-6 border-t border-gray-700/30">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                  <Workflow className="w-3.5 h-3.5" /> 生成内容列表 (Output Entries)
+                </label>
                 <button onClick={addEntry} className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
                   <Plus className="w-3 h-3" /> 新增条目
                 </button>
-              )}
-            </div>
-            
-            <div className="space-y-4">
-              {node.data.typeKey === 'chapter' && (
-                <div className="grid grid-cols-1 gap-2">
-                  {((node.data.outputEntries || []) as OutputEntry[]).map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="bg-[#161922] border border-gray-700/50 rounded-lg p-3 hover:bg-[#1a1d29] transition-colors group/chapter cursor-pointer flex items-center justify-between"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setPreviewEntry(entry);
-                      }}
-                    >
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="w-8 h-8 rounded bg-indigo-500/10 flex items-center justify-center shrink-0">
-                          <FileText className="w-4 h-4 text-indigo-400" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-gray-200 truncate">{entry.title}</div>
-                          <div className="text-[10px] text-gray-500 truncate">{entry.content.replace(/\s+/g, ' ').substring(0, 60)}...</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm('确定要删除这条正文记录吗？')) {
-                              removeEntry(entry.id);
-                            }
-                          }}
-                          className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button type="button" className="px-3 py-1 bg-indigo-600/20 text-indigo-400 rounded text-[10px] font-bold group-hover/chapter:bg-indigo-600 group-hover/chapter:text-white transition-all whitespace-nowrap">
-                          查看正文
-                        </button>
-                      </div>
+              </div>
+              
+              <div className="space-y-4">
+                {((node.data.outputEntries || []) as OutputEntry[]).map((entry) => (
+                  <div key={entry.id} className="bg-[#161922] border border-gray-700/50 rounded-xl overflow-hidden shadow-lg group/entry">
+                    <div className="bg-[#1a1d29] px-4 py-2 border-b border-gray-700/50 flex items-center justify-between">
+                      <input
+                        value={entry.title}
+                        onChange={(e) => updateEntryTitle(entry.id, e.target.value)}
+                        className="bg-transparent border-none outline-none text-xs font-bold text-indigo-300 focus:text-white transition-colors flex-1"
+                        placeholder="条目标题..."
+                      />
+                      <button onClick={() => removeEntry(entry.id)} className="p-1 text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover/entry:opacity-100">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {node.data.typeKey !== 'chapter' && ((node.data.outputEntries || []) as OutputEntry[]).map((entry) => (
-                <div key={entry.id} className="bg-[#161922] border border-gray-700/50 rounded-xl overflow-hidden shadow-lg group/entry">
-                  <div className="bg-[#1a1d29] px-4 py-2 border-b border-gray-700/50 flex items-center justify-between">
-                    <input
-                      value={entry.title}
-                      onChange={(e) => updateEntryTitle(entry.id, e.target.value)}
-                      className="bg-transparent border-none outline-none text-xs font-bold text-indigo-300 focus:text-white transition-colors flex-1"
-                      placeholder="条目标题..."
+                    <textarea
+                      value={entry.content}
+                      onChange={(e) => updateEntryContent(entry.id, e.target.value)}
+                      placeholder="输入内容..."
+                      className="w-full h-32 bg-transparent p-4 text-sm text-gray-300 focus:text-emerald-50 outline-none resize-none font-mono leading-relaxed"
                     />
-                    <button onClick={() => removeEntry(entry.id)} className="p-1 text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover/entry:opacity-100">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
                   </div>
-                  <textarea
-                    value={entry.content}
-                    onChange={(e) => updateEntryContent(entry.id, e.target.value)}
-                    placeholder="输入内容..."
-                    className="w-full h-32 bg-transparent p-4 text-sm text-gray-300 focus:text-emerald-50 outline-none resize-none font-mono leading-relaxed"
-                  />
-                </div>
-              ))}
-              {(!node.data.outputEntries || (node.data.outputEntries as OutputEntry[]).length === 0) && (
-                <div className="text-center py-12 bg-[#161922] rounded-xl border border-dashed border-gray-700">
-                  <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
-                    <Workflow className="w-6 h-6 text-gray-600" />
+                ))}
+                {(!node.data.outputEntries || (node.data.outputEntries as OutputEntry[]).length === 0) && (
+                  <div className="text-center py-12 bg-[#161922] rounded-xl border border-dashed border-gray-700">
+                    <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
+                      <Workflow className="w-6 h-6 text-gray-600" />
+                    </div>
+                    <p className="text-sm text-gray-500">暂无生成产物，执行工作流或手动添加</p>
                   </div>
-                  <p className="text-sm text-gray-500">暂无生成产物，执行工作流或手动添加</p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="p-5 border-t border-gray-700/50 bg-[#1a1d29]">
@@ -1274,7 +1199,6 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         presetName: '',
         instruction: '',
         folderName: '',
-        asyncOptimize: globalConfig?.asyncOptimize || false,
         selectedWorldviewSets: [],
         selectedCharacterSets: [],
         selectedOutlineSets: [],
@@ -1283,8 +1207,6 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         outputEntries: [],
         targetVolumeId: activeNovel?.volumes[0]?.id || '',
         targetVolumeName: '',
-        autoOptimize: false,
-        twoStepOptimization: false,
       },
       position: {
         x: position.x - 140, // 减去节点宽度的一半 (280/2)
@@ -1556,7 +1478,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
           if (currentWorkflowFolder) {
             const createSetIfNotExist = (sets: any[] | undefined, name: string, creator: () => any) => {
-              const existing = sets?.find(s => s.name === name);
+              const existing = sets?.find(s => (s.name || s.title) === name);
               if (existing) return { id: existing.id, isNew: false, set: existing };
               const newSet = creator();
               return { id: newSet.id, isNew: true, set: newSet };
@@ -1867,8 +1789,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             systemPrompt: localNovel.systemPrompt || '你是一个专业的小说家。',
             globalCreationPrompt: globalConfig.globalCreationPrompt,
             longTextMode: globalConfig.longTextMode,
-            autoOptimize: node.data.autoOptimize || globalConfig.autoOptimize,
-            asyncOptimize: node.data.asyncOptimize || globalConfig.asyncOptimize,
+            autoOptimize: globalConfig.autoOptimize,
+            asyncOptimize: globalConfig.asyncOptimize,
             contextChapterCount: globalConfig.contextChapterCount,
             maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
             consecutiveChapterCount: globalConfig.consecutiveChapterCount || 1,
@@ -1882,14 +1804,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           // 4. 初始化引擎
           const engine = new AutoWriteEngine({
             ...engineConfig,
-            twoStepOptimization: node.data.twoStepOptimization,
-            optimizePresets: globalConfig.optimizePresets,
-            activeOptimizePresetId: globalConfig.activeOptimizePresetId,
-            analysisPresets: globalConfig.analysisPresets,
-            activeAnalysisPresetId: globalConfig.activeAnalysisPresetId,
-            asyncOptimize: node.data.asyncOptimize || globalConfig.asyncOptimize,
             contextChapterCount: globalConfig.contextChapterCount,
-            maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
           }, localNovel);
 
           // 4. 计算起始索引
@@ -1915,10 +1830,15 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             items,
             writeStartIndex,
             globalConfig.prompts.filter(p => p.active),
-            globalConfig.getActiveScripts,
+            () => {
+              // 核心修复：工作流执行时，必须根据当前节点所选的 AI 预设来合并正则脚本
+              const baseScripts = globalConfig.getActiveScripts() || [];
+              const presetScripts = (preset as any)?.regexScripts || [];
+              return [...baseScripts, ...presetScripts];
+            },
             (status) => {
-              // 更新节点标签以显示进度，如果状态包含“优化”或“完成”则直接显示，否则增加“创作中”前缀
-              const displayStatus = (status.includes('优化') || status.includes('完成')) ? status : `创作中: ${status}`;
+              // 更新节点标签以显示进度，如果状态包含“完成”则直接显示，否则增加“创作中”前缀
+              const displayStatus = status.includes('完成') ? status : `创作中: ${status}`;
               updateNodeData(node.id, { label: displayStatus });
             },
             (updatedNovel) => {
@@ -1930,56 +1850,12 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 localNovel = updatedNovel;
               }
               if (globalConfig.onChapterComplete) {
-                const result = await globalConfig.onChapterComplete(chapterId, content);
+                const result = await (globalConfig.onChapterComplete as any)(chapterId, content, updatedNovel);
                 if (result && typeof result === 'object' && (result as Novel).chapters) {
                   localNovel = result as Novel;
                 }
               }
-              // 实时更新正文生成节点的 outputEntries，以便用户查看
-              setNodes(nds => nds.map(n => {
-                if (n.id === node.id) {
-                  const novel = (localNovel as Novel);
-                  
-                  // --- 修复：在长文模式下，获取所有相关的章节和总结 ---
-                  const targetVolId = n.data.targetVolumeId || finalVolumeId;
-                  // 这里必须要包含 subtype 存在的章节（即小总结和大总结）
-                  // 核心修复：仅展示内容不为空的章节。
-                  // 这样在点击重新开始后（outputEntries已清空），只有新生成内容的章节才会出现在列表中，避免旧章节干扰。
-                  const volumeChapters = novel.chapters.filter(c => c.volumeId === targetVolId && c.content && c.content.trim().length > 0);
-                  
-                  const newEntries: OutputEntry[] = volumeChapters.map(c => ({
-                    // 注意：这里 ID 的构造必须和下方排序逻辑中的查找 ID 一致
-                    id: (c.subtype === 'small_summary' || c.subtype === 'big_summary') ? `${c.subtype}-${c.id}` : `chapter-${c.id}`,
-                    title: c.title,
-                    content: c.content || '',
-                    versions: c.versions,
-                    analysisResult: c.analysisResult
-                  }));
-
-                  // 排序：根据小说中实际的章节顺序进行排序
-                  const sortedEntries = newEntries.sort((a, b) => {
-                    const indexA = novel.chapters.findIndex(c => {
-                      const cid = (c.subtype === 'small_summary' || c.subtype === 'big_summary') ? `${c.subtype}-${c.id}` : `chapter-${c.id}`;
-                      return cid === a.id;
-                    });
-                    const indexB = novel.chapters.findIndex(c => {
-                      const cid = (c.subtype === 'small_summary' || c.subtype === 'big_summary') ? `${c.subtype}-${c.id}` : `chapter-${c.id}`;
-                      return cid === b.id;
-                    });
-                    return indexA - indexB;
-                  });
-
-                  return {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      outputEntries: sortedEntries
-                    }
-                  };
-                }
-                return n;
-              }));
-              
+              // 正文生成节点不再维护 outputEntries 列表，因为内容直接写入目录
               // 核心修复：必须将最新的 localNovel 返回给引擎
               return localNovel;
             },
@@ -1998,6 +1874,17 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
         // 5. 调用 AI (针对设定生成、AI 聊天等节点)
         const nodeApiConfig = preset?.apiConfig || {};
+        
+        // 确定该功能模块对应的全局模型设置
+        let featureModel = globalConfig.model;
+        if (node.data.typeKey === 'outline') featureModel = globalConfig.outlineModel;
+        else if (node.data.typeKey === 'characters') featureModel = globalConfig.characterModel;
+        else if (node.data.typeKey === 'worldview') featureModel = globalConfig.worldviewModel;
+        else if (node.data.typeKey === 'inspiration') featureModel = globalConfig.inspirationModel;
+        else if (node.data.typeKey === 'plotOutline') featureModel = globalConfig.plotOutlineModel;
+
+        const finalModel = nodeApiConfig.model || featureModel || globalConfig.model;
+
         const openai = new OpenAI({
           apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
           baseURL: nodeApiConfig.baseUrl || globalConfig.baseUrl,
@@ -2007,7 +1894,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         terminal.log(`
 >> AI REQUEST [工作流: ${node.data.typeLabel}]
 >> -----------------------------------------------------------
->> Model:       ${nodeApiConfig.model || globalConfig.model}
+>> Model:       ${finalModel}
 >> Temperature: ${preset?.temperature ?? globalConfig.temperature}
 >> Top P:       ${preset?.topP ?? globalConfig.topP}
 >> Top K:       ${(preset as any)?.topK ?? globalConfig.topK}
@@ -2015,7 +1902,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         `);
 
         const completion = await openai.chat.completions.create({
-          model: nodeApiConfig.model || globalConfig.model,
+          model: finalModel,
           messages,
           temperature: preset?.temperature ?? globalConfig.temperature,
           top_p: preset?.topP ?? globalConfig.topP,
@@ -2023,6 +1910,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         } as any, { signal: abortControllerRef.current?.signal });
 
         let result = completion.choices[0]?.message?.content || '';
+        if (!result || result.trim().length === 0) {
+          throw new Error('AI 返回内容为空，已终止工作流。请检查网络或模型配置。');
+        }
+        terminal.log(`[Workflow Output] ${node.data.typeLabel} - ${node.data.label}:\n${result.slice(0, 500)}${result.length > 500 ? '...' : ''}`);
         
         // 6. 结构化解析 AI 输出并更新节点产物
         let entriesToStore: { title: string; content: string }[] = [];
@@ -2031,13 +1922,21 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           // 增强型 JSON 提取逻辑：深度处理包含前置说明文字的情况
           let potentialJson = result.trim();
           
-          // 1. 定位 JSON 结构边界
+          // 1. 预处理：移除常见的污染字符（如尾部多余的解释文字、未闭合的标签等）
+          // 有些模型会输出 [/JSON] 或类似标记，需要清理
+          potentialJson = potentialJson.replace(/\[\/?JSON\]/gi, '').trim();
+
+          // 2. 移除 Markdown 代码块标记（如果存在）
+          potentialJson = potentialJson.replace(/```json\s*([\s\S]*?)```/g, '$1')
+                                       .replace(/```\s*([\s\S]*?)```/g, '$1').trim();
+          
+          // 3. 定位 JSON 结构边界 (寻找最外层的 [ 或 {)
           const firstBracket = potentialJson.indexOf('[');
           const firstBrace = potentialJson.indexOf('{');
           let start = -1;
           let end = -1;
 
-          if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+          if (firstBracket !== -1 && (firstBrace === -1 || (firstBracket < firstBrace))) {
             start = firstBracket;
             end = potentialJson.lastIndexOf(']');
           } else if (firstBrace !== -1) {
@@ -2045,14 +1944,22 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             end = potentialJson.lastIndexOf('}');
           }
 
-          if (start !== -1 && end !== -1 && end > start) {
+          if (start !== -1 && end !== -1 && end >= start) {
             potentialJson = potentialJson.substring(start, end + 1);
           }
 
-          // 清理可能的 Markdown 标识
-          potentialJson = potentialJson.replace(/```json\s*|```\s*/g, '').trim();
-
-          const parsed = JSON.parse(potentialJson);
+          let parsed;
+          try {
+            parsed = JSON.parse(potentialJson);
+          } catch (e) {
+            // 如果解析失败，尝试进行极端的正则匹配提取（防止末尾有垃圾文字干扰）
+            const match = potentialJson.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+            if (match) {
+              parsed = JSON.parse(match[0]);
+            } else {
+              throw e;
+            }
+          }
           
           // 深度标准化条目提取：精准匹配各设定集的字段名
           const extractEntries = (data: any): {title: string, content: string}[] => {
@@ -2237,6 +2144,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       if (!stopRequestedRef.current) {
         setCurrentNodeIndex(-1);
         setIsRunning(false);
+        // 执行结束，彻底关闭所有连线动画
+        setEdges(eds => eds.map(e => ({ ...e, animated: false })));
       }
     } catch (e: any) {
       if (e.name === 'AbortError') {
