@@ -122,6 +122,7 @@ export class AutoWriteEngine {
       let attempt = 0;
       const maxAttempts = this.config.maxRetries + 1;
       let success = false;
+      const taskStartTime = Date.now(); // 锁定本次任务起始时间戳，保证流式、重试及完成态 ID 一致
 
       while (attempt < maxAttempts && this.isRunning) {
         try {
@@ -212,37 +213,74 @@ export class AutoWriteEngine {
               const content = chunk.choices[0]?.delta?.content || '';
               fullGeneratedContent += content;
 
-              // Intermediate update for first chapter
+              // 支持流式分章节更新
+              const liveContents =
+                batchItems.length > 1
+                  ? this.splitBatchContent(fullGeneratedContent, batchItems)
+                  : [fullGeneratedContent];
+
               this.novel = {
                 ...this.novel,
                 chapters: this.novel.chapters.map(c => {
-                  if (c.id === batchItems[0].id) {
-                    const baseTime = Date.now();
-                    const updatedContent = fullGeneratedContent;
+                  const bIdx = batchItems.findIndex(b => b.id === c.id);
+                  if (bIdx !== -1) {
+                    const updatedContent = liveContents[bIdx] || '';
+                    // 多章节模式下，如果后续章节还没有内容，不要清空它们
+                    if (!updatedContent && batchItems.length > 1 && bIdx > 0) return c;
 
-                    // 确保流式传输中也有正确的 versions 结构，同步更新活跃版本内容
-                    if (!c.versions || c.versions.length === 0) {
+                    let currentVersions = [...(c.versions || [])];
+                    let currentActiveVersionId = c.activeVersionId;
+
+                    // 1. 初始保护：如果原本有内容且无版本历史，将其锁定为 original
+                    if (currentVersions.length === 0 && c.content?.trim()) {
                       const originalVersion: ChapterVersion = {
-                        id: `v_${baseTime}_orig_${c.id}`,
-                        content: updatedContent,
-                        timestamp: baseTime,
+                        id: `v_${taskStartTime}_orig_${c.id}`,
+                        content: c.content,
+                        timestamp: taskStartTime,
                         type: 'original',
                       };
-                      return {
-                        ...c,
-                        content: updatedContent,
-                        versions: [originalVersion],
-                        activeVersionId: originalVersion.id,
-                      };
-                    } else {
-                      return {
-                        ...c,
-                        content: updatedContent,
-                        versions: c.versions.map(v =>
-                          v.id === c.activeVersionId ? { ...v, content: updatedContent } : v,
-                        ),
-                      };
+                      currentVersions = [originalVersion];
                     }
+
+                    // 2. 更新 AI 创作版本
+                    const aiVersionId = `v_${taskStartTime}_autowrite_${c.id}`;
+                    const existingAiVerIdx = currentVersions.findIndex(v => v.id === aiVersionId);
+
+                    if (existingAiVerIdx !== -1) {
+                      currentVersions[existingAiVerIdx] = {
+                        ...currentVersions[existingAiVerIdx],
+                        content: updatedContent,
+                      };
+                    } else if (updatedContent.trim()) {
+                      // 仅在有实际内容时创建版本，避免 0 字符原文标签
+                      // 特殊修复：如果 currentVersions 中唯一的版本内容为空（之前误创建的 0 字符原文），则直接覆盖它
+                      if (currentVersions.length === 1 && !currentVersions[0].content.trim()) {
+                        currentVersions[0] = {
+                          ...currentVersions[0],
+                          id: aiVersionId,
+                          content: updatedContent,
+                          timestamp: taskStartTime,
+                          type: 'original',
+                        };
+                        currentActiveVersionId = aiVersionId;
+                      } else {
+                        const isFirstContent = currentVersions.length === 0;
+                        currentVersions.push({
+                          id: aiVersionId,
+                          content: updatedContent,
+                          timestamp: taskStartTime,
+                          type: isFirstContent ? 'original' : 'user_edit',
+                        });
+                        currentActiveVersionId = aiVersionId;
+                      }
+                    }
+
+                    return {
+                      ...c,
+                      content: updatedContent,
+                      versions: currentVersions,
+                      activeVersionId: currentActiveVersionId || c.activeVersionId,
+                    };
                   }
                   return c;
                 }),
@@ -256,60 +294,64 @@ export class AutoWriteEngine {
           if (!fullGeneratedContent) throw new Error('Empty response received');
 
           // Split logic
-          let finalContents: string[] = [];
-          if (batchItems.length > 1) {
-            const ranges: { start: number; id: number }[] = [];
-            for (let i = 0; i < batchItems.length; i++) {
-              const title = batchItems[i].item.title;
-              const regex = new RegExp(`###\\s*${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
-              const match = fullGeneratedContent.match(regex);
-              if (match && match.index !== undefined) {
-                ranges.push({ start: match.index, id: batchItems[i].id });
-              }
-            }
+          let finalContents = this.splitBatchContent(fullGeneratedContent, batchItems);
 
-            if (ranges.length < batchItems.length) {
-              finalContents = fullGeneratedContent
-                .split(/(?:\r\n|\r|\n|^)###\s*[^\n]*\n/)
-                .filter(p => p.trim().length > 0);
-            } else {
-              ranges.sort((a, b) => a.start - b.start);
-              for (let i = 0; i < ranges.length; i++) {
-                const nextStart = i < ranges.length - 1 ? ranges[i + 1].start : fullGeneratedContent.length;
-                const r = ranges[i];
-                const newlineIdx = fullGeneratedContent.indexOf('\n', r.start);
-                const contentStart = newlineIdx !== -1 ? newlineIdx + 1 : r.start;
-                finalContents[i] = fullGeneratedContent.substring(contentStart, nextStart).trim();
-              }
+          // 兜底处理：如果分割出来的有效章节数不足，尝试更激进的正则分割
+          if (batchItems.length > 1 && finalContents.filter(c => c.trim()).length < batchItems.length) {
+            const aggressiveSplit = fullGeneratedContent
+              .split(/(?:\r\n|\r|\n|^)###\s*[^\n]*/)
+              .filter(p => p.trim().length > 0);
+
+            if (aggressiveSplit.length >= batchItems.length) {
+              finalContents = aggressiveSplit.slice(0, batchItems.length);
             }
-            while (finalContents.length < batchItems.length) {
-              finalContents.push(`(生成错误：未能解析到此章节内容)`);
-            }
-          } else {
-            finalContents = [fullGeneratedContent];
+          }
+
+          // 确保长度一致，避免后续遍历越界
+          while (finalContents.length < batchItems.length) {
+            finalContents.push(`(生成错误：未能解析到此章节内容)`);
           }
 
           finalContents = finalContents.map(c => processTextWithRegex(c, scripts, 'output'));
 
-          // 这里的更新逻辑非常关键，需要初始化 versions
-          const baseTime = Date.now();
+          // 【BUG 风险点 - 原文丢失】：批量生成后的版本强行覆盖
+          // 谨慎修改：在全自动创作完成时，此处会为章节强行初始化 versions。
+          // 它将 AI 生成的最终正文（content）直接作为 original 版本存入。
+          // 如果该章节 ID 对应的是一个用户已经手动修改过的章节，那么用户的手动修改在此处会被 AI 内容彻底抹除。
           this.novel = {
             ...this.novel,
             chapters: this.novel.chapters.map(c => {
               const bIdx = batchItems.findIndex(b => b.id === c.id);
               if (bIdx !== -1) {
                 const content = finalContents[bIdx] || '';
-                const originalVersion: ChapterVersion = {
-                  id: `v_${baseTime}_orig_${c.id}`,
-                  content: content,
-                  timestamp: baseTime,
-                  type: 'original',
-                };
+
+                let currentVersions = [...(c.versions || [])];
+                // 核心修复：使用 taskStartTime 而非 Date.now()，确保与流式阶段 ID 匹配，避免重复
+                const aiVersionId = `v_${taskStartTime}_autowrite_${c.id}`;
+
+                const existingAiVerIdx = currentVersions.findIndex(v => v.id === aiVersionId);
+
+                if (existingAiVerIdx !== -1) {
+                  // 更新现有的 autowrite 版本为最终完整内容
+                  currentVersions[existingAiVerIdx] = {
+                    ...currentVersions[existingAiVerIdx],
+                    content: content,
+                    timestamp: taskStartTime,
+                  };
+                } else {
+                  currentVersions.push({
+                    id: aiVersionId,
+                    content: content,
+                    timestamp: taskStartTime,
+                    type: 'user_edit',
+                  });
+                }
+
                 return {
                   ...c,
                   content: content,
-                  versions: [originalVersion],
-                  activeVersionId: originalVersion.id,
+                  versions: currentVersions,
+                  activeVersionId: currentVersions[currentVersions.length - 1].id,
                 };
               }
               return c;
@@ -317,13 +359,29 @@ export class AutoWriteEngine {
           };
           onNovelUpdate(this.novel);
 
-          // 上报章节完成 (已移除自动优化逻辑)
+          // 上报章节完成并按需触发自动优化
           for (let i = 0; i < batchItems.length; i++) {
             const chapterId = batchItems[i].id;
             const content = finalContents[i];
             const resultNovel = await onChapterComplete(chapterId, content, this.novel);
             if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
               this.novel = resultNovel as Novel;
+            }
+
+            // 联动“自动优化”按钮逻辑：如果配置开启，直接触发内部优化函数
+            if (this.config.autoOptimize && this.isRunning) {
+              terminal.log(
+                `[AutoWrite] Auto-optimization triggered for chapter ${chapterId}. Mode: ${
+                  this.config.asyncOptimize ? 'Async' : 'Sync'
+                }`,
+              );
+              if (this.config.asyncOptimize) {
+                // 异步模式：不阻塞主流程，在后台执行优化
+                this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate, getActiveScripts());
+              } else {
+                // 同步模式：等待优化完成后再继续（或进入下一章）
+                await this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate, getActiveScripts());
+              }
             }
           }
 
@@ -510,8 +568,11 @@ export class AutoWriteEngine {
           type: 'optimized',
         };
 
-        // 核心修复：异步任务返回时，不能直接解构 this.novel，
-        // 而是要将结果合并到当前最新的 this.novel 中，防止回滚在优化期间产生的总结
+        // 【BUG 风险点 - 原文丢失】：异步优化任务的版本抢占
+        // 谨慎修改：当异步优化任务（润色）完成后，会强制切换 activeVersionId。
+        // 如果在 AI 优化的过程中，用户在主界面又进行了手动编辑，
+        // 这里的 `versions.push(optVersion)` 和 `activeVersionId` 的切换，
+        // 可能会导致用户最新的手动编辑内容因为处于非活跃版本而被“隐藏”或被后续合并逻辑丢失。
         const updatedChapters = this.novel.chapters.map(c => {
           if (c.id === chapterId) {
             const versions = [...(c.versions || [])];
@@ -544,5 +605,42 @@ export class AutoWriteEngine {
     } finally {
       this.activeOptimizationTasks.delete(chapterId);
     }
+  }
+
+  /**
+   * 将合并生成的文本拆分为多个章节内容（支持流式过程中动态拆分）
+   */
+  private splitBatchContent(text: string, batchItems: { item: OutlineItem; id: number }[]): string[] {
+    const contents: string[] = new Array(batchItems.length).fill('');
+    const ranges: { start: number; bIdx: number }[] = [];
+
+    batchItems.forEach((b, idx) => {
+      const title = b.item.title;
+      const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // 匹配 ### 标题，兼容多种换行及空格情况
+      const regex = new RegExp(`(?:\\r\\n|\\r|\\n|^)###\\s*${escapedTitle}(?:\\s|\\r|\\n|$)`, 'i');
+      const match = text.match(regex);
+      if (match && match.index !== undefined) {
+        ranges.push({ start: match.index, bIdx: idx });
+      }
+    });
+
+    if (ranges.length === 0) {
+      // 没找到明确标记，默认全部塞进第一章
+      contents[0] = text;
+    } else {
+      ranges.sort((a, b) => a.start - b.start);
+      for (let i = 0; i < ranges.length; i++) {
+        const nextStart = i < ranges.length - 1 ? ranges[i + 1].start : text.length;
+        const currentRange = ranges[i];
+
+        // 寻找标题行的结尾，正文从下一行开始
+        const titleLineEnd = text.indexOf('\n', currentRange.start);
+        const contentStart = titleLineEnd !== -1 ? titleLineEnd + 1 : currentRange.start;
+
+        contents[currentRange.bIdx] = text.substring(contentStart, nextStart).trim();
+      }
+    }
+    return contents;
   }
 }

@@ -471,9 +471,13 @@ const buildReferenceContext = (
   return context
 }
 
+// 【BUG 风险点 - 原文丢失】：数据结构标准化陷阱
+// 谨慎修改：此函数在初始化版本历史时，如果当前正文（content）包含未保存的手动编辑，
+// 而 versions 数组尚不存在，它会直接将当前内容锁死为“原文”。
+// 如果调用时机是在 AI 生成之后但在用户保存之前，就会导致原文备份被 AI 内容占据。
 const ensureChapterVersions = (chapter: Chapter): Chapter => {
+  // 如果已经有版本历史，只需检查 activeVersionId 的有效性
   if (chapter.versions && chapter.versions.length > 0) {
-    // 深度修复：确保 activeVersionId 指向有效的版本
     const activeVersion = chapter.versions.find(v => v.id === chapter.activeVersionId);
     if (!activeVersion) {
       return {
@@ -484,19 +488,25 @@ const ensureChapterVersions = (chapter: Chapter): Chapter => {
     return chapter
   }
 
+  // 核心修复：当初始化版本历史时，必须优先保护当前 content
+  // 如果 content 为空且没有已存在的内容，不要强制初始化 0 字符原文
+  const initialContent = chapter.content || chapter.sourceContent || ''
+  if (!initialContent.trim()) {
+    return chapter
+  }
+
   const versions: ChapterVersion[] = []
   const baseTime = Date.now()
   
-  // Original
   versions.push({
     id: `v_${baseTime}_orig`,
-    content: chapter.sourceContent || chapter.content || '',
+    content: initialContent,
     timestamp: baseTime,
     type: 'original'
   })
 
-  // Optimized (if exists and different)
-  if (chapter.optimizedContent && chapter.optimizedContent !== (chapter.sourceContent || chapter.content)) {
+  // 处理旧数据中的优化内容
+  if (chapter.optimizedContent && chapter.optimizedContent !== initialContent) {
     versions.push({
       id: `v_${baseTime}_opt`,
       content: chapter.optimizedContent,
@@ -505,9 +515,11 @@ const ensureChapterVersions = (chapter: Chapter): Chapter => {
     })
   }
 
-  const activeId = (chapter.showingVersion === 'optimized' && chapter.optimizedContent) && versions[1]
-    ? versions[1].id
-    : versions[0].id
+  // 决定活跃版本
+  let activeId = versions[0].id
+  if (chapter.showingVersion === 'optimized' && versions.length > 1) {
+    activeId = versions[1].id
+  }
 
   return {
     ...chapter,
@@ -4673,6 +4685,10 @@ function App() {
     const currentNovel = novelsRef.current.find(n => n.id === activeNovelId)
     const latestChapter = currentNovel?.chapters.find(c => c.id === idToUse)
     
+    // 【BUG 风险点标注：原文丢失】
+    // 谨慎修改：此处捕捉的是点击“润色”瞬间的正文内容。
+    // 如果用户在此之前进行了手动编辑，而 buildVersions 逻辑认为“原文”已锁定，
+    // 那么 sourceContentToUse 里的最新修改将无法进入版本历史，随后会被 AI 生成内容彻底覆盖导致丢失。
     let sourceContentToUse = initialContent || latestChapter?.content
     
     // 深度检查：如果当前正文为空，尝试从历史版本中恢复原文
@@ -4713,25 +4729,37 @@ function App() {
     // 辅助函数：构建版本历史
     // 确保无论当前状态如何，都能正确保留原文并添加/更新新版本
     const buildVersions = (currentVersions: ChapterVersion[] | undefined, newContent: string): ChapterVersion[] => {
-        const versions = currentVersions ? [...currentVersions] : []
+        let versions = currentVersions ? [...currentVersions] : []
         
-        // 1. 确保有有效的原文版本
+        // 1. 核心修复：原文备份策略
         const originalIndex = versions.findIndex(v => v.type === 'original')
+        
         if (originalIndex === -1) {
-            // 如果没有原文，插入当前正文作为原文
+            // 情况 A：完全没有版本历史，直接创建
             versions.unshift({
                 id: `v_${baseTime}_orig`,
                 content: sourceContentToUse || '',
                 timestamp: baseTime,
                 type: 'original'
             })
-        } else if (!versions[originalIndex].content.trim() && sourceContentToUse?.trim()) {
-            // 如果原文存在但为空，而当前有内容，则更新原文内容
-            // 解决用户创建空章后直接输入并点润色导致原文被锁定为空的问题
-            versions[originalIndex] = {
-                ...versions[originalIndex],
-                content: sourceContentToUse,
-                timestamp: baseTime
+        } else {
+            // 情况 B：已有版本历史
+            // 优化点：如果现有“原文”是空的（0字符），而当前正文有内容，则直接更新“原文”而不是新建“编辑版”
+            if (!versions[originalIndex].content.trim() && sourceContentToUse?.trim()) {
+                versions[originalIndex].content = sourceContentToUse;
+                versions[originalIndex].timestamp = Date.now();
+            } else {
+                // 检查当前内容是否相对于其所属的版本发生了手动修改
+                const activeVersion = versions.find(v => v.id === latestChapter?.activeVersionId);
+                if (sourceContentToUse && activeVersion && sourceContentToUse !== activeVersion.content) {
+                    const editVersion: ChapterVersion = {
+                        id: `v_${Date.now()}_manual`,
+                        content: sourceContentToUse,
+                        timestamp: Date.now() - 1,
+                        type: 'user_edit'
+                    };
+                    versions.push(editVersion);
+                }
             }
         }
 
@@ -4758,6 +4786,10 @@ function App() {
     }
 
     // 1. Initial State Update: 创建新版本占位符
+    // 【BUG 关键操作：版本切换】
+    // 谨慎修改：此处调用 buildVersions 并立即切换 activeVersionId。
+    // 如果 buildVersions 未能将最新的手动修改存入 original 版本，
+    // 那么从这一刻起，正文 content 随时可能被后续的 AI 流式输出覆盖，无法找回。
     setChapters(prev => prev.map(c => {
         if (c.id === idToUse) {
             const newVersions = buildVersions(c.versions, '')
@@ -4976,6 +5008,19 @@ function App() {
       }
     }
     
+    // 最终确认：确保优化完成后，活跃版本锁定在最新的优化版上
+    setChapters(prev => prev.map(c => {
+        if (c.id === idToUse && c.versions && c.versions.length > 0) {
+            const latestVer = c.versions[c.versions.length - 1];
+            return {
+                ...c,
+                activeVersionId: latestVer.id,
+                content: latestVer.content
+            };
+        }
+        return c;
+    }));
+
     // Clean up
     handleStopOptimize(idToUse)
   }
@@ -5216,16 +5261,31 @@ ${taskDescription}`
                                   ...n,
                                   chapters: n.chapters.map(c => {
                                       if (c.id === preparedBatch[0].id) {
-                                          const withVersions = ensureChapterVersions({ ...c, content: fullGeneratedContent });
-                                          if (withVersions.activeVersionId && withVersions.versions) {
-                                              return {
-                                                  ...withVersions,
-                                                  versions: withVersions.versions.map(v =>
-                                                      v.id === withVersions.activeVersionId ? { ...v, content: fullGeneratedContent } : v
-                                                  )
-                                              };
+                                          // 修正：在流式写入前，先确保旧内容被备份
+                                          let chapterWithHistory = c.versions && c.versions.length > 0 ? c : ensureChapterVersions(c);
+                                          
+                                          // 创建或定位 AI 创作版本
+                                          const aiVersionId = `v_autowrite_${preparedBatch[0].id}`;
+                                          let versions = [...(chapterWithHistory.versions || [])];
+                                          let aiVerIdx = versions.findIndex(v => v.id === aiVersionId);
+                                          
+                                          if (aiVerIdx !== -1) {
+                                              versions[aiVerIdx] = { ...versions[aiVerIdx], content: fullGeneratedContent };
+                                          } else {
+                                              versions.push({
+                                                  id: aiVersionId,
+                                                  content: fullGeneratedContent,
+                                                  timestamp: Date.now(),
+                                                  type: 'optimized' // AI 生成的内容统一标记为优化/生成版
+                                              });
                                           }
-                                          return withVersions;
+
+                                          return {
+                                              ...c,
+                                              content: fullGeneratedContent,
+                                              versions: versions,
+                                              activeVersionId: aiVersionId
+                                          };
                                       }
                                       return c;
                                   })
@@ -5237,6 +5297,11 @@ ${taskDescription}`
                       return next;
                   })
               } else {
+                  // 【BUG 风险点 - 原文丢失】：全自动创作流式覆盖
+                  // 谨慎修改：此处在流式输出过程中直接调用了 ensureChapterVersions。
+                  // 如果用户在自动创作开始前进行了手动编辑但未手动创建版本，
+                  // 这里的逻辑会瞬间将 AI 输出的第一块内容误认为是“原文”并初始化版本，
+                  // 从而永久丢失用户在创作开始前的手动修改。
                   setNovels(prev => {
                       const next = prev.map(n => {
                           if (n.id === novelId) {
@@ -5244,16 +5309,30 @@ ${taskDescription}`
                                   ...n,
                                   chapters: n.chapters.map(c => {
                                       if (c.id === preparedBatch[0].id) {
-                                          const withVersions = ensureChapterVersions({ ...c, content: fullGeneratedContent });
-                                          if (withVersions.activeVersionId && withVersions.versions) {
-                                              return {
-                                                  ...withVersions,
-                                                  versions: withVersions.versions.map(v =>
-                                                      v.id === withVersions.activeVersionId ? { ...v, content: fullGeneratedContent } : v
-                                                  )
-                                              };
+                                          // 修正：全自动创作流式版本保护
+                                          let chapterWithHistory = c.versions && c.versions.length > 0 ? c : ensureChapterVersions(c);
+                                          
+                                          const aiVersionId = `v_autowrite_${preparedBatch[0].id}`;
+                                          let versions = [...(chapterWithHistory.versions || [])];
+                                          let aiVerIdx = versions.findIndex(v => v.id === aiVersionId);
+                                          
+                                          if (aiVerIdx !== -1) {
+                                              versions[aiVerIdx] = { ...versions[aiVerIdx], content: fullGeneratedContent };
+                                          } else {
+                                              versions.push({
+                                                  id: aiVersionId,
+                                                  content: fullGeneratedContent,
+                                                  timestamp: Date.now(),
+                                                  type: 'optimized' // AI 生成的内容统一标记为优化/生成版
+                                              });
                                           }
-                                          return withVersions;
+
+                                          return {
+                                              ...c,
+                                              content: fullGeneratedContent,
+                                              versions: versions,
+                                              activeVersionId: aiVersionId
+                                          };
                                       }
                                       return c;
                                   })
@@ -5350,8 +5429,29 @@ ${taskDescription}`
                             const batchIdx = preparedBatch.findIndex(b => b.id === c.id)
                             if (batchIdx !== -1) {
                                 const newChapterContent = finalContents[batchIdx] || '';
-                                // 强制标准化数据结构，确保 versions 数组存在，从而在 UI 显示版本切换按钮
-                                return ensureChapterVersions({ ...c, content: newChapterContent });
+                                // 修正：完成时的最终内容更新
+                                let chapterWithHistory = c.versions && c.versions.length > 0 ? c : ensureChapterVersions(c);
+                                const aiVersionId = `v_autowrite_${c.id}`;
+                                let versions = [...(chapterWithHistory.versions || [])];
+                                let aiVerIdx = versions.findIndex(v => v.id === aiVersionId || v.type === 'original');
+                                
+                                if (aiVerIdx !== -1) {
+                                    versions[aiVerIdx] = { ...versions[aiVerIdx], content: newChapterContent, timestamp: Date.now() };
+                                } else {
+                                    versions.push({
+                                        id: aiVersionId,
+                                        content: newChapterContent,
+                                        timestamp: Date.now(),
+                                        type: 'optimized' // AI 生成的内容统一标记为优化/生成版
+                                    });
+                                }
+
+                                return {
+                                    ...c,
+                                    content: newChapterContent,
+                                    versions: versions,
+                                    activeVersionId: versions[versions.length - 1].id
+                                };
                             }
                             return c
                         })
@@ -5686,9 +5786,32 @@ ${taskDescription}`
               newGeneratedContent += content
               
               const fullRawContent = currentContent + newGeneratedContent
+              // 【BUG 修复】：续写逻辑版本保护
+              // 续写开始时，先确保当前内容已备份为版本，然后 AI 增加的内容更新到新版本中
               setChapters(prev => prev.map(c => {
                   if (c.id === activeChapterId) {
-                    return { ...c, content: fullRawContent }
+                    let chapterWithHistory = c.versions && c.versions.length > 0 ? c : ensureChapterVersions(c);
+                    const continueId = `v_continue_${c.id}`;
+                    let versions = [...(chapterWithHistory.versions || [])];
+                    let verIdx = versions.findIndex(v => v.id === continueId);
+                    
+                    if (verIdx !== -1) {
+                        versions[verIdx] = { ...versions[verIdx], content: fullRawContent };
+                    } else {
+                        versions.push({
+                            id: continueId,
+                            content: fullRawContent,
+                            timestamp: Date.now(),
+                            type: 'user_edit' // 续写生成的混合内容标记为编辑版
+                        });
+                    }
+
+                    return {
+                        ...c,
+                        content: fullRawContent,
+                        versions: versions,
+                        activeVersionId: continueId
+                    }
                   }
                   return c;
                 }))
@@ -6502,7 +6625,15 @@ ${taskDescription}`
                             }`}
                           >
                             <button
-                              onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
+                              onClick={() => {
+                                setActiveChapterId(chapter.id);
+                                setShowOutline(false);
+                                // 自动切换到该章节的最新版本
+                                if (chapter.versions && chapter.versions.length > 0) {
+                                  const latestVersion = chapter.versions[chapter.versions.length - 1];
+                                  setChapters(prev => prev.map(c => c.id === chapter.id ? { ...c, activeVersionId: latestVersion.id, content: latestVersion.content } : c));
+                                }
+                              }}
                               className={`bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate ${chapter.subtype === 'small_summary' || chapter.subtype === 'big_summary' ? 'italic text-[var(--theme-color-light)]' : ''}`}
                             >
                               {chapter.subtype === 'small_summary' ? (
@@ -6568,7 +6699,15 @@ ${taskDescription}`
                     }`}
                   >
                     <button
-                      onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
+                      onClick={() => {
+                        setActiveChapterId(chapter.id);
+                        setShowOutline(false);
+                        // 自动切换到该章节的最新版本
+                        if (chapter.versions && chapter.versions.length > 0) {
+                          const latestVersion = chapter.versions[chapter.versions.length - 1];
+                          setChapters(prev => prev.map(c => c.id === chapter.id ? { ...c, activeVersionId: latestVersion.id, content: latestVersion.content } : c));
+                        }
+                      }}
                       className={`bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate ${chapter.subtype === 'small_summary' || chapter.subtype === 'big_summary' ? 'italic text-[var(--theme-color-light)]' : ''}`}
                     >
                       {chapter.subtype === 'small_summary' ? (
@@ -9317,6 +9456,11 @@ ${taskDescription}`
                 }
                 uniqueVersions.sort((a, b) => a.timestamp - b.timestamp);
 
+                // 【BUG 风险点 - 原文丢失】：工作流状态竞争
+                // 谨慎修改：此处是工作流引擎返回结果时与本地状态合并的关键点。
+                // 它依赖于 uniqueVersions（版本历史）来确定 finalContent。
+                // 如果本地正文（localChapter.content）中有未进入 versions 的手动编辑，
+                // 在此处执行合并后，finalContent 会被版本历史中的旧内容强制覆盖，导致手动编辑丢失。
                 const finalActiveVersionId = localChapter.activeVersionId && uniqueVersions.some(v => v.id === localChapter.activeVersionId)
                     ? localChapter.activeVersionId
                     : remoteChapter.activeVersionId;

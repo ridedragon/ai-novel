@@ -1790,6 +1790,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             globalCreationPrompt: globalConfig.globalCreationPrompt,
             longTextMode: globalConfig.longTextMode,
             autoOptimize: globalConfig.autoOptimize,
+            twoStepOptimization: globalConfig.twoStepOptimization,
             asyncOptimize: globalConfig.asyncOptimize,
             contextChapterCount: globalConfig.contextChapterCount,
             maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
@@ -1799,6 +1800,12 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             smallSummaryPrompt: globalConfig.smallSummaryPrompt,
             bigSummaryPrompt: globalConfig.bigSummaryPrompt,
             outlineModel: globalConfig.outlineModel,
+            optimizeModel: globalConfig.optimizeModel,
+            analysisModel: globalConfig.analysisModel,
+            optimizePresets: globalConfig.optimizePresets,
+            activeOptimizePresetId: globalConfig.activeOptimizePresetId,
+            analysisPresets: globalConfig.analysisPresets,
+            activeAnalysisPresetId: globalConfig.activeAnalysisPresetId,
           };
 
           // 4. 初始化引擎

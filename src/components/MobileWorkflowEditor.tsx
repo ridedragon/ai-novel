@@ -1352,6 +1352,8 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             globalCreationPrompt: globalConfig.globalCreationPrompt,
             longTextMode: globalConfig.longTextMode,
             autoOptimize: globalConfig.autoOptimize,
+            twoStepOptimization: globalConfig.twoStepOptimization,
+            asyncOptimize: globalConfig.asyncOptimize,
             consecutiveChapterCount: globalConfig.consecutiveChapterCount || 1,
             smallSummaryInterval: globalConfig.smallSummaryInterval,
             bigSummaryInterval: globalConfig.bigSummaryInterval,
@@ -1359,6 +1361,13 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
             bigSummaryPrompt: globalConfig.bigSummaryPrompt,
             outlineModel: globalConfig.outlineModel,
             contextChapterCount: globalConfig.contextChapterCount,
+            optimizeModel: globalConfig.optimizeModel,
+            analysisModel: globalConfig.analysisModel,
+            optimizePresets: globalConfig.optimizePresets,
+            activeOptimizePresetId: globalConfig.activeOptimizePresetId,
+            analysisPresets: globalConfig.analysisPresets,
+            activeAnalysisPresetId: globalConfig.activeAnalysisPresetId,
+            maxConcurrentOptimizations: globalConfig.maxConcurrentOptimizations,
           };
 
           const engine = new AutoWriteEngine({

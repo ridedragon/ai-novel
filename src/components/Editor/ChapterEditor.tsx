@@ -99,8 +99,13 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = ({
                     {(() => {
                       const v = activeChapter.versions?.find(v => v.id === activeChapter.activeVersionId);
                       if (!v) return '当前版本';
-                      return v.type === 'original' ? '原文' :
-                        v.type === 'optimized' ? '优化版 ' + (activeChapter.versions?.findIndex(ver => ver.id === v.id) || 0) : '编辑版';
+                      if (v.type === 'original') return '原文';
+                      if (v.type === 'optimized') {
+                        const optimizedVersions = activeChapter.versions?.filter(ver => ver.type === 'optimized') || [];
+                        const optIdx = optimizedVersions.findIndex(ver => ver.id === v.id);
+                        return `优化版 ${optIdx !== -1 ? optIdx + 1 : ''}`;
+                      }
+                      return '编辑版';
                     })()}
                   </span>
                   <span className="text-gray-500">
@@ -122,7 +127,17 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = ({
                         className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-gray-700 transition-colors border-b border-gray-700/50 last:border-0 ${activeChapter.activeVersionId === v.id ? 'text-[var(--theme-color)] bg-gray-700/30' : 'text-gray-300'}`}
                       >
                         <div className="flex flex-col gap-0.5">
-                          <span className="font-medium">{v.type === 'original' ? '原文' : v.type === 'optimized' ? `优化版 ${idx}` : '用户编辑'}</span>
+                          <span className="font-medium">
+                            {(() => {
+                              if (v.type === 'original') return '原文';
+                              if (v.type === 'optimized') {
+                                const optimizedVersions = activeChapter.versions?.filter(ver => ver.type === 'optimized') || [];
+                                const optIdx = optimizedVersions.findIndex(ver => ver.id === v.id);
+                                return `优化版 ${optIdx !== -1 ? optIdx + 1 : ''}`;
+                              }
+                              return '用户编辑';
+                            })()}
+                          </span>
                           <span className="text-gray-500 text-[10px]">{new Date(v.timestamp).toLocaleTimeString()} · {v.content.length}字</span>
                         </div>
                         {activeChapter.activeVersionId === v.id && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)]"></div>}
@@ -167,6 +182,10 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = ({
           ) : (
             <button
               onClick={() => onOptimize()}
+              // 【BUG 风险点：UI 触发源】
+              // 谨慎修改：点击此按钮将启动润色流程。
+              // 由于润色会立即根据当前编辑器内容捕捉“原文”，
+              // 如果用户刚完成手动输入且未保存，存在新编辑内容被润色版本直接覆盖的风险。
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm border border-transparent bg-purple-600 hover:bg-purple-500 text-white shadow-purple-500/20 border-purple-500 hover:shadow-purple-500/30 hover:-translate-y-0.5 active:translate-y-0"
               title="优化当前章节 (基于原文)"
             >
