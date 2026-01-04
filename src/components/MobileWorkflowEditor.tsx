@@ -12,8 +12,10 @@ import {
   Panel,
   Position,
   ReactFlow,
+  ReactFlowProvider,
   useEdgesState,
-  useNodesState
+  useNodesState,
+  useReactFlow
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
@@ -523,8 +525,9 @@ const ConfigPanel = React.memo(({
   );
 });
 
-export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
+const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   const { isOpen, onClose, activeNovel, onSelectChapter, onUpdateNovel, onStartAutoWrite, globalConfig } = props;
+  const { screenToFlowPosition } = useReactFlow();
   
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -719,6 +722,12 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
 
   const addNewNode = (typeKey: NodeTypeKey) => {
     const config = NODE_CONFIGS[typeKey];
+    
+    // 计算视口中心位置
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    const position = screenToFlowPosition({ x: centerX, y: centerY });
+
     const newNode: WorkflowNode = {
       id: `node-${Date.now()}`,
       type: 'custom',
@@ -738,7 +747,10 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         targetVolumeId: activeNovel?.volumes[0]?.id || '',
         status: 'pending'
       },
-      position: { x: 50, y: 100 + nodes.length * 100 },
+      position: {
+        x: position.x - 90, // 移动端节点宽度是 180px，减去一半
+        y: position.y - 40
+      },
     };
     setNodes([...nodes, newNode]);
     setShowAddMenu(false);
@@ -1794,5 +1806,13 @@ export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
         </div>
       )}
     </div>
+  );
+};
+
+export const MobileWorkflowEditor: React.FC<WorkflowEditorProps> = (props) => {
+  return (
+    <ReactFlowProvider>
+      <MobileWorkflowEditorContent {...props} />
+    </ReactFlowProvider>
   );
 };
