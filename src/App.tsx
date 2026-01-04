@@ -1212,7 +1212,11 @@ function App() {
   const concurrentOptimizationLimitRef = useRef(concurrentOptimizationLimit)
 
   // Optimization Queue
-  const [asyncOptimize, setAsyncOptimize] = useState(() => localStorage.getItem('asyncOptimize') !== 'false')
+  const [asyncOptimize, setAsyncOptimize] = useState(() => {
+    const saved = localStorage.getItem('asyncOptimize');
+    if (saved === null) return true; // 默认为开启
+    return saved === 'true';
+  })
   const [optimizationQueue, setOptimizationQueue] = useState<number[]>([])
   const optimizationQueueRef = useRef<number[]>([])
 

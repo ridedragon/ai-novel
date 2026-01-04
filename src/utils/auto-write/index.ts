@@ -365,7 +365,7 @@ export class AutoWriteEngine {
             batchItems.map(async (item, i) => {
               const chapterId = item.id;
               const content = finalContents[i];
-              
+
               const resultNovel = await onChapterComplete(chapterId, content, this.novel);
               if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
                 this.novel = resultNovel as Novel;
@@ -380,7 +380,8 @@ export class AutoWriteEngine {
                 );
                 if (this.config.asyncOptimize) {
                   // 异步模式：彻底不阻塞主流程，在后台执行优化。
-                  this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate, getActiveScripts(), true);
+                  // 第十八次修复：强制传递空函数作为 statusUpdate，从物理上隔绝异步任务对主 UI 状态的干扰
+                  this.optimizeChapter(chapterId, content, () => {}, onNovelUpdate, getActiveScripts(), true);
                 } else {
                   // 同步模式：等待优化完成后再继续
                   await this.optimizeChapter(
@@ -393,7 +394,7 @@ export class AutoWriteEngine {
                   );
                 }
               }
-            })
+            }),
           );
 
           success = true;
