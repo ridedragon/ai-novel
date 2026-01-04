@@ -516,7 +516,10 @@ export class AutoWriteEngine {
     }
 
     // Phase 2: Optimization
-    if (!this.isRunning || optimizationAbortController.signal.aborted) return;
+    // 第二十次修复：移除对 this.isRunning 的依赖。
+    // 因为异步优化任务在后台运行，而主创作循环可能在最后两章投递后立即结束并设置 isRunning=false。
+    // 我们仅需判断该任务是否被显式中止（signal.aborted）。
+    if (optimizationAbortController.signal.aborted) return;
 
     try {
       let isAnalysisUsed = false;
