@@ -376,11 +376,19 @@ export class AutoWriteEngine {
                 }`,
               );
               if (this.config.asyncOptimize) {
-                // 异步模式：不阻塞主流程，在后台执行优化
-                this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate, getActiveScripts());
+                // 异步模式：彻底不阻塞主流程，在后台执行优化。
+                // 注意：这里不使用 await，让其在后台运行
+                this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate, getActiveScripts(), true);
               } else {
                 // 同步模式：等待优化完成后再继续（或进入下一章）
-                await this.optimizeChapter(chapterId, content, onStatusUpdate, onNovelUpdate, getActiveScripts());
+                await this.optimizeChapter(
+                  chapterId,
+                  content,
+                  onStatusUpdate,
+                  onNovelUpdate,
+                  getActiveScripts(),
+                  false,
+                );
               }
             }
           }
@@ -406,28 +414,9 @@ export class AutoWriteEngine {
       }
     }
 
-    // 等待所有异步优化任务完成，确保节点状态正确结束
-    if (this.activeOptimizationTasks.size > 0 && this.isRunning) {
-      onStatusUpdate(`正在完成最后的优化 (${this.activeOptimizationTasks.size}个任务)...`);
-      // 增加超时保护，防止因为网络问题导致某些任务挂起，从而死锁工作流节点状态
-      let waitStart = Date.now();
-      const MAX_WAIT = 300000; // 最多等待 5 分钟 (应对长章节或网络慢的情况)
-
-      while (
-        this.activeOptimizationTasks.size > 0 &&
-        this.isRunning &&
-        !this.abortController?.signal.aborted &&
-        Date.now() - waitStart < MAX_WAIT
-      ) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-
-      if (this.activeOptimizationTasks.size > 0) {
-        onStatusUpdate(`部分优化任务超时，已强制结束。`);
-        this.activeOptimizationTasks.forEach(controller => controller.abort());
-        this.activeOptimizationTasks.clear();
-      }
-    }
+    // 彻底不等待后台优化任务。
+    // 工作流的“正文生成”节点应该在所有正文生成完毕后立即标记为完成。
+    // 后台的润色任务（如果存在）将继续在后台运行，不影响工作流跳转到下一个节点。
 
     if (this.isRunning) {
       onStatusUpdate('创作完成！');
@@ -441,18 +430,20 @@ export class AutoWriteEngine {
     onStatusUpdate: (status: string) => void,
     onNovelUpdate: (novel: Novel) => void,
     scripts: RegexScript[] = [],
+    isAsync: boolean = false,
   ) {
-    // 并发控制
+    // 并发控制：针对异步模式进行优化
     const maxConcurrent = this.config.maxConcurrentOptimizations || 3;
+
     if (this.activeOptimizationTasks.size >= maxConcurrent) {
-      // 如果超过最大并发，且是异步模式，则等待一段时间重试或跳过（这里简单处理：如果是线性模式会自然等待，异步模式则简单排队）
-      if (this.config.asyncOptimize) {
-        let waitCount = 0;
-        while (this.activeOptimizationTasks.size >= maxConcurrent && this.isRunning && waitCount < 30) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          waitCount++;
-        }
+      if (isAsync) {
+        // 如果是异步模式且并发已满，不再等待，直接跳过本次自动优化，确保不阻塞主创作流程
+        terminal.log(
+          `[AutoWrite] Max concurrent optimizations reached (${maxConcurrent}). Skipping auto-optimize for chapter ${chapterId} to avoid blocking.`,
+        );
+        return;
       }
+      // 同步模式下，自然等待前面的任务完成（虽然 AutoWriteEngine 内部逻辑通常是串行的，但为了健壮性保留判断）
     }
 
     const optimizationAbortController = new AbortController();

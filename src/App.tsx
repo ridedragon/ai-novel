@@ -9349,10 +9349,12 @@ ${taskDescription}`
                 const localChapter = allLocalChaptersMap.get(remoteChapter.id);
 
                 if (localChapter) {
-                  if ((localChapter.subtype === 'small_summary' || localChapter.subtype === 'big_summary') && localChapter.content?.trim()) {
+                  // 保护性逻辑：如果本地章节是总结类且已有内容，避免被工作流引擎可能存在的空状态覆盖
+                  if ((localChapter.subtype === 'small_summary' || localChapter.subtype === 'big_summary') && localChapter.content?.trim() && !remoteChapter.content?.trim()) {
                       continue;
                   }
 
+                  // 核心修复：对齐 WorkflowEditor 的版本合并逻辑
                   const combinedVersions = [...(localChapter.versions || []), ...(remoteChapter.versions || [])];
                   let uniqueVersions = Array.from(new Map(combinedVersions.map(v => [v.id, v])).values());
                   
@@ -9364,6 +9366,7 @@ ${taskDescription}`
                   }
                   uniqueVersions.sort((a, b) => a.timestamp - b.timestamp);
 
+                  // 决定活跃版本：优先保留本地当前的活跃版本，除非它在 uniqueVersions 中不存在
                   const finalActiveVersionId = localChapter.activeVersionId && uniqueVersions.some(v => v.id === localChapter.activeVersionId)
                       ? localChapter.activeVersionId
                       : remoteChapter.activeVersionId;
@@ -9400,11 +9403,17 @@ ${taskDescription}`
                   }
               }
               
+              // 关键修复：合并时显式保留 volumes 的折叠状态
+              const mergedVolumes = (updatedNovel.volumes || localNovel.volumes || []).map(v => {
+                const existingVol = localNovel.volumes?.find(ev => ev.id === v.id);
+                return existingVol ? { ...v, collapsed: existingVol.collapsed } : v;
+              });
+
               localNovelsCopy[localNovelIndex] = {
                 ...localNovel,
-                ...updatedNovel, // 优先保留传入的所有更新（包括设定集等）
-                chapters: finalChapters, // 章节使用特殊的合并策略
-                volumes: updatedNovel.volumes || localNovel.volumes,
+                ...updatedNovel,
+                chapters: finalChapters,
+                volumes: mergedVolumes,
               };
               
               return localNovelsCopy;
