@@ -1458,7 +1458,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         selectedInspirationSets: [],
         selectedReferenceFolders: [],
         outputEntries: [],
-        targetVolumeId: activeNovel?.volumes[0]?.id || '',
+        targetVolumeId: typeKey === 'chapter' ? '' : (activeNovel?.volumes[0]?.id || ''),
         targetVolumeName: '',
       },
       position: {
@@ -2640,7 +2640,14 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                             onClick={(e) => {
                               e.stopPropagation();
                               const targetIndex = (wf.id === activeWorkflowId) ? -1 : 0;
-                              const updatedNodes = wf.nodes.map(n => ({ ...n, data: { ...n.data, status: 'pending' as const } }));
+                              const updatedNodes = wf.nodes.map(n => ({
+                                ...n,
+                                data: {
+                                  ...n.data,
+                                  status: 'pending' as const,
+                                  targetVolumeId: n.data.typeKey === 'chapter' ? '' : n.data.targetVolumeId
+                                }
+                              }));
                               setWorkflows(prev => prev.map(w => w.id === wf.id ? { ...w, nodes: updatedNodes, currentNodeIndex: targetIndex } : w));
                               if (wf.id === activeWorkflowId) {
                                 setNodes(updatedNodes);

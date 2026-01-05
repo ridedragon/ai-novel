@@ -1013,7 +1013,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         selectedOutlineSets: [],
         selectedInspirationSets: [],
         outputEntries: [],
-        targetVolumeId: activeNovel?.volumes[0]?.id || '',
+        targetVolumeId: typeKey === 'chapter' ? '' : (activeNovel?.volumes[0]?.id || ''),
         status: 'pending'
       },
       position: {
@@ -2072,7 +2072,14 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               <button
                 onClick={() => {
                   if (confirm('确定要重置所有节点进度吗？')) {
-                    const updatedNodes = nodes.map(n => ({ ...n, data: { ...n.data, status: 'pending' as const } }));
+                    const updatedNodes = nodes.map(n => ({
+                      ...n,
+                      data: {
+                        ...n.data,
+                        status: 'pending' as const,
+                        targetVolumeId: n.data.typeKey === 'chapter' ? '' : n.data.targetVolumeId
+                      }
+                    }));
                     setNodes(updatedNodes);
                     setCurrentNodeIndex(-1);
                     setIsPaused(false);
