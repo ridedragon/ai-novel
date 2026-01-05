@@ -234,7 +234,7 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = React.memo(
 
   const handleAddSet = () => {
     if (!newSetName.trim()) return
-    const newId = crypto.randomUUID()
+    const newId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2)
     const name = newSetName.trim()
 
     onUpdateNovel({
@@ -312,7 +312,7 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = React.memo(
   const handleAddItem = (parentId: string | null = null) => {
     if (!activeSet) return
     const newItem: PlotOutlineItem = {
-      id: crypto.randomUUID(),
+      id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2),
       title: '新项',
       description: '',
       type: '剧情'

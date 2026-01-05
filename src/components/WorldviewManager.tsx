@@ -177,7 +177,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = React.memo(({
   const handleAddSet = () => {
     if (!newSetName.trim()) return
     
-    const newId = crypto.randomUUID()
+    const newId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2)
     const name = newSetName.trim()
 
     const newWorldviewSet: WorldviewSet = {

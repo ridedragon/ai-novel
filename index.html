@@ -40,9 +40,71 @@
         </style>
         <div class="spinner"></div>
         <div style="font-size: 1.125rem; font-weight: 600">AI 小说写作助手</div>
-        <div style="font-size: 0.875rem; color: #9ca3af; margin-top: 8px">正在加载资源，请稍候...</div>
+        <div id="loading-status" style="font-size: 0.875rem; color: #9ca3af; margin-top: 8px">
+          正在加载资源，请稍候...
+        </div>
+        <div
+          id="loading-error"
+          style="
+            display: none;
+            font-size: 0.75rem;
+            color: #ef4444;
+            margin-top: 12px;
+            max-width: 80%;
+            text-align: center;
+            font-family: monospace;
+            white-space: pre-wrap;
+          "
+        ></div>
+        <button
+          id="retry-button"
+          style="
+            display: none;
+            margin-top: 16px;
+            padding: 8px 16px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+          "
+          onclick="location.reload()"
+        >
+          重试
+        </button>
       </div>
     </div>
+    <script>
+      // 监控加载状态
+      window.addEventListener(
+        'error',
+        function (event) {
+          const errorDiv = document.getElementById('loading-error');
+          const retryBtn = document.getElementById('retry-button');
+          if (errorDiv) {
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = '初始化错误: ' + (event.error ? event.error.message : event.message);
+          }
+          if (retryBtn) retryBtn.style.display = 'block';
+        },
+        true,
+      );
+
+      // 超时监控
+      setTimeout(function () {
+        const initialLoading = document.getElementById('initial-loading');
+        if (initialLoading) {
+          const statusDiv = document.getElementById('loading-status');
+          const errorDiv = document.getElementById('loading-error');
+          const retryBtn = document.getElementById('retry-button');
+          if (statusDiv && !errorDiv.textContent) {
+            statusDiv.textContent = '加载时间过长，可能是 IndexedDB 响应慢或资源加载失败';
+            statusDiv.style.color = '#f59e0b';
+            if (retryBtn) retryBtn.style.display = 'block';
+          }
+        }
+      }, 10000); // 10秒超时
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -865,7 +865,13 @@ function App() {
   const [autoWriteStatus, setAutoWriteStatus] = useState('')
 
   // Theme Settings
-  const [themeColor, setThemeColor] = useState(() => localStorage.getItem('themeColor') || '#2563eb')
+  const [themeColor, setThemeColor] = useState(() => {
+    try {
+      return localStorage.getItem('themeColor') || '#2563eb'
+    } catch (e) {
+      return '#2563eb'
+    }
+  })
 
   useEffect(() => {
     localStorage.setItem('themeColor', themeColor)
@@ -876,7 +882,13 @@ function App() {
   }, [themeColor])
 
   // Workflow Edge Color Settings
-  const [workflowEdgeColor, setWorkflowEdgeColor] = useState(() => localStorage.getItem('workflowEdgeColor') || '')
+  const [workflowEdgeColor, setWorkflowEdgeColor] = useState(() => {
+    try {
+      return localStorage.getItem('workflowEdgeColor') || ''
+    } catch (e) {
+      return ''
+    }
+  })
 
   useEffect(() => {
     localStorage.setItem('workflowEdgeColor', workflowEdgeColor)
@@ -893,27 +905,56 @@ function App() {
   }, [workflowEdgeColor])
 
   // API Settings
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('apiKey') || '')
-  const [baseUrl, setBaseUrl] = useState(() => localStorage.getItem('baseUrl') || 'https://api.openai.com/v1')
-  const [model, setModel] = useState(() => localStorage.getItem('model') || '')
-  const [outlineModel, setOutlineModel] = useState(() => localStorage.getItem('outlineModel') || '')
-  const [characterModel, setCharacterModel] = useState(() => localStorage.getItem('characterModel') || '')
-  const [worldviewModel, setWorldviewModel] = useState(() => localStorage.getItem('worldviewModel') || '')
-  const [inspirationModel, setInspirationModel] = useState(() => localStorage.getItem('inspirationModel') || '')
-  const [plotOutlineModel, setPlotOutlineModel] = useState(() => localStorage.getItem('plotOutlineModel') || '')
-  const [optimizeModel, setOptimizeModel] = useState(() => localStorage.getItem('optimizeModel') || '')
-  const [analysisModel, setAnalysisModel] = useState(() => localStorage.getItem('analysisModel') || '')
+  const [apiKey, setApiKey] = useState(() => {
+    try { return localStorage.getItem('apiKey') || '' } catch (e) { return '' }
+  })
+  const [baseUrl, setBaseUrl] = useState(() => {
+    try { return localStorage.getItem('baseUrl') || 'https://api.openai.com/v1' } catch (e) { return 'https://api.openai.com/v1' }
+  })
+  const [model, setModel] = useState(() => {
+    try { return localStorage.getItem('model') || '' } catch (e) { return '' }
+  })
+  const [outlineModel, setOutlineModel] = useState(() => {
+    try { return localStorage.getItem('outlineModel') || '' } catch (e) { return '' }
+  })
+  const [characterModel, setCharacterModel] = useState(() => {
+    try { return localStorage.getItem('characterModel') || '' } catch (e) { return '' }
+  })
+  const [worldviewModel, setWorldviewModel] = useState(() => {
+    try { return localStorage.getItem('worldviewModel') || '' } catch (e) { return '' }
+  })
+  const [inspirationModel, setInspirationModel] = useState(() => {
+    try { return localStorage.getItem('inspirationModel') || '' } catch (e) { return '' }
+  })
+  const [plotOutlineModel, setPlotOutlineModel] = useState(() => {
+    try { return localStorage.getItem('plotOutlineModel') || '' } catch (e) { return '' }
+  })
+  const [optimizeModel, setOptimizeModel] = useState(() => {
+    try { return localStorage.getItem('optimizeModel') || '' } catch (e) { return '' }
+  })
+  const [analysisModel, setAnalysisModel] = useState(() => {
+    try { return localStorage.getItem('analysisModel') || '' } catch (e) { return '' }
+  })
   const [contextChapterCount, setContextChapterCount] = useState<number | ''>(() => {
-    const val = localStorage.getItem('contextChapterCount')
-    return val ? parseInt(val) : ''
+    try {
+      const val = localStorage.getItem('contextChapterCount')
+      return val ? parseInt(val) : ''
+    } catch (e) {
+      return ''
+    }
   })
   const contextChapterCountRef = useRef(contextChapterCount)
 
   const [modelList, setModelList] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('modelList')
-      return saved ? JSON.parse(saved) : []
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return Array.isArray(parsed) ? parsed : []
+      }
+      return []
     } catch (e) {
+      console.error('Failed to parse modelList', e)
       return []
     }
   })
@@ -1009,6 +1050,7 @@ function App() {
       const saved = localStorage.getItem('outlinePresets')
       if (saved) {
         const parsed = JSON.parse(saved)
+        if (!Array.isArray(parsed)) return defaultOutlinePresets
         // Migration: Ensure prompts exist and chat preset exists
         let presets = parsed.map((p: any) => {
           if (!p.prompts && p.content) {
@@ -1023,12 +1065,14 @@ function App() {
           return p
         })
         if (!presets.some((p: any) => p.id === 'chat')) {
-          presets.push(defaultOutlinePresets.find(p => p.id === 'chat')!)
+          const chatPreset = defaultOutlinePresets.find(p => p.id === 'chat')
+          if (chatPreset) presets.push(chatPreset)
         }
         return presets
       }
       return defaultOutlinePresets
     } catch (e) {
+      console.error('Failed to parse outlinePresets', e)
       return defaultOutlinePresets
     }
   })
@@ -1875,7 +1919,7 @@ function App() {
       onConfirm: (name) => {
         if (name && name.trim()) {
           const newVolume: NovelVolume = {
-             id: crypto.randomUUID(),
+             id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2),
              title: name.trim(),
              collapsed: false
           }
@@ -1940,7 +1984,7 @@ function App() {
   const handleConfirmCreateNovel = () => {
      if (!newNovelTitle.trim()) return
 
-     const volumeId = crypto.randomUUID()
+     const volumeId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2)
      const initialVolumeName = newNovelVolume.trim()
      
      const volumes: NovelVolume[] = []
@@ -2999,7 +3043,7 @@ function App() {
   const handleAddOutlineSet = () => {
     if (!newOutlineSetName.trim() || !activeNovelId) return
     
-    const newId = crypto.randomUUID()
+    const newId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2)
     const name = newOutlineSetName.trim()
 
     const newOutlineSet: OutlineSet = {
@@ -3468,7 +3512,7 @@ function App() {
   const handleAddCharacterSet = () => {
     if (!newCharacterSetName.trim() || !activeNovelId) return
     
-    const newId = crypto.randomUUID()
+    const newId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2)
     const name = newCharacterSetName.trim()
 
     const newCharacterSet: CharacterSet = {
@@ -3791,7 +3835,7 @@ function App() {
   const handleAddWorldviewSet = () => {
     if (!newWorldviewSetName.trim() || !activeNovelId) return
 
-    const newId = crypto.randomUUID()
+    const newId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2)
     const name = newWorldviewSetName.trim()
 
     const newWorldviewSet: WorldviewSet = {
@@ -4515,7 +4559,7 @@ function App() {
               return items.map(item => {
                   if (typeof item !== 'object' || !item) return null;
                   return {
-                    id: item.id || crypto.randomUUID(),
+                    id: item.id || (typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2)),
                     title: item.title || item.name || item.header || item.label || '未命名',
                     description: item.description || item.content || item.setting || item.summary || item.plot || '',
                     type: item.type || '剧情',
@@ -5580,7 +5624,7 @@ ${taskDescription}`
     
     if (autoWriteMode === 'new') {
         if (autoWriteNewVolumeName.trim()) {
-           const newVolumeId = crypto.randomUUID()
+           const newVolumeId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2)
            const newVolume: NovelVolume = {
               id: newVolumeId,
               title: autoWriteNewVolumeName.trim(),
@@ -6116,7 +6160,7 @@ ${taskDescription}`
   // Regex Management
   const handleAddNewRegex = (type: 'global' | 'preset') => {
     const newScript: RegexScript = {
-      id: crypto.randomUUID(),
+      id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2),
       scriptName: 'New Script',
       findRegex: '',
       replaceString: '',
@@ -8729,7 +8773,7 @@ ${taskDescription}`
 
                       const addPrompt = () => {
                           const newPrompt: GeneratorPrompt = {
-                              id: crypto.randomUUID(),
+                              id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2),
                               role: 'user',
                               content: '',
                               enabled: true

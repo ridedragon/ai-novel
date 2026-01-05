@@ -89,7 +89,7 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
         }
 
         newFiles.push({
-          id: crypto.randomUUID(),
+          id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2),
           name: file.name,
           content: content,
           type: file.type || 'text/plain',
@@ -134,7 +134,7 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
 
     const newFolders: ReferenceFolder[] = [...(novel.referenceFolders || [])]
     newFolders.push({
-      id: crypto.randomUUID(),
+      id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2),
       name: folderNameInput.trim(),
       parentId: currentFolderId || undefined
     })
