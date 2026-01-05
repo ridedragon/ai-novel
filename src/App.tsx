@@ -2018,12 +2018,18 @@ function App() {
   
   const chapters = activeNovel?.chapters || []
   const sortedChapters = React.useMemo(() => sortChapters(chapters), [chapters])
+  const volumes = activeNovel?.volumes || []
   
   // 性能优化：预先将章节按分卷 ID 进行分组，避免在循环中重复过滤
   const chaptersByVolume = React.useMemo(() => {
     const group: Record<string, Chapter[]> = { 'uncategorized': [] };
+    // 建立有效分卷 ID 集合，用于快速校验
+    const validVolumeIds = new Set(volumes.map(v => v.id));
+
     sortedChapters.forEach(c => {
-      if (c.volumeId) {
+      // 核心修复：只有当 volumeId 存在且确实在分卷列表中时，才按分卷分组
+      // 否则一律归类到“未分卷”，防止因分卷被删或数据异常导致的章节“隐身”
+      if (c.volumeId && validVolumeIds.has(c.volumeId)) {
         if (!group[c.volumeId]) group[c.volumeId] = [];
         group[c.volumeId].push(c);
       } else {
@@ -2031,9 +2037,7 @@ function App() {
       }
     });
     return group;
-  }, [sortedChapters]);
-
-  const volumes = activeNovel?.volumes || []
+  }, [sortedChapters, volumes]);
   const systemPrompt = activeNovel?.systemPrompt || '你是一个专业的小说家。请根据用户的要求创作小说，文笔要优美，情节要跌宕起伏。'
   
   const setChapters = React.useCallback((value: Chapter[] | ((prev: Chapter[]) => Chapter[])) => {
