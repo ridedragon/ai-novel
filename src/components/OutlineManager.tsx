@@ -1178,4 +1178,4 @@ export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
       </div>
     </div>
   )
-}
+})
