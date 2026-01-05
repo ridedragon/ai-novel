@@ -10,6 +10,7 @@ import { Chapter, Novel } from '../types';
  * 3. 同一位置小总结在前，大总结在后
  */
 export const sortChapters = (chapters: Chapter[]): Chapter[] => {
+  if (!chapters || !Array.isArray(chapters)) return [];
   const startTime = Date.now();
   // 1. 分离非总结章节（保持原始顺序）和总结章节
   const storyChapters = chapters.filter(c => c.subtype !== 'small_summary' && c.subtype !== 'big_summary');
@@ -129,7 +130,7 @@ export const checkAndGenerateSummary = async (
 
   // Snapshot of chapters for this generation session
   // This snapshot will be updated locally as we generate new summaries
-  let currentChaptersSnapshot = currentNovel.chapters.map(c => {
+  let currentChaptersSnapshot = (currentNovel.chapters || []).map(c => {
     // Ensure the snapshot has the latest content for the target chapter,
     // and also ensure other chapters in this batch (which might have been updated in Ref but not yet in this function's 'novels' parameter) are captured.
     if (c.id === targetChapterId) return { ...c, content: currentContent };
@@ -142,7 +143,8 @@ export const checkAndGenerateSummary = async (
 
   // Helper to get story chapters from the snapshot
   // We rely on array order as the "truth" for story sequence, especially if user reordered chapters.
-  const getSnapshotStoryChapters = () => currentChaptersSnapshot.filter(c => !c.subtype || c.subtype === 'story');
+  const getSnapshotStoryChapters = () =>
+    (currentChaptersSnapshot || []).filter(c => !c.subtype || c.subtype === 'story');
 
   const storyChapters = getSnapshotStoryChapters();
   const globalIndex = storyChapters.findIndex(c => c.id === targetChapterId);

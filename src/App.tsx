@@ -60,6 +60,7 @@ const ReferenceManager = lazy(() => import('./components/ReferenceManager').then
 const WorkflowEditor = lazy(() => import('./components/WorkflowEditor').then(m => ({ default: m.WorkflowEditor })))
 const WorldviewManager = lazy(() => import('./components/WorldviewManager').then(m => ({ default: m.WorldviewManager })))
 
+import { useLayout } from './contexts/LayoutContext'
 import {
   Chapter,
   ChapterVersion,
@@ -1490,7 +1491,7 @@ function App() {
   const [userPrompt, setUserPrompt] = useState('')
   const [showWorkflowEditor, setShowWorkflowEditor] = useState(false)
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null)
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
+  const { isMobileSidebarOpen, setIsMobileSidebarOpen } = useLayout()
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
 
   useEffect(() => {
@@ -6804,7 +6805,7 @@ ${taskDescription}`
 
       {/* Sidebar - Left */}
       <div className={`
-        fixed md:static inset-y-0 left-0 z-50 w-64 bg-gray-800 border-r border-gray-700 flex flex-col shrink-0 transition-transform duration-200 ease-in-out
+        fixed md:static inset-y-0 left-0 z-50 w-64 bg-gray-800 border-r border-gray-700 flex flex-col shrink-0 transition-transform duration-200 ease-in-out will-change-transform
         ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="p-3 border-b border-gray-700 flex gap-2">
@@ -9511,9 +9512,9 @@ ${taskDescription}`
               const localNovelsCopy = [...prevNovels];
               const localNovel = { ...localNovelsCopy[localNovelIndex] };
               
-              const allLocalChaptersMap = new Map(localNovel.chapters.map(c => [c.id, c]));
+              const allLocalChaptersMap = new Map((localNovel.chapters || []).map(c => [c.id, c]));
 
-              for (const remoteChapter of updatedNovel.chapters) {
+              for (const remoteChapter of (updatedNovel.chapters || [])) {
                 const localChapter = allLocalChaptersMap.get(remoteChapter.id);
 
                 if (localChapter) {
@@ -9524,7 +9525,7 @@ ${taskDescription}`
 
                   // 核心修复：对齐 WorkflowEditor 的版本合并逻辑
                   const combinedVersions = [...(localChapter.versions || []), ...(remoteChapter.versions || [])];
-                  let uniqueVersions = Array.from(new Map(combinedVersions.map(v => [v.id, v])).values());
+                  let uniqueVersions = Array.from(new Map((combinedVersions || []).map(v => [v.id, v])).values());
                   
                   const originalVersions = uniqueVersions.filter(v => v.type === 'original');
                   if (originalVersions.length > 1) {
@@ -9638,9 +9639,9 @@ ${taskDescription}`
             const localNovelsCopy = [...prevNovels];
             const localNovel = { ...localNovelsCopy[localNovelIndex] };
             
-            const allLocalChaptersMap = new Map(localNovel.chapters.map(c => [c.id, c]));
+            const allLocalChaptersMap = new Map((localNovel.chapters || []).map(c => [c.id, c]));
 
-            for (const remoteChapter of updatedNovel.chapters) {
+            for (const remoteChapter of (updatedNovel.chapters || [])) {
               const localChapter = allLocalChaptersMap.get(remoteChapter.id);
 
               if (localChapter) {
@@ -9649,7 +9650,7 @@ ${taskDescription}`
                 }
 
                 const combinedVersions = [...(localChapter.versions || []), ...(remoteChapter.versions || [])];
-                let uniqueVersions = Array.from(new Map(combinedVersions.map(v => [v.id, v])).values());
+                let uniqueVersions = Array.from(new Map((combinedVersions || []).map(v => [v.id, v])).values());
                 
                 const originalVersions = uniqueVersions.filter(v => v.type === 'original');
                 if (originalVersions.length > 1) {

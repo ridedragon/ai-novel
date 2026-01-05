@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  .will-change-transform {
+    will-change: transform;
+  }
+}
+
 :root {
   /* 工作流编辑器连接线颜色自定义 */
   /* 如果您不想更改系统主题色，可以单独修改这里的变量来改变连接线颜色 */
