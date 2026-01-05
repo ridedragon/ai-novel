@@ -5987,7 +5987,8 @@ ${taskDescription}`
         smallSummaryInterval: Number(smallSummaryIntervalRef.current),
         bigSummaryInterval: Number(bigSummaryIntervalRef.current),
         smallSummaryPrompt,
-        bigSummaryPrompt
+        bigSummaryPrompt,
+        contextChapterCount: Number(contextChapterCountRef.current) || 1,
       },
       (msg) => terminal.log(msg),
       (msg) => terminal.error(msg)
@@ -6036,18 +6037,59 @@ ${taskDescription}`
              if (targetChapters.length === 0) return
              sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${c.content}`).join('\n\n')
         } else {
-             const relevantSmallSummaries = localChapters.filter(c => {
-                 if (c.subtype !== 'small_summary' || !c.summaryRange) return false
-                 const [s, e] = c.summaryRange.split('-').map(Number)
-                 return s >= start && e <= end
-             })
-             
-             if (relevantSmallSummaries.length > 0) {
-                 sourceText = relevantSmallSummaries.map(c => `Small Summary (${c.summaryRange}):\n${c.content}`).join('\n\n')
-             } else {
-                 const targetChapters = storyChapters.slice(start - 1, end)
-                 sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${c.content}`).join('\n\n')
+             // 扫描模式同步更新：大总结采用全量累积逻辑
+             const allSmallSummaries = localChapters
+                 .filter(c => {
+                     if (c.subtype !== 'small_summary' || !c.summaryRange) return false
+                     const [s, e] = c.summaryRange.split('-').map(Number)
+                     return s >= 1 && e <= end
+                 })
+                 .sort((a, b) => {
+                     const sA = parseInt(a.summaryRange!.split('-')[0])
+                     const sB = parseInt(b.summaryRange!.split('-')[0])
+                     return sA - sB
+                 })
+
+             const latestBigSummary = localChapters
+                 .filter(c => {
+                     if (c.subtype !== 'big_summary' || !c.summaryRange) return false
+                     const [s, e] = c.summaryRange.split('-').map(Number)
+                     return s === 1 && e < end
+                 })
+                 .sort((a, b) => {
+                     const eA = parseInt(a.summaryRange!.split('-')[1])
+                     const eB = parseInt(b.summaryRange!.split('-')[1])
+                     return eB - eA
+                 })[0]
+
+             const bigEnd = latestBigSummary ? parseInt(latestBigSummary.summaryRange!.split('-')[1]) : 0
+             let contextParts: string[] = []
+
+             if (latestBigSummary) {
+                 contextParts.push(`【历史全局剧情总结 (1-${bigEnd}章)】：\n${latestBigSummary.content}`)
              }
+
+             const incrementalSmallSummaries = allSmallSummaries.filter(s => {
+                 const sEnd = parseInt(s.summaryRange!.split('-')[1])
+                 return sEnd > bigEnd
+             })
+
+             if (incrementalSmallSummaries.length > 0) {
+                 contextParts.push(incrementalSmallSummaries.map(s => `【阶段剧情概要 (${s.summaryRange})】：\n${s.content}`).join('\n\n'))
+             }
+
+             // 扫描模式下正文回看逻辑（固定回看最近小总结后的增量部分）
+             const lastSmallEnd = incrementalSmallSummaries.length > 0
+                ? parseInt(incrementalSmallSummaries[incrementalSmallSummaries.length - 1].summaryRange!.split('-')[1])
+                : bigEnd
+             
+             const incrementalChapters = storyChapters.slice(lastSmallEnd, end)
+             if (incrementalChapters.length > 0) {
+                 const originalText = incrementalChapters.map(c => `### ${c.title}\n${c.content}`).join('\n\n')
+                 contextParts.push(`【近期章节原文细节】：\n${originalText}`)
+             }
+
+             sourceText = contextParts.join('\n\n---\n\n')
         }
         
         if (!sourceText) return
@@ -6130,9 +6172,9 @@ ${taskDescription}`
         }
     }
     
-    // 2. Scan Big Summaries
+    // 2. Scan Big Summaries (累积式：范围始终从 1 开始)
     for (let i = bInterval; i <= total; i += bInterval) {
-        const start = i - bInterval + 1
+        const start = 1
         const end = i
         const rangeStr = `${start}-${end}`
         

@@ -9,6 +9,7 @@ export interface SummaryConfig {
   bigSummaryInterval: number;
   smallSummaryPrompt: string;
   bigSummaryPrompt: string;
+  contextChapterCount?: number;
 }
 
 // Helper: Get stable content (fallback to versions if content is empty/optimizing)
@@ -37,8 +38,16 @@ export const checkAndGenerateSummary = async (
   log: (msg: string) => void,
   errorLog: (msg: string) => void,
 ): Promise<Novel | undefined> => {
-  const { apiKey, baseUrl, model, smallSummaryInterval, bigSummaryInterval, smallSummaryPrompt, bigSummaryPrompt } =
-    config;
+  const {
+    apiKey,
+    baseUrl,
+    model,
+    smallSummaryInterval,
+    bigSummaryInterval,
+    smallSummaryPrompt,
+    bigSummaryPrompt,
+    contextChapterCount = 1,
+  } = config;
 
   if (!apiKey || !targetNovelId) return;
 
@@ -96,15 +105,15 @@ export const checkAndGenerateSummary = async (
       if (targetChapters.length === 0) return;
       sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${getStableContent(c)}`).join('\n\n');
     } else {
-      // For Big Summary, try to use Small Summaries first
-      // We filter from currentChaptersSnapshot which includes any just-generated small summaries
-      const relevantSmallSummaries = currentChaptersSnapshot
+      // --- 重构：全量累积式大总结上下文构建 ---
+      // 目标：[历史最近大总结] + [后续所有小总结] + [基于深度的正文原文]
+
+      // 1. 获取所有相关的小总结 (1 到 end)
+      const allSmallSummaries = currentChaptersSnapshot
         .filter(c => {
           if (c.subtype !== 'small_summary' || !c.summaryRange) return false;
           const [s, e] = c.summaryRange.split('-').map(Number);
-          const rangeMatch = s >= start && e <= end;
-          const volumeMatch = c.volumeId === targetVolumeId || (!c.volumeId && !targetVolumeId);
-          return rangeMatch && volumeMatch;
+          return s >= 1 && e <= end;
         })
         .sort((a, b) => {
           const startA = parseInt(a.summaryRange!.split('-')[0]);
@@ -112,12 +121,62 @@ export const checkAndGenerateSummary = async (
           return startA - startB;
         });
 
-      if (relevantSmallSummaries.length > 0) {
-        sourceText = relevantSmallSummaries.map(c => `Small Summary (${c.summaryRange}):\n${c.content}`).join('\n\n');
-      } else {
-        const targetChapters = getSnapshotStoryChapters().slice(start - 1, end);
-        sourceText = targetChapters.map(c => `Chapter: ${c.title}\n${getStableContent(c)}`).join('\n\n');
+      // 2. 寻找最近的一个大总结 (且范围结束于本次 end 之前)
+      const latestBigSummary = currentChaptersSnapshot
+        .filter(c => {
+          if (c.subtype !== 'big_summary' || !c.summaryRange) return false;
+          const [s, e] = c.summaryRange.split('-').map(Number);
+          return s === 1 && e < end;
+        })
+        .sort((a, b) => {
+          const endA = parseInt(a.summaryRange!.split('-')[1]);
+          const endB = parseInt(b.summaryRange!.split('-')[1]);
+          return endB - endA; // 取结束章节最大的那个
+        })[0];
+
+      const bigEnd = latestBigSummary ? parseInt(latestBigSummary.summaryRange!.split('-')[1]) : 0;
+
+      // 3. 构造 Prompt 内容
+      let contextParts: string[] = [];
+
+      if (latestBigSummary) {
+        contextParts.push(`【历史全局剧情总结 (1-${bigEnd}章)】：\n${latestBigSummary.content}`);
       }
+
+      // 仅包含在大总结结束之后的那些小总结，避免重复
+      const incrementalSmallSummaries = allSmallSummaries.filter(s => {
+        const sEnd = parseInt(s.summaryRange!.split('-')[1]);
+        return sEnd > bigEnd;
+      });
+
+      if (incrementalSmallSummaries.length > 0) {
+        const smallText = incrementalSmallSummaries
+          .map(s => `【阶段剧情概要 (${s.summaryRange})】：\n${s.content}`)
+          .join('\n\n');
+        contextParts.push(smallText);
+      }
+
+      // 4. 确定正文原文提取范围
+      // 策略：提取最近的一个小总结之前的 N 章 (depth)，加上最后一个小总结之后的所有章节 (incremental)
+      const latestSmallSummary = allSmallSummaries[allSmallSummaries.length - 1];
+      const lastSmallEnd = latestSmallSummary ? parseInt(latestSmallSummary.summaryRange!.split('-')[1]) : bigEnd;
+
+      const storyChapters = getSnapshotStoryChapters();
+
+      // 双段式原文提取
+      const lookbackStart = Math.max(1, lastSmallEnd - contextChapterCount + 1);
+      const relevantOriginalChapters = storyChapters.filter((_, idx) => {
+        const cNum = idx + 1;
+        // 包含最近小总结边界附近的细节，以及小总结之后尚未被总结的增量章节
+        return cNum >= lookbackStart && cNum <= end;
+      });
+
+      if (relevantOriginalChapters.length > 0) {
+        const originalText = relevantOriginalChapters.map(c => `### ${c.title}\n${getStableContent(c)}`).join('\n\n');
+        contextParts.push(`【近期章节原文细节 (用于确保逻辑连贯)】：\n${originalText}`);
+      }
+
+      sourceText = contextParts.join('\n\n---\n\n');
     }
 
     if (!sourceText) return;
@@ -288,7 +347,8 @@ export const checkAndGenerateSummary = async (
     const batchChapters = volumeStoryChapters.slice(batchStartVolIndex, batchEndVolIndex + 1);
 
     if (batchChapters.length > 0) {
-      const globalStart = storyChapters.findIndex(c => c.id === batchChapters[0].id) + 1;
+      // 累积式修改：大总结始终从第 1 章（或本卷第 1 章）开始
+      const globalStart = 1;
       const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1;
       const rangeStr = `${globalStart}-${globalEnd}`;
 
