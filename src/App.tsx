@@ -43,18 +43,23 @@ import {
   Zap
 } from 'lucide-react'
 import OpenAI from 'openai'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import terminal from 'virtual:terminal'
-import { CharacterManager } from './components/CharacterManager'
+
+// 核心编辑器组件保持同步加载以保证首屏响应
 import { ChapterEditor } from './components/Editor/ChapterEditor'
-import { GlobalSettingsModal } from './components/GlobalSettingsModal'
-import { InspirationManager } from './components/InspirationManager'
-import { MobileWorkflowEditor } from './components/MobileWorkflowEditor'
-import { OutlineManager } from './components/OutlineManager'
-import { PlotOutlineManager } from './components/PlotOutlineManager'
-import { ReferenceManager } from './components/ReferenceManager'
-import { WorkflowEditor } from './components/WorkflowEditor'
-import { WorldviewManager } from './components/WorldviewManager'
+
+// 懒加载重型组件，减小主包体积
+const CharacterManager = lazy(() => import('./components/CharacterManager').then(m => ({ default: m.CharacterManager })))
+const GlobalSettingsModal = lazy(() => import('./components/GlobalSettingsModal').then(m => ({ default: m.GlobalSettingsModal })))
+const InspirationManager = lazy(() => import('./components/InspirationManager').then(m => ({ default: m.InspirationManager })))
+const MobileWorkflowEditor = lazy(() => import('./components/MobileWorkflowEditor').then(m => ({ default: m.MobileWorkflowEditor })))
+const OutlineManager = lazy(() => import('./components/OutlineManager').then(m => ({ default: m.OutlineManager })))
+const PlotOutlineManager = lazy(() => import('./components/PlotOutlineManager').then(m => ({ default: m.PlotOutlineManager })))
+const ReferenceManager = lazy(() => import('./components/ReferenceManager').then(m => ({ default: m.ReferenceManager })))
+const WorkflowEditor = lazy(() => import('./components/WorkflowEditor').then(m => ({ default: m.WorkflowEditor })))
+const WorldviewManager = lazy(() => import('./components/WorldviewManager').then(m => ({ default: m.WorldviewManager })))
+
 import {
   Chapter,
   ChapterVersion,
@@ -1618,13 +1623,20 @@ function App() {
       return applyRegexToText(text, relevantScripts)
   }
 
-  const handleToggleEdit = () => {
+  const handleToggleEdit = (contentOverride?: string) => {
     if (isEditingChapter) {
         // Exiting edit mode
+        const currentContent = contentOverride !== undefined ? contentOverride : (activeChapter?.content || '');
+        
+        // 显式同步内容回全局状态，确保退出时保存最新内容
+        if (contentOverride !== undefined && activeChapterId) {
+            setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, content: contentOverride } : c));
+        }
+
         const scripts = getActiveScripts().filter(s => !s.disabled && s.runOnEdit)
         if (scripts.length > 0) {
-            const processed = applyRegexToText(activeChapter.content, scripts)
-            if (processed !== activeChapter.content) {
+            const processed = applyRegexToText(currentContent, scripts)
+            if (processed !== currentContent) {
                  setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, content: processed } : c))
             }
         }
@@ -6374,6 +6386,7 @@ ${taskDescription}`
         </div>
 
         {/* Global Settings Modal in List View */}
+        <Suspense fallback={null}>
         <GlobalSettingsModal
           isOpen={showSettings}
           onClose={() => setShowSettings(false)}
@@ -6423,6 +6436,7 @@ ${taskDescription}`
           contextChapterCount={contextChapterCount}
           setContextChapterCount={setContextChapterCount}
         />
+        </Suspense>
 
         {/* Create Novel Modal (List View) */}
         {showCreateNovelModal && (
@@ -7045,6 +7059,7 @@ ${taskDescription}`
                  {/* Inspiration Module */}
                  {creationModule === 'inspiration' && activeNovel && (
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
+                       <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-gray-900 text-gray-400">加载灵感模块...</div>}>
                        <InspirationManager
                           novel={activeNovel}
                           activeInspirationSetId={activeInspirationSetId}
@@ -7163,6 +7178,7 @@ ${taskDescription}`
                  {/* Characters Module - Redesigned */}
                  {creationModule === 'characters' && activeNovel && (
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
+                       <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-gray-900 text-gray-400">加载角色模块...</div>}>
                        <CharacterManager
                           novel={activeNovel}
                           activeCharacterSetId={activeCharacterSetId}
@@ -7267,12 +7283,14 @@ ${taskDescription}`
                           showOutlineSelector={showOutlineSelectorForModules}
                           onToggleOutlineSelector={setShowOutlineSelectorForModules}
                        />
+                       </Suspense>
                     </div>
                  )}
 
                  {/* Worldview Module */}
                  {creationModule === 'worldview' && activeNovel && (
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
+                       <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-gray-900 text-gray-400">加载世界观模块...</div>}>
                        <WorldviewManager
                           novel={activeNovel}
                           activeWorldviewSetId={activeWorldviewSetId}
@@ -7383,6 +7401,7 @@ ${taskDescription}`
                  {/* Outline Module - Redesigned */}
                  {creationModule === 'outline' && activeNovel && (
                     <div className="flex h-full animate-in slide-in-from-right duration-200">
+                       <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-gray-900 text-gray-400">加载大纲模块...</div>}>
                        <OutlineManager
                           novel={activeNovel}
                           activeOutlineSetId={activeOutlineSetId}
@@ -7498,6 +7517,7 @@ ${taskDescription}`
                  {/* Plot Outline Module */}
                  {creationModule === 'plotOutline' && activeNovel && (
                    <div className="flex h-full animate-in slide-in-from-right duration-200">
+                       <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-gray-900 text-gray-400">加载剧情粗纲...</div>}>
                        <PlotOutlineManager
                           novel={activeNovel}
                           activePlotOutlineSetId={activePlotOutlineSetId}
@@ -7602,12 +7622,14 @@ ${taskDescription}`
                           showOutlineSelector={showOutlineSelectorForModules}
                           onToggleOutlineSelector={setShowOutlineSelectorForModules}
                        />
+                       </Suspense>
                    </div>
                 )}
 
                 {/* Reference Module */}
                 {creationModule === 'reference' && activeNovel && (
                    <div className="flex h-full animate-in slide-in-from-right duration-200">
+                       <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-gray-900 text-gray-400">加载资料库...</div>}>
                        <ReferenceManager
                           novel={activeNovel}
                           onUpdateNovel={(updatedNovel) => {
@@ -7672,6 +7694,7 @@ ${taskDescription}`
                              </div>
                           }
                        />
+                       </Suspense>
                    </div>
                 )}
              </div>
@@ -7705,6 +7728,7 @@ ${taskDescription}`
       </div>
 
       {/* Global Settings Modal */}
+      <Suspense fallback={null}>
       <GlobalSettingsModal
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
@@ -7754,6 +7778,7 @@ ${taskDescription}`
         contextChapterCount={contextChapterCount}
         setContextChapterCount={setContextChapterCount}
       />
+      </Suspense>
 
       {/* Advanced Settings Panel ("对话补全源") */}
       {showAdvancedSettings && (
@@ -9279,6 +9304,7 @@ ${taskDescription}`
 
       {/* Workflow Editor */}
       {isMobile ? (
+        <Suspense fallback={<div className="fixed inset-0 z-[100] bg-gray-900 flex items-center justify-center">加载编辑器...</div>}>
         <MobileWorkflowEditor
           isOpen={showWorkflowEditor}
           onClose={() => setShowWorkflowEditor(false)}
@@ -9417,7 +9443,9 @@ ${taskDescription}`
             });
           }}
         />
+        </Suspense>
       ) : (
+        <Suspense fallback={<div className="fixed inset-0 z-[100] bg-gray-900 flex items-center justify-center">加载编辑器...</div>}>
         <WorkflowEditor
           isOpen={showWorkflowEditor}
           onClose={() => setShowWorkflowEditor(false)}
@@ -9552,6 +9580,7 @@ ${taskDescription}`
           });
         }}
       />
+      </Suspense>
       )}
 
     </div>

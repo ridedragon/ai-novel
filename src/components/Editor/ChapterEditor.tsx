@@ -9,7 +9,7 @@ import {
   StopCircle,
   Wand2
 } from 'lucide-react';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Chapter, ChapterVersion } from '../../types';
 
@@ -17,7 +17,7 @@ interface ChapterEditorProps {
   activeChapter: Chapter | undefined;
   activeChapterId: number | null;
   isEditingChapter: boolean;
-  onToggleEdit: () => void;
+  onToggleEdit: (content?: string) => void;
   onChapterContentChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onOptimize: (targetId?: number, initialContent?: string) => Promise<void>;
   onStopOptimize: (chapterId: number) => void;
@@ -52,14 +52,45 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = ({
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const [localContent, setLocalContent] = useState('');
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 当章节切换或进入编辑模式时，初始化本地状态
   useEffect(() => {
+    if (activeChapter) {
+      setLocalContent(activeChapter.content || '');
+    }
+    
     if (contentScrollRef.current) {
       contentScrollRef.current.scrollTop = 0;
     }
     if (textareaRef.current) {
       textareaRef.current.scrollTop = 0;
     }
-  }, [activeChapterId]);
+  }, [activeChapterId, isEditingChapter]);
+
+  // 处理输入：仅更新本地状态，解除全局渲染锁定
+  const handleLocalChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    setLocalContent(newValue);
+
+    // 采用 500ms 防抖同步回全局状态，保证后台保存
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = setTimeout(() => {
+      onChapterContentChange(e);
+    }, 500);
+  };
+
+  // 退出编辑时立即同步
+  const handleToggleEditWithSync = () => {
+    if (isEditingChapter) {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+      // 显式传入最新内容进行保存
+      onToggleEdit(localContent);
+    } else {
+      onToggleEdit();
+    }
+  };
 
   if (!activeChapter) {
     return (
@@ -181,11 +212,8 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = ({
             </button>
           ) : (
             <button
-              onClick={() => onOptimize()}
-              // 【BUG 风险点：UI 触发源】
-              // 谨慎修改：点击此按钮将启动润色流程。
-              // 由于润色会立即根据当前编辑器内容捕捉“原文”，
-              // 如果用户刚完成手动输入且未保存，存在新编辑内容被润色版本直接覆盖的风险。
+              onClick={() => onOptimize(activeChapter.id, localContent)}
+              // 修正：点击润色时，显式传入 localContent 以确保未防抖同步的内容也被捕捉
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm border border-transparent bg-purple-600 hover:bg-purple-500 text-white shadow-purple-500/20 border-purple-500 hover:shadow-purple-500/30 hover:-translate-y-0.5 active:translate-y-0"
               title="优化当前章节 (基于原文)"
             >
@@ -210,7 +238,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = ({
           </button>
           <div className="w-px h-4 bg-gray-700 mx-1"></div>
           <button
-            onClick={onToggleEdit}
+            onClick={handleToggleEditWithSync}
             className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
             title={isEditingChapter ? "保存/退出编辑" : "编辑章节内容"}
           >
@@ -223,8 +251,8 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = ({
         {isEditingChapter ? (
           <textarea
             ref={textareaRef}
-            value={activeChapter.content || ''}
-            onChange={onChapterContentChange}
+            value={localContent}
+            onChange={handleLocalChange}
             className="w-full h-full bg-gray-900 p-4 text-base leading-relaxed text-gray-200 outline-none resize-none font-mono"
             placeholder="在此处输入章节正文..."
           />

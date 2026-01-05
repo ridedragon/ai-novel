@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -7,7 +7,42 @@
     <title>AI 小说写作助手</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div
+        id="initial-loading"
+        style="
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          width: 100vw;
+          background-color: #111827;
+          color: #f3f4f6;
+          font-family: system-ui, -apple-system, sans-serif;
+        "
+      >
+        <style>
+          .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: #3b82f6;
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 16px;
+          }
+          @keyframes spin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        </style>
+        <div class="spinner"></div>
+        <div style="font-size: 1.125rem; font-weight: 600">AI 小说写作助手</div>
+        <div style="font-size: 0.875rem; color: #9ca3af; margin-top: 8px">正在加载资源，请稍候...</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
