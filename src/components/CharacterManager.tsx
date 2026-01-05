@@ -76,7 +76,7 @@ interface CharacterManagerProps {
   onToggleReferenceSelector: (open: boolean) => void
 }
 
-export const CharacterManager: React.FC<CharacterManagerProps> = ({
+export const CharacterManager: React.FC<CharacterManagerProps> = React.memo(({
   novel,
   activeCharacterSetId,
   onSetActiveCharacterSetId,
@@ -1021,4 +1021,4 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
       </div>
     </div>
   )
-}
+})

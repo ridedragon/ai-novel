@@ -90,7 +90,7 @@ interface OutlineManagerProps {
   onToggleReferenceSelector: (open: boolean) => void
 }
 
-export const OutlineManager: React.FC<OutlineManagerProps> = ({
+export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
   novel,
   activeOutlineSetId,
   onSetActiveOutlineSetId,

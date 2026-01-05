@@ -36,6 +36,17 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  /* 移除移动端点击 300ms 延迟，提升响应速度 */
+  touch-action: manipulation;
+}
+
+/* 针对侧边栏等可点击元素优化 */
+button,
+[role='button'],
+.cursor-pointer {
+  touch-action: manipulation;
+  /* 禁用长按菜单（如不需要），进一步减少干扰 */
+  -webkit-touch-callout: none;
 }
 
 h1 {

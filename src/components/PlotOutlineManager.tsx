@@ -151,7 +151,7 @@ const TreeItem: React.FC<{
   )
 }
 
-export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => {
+export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = React.memo((props) => {
   const {
     novel,
     activePlotOutlineSetId,
@@ -1017,4 +1017,4 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = (props) => 
       </div>
     </div>
   )
-}
+})

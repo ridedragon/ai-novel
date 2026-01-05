@@ -1247,11 +1247,12 @@ function App() {
   // Persistence - 增加防抖处理，避免频繁写入导致的卡顿
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
+    // 增加保存间隔，减轻手机端压力
     if (novels.length > 0) {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
         storage.saveNovels(novels).catch(e => console.error('Failed to save novels', e));
-      }, 1000);
+      }, 2000);
     }
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -1644,18 +1645,22 @@ function App() {
     setIsEditingChapter(!isEditingChapter)
   }
 
-  const updateOutlineSets = (newSets: OutlineSet[]) => {
+  const updateOutlineSets = React.useCallback((newSets: OutlineSet[]) => {
     if (!activeNovelId) return
     setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, outlineSets: newSets } : n))
-  }
+  }, [activeNovelId, setNovels])
 
-  const updateOutlineSet = (setId: string, updates: Partial<OutlineSet>) => {
-    if (!activeNovelId || !activeNovel?.outlineSets) return
-    const newSets = activeNovel.outlineSets.map(set => 
-      set.id === setId ? { ...set, ...updates } : set
-    )
-    updateOutlineSets(newSets)
-  }
+  const updateOutlineSet = React.useCallback((setId: string, updates: Partial<OutlineSet>) => {
+    setNovels(prev => prev.map(n => {
+      if (n.id === activeNovelId && n.outlineSets) {
+        return {
+          ...n,
+          outlineSets: n.outlineSets.map(set => set.id === setId ? { ...set, ...updates } : set)
+        }
+      }
+      return n
+    }))
+  }, [activeNovelId, setNovels])
 
   const updateOutlineItemsInSet = (setId: string, newItems: OutlineItem[]) => {
     updateOutlineSet(setId, { items: newItems })
@@ -1717,18 +1722,22 @@ function App() {
 
   // Character Set Helpers
 
-  const updateCharacterSets = (newSets: CharacterSet[]) => {
+  const updateCharacterSets = React.useCallback((newSets: CharacterSet[]) => {
     if (!activeNovelId) return
     setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, characterSets: newSets } : n))
-  }
+  }, [activeNovelId, setNovels])
 
-  const updateCharacterSet = (setId: string, updates: Partial<CharacterSet>) => {
-    if (!activeNovelId || !activeNovel?.characterSets) return
-    const newSets = activeNovel.characterSets.map(set => 
-      set.id === setId ? { ...set, ...updates } : set
-    )
-    updateCharacterSets(newSets)
-  }
+  const updateCharacterSet = React.useCallback((setId: string, updates: Partial<CharacterSet>) => {
+    setNovels(prev => prev.map(n => {
+      if (n.id === activeNovelId && n.characterSets) {
+        return {
+          ...n,
+          characterSets: n.characterSets.map(set => set.id === setId ? { ...set, ...updates } : set)
+        }
+      }
+      return n
+    }))
+  }, [activeNovelId, setNovels])
 
   const updateCharactersInSet = (setId: string, newCharacters: CharacterItem[]) => {
     updateCharacterSet(setId, { characters: newCharacters })
@@ -1805,18 +1814,22 @@ function App() {
     }
   }, [activeNovelId, activeNovel?.characterSets, activeNovel?.characters, activeNovel?.worldviewSets, activeNovel?.worldview, activeNovel?.outlineSets, activeNovel?.outline, activeNovel?.plotOutlineSets])
 
-  const updateWorldviewSets = (newSets: WorldviewSet[]) => {
+  const updateWorldviewSets = React.useCallback((newSets: WorldviewSet[]) => {
     if (!activeNovelId) return
     setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, worldviewSets: newSets } : n))
-  }
+  }, [activeNovelId, setNovels])
 
-  const updateWorldviewSet = (setId: string, updates: Partial<WorldviewSet>) => {
-    if (!activeNovelId || !activeNovel?.worldviewSets) return
-    const newSets = activeNovel.worldviewSets.map(set => 
-      set.id === setId ? { ...set, ...updates } : set
-    )
-    updateWorldviewSets(newSets)
-  }
+  const updateWorldviewSet = React.useCallback((setId: string, updates: Partial<WorldviewSet>) => {
+    setNovels(prev => prev.map(n => {
+      if (n.id === activeNovelId && n.worldviewSets) {
+        return {
+          ...n,
+          worldviewSets: n.worldviewSets.map(set => set.id === setId ? { ...set, ...updates } : set)
+        }
+      }
+      return n
+    }))
+  }, [activeNovelId, setNovels])
 
   const updateEntriesInSet = (setId: string, newEntries: WorldviewItem[]) => {
     updateWorldviewSet(setId, { entries: newEntries })
@@ -1840,10 +1853,10 @@ function App() {
       })
   }, [activeNovelId, setNovels]);
 
-  const setVolumes = (value: NovelVolume[]) => {
+  const setVolumes = React.useCallback((value: NovelVolume[]) => {
       if (!activeNovelId) return
       setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, volumes: value } : n))
-  }
+  }, [activeNovelId, setNovels])
 
   // Volume Actions
   const handleAddVolume = () => {
@@ -3066,7 +3079,7 @@ function App() {
   }
 
   // Outline Generation
-  const handleRegenerateOutlineItem = async (index: number) => {
+  const handleRegenerateOutlineItem = React.useCallback(async (index: number) => {
     const activePreset = outlinePresets.find(p => p.id === activeOutlinePresetId) || outlinePresets[0]
     const apiConfig = getApiConfig(activePreset.apiConfig, outlineModel)
 
@@ -3195,9 +3208,9 @@ function App() {
             return next
         })
     }
-  }
+  }, [activeNovel, activeOutlinePresetId, outlineModel, selectedWorldviewSetIdForModules, selectedWorldviewIndicesForModules, selectedCharacterSetIdForModules, selectedCharacterIndicesForModules, selectedInspirationSetIdForModules, selectedInspirationIndicesForModules, selectedOutlineSetIdForModules, selectedOutlineIndicesForModules, activeNovelId, activeOutlineSetId, globalCreationPrompt])
 
-  const handleGenerateOutline = async (mode: 'append' | 'replace' | 'chat' = 'append', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
+  const handleGenerateOutline = React.useCallback(async (mode: 'append' | 'replace' | 'chat' = 'append', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activeOutlinePresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -3440,11 +3453,11 @@ function App() {
     }
     
     setIsGeneratingOutline(false)
-  }
+  }, [activeOutlinePresetId, outlineModel, maxRetries, activeNovel, activeOutlineSetId, selectedWorldviewSetIdForChat, selectedWorldviewIndicesForChat, selectedCharacterSetIdForChat, selectedCharacterIndicesForChat, selectedInspirationSetIdForChat, selectedInspirationIndicesForChat, selectedOutlineSetIdForChat, selectedOutlineIndicesForChat, selectedWorldviewSetIdForModules, selectedWorldviewIndicesForModules, selectedCharacterSetIdForModules, selectedCharacterIndicesForModules, selectedInspirationSetIdForModules, selectedInspirationIndicesForModules, selectedOutlineSetIdForModules, selectedOutlineIndicesForModules, globalCreationPrompt, userPrompt, activeChapter, contextLength, setNovels, activeNovelId]);
 
-  const handleRegenerateAllOutline = async () => {
+  const handleRegenerateAllOutline = React.useCallback(async () => {
       await handleGenerateOutline('replace')
-  }
+  }, [handleGenerateOutline]);
 
   // Character Generation
   const handleAddCharacterSet = () => {
@@ -3534,7 +3547,7 @@ function App() {
       })
   }
 
-  const handleGenerateCharacters = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
+  const handleGenerateCharacters = React.useCallback(async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activeCharacterPresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -3767,7 +3780,7 @@ function App() {
     }
     
     setIsGeneratingCharacters(false)
-  }
+  }, [activeCharacterSetId, activeCharacterPresetId, characterModel, activeNovel, selectedWorldviewSetIdForChat, selectedWorldviewIndicesForChat, selectedCharacterSetIdForChat, selectedCharacterIndicesForChat, selectedInspirationSetIdForChat, selectedInspirationIndicesForChat, selectedOutlineSetIdForChat, selectedOutlineIndicesForChat, selectedWorldviewSetIdForModules, selectedWorldviewIndicesForModules, selectedCharacterSetIdForModules, selectedCharacterIndicesForModules, selectedInspirationSetIdForModules, selectedInspirationIndicesForModules, selectedOutlineSetIdForModules, selectedOutlineIndicesForModules, activeNovelId, contextLength, activeChapter, globalCreationPrompt, userPrompt, maxRetries])
 
   // Worldview Actions
   const handleAddWorldviewSet = () => {
@@ -3860,7 +3873,7 @@ function App() {
   }
 
   // Inspiration Generation
-  const handleGenerateInspiration = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
+  const handleGenerateInspiration = React.useCallback(async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activeInspirationPresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -4093,10 +4106,10 @@ function App() {
     }
     
     setIsGeneratingInspiration(false)
-  }
+  }, [activeInspirationSetId, activeInspirationPresetId, inspirationModel, activeNovel, selectedWorldviewSetIdForChat, selectedWorldviewIndicesForChat, selectedCharacterSetIdForChat, selectedCharacterIndicesForChat, selectedInspirationSetIdForChat, selectedInspirationIndicesForChat, selectedOutlineSetIdForChat, selectedOutlineIndicesForChat, selectedWorldviewSetIdForModules, selectedWorldviewIndicesForModules, selectedCharacterSetIdForModules, selectedCharacterIndicesForModules, selectedInspirationSetIdForModules, selectedInspirationIndicesForModules, selectedOutlineSetIdForModules, selectedOutlineIndicesForModules, activeNovelId, contextLength, activeChapter, globalCreationPrompt, userPrompt, maxRetries, setNovels]);
 
   // Worldview Generation
-  const handleGenerateWorldview = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
+  const handleGenerateWorldview = React.useCallback(async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activeWorldviewPresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -4329,17 +4342,22 @@ function App() {
     }
     
     setIsGeneratingWorldview(false)
-  }
+  }, [activeWorldviewSetId, activeWorldviewPresetId, worldviewModel, activeNovel, selectedWorldviewSetIdForChat, selectedWorldviewIndicesForChat, selectedCharacterSetIdForChat, selectedCharacterIndicesForChat, selectedInspirationSetIdForChat, selectedInspirationIndicesForChat, selectedOutlineSetIdForChat, selectedOutlineIndicesForChat, selectedWorldviewSetIdForModules, selectedWorldviewIndicesForModules, selectedCharacterSetIdForModules, selectedCharacterIndicesForModules, selectedInspirationSetIdForModules, selectedInspirationIndicesForModules, selectedOutlineSetIdForModules, selectedOutlineIndicesForModules, activeNovelId, contextLength, activeChapter, globalCreationPrompt, userPrompt, maxRetries, setNovels]);
 
   // Version Management
-  const handleNextVersion = () => {
+  const loadVersionsIfNeeded = React.useCallback(async (chapter: Chapter) => {
+    if (chapter.versions && chapter.versions.length > 0) return chapter;
+    const versions = await storage.getChapterVersions(chapter.id);
+    if (versions.length > 0) {
+      return { ...chapter, versions };
+    }
+    return ensureChapterVersions(chapter);
+  }, []);
+
+  const handleNextVersion = async () => {
     if (!activeChapter) return
 
-    let currentChapter = activeChapter
-    if (!currentChapter.versions || currentChapter.versions.length === 0) {
-        currentChapter = ensureChapterVersions(currentChapter)
-    }
-    
+    const currentChapter = await loadVersionsIfNeeded(activeChapter);
     const versions = currentChapter.versions || []
     if (versions.length <= 1) return
 
@@ -4361,7 +4379,7 @@ function App() {
   }
 
   // Plot Outline Generation
-  const handleGeneratePlotOutline = async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
+  const handleGeneratePlotOutline = React.useCallback(async (mode: 'generate' | 'chat' = 'generate', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
     let currentPresetId = activePlotOutlinePresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -4537,16 +4555,12 @@ function App() {
       }
     }
     setIsGeneratingPlotOutline(false)
-  }
+  }, [activePlotOutlineSetId, activePlotOutlinePresetId, plotOutlineModel, activeNovel, selectedWorldviewSetIdForModules, selectedWorldviewIndicesForModules, selectedCharacterSetIdForModules, selectedCharacterIndicesForModules, selectedInspirationSetIdForModules, selectedInspirationIndicesForModules, selectedOutlineSetIdForModules, selectedOutlineIndicesForModules, activeNovelId, globalCreationPrompt, userPrompt, maxRetries, setNovels]);
 
-  const handlePrevVersion = () => {
+  const handlePrevVersion = async () => {
     if (!activeChapter) return
 
-    let currentChapter = activeChapter
-    if (!currentChapter.versions || currentChapter.versions.length === 0) {
-        currentChapter = ensureChapterVersions(currentChapter)
-    }
-    
+    const currentChapter = await loadVersionsIfNeeded(activeChapter);
     const versions = currentChapter.versions || []
     if (versions.length <= 1) return
 
@@ -4678,7 +4692,7 @@ function App() {
       return contextContent
   }
 
-  const handleStopOptimize = (chapterId: number) => {
+  const handleStopOptimize = React.useCallback((chapterId: number) => {
       const controller = optimizeAbortControllersRef.current.get(chapterId)
       if (controller) {
           controller.abort()
@@ -4689,10 +4703,10 @@ function App() {
           next.delete(chapterId)
           return next
       })
-  }
+  }, [])
 
   // Optimize Function
-  const handleOptimize = async (targetId?: number, initialContent?: string) => {
+  const handleOptimize = React.useCallback(async (targetId?: number, initialContent?: string) => {
     const idToUse = targetId ?? activeChapterId
     
     terminal.log(`[Optimize Clicked] targetId: ${targetId}, activeChapterId: ${activeChapterId}, idToUse: ${idToUse}`);
@@ -5069,7 +5083,7 @@ function App() {
 
     // Clean up
     handleStopOptimize(idToUse)
-  }
+  }, [activeOptimizePresetId, optimizeModel, apiKey, activeNovelId, userPrompt, twoStepOptimization, activeAnalysisPresetId, analysisModel, maxRetries, baseUrl, setChapters])
 
   // Auto Writing Loop
   const autoWriteLoop = async (
@@ -5698,7 +5712,7 @@ ${taskDescription}`
     }
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = React.useCallback(async () => {
     if (!apiKey) {
       setError('请先在设置中配置 API Key')
       setShowSettings(true)
@@ -5920,7 +5934,7 @@ ${taskDescription}`
     }
     
     setIsLoading(false)
-  }
+  }, [apiKey, activeChapter, activeNovel, contextLength, selectedWorldviewSetIdForChat, selectedWorldviewIndicesForChat, selectedCharacterSetIdForChat, selectedCharacterIndicesForChat, selectedInspirationSetIdForChat, selectedInspirationIndicesForChat, selectedOutlineSetIdForChat, selectedOutlineIndicesForChat, activeOutlineSetId, includeFullOutlineInAutoWrite, systemPrompt, prompts, userPrompt, temperature, topP, topK, stream, presencePenalty, frequencyPenalty, maxReplyLength, maxRetries, baseUrl, outlineModel, model, presetApiConfig, setChapters, activeChapterId])
 
   const addNewChapter = (volumeId?: string) => {
     // Generate unique ID using timestamp to avoid conflict with existing large IDs
@@ -6234,7 +6248,7 @@ ${taskDescription}`
     }
   }
 
-  const handleSetActiveOutlineSetId = (id: string | null) => {
+  const handleSetActiveOutlineSetId = React.useCallback((id: string | null) => {
       setActiveOutlineSetId(id)
       if (id && activeNovel) {
           const set = activeNovel.outlineSets?.find(s => s.id === id)
@@ -6246,9 +6260,9 @@ ${taskDescription}`
               if (matchWorld) setSelectedWorldviewSetIdForOutlineGen(matchWorld.id)
           }
       }
-  }
+  }, [activeNovel]);
 
-  const handleSetActiveCharacterSetId = (id: string | null) => {
+  const handleSetActiveCharacterSetId = React.useCallback((id: string | null) => {
       setActiveCharacterSetId(id)
       if (id && activeNovel) {
           const set = activeNovel.characterSets?.find(s => s.id === id)
@@ -6257,7 +6271,7 @@ ${taskDescription}`
               if (matchWorld) setSelectedWorldviewSetIdForCharGen(matchWorld.id)
           }
       }
-  }
+  }, [activeNovel]);
 
   const handleSwitchModule = (targetModule: 'outline' | 'plotOutline' | 'characters' | 'worldview' | 'inspiration' | 'reference') => {
       if (!activeNovel) {
@@ -7720,8 +7734,12 @@ ${taskDescription}`
               onShowOptimizeSettings={() => { setGeneratorSettingsType('optimize'); setShowGeneratorSettingsModal(true); }}
               onPrevVersion={handlePrevVersion}
               onNextVersion={handleNextVersion}
-              onSwitchVersion={(v) => {
-                setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, activeVersionId: v.id, content: v.content } : c))
+              onSwitchVersion={async (v) => {
+                const currentChapter = chapters.find(c => c.id === activeChapterId);
+                if (currentChapter) {
+                  const withVersions = await loadVersionsIfNeeded(currentChapter);
+                  setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...withVersions, activeVersionId: v.id, content: v.content } : c));
+                }
               }}
             />
           </div>

@@ -32,7 +32,7 @@ interface ChapterEditorProps {
   onSwitchVersion: (version: ChapterVersion) => void;
 }
 
-export const ChapterEditor: React.FC<ChapterEditorProps> = ({
+export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
   activeChapter,
   activeChapterId,
   isEditingChapter,
@@ -279,4 +279,4 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = ({
       </div>
     </div>
   );
-};
+});

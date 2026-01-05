@@ -76,7 +76,7 @@ interface WorldviewManagerProps {
   onToggleReferenceSelector: (open: boolean) => void
 }
 
-export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
+export const WorldviewManager: React.FC<WorldviewManagerProps> = React.memo(({
   novel,
   activeWorldviewSetId,
   onSetActiveWorldviewSetId,
@@ -996,4 +996,4 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = ({
       </div>
     </div>
   )
-}
+})

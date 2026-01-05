@@ -81,7 +81,7 @@ interface InspirationManagerProps {
   onToggleReferenceSelector: (open: boolean) => void
 }
 
-export const InspirationManager: React.FC<InspirationManagerProps> = ({
+export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(({
   novel,
   activeInspirationSetId,
   onSetActiveInspirationSetId,
@@ -1006,4 +1006,4 @@ export const InspirationManager: React.FC<InspirationManagerProps> = ({
       </div>
     </div>
   )
-}
+})
