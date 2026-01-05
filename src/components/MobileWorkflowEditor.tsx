@@ -301,8 +301,9 @@ const ConfigPanel = React.memo(({
               {editingNode.data.skipped ? <Square className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
               {editingNode.data.skipped ? '已跳过' : '执行'}
             </button>
-            <button onClick={onClose} className="p-2 bg-gray-700 rounded-full text-gray-400 ml-2">
-              <X className="w-5 h-5" />
+            <button onClick={onClose} className="flex flex-col items-center justify-center p-1.5 bg-gray-700 rounded-xl text-gray-400 ml-2">
+              <X className="w-4 h-4" />
+              <span className="text-[8px] font-bold mt-0.5">返回</span>
             </button>
           </div>
         </div>
@@ -654,8 +655,9 @@ const ConfigPanel = React.memo(({
       </div>
 
       <div className="p-6 bg-gray-800 border-t border-gray-700 sticky bottom-0 z-10 flex gap-4">
-        <button onClick={() => { if(confirm('确定要删除这个模块吗？')) { onDeleteNode(editingNode.id); } }} className="p-4 bg-red-900/20 text-red-400 rounded-2xl">
-          <Trash2 className="w-6 h-6" />
+        <button onClick={() => { if(confirm('确定要删除这个模块吗？')) { onDeleteNode(editingNode.id); } }} className="flex flex-col items-center justify-center px-6 bg-red-900/20 text-red-400 rounded-2xl">
+          <Trash2 className="w-5 h-5" />
+          <span className="text-[10px] font-bold mt-1">删除</span>
         </button>
         <button onClick={onClose} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">
           确定并返回
@@ -1867,9 +1869,12 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               />
             ) : (
               <div className="flex items-center gap-1 min-w-0">
-                <button onClick={() => setShowWorkflowMenu(!showWorkflowMenu)} className="font-bold text-sm text-gray-100 flex items-center gap-1 min-w-0">
-                  <span className="truncate">{workflows.find(w => w.id === activeWorkflowId)?.name || '选择工作流'}</span>
-                  <ChevronDown className="w-3 h-3 shrink-0" />
+                <button onClick={() => setShowWorkflowMenu(!showWorkflowMenu)} className="flex flex-col items-start min-w-0">
+                  <span className="text-[8px] text-indigo-400 font-bold uppercase tracking-wider">当前工作流</span>
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="font-bold text-sm text-gray-100 truncate">{workflows.find(w => w.id === activeWorkflowId)?.name || '选择工作流'}</span>
+                    <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
+                  </div>
                 </button>
                 <button
                   onClick={() => {
@@ -1901,67 +1906,101 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           {!isRunning && (
             <button
               onClick={handleSaveWorkflow}
-              className="p-2 bg-gray-700/50 text-indigo-400 rounded-lg border border-gray-600/50 active:scale-95 transition-all"
-              title="保存"
+              className="flex flex-col items-center justify-center p-1.5 bg-gray-700/50 text-indigo-400 rounded-lg border border-gray-600/50 active:scale-95 transition-all"
             >
-              <Save className="w-4 h-4" />
+              <Save className="w-3.5 h-3.5" />
+              <span className="text-[8px] font-bold mt-0.5">保存</span>
             </button>
           )}
+          
           {isRunning ? (
-            <button onClick={stopWorkflow} className="bg-red-600/20 text-red-500 p-2 rounded-lg border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-pulse"><Square className="w-4 h-4 fill-current" /></button>
+            <button
+              onClick={stopWorkflow}
+              className="flex flex-col items-center justify-center bg-red-600/20 text-red-500 p-1.5 rounded-lg border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-pulse"
+            >
+              <Square className="w-3.5 h-3.5 fill-current" />
+              <span className="text-[8px] font-bold mt-0.5">停止</span>
+            </button>
           ) : isPaused && currentNodeIndex !== -1 ? (
-            <div className="flex items-center gap-2">
-              <select
-                className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 outline-none max-w-[100px]"
-                value=""
-                onChange={(e) => {
-                  const idx = parseInt(e.target.value);
-                  if (!isNaN(idx)) runWorkflow(idx);
-                }}
+            <div className="flex items-center gap-1.5">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[7px] text-gray-500 font-bold uppercase pl-1">跳转执行</span>
+                <select
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1 text-[9px] text-gray-300 outline-none max-w-[80px]"
+                  value=""
+                  onChange={(e) => {
+                    const idx = parseInt(e.target.value);
+                    if (!isNaN(idx)) runWorkflow(idx);
+                  }}
+                >
+                  <option value="" disabled>选择节点...</option>
+                  {getOrderedNodes().map((n, idx) => (
+                    <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <button
+                onClick={() => runWorkflow(currentNodeIndex)}
+                className="flex flex-col items-center justify-center bg-blue-600/20 text-blue-500 p-1.5 rounded-lg border border-blue-500/20 shadow-lg"
               >
-                <option value="" disabled>跳转...</option>
-                {getOrderedNodes().map((n, idx) => (
-                  <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
-                ))}
-              </select>
-              <button onClick={() => runWorkflow(currentNodeIndex)} className="bg-blue-600/20 text-blue-500 p-2 rounded-lg border border-blue-500/20 shadow-lg"><Play className="w-4 h-4 fill-current" /></button>
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span className="text-[8px] font-bold mt-0.5">继续</span>
+              </button>
+              
               <button
                 onClick={() => {
-                  const updatedNodes = nodes.map(n => ({ ...n, data: { ...n.data, status: 'pending' as const } }));
-                  setNodes(updatedNodes);
-                  setCurrentNodeIndex(-1);
-                  setIsPaused(false);
-                  setWorkflows(prev => prev.map(w => w.id === activeWorkflowId ? { ...w, nodes: updatedNodes, currentNodeIndex: -1 } : w));
+                  if (confirm('确定要重置所有节点进度吗？')) {
+                    const updatedNodes = nodes.map(n => ({ ...n, data: { ...n.data, status: 'pending' as const } }));
+                    setNodes(updatedNodes);
+                    setCurrentNodeIndex(-1);
+                    setIsPaused(false);
+                    setWorkflows(prev => prev.map(w => w.id === activeWorkflowId ? { ...w, nodes: updatedNodes, currentNodeIndex: -1 } : w));
+                  }
                 }}
-                className="p-2 bg-gray-700/50 text-gray-400 rounded-lg border border-gray-600/50"
-                title="重置"
+                className="flex flex-col items-center justify-center p-1.5 bg-gray-700/50 text-gray-400 rounded-lg border border-gray-600/50"
               >
-                <Settings2 className="w-4 h-4" />
+                <Settings2 className="w-3.5 h-3.5" />
+                <span className="text-[8px] font-bold mt-0.5">重置</span>
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-               <select
-                className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 outline-none max-w-[100px]"
-                value=""
-                onChange={(e) => {
-                  const idx = parseInt(e.target.value);
-                  if (!isNaN(idx)) runWorkflow(idx);
-                }}
+            <div className="flex items-center gap-1.5">
+               <div className="flex flex-col gap-0.5">
+                <span className="text-[7px] text-gray-500 font-bold uppercase pl-1">起始节点</span>
+                <select
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1 text-[9px] text-gray-300 outline-none max-w-[80px]"
+                  value=""
+                  onChange={(e) => {
+                    const idx = parseInt(e.target.value);
+                    if (!isNaN(idx)) runWorkflow(idx);
+                  }}
+                >
+                  <option value="" disabled>从头开始</option>
+                  {getOrderedNodes().map((n, idx) => (
+                    <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={() => runWorkflow(0)}
+                disabled={nodes.length === 0}
+                className="flex flex-col items-center justify-center bg-green-600/20 text-green-500 p-1.5 rounded-lg border border-green-500/20 shadow-lg disabled:opacity-50"
               >
-                <option value="" disabled>指定起始...</option>
-                {getOrderedNodes().map((n, idx) => (
-                  <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
-                ))}
-              </select>
-              <button onClick={() => runWorkflow(0)} disabled={nodes.length === 0} className="bg-green-600/20 text-green-500 p-2 rounded-lg border border-green-500/20 shadow-lg disabled:opacity-50"><Play className="w-4 h-4 fill-current" /></button>
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span className="text-[8px] font-bold mt-0.5">运行</span>
+              </button>
             </div>
           )}
-          <button onClick={onClose} className="p-1 text-gray-400"><X className="w-6 h-6" /></button>
+          <div className="w-px h-6 bg-gray-700 mx-0.5" />
+          <button onClick={onClose} className="p-1 text-gray-400 flex flex-col items-center">
+            <X className="w-5 h-5" />
+            <span className="text-[8px] font-bold">关闭</span>
+          </button>
         </div>
       </div>
 
@@ -1998,7 +2037,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           <div className="w-px h-8 bg-gray-700 mx-1" />
           <button onClick={() => { setNodes(nds => nds.filter(n => n.id !== editingNode.id)); setEditingNodeId(null); }} className="flex flex-col items-center gap-1 px-4 py-2 text-red-400 hover:bg-gray-700 rounded-xl transition-colors"><Trash2 className="w-5 h-5" /><span className="text-[10px] font-bold">删除</span></button>
           <div className="w-px h-8 bg-gray-700 mx-1" />
-          <button onClick={() => setEditingNodeId(null)} className="p-2 text-gray-400 hover:bg-gray-700 rounded-xl"><X className="w-5 h-5" /></button>
+          <button onClick={() => setEditingNodeId(null)} className="flex flex-col items-center gap-1 px-4 py-2 text-gray-400 hover:bg-gray-700 rounded-xl transition-colors"><X className="w-5 h-5" /><span className="text-[10px] font-bold">关闭</span></button>
         </div>
       )}
 

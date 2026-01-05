@@ -24,6 +24,9 @@ const getStableContent = (chapter: Chapter) => {
   return chapter.content || '';
 };
 
+// 模块级锁，防止同一小说在同一时间内对同一范围触发多次生成请求
+const activeGenerations = new Set<string>();
+
 export const checkAndGenerateSummary = async (
   targetChapterId: number,
   currentContent: string,
@@ -265,8 +268,15 @@ export const checkAndGenerateSummary = async (
 
       // 检查是否已存在该范围的总结
       const exists = currentChaptersSnapshot.some(c => c.subtype === 'small_summary' && c.summaryRange === rangeStr);
-      if (!exists) {
-        await generate('small', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
+      const lockKey = `${targetNovelId}_small_${rangeStr}`;
+
+      if (!exists && !activeGenerations.has(lockKey)) {
+        activeGenerations.add(lockKey);
+        try {
+          await generate('small', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
+        } finally {
+          activeGenerations.delete(lockKey);
+        }
       }
     }
   }
@@ -283,8 +293,15 @@ export const checkAndGenerateSummary = async (
       const rangeStr = `${globalStart}-${globalEnd}`;
 
       const exists = currentChaptersSnapshot.some(c => c.subtype === 'big_summary' && c.summaryRange === rangeStr);
-      if (!exists) {
-        await generate('big', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
+      const lockKey = `${targetNovelId}_big_${rangeStr}`;
+
+      if (!exists && !activeGenerations.has(lockKey)) {
+        activeGenerations.add(lockKey);
+        try {
+          await generate('big', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
+        } finally {
+          activeGenerations.delete(lockKey);
+        }
       }
     }
   }

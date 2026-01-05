@@ -71,7 +71,12 @@ export class AutoWriteEngine {
 
         if (existingChapter && existingChapter.content && existingChapter.content.trim().length > 0) {
           if (batchItems.length === 0) {
-            console.log(`[AutoWrite] Skipping existing chapter: ${item.title}`);
+            console.log(`[AutoWrite] Skipping existing chapter and checking for summaries: ${item.title}`);
+            // 即使跳过已存在的章节，也触发一次完成回调，确保由于跳过导致的缺失总结能被补全
+            const resultNovel = await onChapterComplete(existingChapter.id, existingChapter.content, this.novel);
+            if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
+              this.novel = resultNovel as Novel;
+            }
             startIndex++;
             continue;
           } else {
@@ -360,27 +365,24 @@ export class AutoWriteEngine {
           onNovelUpdate(this.novel);
 
           // 上报章节完成并按需触发自动优化
-          // 优化：并行处理批次内的章节完成上报和自动优化投递，缩短批次间停顿感
-          await Promise.all(
-            batchItems.map(async (item, i) => {
-              const chapterId = item.id;
-              const content = finalContents[i];
+          // 核心修复：由 Promise.all 改为顺序执行，防止由于并发产生的状态覆盖导致总结丢失（Stale State Conflict）
+          for (let i = 0; i < batchItems.length; i++) {
+            const item = batchItems[i];
+            const chapterId = item.id;
+            const content = finalContents[i];
 
-              const resultNovel = await onChapterComplete(chapterId, content, this.novel);
-              if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
-                this.novel = resultNovel as Novel;
-              }
+            const resultNovel = await onChapterComplete(chapterId, content, this.novel);
+            if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
+              this.novel = resultNovel as Novel;
+            }
 
-              // 联动“自动优化”按钮逻辑：如果配置开启，直接触发内部优化函数
-              if (this.config.autoOptimize && this.isRunning) {
-                terminal.log(`[AutoWrite] Auto-optimization (background) triggered for chapter ${chapterId}.`);
-                // 第十九次修复：彻底移除 asyncOptimize 配置判定，强制将自动优化设为异步非阻塞。
-                // 自动优化（润色）任务现在永远在后台静默运行，绝对不会阻塞主创作流程。
-                // 同时强制传递空函数作为 statusUpdate，从物理上隔绝异步任务对主 UI 状态的干扰。
-                this.optimizeChapter(chapterId, content, () => {}, onNovelUpdate, getActiveScripts(), true);
-              }
-            }),
-          );
+            // 联动“自动优化”按钮逻辑：如果配置开启，直接触发内部优化函数
+            if (this.config.autoOptimize && this.isRunning) {
+              terminal.log(`[AutoWrite] Auto-optimization (background) triggered for chapter ${chapterId}.`);
+              // 第十九次修复：自动优化任务在后台静默运行，不阻塞主流程
+              this.optimizeChapter(chapterId, content, () => {}, onNovelUpdate, getActiveScripts(), true);
+            }
+          }
 
           success = true;
           startIndex += batchItems.length;
