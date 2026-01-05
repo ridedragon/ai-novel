@@ -83,7 +83,7 @@ import {
   WorldviewSet
 } from './types'
 import { keepAliveManager } from './utils/KeepAliveManager'
-import { checkAndGenerateSummary as checkAndGenerateSummaryUtil } from './utils/SummaryManager'
+import { checkAndGenerateSummary as checkAndGenerateSummaryUtil, sortChapters } from './utils/SummaryManager'
 import { storage } from './utils/storage'
  
  const defaultInspirationPresets: GeneratorPreset[] = [
@@ -1645,9 +1645,16 @@ function App() {
       ]
   }
 
-  const applyRegexToText = (text: string, scripts: RegexScript[]) => {
+  const applyRegexToText = async (text: string, scripts: RegexScript[]) => {
       let processed = text
+      const startTime = Date.now();
+      
       for (const script of scripts) {
+          // 时间分片：如果处理时间超过 50ms，yield 给主线程
+          if (Date.now() - startTime > 50) {
+              await new Promise(resolve => setTimeout(resolve, 0));
+          }
+
           try {
               // Handle Trim Strings
               if (script.trimStrings && script.trimStrings.length > 0) {
@@ -1668,10 +1675,10 @@ function App() {
       return processed
   }
 
-  const processTextWithRegex = (text: string, scripts: RegexScript[], type: 'input' | 'output') => {
+  const processTextWithRegex = async (text: string, scripts: RegexScript[], type: 'input' | 'output') => {
       if (!text) return text
       const relevantScripts = scripts.filter(s => !s.disabled && s.placement.includes(type === 'input' ? 1 : 2))
-      return applyRegexToText(text, relevantScripts)
+      return await applyRegexToText(text, relevantScripts)
   }
 
   const handleToggleEdit = (contentOverride?: string) => {
@@ -1686,10 +1693,11 @@ function App() {
 
         const scripts = getActiveScripts().filter(s => !s.disabled && s.runOnEdit)
         if (scripts.length > 0) {
-            const processed = applyRegexToText(currentContent, scripts)
-            if (processed !== currentContent) {
-                 setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, content: processed } : c))
-            }
+            applyRegexToText(currentContent, scripts).then(processed => {
+                if (processed !== currentContent) {
+                     setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...c, content: processed } : c))
+                }
+            })
         }
     }
     setIsEditingChapter(!isEditingChapter)
@@ -1886,6 +1894,22 @@ function App() {
   }
   
   const chapters = activeNovel?.chapters || []
+  const sortedChapters = React.useMemo(() => sortChapters(chapters), [chapters])
+  
+  // 性能优化：预先将章节按分卷 ID 进行分组，避免在循环中重复过滤
+  const chaptersByVolume = React.useMemo(() => {
+    const group: Record<string, Chapter[]> = { 'uncategorized': [] };
+    sortedChapters.forEach(c => {
+      if (c.volumeId) {
+        if (!group[c.volumeId]) group[c.volumeId] = [];
+        group[c.volumeId].push(c);
+      } else {
+        group['uncategorized'].push(c);
+      }
+    });
+    return group;
+  }, [sortedChapters]);
+
   const volumes = activeNovel?.volumes || []
   const systemPrompt = activeNovel?.systemPrompt || '你是一个专业的小说家。请根据用户的要求创作小说，文笔要优美，情节要跌宕起伏。'
   
@@ -1896,7 +1920,8 @@ function App() {
               if (n.id === activeNovelId) {
                   const currentChapters = n.chapters
                   const newChapters = typeof value === 'function' ? (value as any)(currentChapters) : value
-                  return { ...n, chapters: newChapters }
+                  // 核心修复：所有通过 UI 触发的章节列表更新都强制进行稳定排序，解决“闪烁”根源
+                  return { ...n, chapters: sortChapters(newChapters) }
               }
               return n
           })
@@ -5795,7 +5820,7 @@ ${taskDescription}`
           { role: 'system', content: systemPrompt }
         ]
         
-        prompts.filter(p => p.active).forEach(p => {
+        for (const p of prompts.filter(p => p.active)) {
           if (p.isFixed) {
             let content = ""
             if (p.fixedType === 'chat_history') content = chatHistoryContent ? `【前文剧情回顾】：\n${chatHistoryContent}` : ""
@@ -5803,14 +5828,14 @@ ${taskDescription}`
             else if (p.fixedType === 'outline') content = outlineContent ? `【剧情粗纲参考】：\n${outlineContent}` : ""
             
             if (content) {
-              messages.push({ role: p.role, content: processTextWithRegex(content, scripts, 'input') })
+              messages.push({ role: p.role, content: await processTextWithRegex(content, scripts, 'input') })
             }
           } else if (p.content && p.content.trim()) {
             messages.push({ role: p.role, content: p.content })
           }
-        })
+        }
 
-        const processedUserPrompt = processTextWithRegex(userPrompt, scripts, 'input')
+        const processedUserPrompt = await processTextWithRegex(userPrompt, scripts, 'input')
         const finalUserPrompt = processedUserPrompt || "请继续生成后续剧情。"
         
         // Ensure there's at least one user message at the end if not already present
@@ -5887,7 +5912,7 @@ ${taskDescription}`
         }
         
         const originalFullContent = currentContent + newGeneratedContent
-        const processedFullContent = currentContent + processTextWithRegex(newGeneratedContent, scripts, 'output')
+        const processedFullContent = currentContent + await processTextWithRegex(newGeneratedContent, scripts, 'output')
 
         setChapters(prev => prev.map(c => {
           if (c.id === activeChapterId) {
@@ -6675,53 +6700,55 @@ ${taskDescription}`
           </div>
           
           <div className="space-y-1 px-2">
-            {/* Render Volumes */}
-            {volumes.map(volume => (
-              <div key={volume.id} className="mb-2">
-                 <div 
-                   className="flex items-center gap-2 px-2 py-1.5 text-gray-400 hover:bg-gray-700/50 rounded cursor-pointer group"
-                   onClick={() => handleToggleVolumeCollapse(volume.id)}
-                 >
-                    {volume.collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                    <Folder className="w-3.5 h-3.5 text-[var(--theme-color)]" />
-                    <span className="text-sm font-medium flex-1 truncate text-gray-300">{volume.title}</span>
-                    
-                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                       <button
-                          onClick={(e) => { e.stopPropagation(); addNewChapter(volume.id); }}
-                          className="bg-transparent p-1 hover:text-white"
-                          title="在此卷添加章节"
-                       >
-                          <Plus className="w-3 h-3" />
-                       </button>
-                       <button
-                          onClick={(e) => { e.stopPropagation(); handleRenameVolume(volume.id, volume.title); }}
-                          className="bg-transparent p-1 hover:text-white"
-                          title="重命名分卷"
-                       >
-                          <Edit3 className="w-3 h-3" />
-                       </button>
-                       <button
-                          onClick={(e) => { e.stopPropagation(); handleExportVolume(volume.id); }}
-                          className="bg-transparent p-1 hover:text-white"
-                          title="导出本卷"
-                       >
-                          <Download className="w-3 h-3" />
-                       </button>
-                       <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteVolume(volume.id); }}
-                          className="bg-transparent p-1 hover:text-red-400"
-                          title="删除分卷"
-                       >
-                          <Trash2 className="w-3 h-3" />
-                       </button>
-                    </div>
-                 </div>
-                 
-                 {!volume.collapsed && (
-                    <div className="ml-2 pl-2 border-l border-gray-700/50 mt-1 space-y-1">
-                       {chapters.filter(c => c.volumeId === volume.id).map(chapter => (
-                          <div 
+            {/* 核心修复：使用 memoized 的排序结果，确保排序稳定且渲染高效 */}
+            <>
+              {/* Render Volumes */}
+              {volumes.map(volume => (
+                    <div key={volume.id} className="mb-2">
+                      <div
+                        className="flex items-center gap-2 px-2 py-1.5 text-gray-400 hover:bg-gray-700/50 rounded cursor-pointer group"
+                        onClick={() => handleToggleVolumeCollapse(volume.id)}
+                      >
+                        {volume.collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        <Folder className="w-3.5 h-3.5 text-[var(--theme-color)]" />
+                        <span className="text-sm font-medium flex-1 truncate text-gray-300">{volume.title}</span>
+                        
+                        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); addNewChapter(volume.id); }}
+                              className="bg-transparent p-1 hover:text-white"
+                              title="在此卷添加章节"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleRenameVolume(volume.id, volume.title); }}
+                              className="bg-transparent p-1 hover:text-white"
+                              title="重命名分卷"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleExportVolume(volume.id); }}
+                              className="bg-transparent p-1 hover:text-white"
+                              title="导出本卷"
+                            >
+                              <Download className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteVolume(volume.id); }}
+                              className="bg-transparent p-1 hover:text-red-400"
+                              title="删除分卷"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                        </div>
+                      </div>
+                      
+                      {!volume.collapsed && (
+                        <div className="ml-2 pl-2 border-l border-gray-700/50 mt-1 space-y-1">
+                          {(chaptersByVolume[volume.id] || []).map(chapter => (
+                          <div
                             key={chapter.id}
                             className={`group flex items-center w-full rounded transition-colors pr-2 ${
                               activeChapterId === chapter.id 
@@ -6788,81 +6815,82 @@ ${taskDescription}`
                        )}
                     </div>
                  )}
-              </div>
-            ))}
-
-            {/* Uncategorized Chapters */}
-            <div className="mt-2">
-               {volumes.length > 0 && <div className="px-2 py-1 text-xs text-gray-500 font-semibold">未分卷章节</div>}
-               {chapters.filter(c => !c.volumeId).map(chapter => (
-                  <div 
-                    key={chapter.id}
-                    className={`group flex items-center w-full rounded transition-colors pr-2 ${
-                      activeChapterId === chapter.id 
-                        ? 'bg-[var(--theme-color)] text-white' 
-                        : 'text-gray-300 hover:bg-gray-700'
-                    }`}
-                  >
-                    <button
-                      onClick={() => {
-                        setActiveChapterId(chapter.id);
-                        setShowOutline(false);
-                        // 自动切换到该章节的最新版本
-                        if (chapter.versions && chapter.versions.length > 0) {
-                          const latestVersion = chapter.versions[chapter.versions.length - 1];
-                          setChapters(prev => prev.map(c => c.id === chapter.id ? { ...c, activeVersionId: latestVersion.id, content: latestVersion.content } : c));
-                        }
-                      }}
-                      className={`bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate ${chapter.subtype === 'small_summary' || chapter.subtype === 'big_summary' ? 'italic text-[var(--theme-color-light)]' : ''}`}
-                    >
-                      {chapter.subtype === 'small_summary' ? (
-                        <LayoutList className="w-4 h-4 shrink-0 text-blue-400" />
-                      ) : chapter.subtype === 'big_summary' ? (
-                        <BookOpen className="w-4 h-4 shrink-0 text-amber-400" />
-                      ) : (
-                        <FileText className={`w-4 h-4 shrink-0 ${chapter.logicScore !== undefined ? (chapter.logicScore > 80 ? 'text-green-400' : chapter.logicScore > 60 ? 'text-yellow-400' : 'text-red-400') : 'opacity-70'}`} />
-                      )}
-                      <span className="truncate">{chapter.title}</span>
-                      {chapter.logicScore !== undefined && (
-                        <span className={`ml-1 text-[10px] px-1 rounded ${chapter.logicScore > 80 ? 'bg-green-900/30 text-green-500' : chapter.logicScore > 60 ? 'bg-yellow-900/30 text-yellow-500' : 'bg-red-900/30 text-red-500'}`}>
-                          {chapter.logicScore}
-                        </span>
-                      )}
-                    </button>
-                    
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                       <button 
-                          onClick={(e) => { e.stopPropagation(); handleMoveChapter(chapter.id); }}
-                          className="bg-transparent p-1 hover:bg-white/20 rounded"
-                          title="移动到..."
-                       >
-                         <FolderInput className="w-3 h-3" />
-                       </button>
-                               <button 
-                                  onClick={(e) => { e.stopPropagation(); handleRenameChapter(chapter.id); }}
-                                  className="bg-transparent p-1 hover:bg-white/20 rounded"
-                                  title="重命名"
-                               >
-                                 <Edit3 className="w-3 h-3" />
-                               </button>
-                               <button 
-                                  onClick={(e) => { e.stopPropagation(); handleExportChapter(chapter.id); }}
-                                  className="bg-transparent p-1 hover:bg-white/20 rounded"
-                                  title="导出本章"
-                               >
-                                 <Download className="w-3 h-3" />
-                               </button>
-                               <button 
-                                  onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chapter.id); }}
-                                  className="bg-transparent p-1 hover:bg-red-500/80 rounded hover:text-white"
-                                  title="删除"
-                               >
-                                 <Trash2 className="w-3 h-3" />
-                               </button>
                     </div>
+                  ))}
+
+                  {/* Uncategorized Chapters */}
+                  <div className="mt-2">
+                    {volumes.length > 0 && <div className="px-2 py-1 text-xs text-gray-500 font-semibold">未分卷章节</div>}
+                    {(chaptersByVolume['uncategorized'] || []).map(chapter => (
+                      <div
+                        key={chapter.id}
+                        className={`group flex items-center w-full rounded transition-colors pr-2 ${
+                          activeChapterId === chapter.id
+                            ? 'bg-[var(--theme-color)] text-white'
+                            : 'text-gray-300 hover:bg-gray-700'
+                        }`}
+                      >
+                        <button
+                          onClick={() => {
+                            setActiveChapterId(chapter.id);
+                            setShowOutline(false);
+                            // 自动切换到该章节的最新版本
+                            if (chapter.versions && chapter.versions.length > 0) {
+                              const latestVersion = chapter.versions[chapter.versions.length - 1];
+                              setChapters(prev => prev.map(c => c.id === chapter.id ? { ...c, activeVersionId: latestVersion.id, content: latestVersion.content } : c));
+                            }
+                          }}
+                          className={`bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate ${chapter.subtype === 'small_summary' || chapter.subtype === 'big_summary' ? 'italic text-[var(--theme-color-light)]' : ''}`}
+                        >
+                          {chapter.subtype === 'small_summary' ? (
+                            <LayoutList className="w-4 h-4 shrink-0 text-blue-400" />
+                          ) : chapter.subtype === 'big_summary' ? (
+                            <BookOpen className="w-4 h-4 shrink-0 text-amber-400" />
+                          ) : (
+                            <FileText className={`w-4 h-4 shrink-0 ${chapter.logicScore !== undefined ? (chapter.logicScore > 80 ? 'text-green-400' : chapter.logicScore > 60 ? 'text-yellow-400' : 'text-red-400') : 'opacity-70'}`} />
+                          )}
+                          <span className="truncate">{chapter.title}</span>
+                          {chapter.logicScore !== undefined && (
+                            <span className={`ml-1 text-[10px] px-1 rounded ${chapter.logicScore > 80 ? 'bg-green-900/30 text-green-500' : chapter.logicScore > 60 ? 'bg-yellow-900/30 text-yellow-500' : 'bg-red-900/30 text-red-500'}`}>
+                              {chapter.logicScore}
+                            </span>
+                          )}
+                        </button>
+                        
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                              onClick={(e) => { e.stopPropagation(); handleMoveChapter(chapter.id); }}
+                              className="bg-transparent p-1 hover:bg-white/20 rounded"
+                              title="移动到..."
+                          >
+                            <FolderInput className="w-3 h-3" />
+                          </button>
+                          <button
+                              onClick={(e) => { e.stopPropagation(); handleRenameChapter(chapter.id); }}
+                              className="bg-transparent p-1 hover:bg-white/20 rounded"
+                              title="重命名"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </button>
+                          <button
+                              onClick={(e) => { e.stopPropagation(); handleExportChapter(chapter.id); }}
+                              className="bg-transparent p-1 hover:bg-white/20 rounded"
+                              title="导出本章"
+                          >
+                            <Download className="w-3 h-3" />
+                          </button>
+                          <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chapter.id); }}
+                              className="bg-transparent p-1 hover:bg-red-500/80 rounded hover:text-white"
+                              title="删除"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-               ))}
-            </div>
+                </>
           </div>
         </div>
 
@@ -9471,22 +9499,8 @@ ${taskDescription}`
                 }
               }
 
-              const finalChapters: Chapter[] = [];
-              const processedIds = new Set<number>();
-
-              for (const originalChapter of localNovel.chapters) {
-                  const updatedChapter = allLocalChaptersMap.get(originalChapter.id);
-                  if (updatedChapter) {
-                      finalChapters.push(updatedChapter);
-                      processedIds.add(updatedChapter.id);
-                  }
-              }
-
-              for (const remoteChapter of updatedNovel.chapters) {
-                  if (!processedIds.has(remoteChapter.id)) {
-                      finalChapters.push(allLocalChaptersMap.get(remoteChapter.id)!);
-                  }
-              }
+              // 使用 Map 收集后的所有章节进行稳定排序
+              const mergedChapters = sortChapters(Array.from(allLocalChaptersMap.values()));
               
               // 关键修复：合并时显式保留 volumes 的折叠状态
               const mergedVolumes = (updatedNovel.volumes || localNovel.volumes || []).map(v => {
@@ -9497,7 +9511,7 @@ ${taskDescription}`
               localNovelsCopy[localNovelIndex] = {
                 ...localNovel,
                 ...updatedNovel,
-                chapters: finalChapters,
+                chapters: mergedChapters,
                 volumes: mergedVolumes,
               };
               
@@ -9614,27 +9628,13 @@ ${taskDescription}`
               }
             }
 
-            const finalChapters: Chapter[] = [];
-            const processedIds = new Set<number>();
-
-            for (const originalChapter of localNovel.chapters) {
-                const updatedChapter = allLocalChaptersMap.get(originalChapter.id);
-                if (updatedChapter) {
-                    finalChapters.push(updatedChapter);
-                    processedIds.add(updatedChapter.id);
-                }
-            }
-
-            for (const remoteChapter of updatedNovel.chapters) {
-                if (!processedIds.has(remoteChapter.id)) {
-                    finalChapters.push(allLocalChaptersMap.get(remoteChapter.id)!);
-                }
-            }
+            // 使用 Map 收集后的所有章节进行稳定排序
+            const mergedChapters = sortChapters(Array.from(allLocalChaptersMap.values()));
             
             localNovelsCopy[localNovelIndex] = {
               ...localNovel,
               ...updatedNovel, // 优先保留传入的所有更新
-              chapters: finalChapters,
+              chapters: mergedChapters,
               volumes: updatedNovel.volumes || localNovel.volumes,
             };
             

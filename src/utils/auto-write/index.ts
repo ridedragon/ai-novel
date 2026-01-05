@@ -157,7 +157,7 @@ export class AutoWriteEngine {
           });
 
           const scripts = getActiveScripts();
-          const processedContext = processTextWithRegex(rawContext, scripts, 'input');
+          const processedContext = await processTextWithRegex(rawContext, scripts, 'input');
           const contextMsg = processedContext ? `【前文剧情回顾】：\n${processedContext}\n\n` : '';
 
           const fullOutlineContext = includeFullOutline
@@ -213,10 +213,16 @@ export class AutoWriteEngine {
           let fullGeneratedContent = '';
 
           if (this.config.stream) {
+            let lastUpdateTime = 0;
             for await (const chunk of response) {
               if (!this.isRunning || this.abortController?.signal.aborted) throw new Error('Aborted');
               const content = chunk.choices[0]?.delta?.content || '';
               fullGeneratedContent += content;
+
+              const now = Date.now();
+              // 节流处理：每 200ms 更新一次 UI，防止高频重绘导致的闪烁和性能下降
+              if (now - lastUpdateTime < 200) continue;
+              lastUpdateTime = now;
 
               // 支持流式分章节更新
               const liveContents =
@@ -317,7 +323,11 @@ export class AutoWriteEngine {
             finalContents.push(`(生成错误：未能解析到此章节内容)`);
           }
 
-          finalContents = finalContents.map(c => processTextWithRegex(c, scripts, 'output'));
+          const processedContents: string[] = [];
+          for (const content of finalContents) {
+            processedContents.push(await processTextWithRegex(content, scripts, 'output'));
+          }
+          finalContents = processedContents;
 
           // 【BUG 风险点 - 原文丢失】：批量生成后的版本强行覆盖
           // 谨慎修改：在全自动创作完成时，此处会为章节强行初始化 versions。
@@ -563,7 +573,7 @@ export class AutoWriteEngine {
       terminal.log(`[Optimization Result] chapter ${chapterId} length: ${optimizedContent.length}`);
       if (optimizedContent) {
         // 核心修复：对优化后的正文也要应用正则脚本
-        optimizedContent = processTextWithRegex(optimizedContent, scripts, 'output');
+        optimizedContent = await processTextWithRegex(optimizedContent, scripts, 'output');
 
         const optVersion: ChapterVersion = {
           id: `v_${baseTime}_opt_${chapterId}`,

@@ -585,7 +585,16 @@ const NodePropertiesModal = ({
                 <button
                   onClick={() => {
                     const newVal = !node.data.overrideAiConfig;
-                    updateNodeData(node.id, { overrideAiConfig: newVal });
+                    const updates: any = { overrideAiConfig: newVal };
+                    // 开启自定义时，如果提示词列表为空，自动初始化包含上下文占位符的默认模版
+                    // 这样可以确保“全局输入”和“参考资料”能直接传递给 AI
+                    if (newVal && (!node.data.promptItems || (node.data.promptItems as any[]).length === 0)) {
+                      updates.promptItems = [
+                        { id: 'sys-1', role: 'system', content: '你是一个专业的创作助手。', enabled: true },
+                        { id: 'user-1', role: 'user', content: '{{context}}\n\n要求：{{input}}', enabled: true }
+                      ];
+                    }
+                    updateNodeData(node.id, updates);
                     if (newVal) setShowAdvancedAI(true);
                   }}
                   className={`text-[10px] px-2 py-1 rounded transition-all font-bold uppercase tracking-wider ${node.data.overrideAiConfig ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-gray-700 text-gray-400 hover:text-gray-200'}`}
@@ -1298,7 +1307,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         
         return updatedWorkflows;
       });
-    }, 1000); // 1秒防抖，避免高频写入
+    }, 5000); // 5秒防抖，减轻大规模数据序列化压力
 
     return () => {
       if (saveTimeoutRef.current) {
@@ -1640,21 +1649,21 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     stopRequestedRef.current = false;
     abortControllerRef.current = new AbortController();
 
-    // 开启保活，防止移动端切后台导致执行中断
-    try {
-      await keepAliveManager.enable();
-    } catch (e) {
+    // 开启保活，防止移动端切后台导致执行中断 (不阻塞主流程)
+    keepAliveManager.enable().catch(e => {
       console.warn('[Workflow] KeepAlive failed to enable:', e);
-    }
+    });
     
     try {
-      if (!activeNovel) return;
+      if (!activeNovel) {
+        setIsRunning(false);
+        return;
+      }
 
       // 使用 localNovel 跟踪执行过程中的最新状态，避免闭包捕获 stale props
       let localNovel = { ...activeNovel };
       const updateLocalAndGlobal = async (newNovel: Novel) => {
         // 核心修复：合并状态时保留 UI 特有的折叠状态
-        // 使用 activeNovelRef 获取最新的全局状态，避免闭包过时
         const currentActiveNovel = activeNovelRef.current;
         const mergedNovel: Novel = {
           ...newNovel,
@@ -1664,13 +1673,22 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           })
         };
         localNovel = mergedNovel;
-        // 强制触发持久化，确保在异步执行过程中数据不丢失
+        
+        // 性能优化：在大型对象更新前 yield 一次，确保浏览器有时间处理用户输入
+        await new Promise(resolve => setTimeout(resolve, 0));
+        
         if (onUpdateNovel) {
           onUpdateNovel(mergedNovel);
         }
       };
 
       let sortedNodes = getOrderedNodes();
+
+      if (sortedNodes.length === 0) {
+        setError('工作流中没有任何节点可执行');
+        setIsRunning(false);
+        return;
+      }
       
       // 重置后续节点的执行状态
       if (startIndex === 0) {
@@ -2172,20 +2190,35 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           const nodePromptItems = (node.data.promptItems as GeneratorPrompt[]) || [];
           if (nodePromptItems.length > 0) {
             // 如果使用了多条目系统，则替换整个 messages 列表
+            let hasContextPlaceholder = false;
             messages = nodePromptItems
               .filter(p => p.enabled !== false)
-              .map(p => ({
-                role: p.role,
-                content: p.content
-                  .replace('{{context}}', finalContext)
-                  .replace('{{input}}', node.data.instruction)
-              }));
+              .map(p => {
+                if (p.content.includes('{{context}}')) hasContextPlaceholder = true;
+                return {
+                  role: p.role,
+                  content: p.content
+                    .replace('{{context}}', finalContext)
+                    .replace('{{input}}', node.data.instruction)
+                };
+              });
+            
+            // 如果用户自定义的提示词中完全没有包含 {{context}}，则为了满足用户“直接给”的需求，
+            // 强制将 finalContext 作为一个单独的 User 消息插入到最前面，确保 AI 能接收到全局输入
+            if (!hasContextPlaceholder && finalContext.trim()) {
+              messages.unshift({ role: 'user', content: `【参考背景与全局输入】：\n${finalContext}` });
+            }
           } else if (node.data.systemPrompt) {
             // 兼容旧的单一 systemPrompt
             if (messages.length > 0 && messages[0].role === 'system') {
               messages[0] = { ...messages[0], content: node.data.systemPrompt as string };
             } else {
               messages.unshift({ role: 'system', content: node.data.systemPrompt as string });
+            }
+            
+            // 同样，在这种模式下如果消息中没包含 context，也补充进去
+            if (finalContext.trim() && !messages.some(m => m.content.includes(finalContext.substring(0, 20)))) {
+               messages.push({ role: 'user', content: `上下文信息：\n${finalContext}` });
             }
           }
         }
@@ -2239,10 +2272,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           // 6. 结构化解析 AI 输出并更新节点产物
           try {
             // 极致鲁棒的 JSON 提取与清理逻辑 (同步 MobileWorkflowEditor 逻辑)
-            const cleanAndParseJSON = (text: string) => {
+            const cleanAndParseJSON = async (text: string) => {
               let processed = text.trim();
               
-              // 移除 Markdown 标记
+              // 1. 异步化的正则清理 (Yield thread)
+              await new Promise(resolve => setTimeout(resolve, 0));
               processed = processed.replace(/```json\s*([\s\S]*?)```/gi, '$1')
                                    .replace(/```\s*([\s\S]*?)```/gi, '$1')
                                    .replace(/\[\/?JSON\]/gi, '');
@@ -2287,31 +2321,43 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               }
             };
 
-            const parsed = cleanAndParseJSON(result);
+            const parsed = await cleanAndParseJSON(result);
             
-            const extractEntries = (data: any): {title: string, content: string}[] => {
+            const extractEntries = async (data: any): Promise<{title: string, content: string}[]> => {
               if (!data) return [];
               
               // 递归处理嵌套对象（如 { "outline": [...] }）
               if (typeof data === 'object' && !Array.isArray(data)) {
                 const arrayKey = Object.keys(data).find(k => Array.isArray(data[k]));
-                if (arrayKey) return extractEntries(data[arrayKey]);
+                if (arrayKey) return await extractEntries(data[arrayKey]);
               }
 
               const items = Array.isArray(data) ? data : [data];
-              return items.map((item, idx) => {
-                if (typeof item === 'string') return { title: `条目 ${idx + 1}`, content: item };
-                if (typeof item !== 'object' || item === null) return { title: '未命名', content: String(item) };
+              const resultItems: {title: string, content: string}[] = [];
+              
+              for (let idx = 0; idx < items.length; idx++) {
+                // 每处理 50 个条目 yield 一次
+                if (idx > 0 && idx % 50 === 0) await new Promise(resolve => setTimeout(resolve, 0));
                 
-                // 拓宽键名匹配范围，增加鲁棒性
+                const item = items[idx];
+                if (typeof item === 'string') {
+                  resultItems.push({ title: `条目 ${idx + 1}`, content: item });
+                  continue;
+                }
+                if (typeof item !== 'object' || item === null) {
+                  resultItems.push({ title: '未命名', content: String(item) });
+                  continue;
+                }
+                
                 const title = String(item.title || item.chapter || item.name || item.item || item.label || item.header || Object.values(item)[0] || '未命名');
                 const content = String(item.summary || item.content || item.description || item.plot || item.setting || item.bio || item.value || Object.values(item)[1] || '');
                 
-                return { title, content };
-              });
+                resultItems.push({ title, content });
+              }
+              return resultItems;
             };
 
-            entriesToStore = extractEntries(parsed);
+            entriesToStore = await extractEntries(parsed);
             isSuccess = true; // 解析成功
           } catch (e) {
             // 解析失败，说明不是结构化 JSON
@@ -2531,6 +2577,38 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     }
   };
 
+  const resetWorkflowStatus = () => {
+    if (confirm('确定要重置当前工作流的所有节点执行进度吗？已生成的产出条目将被清理。')) {
+      const updatedNodes = nodes.map(n => ({
+        ...n,
+        data: {
+          ...n.data,
+          status: 'pending' as const,
+          outputEntries: []
+        }
+      }));
+      setNodes(updatedNodes);
+      setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+      setCurrentNodeIndex(-1);
+      setIsPaused(false);
+      
+      // 同步更新持久化状态
+      const updatedWorkflows = workflows.map(w => {
+        if (w.id === activeWorkflowId) {
+          return {
+            ...w,
+            nodes: updatedNodes,
+            currentNodeIndex: -1,
+            lastModified: Date.now()
+          };
+        }
+        return w;
+      });
+      setWorkflows(updatedWorkflows);
+      localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -2541,7 +2619,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[130] bg-indigo-600/90 border border-indigo-400 px-4 py-2 rounded-full flex items-center gap-3 shadow-2xl animate-in zoom-in-95 duration-300 backdrop-blur-md">
             <span className="w-2 h-2 rounded-full bg-white animate-ping" />
             <span className="text-xs font-bold text-white tracking-wide">
-              正在执行: {getOrderedNodes()[currentNodeIndex]?.data.typeLabel}
+              正在执行: {currentNodeIndex === -1 ? '准备中...' : (getOrderedNodes()[currentNodeIndex]?.data.typeLabel || '...')}
             </span>
           </div>
         )}
@@ -2728,10 +2806,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                   ))}
                 </select>
                 <button
-                  onClick={() => runWorkflow(0)}
+                  onClick={resetWorkflowStatus}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-sm font-medium transition-all"
                 >
-                  重新开始
+                  重置状态
                 </button>
               </div>
             ) : (

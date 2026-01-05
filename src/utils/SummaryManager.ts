@@ -1,6 +1,71 @@
 import OpenAI from 'openai';
 import { Chapter, Novel } from '../types';
 
+/**
+ * 核心章节排序函数：确保“章节-总结”关系的稳定性
+ * 规则：
+ * 1. 普通章节按数组原始顺序排列
+ * 2. 总结章节紧跟在其 summaryRange 涵盖范围的最后一章之后
+ * 3. 同一位置小总结在前，大总结在后
+ */
+export const sortChapters = (chapters: Chapter[]): Chapter[] => {
+  // 1. 分离非总结章节（保持原始顺序）和总结章节
+  const storyChapters = chapters.filter(c => c.subtype !== 'small_summary' && c.subtype !== 'big_summary');
+  const summaries = chapters.filter(c => c.subtype === 'small_summary' || c.subtype === 'big_summary');
+
+  const finalChapters: Chapter[] = [];
+
+  // 按总结的范围结束点进行分组
+  const summariesByEndIndex = new Map<number, Chapter[]>();
+  summaries.forEach(s => {
+    const range = s.summaryRange?.split('-').map(Number);
+    if (range && range.length === 2) {
+      const end = range[1];
+      if (!summariesByEndIndex.has(end)) summariesByEndIndex.set(end, []);
+      summariesByEndIndex.get(end)?.push(s);
+    }
+  });
+
+  // 对每一组内的总结进行排序：规定同一结束点，小总结在前，大总结在后。
+  // 若类型相同，起始章节靠后（即总结范围更小、更具体的）排在前面。
+  summariesByEndIndex.forEach(group => {
+    group.sort((a, b) => {
+      // 1. 优先级最高：子类型 (small_summary < big_summary)
+      if (a.subtype !== b.subtype) {
+        return a.subtype === 'small_summary' ? -1 : 1;
+      }
+
+      // 2. 类型相同时：起始章节降序 (例如 4-6 排在 1-6 之前)
+      const startA = parseInt(a.summaryRange?.split('-')[0] || '0');
+      const startB = parseInt(b.summaryRange?.split('-')[0] || '0');
+      if (startA !== startB) return startB - startA;
+
+      // 3. 兜底：ID 稳定排序，防止视觉闪烁
+      return (a.id || 0) - (b.id || 0);
+    });
+  });
+
+  // 构建最终列表
+  storyChapters.forEach((chapter, index) => {
+    finalChapters.push(chapter);
+    const storyOrder = index + 1;
+    const matchedSummaries = summariesByEndIndex.get(storyOrder);
+    if (matchedSummaries) {
+      finalChapters.push(...matchedSummaries);
+    }
+  });
+
+  // 补漏：处理那些无法通过范围匹配到的孤立总结（按 ID 兜底）
+  const processedIds = new Set(finalChapters.map(c => c.id));
+  summaries.forEach(s => {
+    if (!processedIds.has(s.id)) {
+      finalChapters.push(s);
+    }
+  });
+
+  return finalChapters;
+};
+
 export interface SummaryConfig {
   apiKey: string;
   baseUrl: string;
@@ -274,35 +339,8 @@ export const checkAndGenerateSummary = async (
               return { ...n, chapters: updatedChapters };
             }
 
-            // 3. 将新总结插入到正确位置
-            const mergedChapters = [...n.chapters];
-            newSummaries.forEach(summary => {
-              // 寻找插入点：在 summaryRange 结束章节之后
-              const rangeEnd = parseInt(summary.summaryRange?.split('-')[1] || '0');
-              const storyChapters = mergedChapters.filter(c => !c.subtype || c.subtype === 'story');
-              const lastChapterInRange = storyChapters[rangeEnd - 1];
-
-              if (lastChapterInRange) {
-                const insertIdx = mergedChapters.findIndex(c => c.id === lastChapterInRange.id);
-                if (insertIdx !== -1) {
-                  // 往后找，跳过已有的总结
-                  let insertAt = insertIdx + 1;
-                  while (
-                    insertAt < mergedChapters.length &&
-                    (mergedChapters[insertAt].subtype === 'small_summary' ||
-                      mergedChapters[insertAt].subtype === 'big_summary')
-                  ) {
-                    insertAt++;
-                  }
-                  mergedChapters.splice(insertAt, 0, summary);
-                } else {
-                  mergedChapters.push(summary);
-                }
-              } else {
-                mergedChapters.push(summary);
-              }
-            });
-
+            // 3. 将新总结合并并进行全局稳定排序
+            const mergedChapters = sortChapters([...n.chapters, ...newSummaries]);
             return { ...n, chapters: mergedChapters };
           }),
         );

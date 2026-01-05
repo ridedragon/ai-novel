@@ -393,7 +393,19 @@ const ConfigPanel = React.memo(({
                 <Wand2 className="w-3.5 h-3.5 text-amber-400" /> 强制自定义 (覆盖所有)
               </label>
               <button
-                onClick={() => onUpdateNodeData(editingNode.id, { overrideAiConfig: !editingNode.data.overrideAiConfig })}
+                onClick={() => {
+                  const newVal = !editingNode.data.overrideAiConfig;
+                  const updates: any = { overrideAiConfig: newVal };
+                  // 开启自定义时，如果提示词列表为空，自动初始化包含上下文占位符的默认模版
+                  // 这样可以确保“全局输入”和“参考资料”能直接传递给 AI
+                  if (newVal && (!editingNode.data.promptItems || (editingNode.data.promptItems as any[]).length === 0)) {
+                    updates.promptItems = [
+                      { id: 'sys-1', role: 'system', content: '你是一个专业的创作助手。', enabled: true },
+                      { id: 'user-1', role: 'user', content: '{{context}}\n\n要求：{{input}}', enabled: true }
+                    ];
+                  }
+                  onUpdateNodeData(editingNode.id, updates);
+                }}
                 className={`text-[10px] px-3 py-1.5 rounded-full transition-all font-bold ${editingNode.data.overrideAiConfig ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-gray-700 text-gray-400'}`}
               >
                 {editingNode.data.overrideAiConfig ? '已开启重写' : '开启自定义'}
@@ -1719,20 +1731,33 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           const nodePromptItems = (node.data.promptItems as any[]) || [];
           if (nodePromptItems.length > 0) {
             // 如果使用了多条目系统，则替换整个 messages 列表
+            let hasContextPlaceholder = false;
             messages = nodePromptItems
               .filter(p => p.enabled !== false)
-              .map(p => ({
-                role: p.role,
-                content: p.content
-                  .replace('{{context}}', finalContext)
-                  .replace('{{input}}', node.data.instruction)
-              }));
+              .map(p => {
+                if (p.content.includes('{{context}}')) hasContextPlaceholder = true;
+                return {
+                  role: p.role,
+                  content: p.content
+                    .replace('{{context}}', finalContext)
+                    .replace('{{input}}', node.data.instruction)
+                };
+              });
+            
+            // 满足用户“直接给”的需求：如果提示词中没有占位符，强制注入上下文
+            if (!hasContextPlaceholder && finalContext.trim()) {
+              messages.unshift({ role: 'user', content: `【参考背景与全局输入】：\n${finalContext}` });
+            }
           } else if (node.data.systemPrompt) {
             // 兼容旧的单一 systemPrompt
             if (messages.length > 0 && messages[0].role === 'system') {
               messages[0] = { ...messages[0], content: node.data.systemPrompt as string };
             } else {
               messages.unshift({ role: 'system', content: node.data.systemPrompt as string });
+            }
+            
+            if (finalContext.trim() && !messages.some(m => m.content.includes(finalContext.substring(0, 20)))) {
+               messages.push({ role: 'user', content: `上下文信息：\n${finalContext}` });
             }
           }
         }

@@ -166,9 +166,16 @@ export const getChapterContext = (
   return contextContent;
 };
 
-export const applyRegexToText = (text: string, scripts: RegexScript[]) => {
+export const applyRegexToText = async (text: string, scripts: RegexScript[]) => {
   let processed = text;
+  const startTime = Date.now();
+
   for (const script of scripts) {
+    // 每一秒或每个脚本处理前 yield 一次主线程，防止长文本+多脚本导致页面完全无响应
+    if (Date.now() - startTime > 50) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
     try {
       if (script.trimStrings && script.trimStrings.length > 0) {
         for (const trimStr of script.trimStrings) {
@@ -180,6 +187,8 @@ export const applyRegexToText = (text: string, scripts: RegexScript[]) => {
 
       const regexParts = script.findRegex.match(/^\/(.*?)\/([a-z]*)$/);
       const regex = regexParts ? new RegExp(regexParts[1], regexParts[2]) : new RegExp(script.findRegex, 'g');
+
+      // 这里的 replace 是同步的，如果是灾难性回溯仍可能卡顿，但至少脚本之间有了喘息机会
       processed = processed.replace(regex, script.replaceString);
     } catch (e) {
       console.error(`Regex error in ${script.scriptName}`, e);
@@ -188,8 +197,8 @@ export const applyRegexToText = (text: string, scripts: RegexScript[]) => {
   return processed;
 };
 
-export const processTextWithRegex = (text: string, scripts: RegexScript[], type: 'input' | 'output') => {
+export const processTextWithRegex = async (text: string, scripts: RegexScript[], type: 'input' | 'output') => {
   if (!text) return text;
   const relevantScripts = scripts.filter(s => !s.disabled && s.placement.includes(type === 'input' ? 1 : 2));
-  return applyRegexToText(text, relevantScripts);
+  return await applyRegexToText(text, relevantScripts);
 };
