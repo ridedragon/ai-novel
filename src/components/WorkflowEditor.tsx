@@ -2112,8 +2112,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               return [...baseScripts, ...presetScripts];
             },
             (status) => {
-              // 更新节点标签以显示进度，如果状态包含“完成”则直接显示，否则增加“创作中”前缀
-              const displayStatus = status.includes('完成') ? status : `创作中: ${status}`;
+              // 更新节点标签以显示进度，如果状态包含“完成”、“失败”、“跳过”等结束语，则直接显示
+              const isTerminal = status.includes('完成') || status.includes('失败') || status.includes('跳过') || status.includes('错误');
+              const displayStatus = isTerminal ? status : `创作中: ${status}`;
               updateNodeData(node.id, { label: displayStatus });
             },
             (updatedNovel) => {
@@ -2140,8 +2141,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             abortControllerRef.current?.signal
           );
 
-          updateNodeData(node.id, { label: NODE_CONFIGS.chapter.defaultLabel });
-          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          updateNodeData(node.id, {
+            label: NODE_CONFIGS.chapter.defaultLabel,
+            status: 'completed'
+          });
           // 停止入线动画
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;

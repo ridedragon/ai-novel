@@ -410,10 +410,8 @@ export class AutoWriteEngine {
     // 工作流的“正文生成”节点应该在所有正文生成完毕后立即标记为完成。
     // 后台的润色任务（如果存在）将继续在后台运行，不影响工作流跳转到下一个节点。
 
-    if (this.isRunning) {
-      onStatusUpdate('创作完成！');
-      this.isRunning = false;
-    }
+    onStatusUpdate('完成');
+    this.isRunning = false;
   }
 
   private async optimizeChapter(
