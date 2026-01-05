@@ -11,15 +11,29 @@ const lastSavedContentCache = new Map<number, string>();
 let lastSavedMetadataJson = '';
 
 export const storage = {
-  // 辅助函数：生成不含正文和版本的瘦身版数据，用于比对
+  // 辅助函数：生成极简版元数据，仅包含影响结构和列表显示的必要字段
   _getStrippedMetadata(novels: Novel[]): string {
     return JSON.stringify(
       novels.map(novel => ({
-        ...novel,
-        chapters: novel.chapters.map(chapter => {
-          const { versions, content, ...rest } = chapter;
-          return rest;
-        }),
+        id: novel.id,
+        title: novel.title,
+        createdAt: novel.createdAt,
+        systemPrompt: novel.systemPrompt,
+        volumes: novel.volumes,
+        // 只保留章节的核心元数据，剔除所有可能变动的正文、版本和临时状态
+        chapters: novel.chapters.map(chapter => ({
+          id: chapter.id,
+          title: chapter.title,
+          volumeId: chapter.volumeId,
+          activeVersionId: chapter.activeVersionId,
+          subtype: chapter.subtype,
+          logicScore: chapter.logicScore,
+          analysisResult: chapter.analysisResult?.substring(0, 10), // 仅比对摘要变化
+        })),
+        // 资料集仅比对核心结构
+        worldviewSets: novel.worldviewSets?.map(s => ({ id: s.id, name: s.name, count: s.entries?.length })),
+        characterSets: novel.characterSets?.map(s => ({ id: s.id, name: s.name, count: s.characters?.length })),
+        outlineSets: novel.outlineSets?.map(s => ({ id: s.id, name: s.name, count: s.items?.length })),
       })),
     );
   },
@@ -110,7 +124,7 @@ export const storage = {
       }));
 
       const serializeTime = Date.now();
-      const currentMetadataJson = JSON.stringify(strippedNovels);
+      const currentMetadataJson = this._getStrippedMetadata(novels);
       let indexWriteCount = 0;
       let indexWriteTime = 0;
 

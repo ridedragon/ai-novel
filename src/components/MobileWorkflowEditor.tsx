@@ -265,6 +265,17 @@ const ConfigPanel = React.memo(({
 }: ConfigPanelProps) => {
   const [isEditingPrompts, setIsEditingPrompts] = useState(false);
 
+  // 性能优化：缓存庞大的目录列表，避免每次渲染重新生成
+  const directoryOptions = React.useMemo(() => {
+    if (!activeNovel) return [];
+    return Array.from(new Set([
+      ...(activeNovel.volumes?.map(v => v.title) || []),
+      ...(activeNovel.worldviewSets?.map(s => s.name) || []),
+      ...(activeNovel.characterSets?.map(s => s.name) || []),
+      ...(activeNovel.outlineSets?.map(s => s.name) || [])
+    ])).filter(Boolean);
+  }, [activeNovel?.volumes, activeNovel?.worldviewSets, activeNovel?.characterSets, activeNovel?.outlineSets]);
+
   const handleUpdate = (updates: Partial<WorkflowNodeData>) => {
     onUpdateNodeData(editingNode.id, updates);
   };
@@ -338,12 +349,7 @@ const ConfigPanel = React.memo(({
                   value=""
                 >
                   <option value="" disabled>选择...</option>
-                  {Array.from(new Set([
-                    ...(activeNovel.volumes?.map(v => v.title) || []),
-                    ...(activeNovel.worldviewSets?.map(s => s.name) || []),
-                    ...(activeNovel.characterSets?.map(s => s.name) || []),
-                    ...(activeNovel.outlineSets?.map(s => s.name) || [])
-                  ])).filter(Boolean).map(name => (
+                  {directoryOptions.map(name => (
                     <option key={name as string} value={name as string}>{name as string}</option>
                   ))}
                 </select>
@@ -815,6 +821,17 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   const [error, setError] = useState<string | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OutputEntry | null>(null);
 
+  // 性能监控埋点
+  const renderStartTimeRef = useRef<number>(0);
+  renderStartTimeRef.current = performance.now();
+
+  useEffect(() => {
+    const renderDuration = performance.now() - renderStartTimeRef.current;
+    if (renderDuration > 16) { // 超过 1 帧 (16ms)
+      terminal.log(`[PERF] MobileWorkflowEditor 渲染耗时过长: ${renderDuration.toFixed(2)}ms (警告: 可能造成 UI 卡顿)`);
+    }
+  });
+
   const stopRequestedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isInitialLoadRef = useRef(true);
@@ -901,7 +918,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     setActiveWorkflowId(targetId);
     loadWorkflow(targetId, loadedWorkflows);
     isInitialLoadRef.current = false;
-  }, [isOpen, activeNovel]);
+  }, [isOpen]); // 核心修复：切断与 activeNovel 的同步，防止后台保存导致 UI 重置
 
   const loadWorkflow = (id: string, workflowList: WorkflowData[]) => {
     if (isRunning) return;
@@ -1208,8 +1225,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     e.target.value = '';
   };
 
-  // --- 拓扑排序 ---
-  const getOrderedNodes = useCallback(() => {
+  // --- 拓扑排序 (增加缓存优化) ---
+  const orderedNodes = React.useMemo(() => {
     const adjacencyList = new Map<string, string[]>();
     const inDegree = new Map<string, number>();
     nodes.forEach(node => { adjacencyList.set(node.id, []); inDegree.set(node.id, 0); });
@@ -1237,20 +1254,21 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       // 对邻居按坐标排序以保持执行稳定性
       const sortedNeighbors = neighbors
         .map(id => nodes.find(n => n.id === id)!)
-        .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+        .filter(Boolean)
+        .sort((a: any, b: any) => a.position.y - b.position.y || a.position.x - b.position.x);
 
-      sortedNeighbors.forEach(v => {
+      sortedNeighbors.forEach((v: any) => {
         const newDegree = (currentInDegree.get(v.id) || 0) - 1;
         currentInDegree.set(v.id, newDegree);
         if (newDegree === 0) queue.push(v.id);
       });
     }
     
-    const orderedNodes = result.map(id => nodes.find(n => n.id === id)!);
-    const remainingNodes = nodes.filter(n => !result.includes(n.id))
-                               .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+    const ordered = result.map(id => nodes.find(n => n.id === id)!).filter(Boolean);
+    const remaining = nodes.filter(n => !result.includes(n.id))
+                          .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
     
-    return [...orderedNodes, ...remainingNodes];
+    return [...ordered, ...remaining];
   }, [nodes, edges]);
 
   // --- 执行引擎 ---
@@ -1303,7 +1321,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         }
       };
 
-      let sortedNodes = getOrderedNodes();
+      let sortedNodes = orderedNodes;
       
       // 重置后续节点的执行状态
       if (startIndex === 0) {
@@ -2114,7 +2132,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                   }}
                 >
                   <option value="" disabled>选择节点...</option>
-                  {getOrderedNodes().map((n, idx) => (
+                  {orderedNodes.map((n, idx) => (
                     <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
                   ))}
                 </select>
@@ -2164,7 +2182,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                   }}
                 >
                   <option value="" disabled>从头开始</option>
-                  {getOrderedNodes().map((n, idx) => (
+                  {orderedNodes.map((n, idx) => (
                     <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
                   ))}
                 </select>
