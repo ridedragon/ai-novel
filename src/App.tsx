@@ -7172,6 +7172,7 @@ ${taskDescription}`
                              </div>
                           }
                        />
+                       </Suspense>
                     </div>
                  )}
 
@@ -7395,6 +7396,7 @@ ${taskDescription}`
                              </div>
                           }
                        />
+                       </Suspense>
                     </div>
                  )}
 
@@ -7511,6 +7513,7 @@ ${taskDescription}`
                              </div>
                           }
                        />
+                       </Suspense>
                     </div>
                  )}
 
