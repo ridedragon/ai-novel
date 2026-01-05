@@ -2312,10 +2312,13 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 try {
                   return JSON.parse(fixed);
                 } catch (e2: any) {
-                  // 打印详细错误上下文
-                  const errorPos = parseInt(e2.message.match(/at position (\d+)/)?.[1] || "0", 10);
-                  const context = fixed.substring(Math.max(0, errorPos - 50), Math.min(fixed.length, errorPos + 50));
-                  terminal.log(`[JSON Parse Error] ${e2.message}\nContext near error:\n...${context}...`);
+                  // 如果不是强行 JSON 的节点，静默报错，平滑回退到纯文本处理
+                  const jsonRequiredNodes = ['outline', 'plotOutline', 'characters', 'worldview'];
+                  if (jsonRequiredNodes.includes(node.data.typeKey as string)) {
+                    const errorPos = parseInt(e2.message.match(/at position (\d+)/)?.[1] || "0", 10);
+                    const context = fixed.substring(Math.max(0, errorPos - 50), Math.min(fixed.length, errorPos + 50));
+                    terminal.log(`[JSON Parse Error] ${e2.message}\nContext near error:\n...${context}...`);
+                  }
                   throw e2;
                 }
               }

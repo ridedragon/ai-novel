@@ -5,13 +5,29 @@ import { ChapterVersion, Novel } from '../types';
 const NOVELS_KEY = 'novels';
 const VERSIONS_PREFIX = 'versions_';
 
+// 用于在内存中缓存章节内容的哈希或副本，实现脏检查，避免重复写入
+const lastSavedContentCache = new Map<number, string>();
+
 export const storage = {
   async getNovels(): Promise<Novel[]> {
     try {
-      // First, try to get from IndexedDB
+      // 1. 先获取主索引数据
       const novels = await get<Novel[]>(NOVELS_KEY);
 
       if (novels) {
+        // 2. 并行加载所有章节的正文内容 (优化 985 个章节的加载速度)
+        for (const novel of novels) {
+          // 使用 Promise.all 批量获取当前小说的所有章节内容
+          const contentPromises = novel.chapters.map(async chapter => {
+            const content = await get<string>(`chapter_content_${chapter.id}`);
+            if (content !== undefined) {
+              chapter.content = content;
+              // 同步到脏检查缓存
+              lastSavedContentCache.set(chapter.id, content);
+            }
+          });
+          await Promise.all(contentPromises);
+        }
         return novels;
       }
 
@@ -43,19 +59,35 @@ export const storage = {
 
   async saveNovels(novels: Novel[]): Promise<void> {
     const startTime = Date.now();
+    let contentWriteCount = 0;
     try {
-      // --- 性能调查：监控主数据保存流程 ---
-      // 冷热分离：保存主数据时剥离 versions
+      // 1. 章节内容增量存储
+      for (const novel of novels) {
+        for (const chapter of novel.chapters) {
+          // 异步保存版本数据 (非常驻内存，无需等待)
+          if (chapter.versions && chapter.versions.length > 0) {
+            this.saveChapterVersions(chapter.id, chapter.versions);
+          }
+
+          // 核心优化：脏检查。只有当内容真正改变时，才写入独立的章节 Key
+          const currentContent = chapter.content || '';
+          if (currentContent !== lastSavedContentCache.get(chapter.id)) {
+            await set(`chapter_content_${chapter.id}`, currentContent);
+            lastSavedContentCache.set(chapter.id, currentContent);
+            contentWriteCount++;
+          }
+        }
+      }
+
+      const contentEndTime = Date.now();
+
+      // 2. 剥离正文后的主索引瘦身保存
       const strippedNovels = novels.map(novel => ({
         ...novel,
         chapters: novel.chapters.map(chapter => {
-          if (chapter.versions && chapter.versions.length > 0) {
-            // 异步保存版本数据，不阻塞主数据保存
-            this.saveChapterVersions(chapter.id, chapter.versions);
-          }
-          // 返回不包含 versions 的章节对象
-          const { versions, ...rest } = chapter;
-          return rest;
+          // 从主 JSON 中剥离 content 和 versions
+          const { versions, content, ...rest } = chapter;
+          return rest; // rest 只包含标题、ID、状态等元数据
         }),
       }));
 
@@ -63,12 +95,12 @@ export const storage = {
       await set(NOVELS_KEY, strippedNovels);
       const endTime = Date.now();
 
-      // 在 PowerShell 终端打印耗时
+      // 在 PowerShell 终端打印详细性能数据
       terminal.log(`
-[PERF] storage.saveNovels:
-- 处理数据耗时: ${serializeTime - startTime}ms
-- IndexedDB 写入耗时: ${endTime - serializeTime}ms
-- 总计: ${endTime - startTime}ms
+[PERF] storage.saveNovels (增量模式):
+- 章节增量保存耗时: ${contentEndTime - startTime}ms (更新章节数: ${contentWriteCount})
+- 主表瘦身保存耗时: ${endTime - serializeTime}ms
+- 总计总计: ${endTime - startTime}ms
 - 章节总数: ${novels.reduce((acc, n) => acc + n.chapters.length, 0)}
       `);
     } catch (e) {
