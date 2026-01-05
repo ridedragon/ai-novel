@@ -1026,7 +1026,21 @@ function App() {
 
   const [activeNovelId, setActiveNovelId] = useState<string | null>(null)
   const activeNovelIdRef = useRef(activeNovelId)
-  useEffect(() => { activeNovelIdRef.current = activeNovelId }, [activeNovelId])
+  
+  // 核心逻辑：书籍切换与内容加载同步
+  useEffect(() => {
+    activeNovelIdRef.current = activeNovelId
+    
+    if (activeNovelId) {
+      const novel = novelsRef.current.find(n => n.id === activeNovelId)
+      if (novel) {
+        // 当切换小说时，触发按需加载
+        storage.loadNovelContent(novel).then(loadedNovel => {
+          setNovels(prev => prev.map(n => n.id === loadedNovel.id ? loadedNovel : n))
+        })
+      }
+    }
+  }, [activeNovelId])
 
   const creationModuleRef = useRef<'menu' | 'outline' | 'plotOutline' | 'characters' | 'worldview' | 'inspiration' | 'reference'>('menu')
 

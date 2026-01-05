@@ -47,19 +47,9 @@ export const storage = {
         // 初始化主索引缓存：必须使用与保存时相同的瘦身逻辑，否则首次比对必不相等
         lastSavedMetadataJson = this._getStrippedMetadata(novels);
 
-        // 2. 并行加载所有章节的正文内容 (优化 985 个章节的加载速度)
-        for (const novel of novels) {
-          // 使用 Promise.all 批量获取当前小说的所有章节内容
-          const contentPromises = novel.chapters.map(async chapter => {
-            const content = await get<string>(`chapter_content_${chapter.id}`);
-            if (content !== undefined) {
-              chapter.content = content;
-              // 同步到脏检查缓存
-              lastSavedContentCache.set(chapter.id, content);
-            }
-          });
-          await Promise.all(contentPromises);
-        }
+        // --- 性能飞跃优化 ---
+        // 核心改动：启动时只加载“书籍框架”，不再加载任何章节正文。
+        // 正文加载将由 App.tsx 根据当前选中的书籍按需调用 loadNovelContent 进行。
         return novels;
       }
 
@@ -89,6 +79,28 @@ export const storage = {
     }
   },
 
+  // 新增：按需加载特定小说的正文内容
+  async loadNovelContent(novel: Novel): Promise<Novel> {
+    const startTime = Date.now();
+    terminal.log(`[STORAGE] 正在按需加载《${novel.title}》的正文内容 (${novel.chapters.length} 章节)...`);
+
+    const contentPromises = novel.chapters.map(async chapter => {
+      // 如果内存中已经有了，跳过读取
+      if (chapter.content && lastSavedContentCache.has(chapter.id)) return;
+
+      const content = await get<string>(`chapter_content_${chapter.id}`);
+      if (content !== undefined) {
+        chapter.content = content;
+        // 同步到脏检查缓存
+        lastSavedContentCache.set(chapter.id, content);
+      }
+    });
+
+    await Promise.all(contentPromises);
+    terminal.log(`[STORAGE] 《${novel.title}》正文加载完成，耗时: ${Date.now() - startTime}ms`);
+    return novel;
+  },
+
   async saveNovels(novels: Novel[]): Promise<void> {
     const startTime = Date.now();
     let contentWriteCount = 0;
@@ -101,12 +113,16 @@ export const storage = {
             this.saveChapterVersions(chapter.id, chapter.versions);
           }
 
-          // 核心优化：脏检查。只有当内容真正改变时，才写入独立的章节 Key
-          const currentContent = chapter.content || '';
-          if (currentContent !== lastSavedContentCache.get(chapter.id)) {
-            await set(`chapter_content_${chapter.id}`, currentContent);
-            lastSavedContentCache.set(chapter.id, currentContent);
-            contentWriteCount++;
+          // 核心优化：脏检查。
+          // 关键：只有当 chapter.content 是字符串时，才说明该章节已被加载或有修改。
+          // 如果是 undefined，说明该书处于“冷隔离”状态，绝对不能执行写入，否则会抹除数据库正文！
+          if (typeof chapter.content === 'string') {
+            const currentContent = chapter.content;
+            if (currentContent !== lastSavedContentCache.get(chapter.id)) {
+              await set(`chapter_content_${chapter.id}`, currentContent);
+              lastSavedContentCache.set(chapter.id, currentContent);
+              contentWriteCount++;
+            }
           }
         }
       }
