@@ -1517,30 +1517,31 @@ function App() {
   useEffect(() => {
     // Load Chapter-specific Settings
     if (activeChapterId) {
-        // Use novelsRef to find the chapter to avoid dependency issues if needed, 
-        // but activeChapterId change should be enough to trigger this.
-        // We need to find the chapter object from the current state.
         const currentNovel = novels.find(n => n.id === activeNovelId)
         const chapter = currentNovel?.chapters.find(c => c.id === activeChapterId)
         
         if (chapter) {
+            // 自动加载版本历史：解决冷热分离后，重新加载页面导致版本切换按钮消失的问题
+            if (!chapter.versions || chapter.versions.length === 0) {
+                storage.getChapterVersions(chapter.id).then(versions => {
+                    if (versions && versions.length > 0) {
+                        setChapters(prev => prev.map(c => {
+                            if (c.id === chapter.id) {
+                                // 只有在内存中版本为空时才更新，避免覆盖正在进行的润色
+                                if (!c.versions || c.versions.length === 0) {
+                                    return { ...c, versions };
+                                }
+                            }
+                            return c;
+                        }));
+                    }
+                });
+            }
+
             // Load Optimize Preset
             const savedOptId = chapter.activeOptimizePresetId
-            // Fallback to global last used if chapter doesn't have one (optional, or 'default')
-            // To ensure isolation, maybe better to default to 'default' if not set? 
-            // Or use the current global value as a starting point? 
-            // User requirement: "Seeing different settings". So if I haven't set it for this chapter, what should I see?
-            // Probably the default or the global one. Let's use the global variable which is initialized from localStorage.
-            // But if chapter HAS a setting, we MUST use it.
             if (savedOptId && savedOptId !== activeOptimizePresetId) {
                 setActiveOptimizePresetId(savedOptId)
-            } else if (!savedOptId) {
-                // If chapter has NO setting, we might want to reset to default or keep global.
-                // Keeping global means "inheritance". Resetting means "isolation".
-                // User said "won't be overwritten by other analysis optimization returned content". 
-                // Let's try to restore what was saved, or default.
-                // Actually, if we want strict isolation, we should load 'default' if nothing saved.
-                // But that might be annoying. Let's stick to: if saved, use saved.
             }
 
             // Load Analysis Preset
@@ -1550,7 +1551,6 @@ function App() {
             }
 
             // Load Analysis Result
-            // Always load, even if empty, to clear previous chapter's result
             setAnalysisResult(chapter.analysisResult || '')
         }
     } else {
