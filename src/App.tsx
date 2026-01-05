@@ -852,6 +852,92 @@ const normalizeGeneratorResult = (data: any[], type: 'outline' | 'character' | '
     }).filter(item => item !== null)
 }
 
+// 性能优化组件：侧边栏章节项。使用 memo 锁定，防止 985 个节点在打字时被无效 Diff 阻塞
+const ChapterSidebarItem = React.memo(({
+  chapter,
+  isActive,
+  onSelect,
+  onMove,
+  onRename,
+  onExport,
+  onDelete
+}: {
+  chapter: Chapter,
+  isActive: boolean,
+  onSelect: (id: number) => void,
+  onMove: (id: number) => void,
+  onRename: (id: number) => void,
+  onExport: (id: number) => void,
+  onDelete: (id: number) => void
+}) => {
+  return (
+    <div
+      className={`group flex items-center w-full rounded transition-colors pr-2 ${
+        isActive
+          ? 'bg-[var(--theme-color)] text-white'
+          : 'text-gray-300 hover:bg-gray-700'
+      }`}
+    >
+      <button
+        onClick={() => onSelect(chapter.id)}
+        className={`bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate ${chapter.subtype === 'small_summary' || chapter.subtype === 'big_summary' ? 'italic text-[var(--theme-color-light)]' : ''}`}
+      >
+        {chapter.subtype === 'small_summary' ? (
+          <LayoutList className="w-4 h-4 shrink-0 text-blue-400" />
+        ) : chapter.subtype === 'big_summary' ? (
+          <BookOpen className="w-4 h-4 shrink-0 text-amber-400" />
+        ) : (
+          <FileText className={`w-4 h-4 shrink-0 ${chapter.logicScore !== undefined ? (chapter.logicScore > 80 ? 'text-green-400' : chapter.logicScore > 60 ? 'text-yellow-400' : 'text-red-400') : 'opacity-70'}`} />
+        )}
+        <span className="truncate">{chapter.title}</span>
+        {chapter.logicScore !== undefined && (
+          <span className={`ml-1 text-[10px] px-1 rounded ${chapter.logicScore > 80 ? 'bg-green-900/30 text-green-500' : chapter.logicScore > 60 ? 'bg-yellow-900/30 text-yellow-500' : 'bg-red-900/30 text-red-500'}`}>
+            {chapter.logicScore}
+          </span>
+        )}
+      </button>
+      
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+         <button
+            onClick={(e) => { e.stopPropagation(); onMove(chapter.id); }}
+            className="bg-transparent p-1 hover:bg-white/20 rounded"
+            title="移动到..."
+         >
+           <FolderInput className="w-3 h-3" />
+         </button>
+         <button
+            onClick={(e) => { e.stopPropagation(); onRename(chapter.id); }}
+            className="bg-transparent p-1 hover:bg-white/20 rounded"
+            title="重命名"
+         >
+           <Edit3 className="w-3 h-3" />
+         </button>
+         <button
+            onClick={(e) => { e.stopPropagation(); onExport(chapter.id); }}
+            className="bg-transparent p-1 hover:bg-white/20 rounded"
+            title="导出本章"
+         >
+           <Download className="w-3 h-3" />
+         </button>
+         <button
+            onClick={(e) => { e.stopPropagation(); onDelete(chapter.id); }}
+            className="bg-transparent p-1 hover:bg-red-500/80 rounded hover:text-white"
+            title="删除"
+         >
+           <Trash2 className="w-3 h-3" />
+         </button>
+      </div>
+    </div>
+  );
+}, (prev, next) => {
+  // 核心比对逻辑：只有 ID、标题、活跃状态或分数变化时才重绘。
+  // content 等正文变化被完全屏蔽，不再导致侧边栏 Diff！
+  return prev.chapter.id === next.chapter.id &&
+         prev.chapter.title === next.chapter.title &&
+         prev.chapter.logicScore === next.chapter.logicScore &&
+         prev.isActive === next.isActive;
+});
+
 function App() {
   // --- UI & AI Task States (Moved to top to ensure initialization) ---
   const [isLoading, setIsLoading] = useState(false)
@@ -1037,10 +1123,18 @@ function App() {
         // 当切换小说时，触发按需加载
         storage.loadNovelContent(novel).then(loadedNovel => {
           setNovels(prev => prev.map(n => n.id === loadedNovel.id ? loadedNovel : n))
+          
+          // 核心优化：异步加载完成后，如果当前没有活跃章节，自动选择第一章
+          setActiveChapterId(prev => {
+            if (prev === null && loadedNovel.chapters && loadedNovel.chapters.length > 0) {
+              return loadedNovel.chapters[0].id;
+            }
+            return prev;
+          });
         })
       }
     }
-  }, [activeNovelId])
+  }, [activeNovelId, setNovels])
 
   const creationModuleRef = useRef<'menu' | 'outline' | 'plotOutline' | 'characters' | 'worldview' | 'inspiration' | 'reference'>('menu')
 
@@ -1318,24 +1412,28 @@ function App() {
     localStorage.setItem('bigSummaryPrompt', bigSummaryPrompt)
   }, [longTextMode, contextScope, smallSummaryInterval, bigSummaryInterval, smallSummaryPrompt, bigSummaryPrompt])
 
-  // Persistence - 增加防抖处理，避免频繁写入导致的卡顿
+  // Persistence - 增加防抖与状态锁定，避免频繁写入导致的卡顿
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
     // 核心性能优化：
-    // 由于我们重构了存储层（src/utils/storage.ts），现在支持极轻量级的“增量保存”。
-    // 即使拥有 985 个章节，只要正文没有剧烈变化，保存耗时已从 300ms 降至 10ms 左右。
-    // 因此，我们不再需要为了性能而跳过“高强度任务期间”的自动保存。
-    // 这确保了即使手机在 AI 续写时崩溃，已生成的每一段文字也能被安全持久化。
+    // 在 AI 正在生成（isAutoWriting）或 正在生成大纲/角色等高频更新期间，
+    // 我们应当降低保存频率，甚至在流式输出最剧烈的阶段暂时锁定元数据写入。
+    const isHeavyTaskRunning = isAutoWriting || isGeneratingOutline || isGeneratingCharacters || isGeneratingWorldview || isGeneratingInspiration || isGeneratingPlotOutline;
+    
     if (novels.length > 0) {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      
+      // AI 生成期间将防抖延长至 5 秒，平时保持 2 秒
+      const debounceTime = isHeavyTaskRunning ? 5000 : 2000;
+      
       saveTimeoutRef.current = setTimeout(() => {
         storage.saveNovels(novels).catch(e => console.error('Failed to save novels', e));
-      }, 2000);
+      }, debounceTime);
     }
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [novels, isAutoWriting, optimizingChapterIds.size, isLoading, isGeneratingOutline, isGeneratingCharacters, isGeneratingWorldview, isGeneratingInspiration, isGeneratingPlotOutline])
+  }, [novels, isAutoWriting, isGeneratingOutline, isGeneratingCharacters, isGeneratingWorldview, isGeneratingInspiration, isGeneratingPlotOutline])
 
   useEffect(() => {
     localStorage.setItem('outlinePresets', JSON.stringify(outlinePresets))
@@ -1824,73 +1922,57 @@ function App() {
   // Backwards compatibility helper & State Validation
   useEffect(() => {
     if (activeNovelId && activeNovel) {
-      // 1. Character Sets
-      if ((!activeNovel.characterSets || activeNovel.characterSets.length === 0) && activeNovel.characters && activeNovel.characters.length > 0) {
-        // Migrate legacy characters
-        const defaultSet: CharacterSet = {
-          id: 'default',
-          name: '默认角色集',
-          characters: activeNovel.characters
+      // 核心安全检查：如果章节列表尚未加载（Skeleton 状态），彻底跳过后续逻辑
+      // 这里的 !activeNovel.chapters 是为了捕获存储重构后的延迟加载状态，防止 length 报错
+      if (!activeNovel.chapters || activeNovel.chapters.length === 0) {
+        // 特殊情况：如果是新创建的书（确实没章节），则允许继续，但需要先初始化 chapters
+        if (activeNovel.createdAt > Date.now() - 10000) {
+           // 新书逻辑...
+        } else {
+           return;
         }
+      }
+
+      // 1. Character Sets
+      const charSets = activeNovel.characterSets || [];
+      const legacyChars = activeNovel.characters || [];
+      if (charSets.length === 0 && legacyChars.length > 0) {
+        const defaultSet: CharacterSet = { id: 'default', name: '默认角色集', characters: legacyChars }
         setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, characterSets: [defaultSet], characters: undefined } : n))
         setActiveCharacterSetId('default')
-      } else {
-        // Validate active ID
-        const currentSets = activeNovel.characterSets || []
-        const isValid = currentSets.some(s => s.id === activeCharacterSetId)
-        if (!isValid) {
-            setActiveCharacterSetId(currentSets.length > 0 ? currentSets[0].id : null)
-        }
+      } else if (charSets.length > 0) {
+        if (!charSets.some(s => s.id === activeCharacterSetId)) setActiveCharacterSetId(charSets[0].id)
       }
 
       // 2. Worldview Sets
-      if ((!activeNovel.worldviewSets || activeNovel.worldviewSets.length === 0) && activeNovel.worldview && activeNovel.worldview.length > 0) {
-        // Migrate legacy worldview
-        const defaultSet: WorldviewSet = {
-             id: 'default_world',
-             name: '默认世界观',
-             entries: activeNovel.worldview
-        }
+      const wvSets = activeNovel.worldviewSets || [];
+      const legacyWv = activeNovel.worldview || [];
+      if (wvSets.length === 0 && legacyWv.length > 0) {
+        const defaultSet: WorldviewSet = { id: 'default_world', name: '默认世界观', entries: legacyWv }
         setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, worldviewSets: [defaultSet], worldview: undefined } : n))
         setActiveWorldviewSetId('default_world')
-      } else {
-        // Validate active ID
-        const currentSets = activeNovel.worldviewSets || []
-        const isValid = currentSets.some(s => s.id === activeWorldviewSetId)
-        if (!isValid) {
-            setActiveWorldviewSetId(currentSets.length > 0 ? currentSets[0].id : null)
-        }
+      } else if (wvSets.length > 0) {
+        if (!wvSets.some(s => s.id === activeWorldviewSetId)) setActiveWorldviewSetId(wvSets[0].id)
       }
 
       // 3. Outline Sets
-      if ((!activeNovel.outlineSets || activeNovel.outlineSets.length === 0) && activeNovel.outline && activeNovel.outline.length > 0) {
-        // Migrate legacy outline
-        const defaultSet: OutlineSet = {
-             id: 'default_outline',
-             name: '默认粗纲',
-             items: activeNovel.outline
-        }
+      const outSets = activeNovel.outlineSets || [];
+      const legacyOut = activeNovel.outline || [];
+      if (outSets.length === 0 && legacyOut.length > 0) {
+        const defaultSet: OutlineSet = { id: 'default_outline', name: '默认粗纲', items: legacyOut }
         setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, outlineSets: [defaultSet], outline: undefined } : n))
         setActiveOutlineSetId('default_outline')
-      } else {
-        // Validate active ID
-        const currentSets = activeNovel.outlineSets || []
-        const isValid = currentSets.some(s => s.id === activeOutlineSetId)
-        if (!isValid) {
-            setActiveOutlineSetId(currentSets.length > 0 ? currentSets[0].id : null)
-        }
+      } else if (outSets.length > 0) {
+        if (!outSets.some(s => s.id === activeOutlineSetId)) setActiveOutlineSetId(outSets[0].id)
       }
 
       // 4. Plot Outline Sets
-      if (activeNovel.plotOutlineSets && activeNovel.plotOutlineSets.length > 0) {
-          const currentSets = activeNovel.plotOutlineSets || []
-          const isValid = currentSets.some(s => s.id === activePlotOutlineSetId)
-          if (!isValid) {
-              setActivePlotOutlineSetId(currentSets.length > 0 ? currentSets[0].id : null)
-          }
+      const plotSets = activeNovel.plotOutlineSets || [];
+      if (plotSets.length > 0) {
+          if (!plotSets.some(s => s.id === activePlotOutlineSetId)) setActivePlotOutlineSetId(plotSets[0].id)
       }
     }
-  }, [activeNovelId, activeNovel?.characterSets, activeNovel?.characters, activeNovel?.worldviewSets, activeNovel?.worldview, activeNovel?.outlineSets, activeNovel?.outline, activeNovel?.plotOutlineSets])
+  }, [activeNovelId, activeNovel?.chapters, activeNovel?.characterSets, activeNovel?.characters, activeNovel?.worldviewSets, activeNovel?.worldview, activeNovel?.outlineSets, activeNovel?.outline, activeNovel?.plotOutlineSets])
 
   const updateWorldviewSets = React.useCallback((newSets: WorldviewSet[]) => {
     if (!activeNovelId) return
@@ -2105,8 +2187,8 @@ function App() {
       })
   }
 
-  // Chapter Actions
-  const handleDeleteChapter = (chapterId: number) => {
+  // Chapter Actions - 使用 useCallback 锁定，防止触发侧边栏无意义重绘
+  const handleDeleteChapter = React.useCallback((chapterId: number) => {
       setDialog({
         isOpen: true,
         type: 'confirm',
@@ -2114,7 +2196,9 @@ function App() {
         message: '确定删除此章节吗？',
         inputValue: '',
         onConfirm: () => {
-          const newChapters = chapters.filter(c => c.id !== chapterId)
+          const novel = novelsRef.current.find(n => n.id === activeNovelIdRef.current)
+          if (!novel) return
+          const newChapters = novel.chapters.filter(c => c.id !== chapterId)
           setChapters(newChapters)
           if (activeChapterId === chapterId) {
               setActiveChapterId(newChapters[0]?.id || null)
@@ -2122,10 +2206,11 @@ function App() {
           closeDialog()
         }
       })
-  }
+  }, [setChapters, setActiveChapterId]);
 
-  const handleRenameChapter = (chapterId: number) => {
-      const chapter = chapters.find(c => c.id === chapterId)
+  const handleRenameChapter = React.useCallback((chapterId: number) => {
+      const novel = novelsRef.current.find(n => n.id === activeNovelIdRef.current)
+      const chapter = novel?.chapters.find(c => c.id === chapterId)
       if (!chapter) return
       
       setDialog({
@@ -2136,20 +2221,21 @@ function App() {
         inputValue: chapter.title,
         onConfirm: (newTitle) => {
            if (newTitle && newTitle !== chapter.title) {
-              setChapters(chapters.map(c => c.id === chapterId ? { ...c, title: newTitle } : c))
+              setChapters(prev => prev.map(c => c.id === chapterId ? { ...c, title: newTitle } : c))
            }
            closeDialog()
         }
       })
-  }
+  }, [setChapters]);
 
-  const handleMoveChapter = (chapterId: number) => {
-    const chapter = chapters.find(c => c.id === chapterId)
+  const handleMoveChapter = React.useCallback((chapterId: number) => {
+    const novel = novelsRef.current.find(n => n.id === activeNovelIdRef.current)
+    const chapter = novel?.chapters.find(c => c.id === chapterId)
     if (!chapter) return
 
     const options = [
       { label: '未分卷', value: '' },
-      ...volumes.map(v => ({ label: v.title, value: v.id }))
+      ...(novel?.volumes || []).map(v => ({ label: v.title, value: v.id }))
     ]
 
     setDialog({
@@ -2160,11 +2246,11 @@ function App() {
       inputValue: chapter.volumeId || '',
       selectOptions: options,
       onConfirm: (newVolumeId) => {
-         setChapters(chapters.map(c => c.id === chapterId ? { ...c, volumeId: newVolumeId || undefined } : c))
+         setChapters(prev => prev.map(c => c.id === chapterId ? { ...c, volumeId: newVolumeId || undefined } : c))
          closeDialog()
       }
     })
-  }
+  }, [setChapters]);
 
   // Export Functions
   const downloadFile = (content: string, filename: string, type: string = 'text/plain;charset=utf-8') => {
@@ -6480,14 +6566,19 @@ ${taskDescription}`
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {novels.map(novel => (
               <div 
-                key={novel.id} 
-                onClick={() => { setActiveNovelId(novel.id); setActiveChapterId(novel.chapters[0].id); }} 
+                key={novel.id}
+                onClick={() => {
+                  setActiveNovelId(novel.id);
+                  // 核心修复：由于实施了书籍隔离加载，stripped novel 此时没有 chapters。
+                  // 我们先重置 activeChapterId，等待 loadNovelContent 完成后再自动选中。
+                  setActiveChapterId(null);
+                }}
                 className="bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-[var(--theme-color)] cursor-pointer transition-all hover:shadow-lg group relative flex flex-col h-44"
               >
                 <h3 className="text-lg font-bold mb-2 text-gray-100 truncate pr-16">{novel.title}</h3>
                 <p className="text-xs text-gray-400 mb-4 line-clamp-3 flex-1 leading-relaxed">{novel.systemPrompt}</p>
                 <div className="flex justify-between items-center text-xs text-gray-500 mt-auto border-t border-gray-700/50 pt-3">
-                  <span className="bg-gray-900/50 px-2 py-0.5 rounded text-gray-400">{novel.chapters.length} 章节</span>
+                  <span className="bg-gray-900/50 px-2 py-0.5 rounded text-gray-400">{novel.chapters?.length || 0} 章节</span>
                   <span>{new Date(novel.createdAt).toLocaleDateString()}</span>
                 </div>
                 
@@ -6812,68 +6903,21 @@ ${taskDescription}`
                       {!volume.collapsed && (
                         <div className="ml-2 pl-2 border-l border-gray-700/50 mt-1 space-y-1">
                           {(chaptersByVolume[volume.id] || []).map(chapter => (
-                          <div
-                            key={chapter.id}
-                            className={`group flex items-center w-full rounded transition-colors pr-2 ${
-                              activeChapterId === chapter.id 
-                                ? 'bg-[var(--theme-color)] text-white' 
-                                : 'text-gray-300 hover:bg-gray-700'
-                            }`}
-                          >
-                            <button
-                              onClick={() => {
-                                setActiveChapterId(chapter.id);
+                            <ChapterSidebarItem
+                              key={chapter.id}
+                              chapter={chapter}
+                              isActive={activeChapterId === chapter.id}
+                              onSelect={(id) => {
+                                setActiveChapterId(id);
                                 setShowOutline(false);
-                                // 自动切换到该章节的最新版本
-                                if (chapter.versions && chapter.versions.length > 0) {
-                                  const latestVersion = chapter.versions[chapter.versions.length - 1];
-                                  setChapters(prev => prev.map(c => c.id === chapter.id ? { ...c, activeVersionId: latestVersion.id, content: latestVersion.content } : c));
-                                }
+                                // 自动切换到该章节的最新版本逻辑已移至 ChapterEditor 内部处理，此处仅触发 ID 切换
                               }}
-                              className={`bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate ${chapter.subtype === 'small_summary' || chapter.subtype === 'big_summary' ? 'italic text-[var(--theme-color-light)]' : ''}`}
-                            >
-                              {chapter.subtype === 'small_summary' ? (
-                                <LayoutList className="w-4 h-4 shrink-0 text-blue-400" />
-                              ) : chapter.subtype === 'big_summary' ? (
-                                <BookOpen className="w-4 h-4 shrink-0 text-amber-400" />
-                              ) : (
-                                <FileText className="w-4 h-4 shrink-0 opacity-70" />
-                              )}
-                              <span className="truncate">{chapter.title}</span>
-                            </button>
-                            
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                               <button 
-                                  onClick={(e) => { e.stopPropagation(); handleMoveChapter(chapter.id); }}
-                                  className="bg-transparent p-1 hover:bg-white/20 rounded"
-                                  title="移动到..."
-                               >
-                                 <FolderInput className="w-3 h-3" />
-                               </button>
-                               <button 
-                                  onClick={(e) => { e.stopPropagation(); handleRenameChapter(chapter.id); }}
-                                  className="bg-transparent p-1 hover:bg-white/20 rounded"
-                                  title="重命名"
-                               >
-                                 <Edit3 className="w-3 h-3" />
-                               </button>
-                               <button 
-                                  onClick={(e) => { e.stopPropagation(); handleExportChapter(chapter.id); }}
-                                  className="bg-transparent p-1 hover:bg-white/20 rounded"
-                                  title="导出本章"
-                               >
-                                 <Download className="w-3 h-3" />
-                               </button>
-                               <button 
-                                  onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chapter.id); }}
-                                  className="bg-transparent p-1 hover:bg-red-500/80 rounded hover:text-white"
-                                  title="删除"
-                               >
-                                 <Trash2 className="w-3 h-3" />
-                               </button>
-                            </div>
-                          </div>
-                       ))}
+                              onMove={handleMoveChapter}
+                              onRename={handleRenameChapter}
+                              onExport={handleExportChapter}
+                              onDelete={handleDeleteChapter}
+                            />
+                          ))}
                        {chapters.filter(c => c.volumeId === volume.id).length === 0 && (
                           <div className="text-xs text-gray-600 px-4 py-1 italic">空卷</div>
                        )}
@@ -6886,72 +6930,19 @@ ${taskDescription}`
                   <div className="mt-2">
                     {volumes.length > 0 && <div className="px-2 py-1 text-xs text-gray-500 font-semibold">未分卷章节</div>}
                     {(chaptersByVolume['uncategorized'] || []).map(chapter => (
-                      <div
+                      <ChapterSidebarItem
                         key={chapter.id}
-                        className={`group flex items-center w-full rounded transition-colors pr-2 ${
-                          activeChapterId === chapter.id
-                            ? 'bg-[var(--theme-color)] text-white'
-                            : 'text-gray-300 hover:bg-gray-700'
-                        }`}
-                      >
-                        <button
-                          onClick={() => {
-                            setActiveChapterId(chapter.id);
-                            setShowOutline(false);
-                            // 自动切换到该章节的最新版本
-                            if (chapter.versions && chapter.versions.length > 0) {
-                              const latestVersion = chapter.versions[chapter.versions.length - 1];
-                              setChapters(prev => prev.map(c => c.id === chapter.id ? { ...c, activeVersionId: latestVersion.id, content: latestVersion.content } : c));
-                            }
-                          }}
-                          className={`bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate ${chapter.subtype === 'small_summary' || chapter.subtype === 'big_summary' ? 'italic text-[var(--theme-color-light)]' : ''}`}
-                        >
-                          {chapter.subtype === 'small_summary' ? (
-                            <LayoutList className="w-4 h-4 shrink-0 text-blue-400" />
-                          ) : chapter.subtype === 'big_summary' ? (
-                            <BookOpen className="w-4 h-4 shrink-0 text-amber-400" />
-                          ) : (
-                            <FileText className={`w-4 h-4 shrink-0 ${chapter.logicScore !== undefined ? (chapter.logicScore > 80 ? 'text-green-400' : chapter.logicScore > 60 ? 'text-yellow-400' : 'text-red-400') : 'opacity-70'}`} />
-                          )}
-                          <span className="truncate">{chapter.title}</span>
-                          {chapter.logicScore !== undefined && (
-                            <span className={`ml-1 text-[10px] px-1 rounded ${chapter.logicScore > 80 ? 'bg-green-900/30 text-green-500' : chapter.logicScore > 60 ? 'bg-yellow-900/30 text-yellow-500' : 'bg-red-900/30 text-red-500'}`}>
-                              {chapter.logicScore}
-                            </span>
-                          )}
-                        </button>
-                        
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                              onClick={(e) => { e.stopPropagation(); handleMoveChapter(chapter.id); }}
-                              className="bg-transparent p-1 hover:bg-white/20 rounded"
-                              title="移动到..."
-                          >
-                            <FolderInput className="w-3 h-3" />
-                          </button>
-                          <button
-                              onClick={(e) => { e.stopPropagation(); handleRenameChapter(chapter.id); }}
-                              className="bg-transparent p-1 hover:bg-white/20 rounded"
-                              title="重命名"
-                          >
-                            <Edit3 className="w-3 h-3" />
-                          </button>
-                          <button
-                              onClick={(e) => { e.stopPropagation(); handleExportChapter(chapter.id); }}
-                              className="bg-transparent p-1 hover:bg-white/20 rounded"
-                              title="导出本章"
-                          >
-                            <Download className="w-3 h-3" />
-                          </button>
-                          <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chapter.id); }}
-                              className="bg-transparent p-1 hover:bg-red-500/80 rounded hover:text-white"
-                              title="删除"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
+                        chapter={chapter}
+                        isActive={activeChapterId === chapter.id}
+                        onSelect={(id) => {
+                          setActiveChapterId(id);
+                          setShowOutline(false);
+                        }}
+                        onMove={handleMoveChapter}
+                        onRename={handleRenameChapter}
+                        onExport={handleExportChapter}
+                        onDelete={handleDeleteChapter}
+                      />
                     ))}
                   </div>
                 </>
