@@ -252,31 +252,40 @@ export const checkAndGenerateSummary = async (
   };
 
   // Check Small Summary Trigger (Volume Based)
-  if (currentCountInVolume % sInterval === 0) {
-    // Map back to Global Range for Labeling
-    const batchStartVolIndex = indexInVolume - sInterval + 1;
-    const batchChapters = volumeStoryChapters.slice(batchStartVolIndex, indexInVolume + 1);
+  // 改进：检查当前及之前所有应触发但未触发的总结，防止丢失
+  for (let i = sInterval; i <= currentCountInVolume; i += sInterval) {
+    const batchEndVolIndex = i - 1;
+    const batchStartVolIndex = i - sInterval;
+    const batchChapters = volumeStoryChapters.slice(batchStartVolIndex, batchEndVolIndex + 1);
 
     if (batchChapters.length > 0) {
-      // Find IDs in global list to get range
-      // Note: getSnapshotStoryChapters returns filtered list, so indices match global STORY indices if we map back
-      // But we need the range string to be meaningful to user (e.g. Chapter 4-6).
-      // We can use the global index in storyChapters (+1 for 1-based)
       const globalStart = storyChapters.findIndex(c => c.id === batchChapters[0].id) + 1;
       const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1;
-      await generate('small', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
+      const rangeStr = `${globalStart}-${globalEnd}`;
+
+      // 检查是否已存在该范围的总结
+      const exists = currentChaptersSnapshot.some(c => c.subtype === 'small_summary' && c.summaryRange === rangeStr);
+      if (!exists) {
+        await generate('small', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
+      }
     }
   }
 
   // Check Big Summary Trigger (Volume Based)
-  if (currentCountInVolume % bInterval === 0) {
-    const batchStartVolIndex = indexInVolume - bInterval + 1;
-    const batchChapters = volumeStoryChapters.slice(batchStartVolIndex, indexInVolume + 1);
+  for (let i = bInterval; i <= currentCountInVolume; i += bInterval) {
+    const batchEndVolIndex = i - 1;
+    const batchStartVolIndex = i - bInterval;
+    const batchChapters = volumeStoryChapters.slice(batchStartVolIndex, batchEndVolIndex + 1);
 
     if (batchChapters.length > 0) {
       const globalStart = storyChapters.findIndex(c => c.id === batchChapters[0].id) + 1;
       const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1;
-      await generate('big', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
+      const rangeStr = `${globalStart}-${globalEnd}`;
+
+      const exists = currentChaptersSnapshot.some(c => c.subtype === 'big_summary' && c.summaryRange === rangeStr);
+      if (!exists) {
+        await generate('big', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
+      }
     }
   }
 

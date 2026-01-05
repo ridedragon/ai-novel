@@ -52,6 +52,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
 import { GeneratorPreset, Novel } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
+import { keepAliveManager } from '../utils/KeepAliveManager';
 import { WorkflowData, WorkflowEditorProps, WorkflowNode, WorkflowNodeData } from './WorkflowEditor';
 
 // --- 类型定义 ---
@@ -284,16 +285,27 @@ const ConfigPanel = React.memo(({
 
   return (
     <div className="fixed inset-0 bg-gray-900 z-[130] flex flex-col animate-in slide-in-from-bottom duration-300">
-      <div className="p-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg" style={{ backgroundColor: `${editingNode.data.color}20`, color: editingNode.data.color }}>
-            {(() => { const Icon = editingNode.data.icon; return <Icon className="w-5 h-5" /> })()}
+      <div className="p-4 bg-gray-800 border-b border-gray-700 flex flex-col gap-3 sticky top-0 z-10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg" style={{ backgroundColor: `${editingNode.data.color}20`, color: editingNode.data.color }}>
+              {(() => { const Icon = editingNode.data.icon; return <Icon className="w-5 h-5" /> })()}
+            </div>
+            <h3 className="font-bold text-gray-100 truncate max-w-[150px]">{editingNode.data.label}</h3>
           </div>
-          <h3 className="font-bold text-gray-100 truncate max-w-[200px]">{editingNode.data.label}</h3>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleUpdate({ skipped: !editingNode.data.skipped })}
+              className={`text-[10px] px-3 py-1.5 rounded-full transition-all font-bold uppercase tracking-wider flex items-center gap-1 ${editingNode.data.skipped ? 'bg-gray-600 text-gray-300' : 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'}`}
+            >
+              {editingNode.data.skipped ? <Square className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
+              {editingNode.data.skipped ? '已跳过' : '执行'}
+            </button>
+            <button onClick={onClose} className="p-2 bg-gray-700 rounded-full text-gray-400 ml-2">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
-        <button onClick={onClose} className="p-2 bg-gray-700 rounded-full text-gray-400">
-          <X className="w-5 h-5" />
-        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-8 pb-24 custom-scrollbar">
@@ -1106,6 +1118,13 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     setError(null);
     stopRequestedRef.current = false;
     abortControllerRef.current = new AbortController();
+
+    // 开启保活
+    try {
+      await keepAliveManager.enable();
+    } catch (e) {
+      console.warn('[Mobile Workflow] KeepAlive failed:', e);
+    }
     
     try {
       if (!activeNovel) return;
@@ -1182,6 +1201,11 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
         const node = sortedNodes[i];
         setCurrentNodeIndex(i);
+
+        if (node.data.skipped) {
+          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          continue;
+        }
         
         // 更新节点状态为正在执行
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'executing' } } : n));
@@ -1784,14 +1808,20 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       })));
       setEdges(eds => eds.map(e => ({ ...e, animated: false })));
 
-      if (!stopRequestedRef.current) { setCurrentNodeIndex(-1); setIsRunning(false); }
+      if (!stopRequestedRef.current) {
+        setCurrentNodeIndex(-1);
+        setIsRunning(false);
+        keepAliveManager.disable();
+      }
     } catch (e: any) {
       if (e.name !== 'AbortError') setError(`执行失败: ${e.message}`);
       setIsRunning(false);
+      keepAliveManager.disable();
     }
   };
 
   const stopWorkflow = () => {
+    keepAliveManager.disable();
     // 停止时显式更新工作流列表并保存
     const updatedWorkflows = workflows.map(w => {
       if (w.id === activeWorkflowId) {
@@ -1882,14 +1912,54 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             </button>
           )}
           {isRunning ? (
-            <button onClick={stopWorkflow} className="bg-red-600/20 text-red-500 p-2 rounded-lg border border-red-500/20"><Square className="w-4 h-4 fill-current" /></button>
+            <button onClick={stopWorkflow} className="bg-red-600/20 text-red-500 p-2 rounded-lg border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-pulse"><Square className="w-4 h-4 fill-current" /></button>
           ) : isPaused && currentNodeIndex !== -1 ? (
-            <div className="flex items-center gap-1">
-              <button onClick={() => runWorkflow(currentNodeIndex)} className="bg-blue-600/20 text-blue-500 p-2 rounded-lg border border-blue-500/20"><Play className="w-4 h-4 fill-current" /></button>
-              <button onClick={() => runWorkflow(0)} className="text-[10px] text-gray-400 px-2">重开</button>
+            <div className="flex items-center gap-2">
+              <select
+                className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 outline-none max-w-[100px]"
+                value=""
+                onChange={(e) => {
+                  const idx = parseInt(e.target.value);
+                  if (!isNaN(idx)) runWorkflow(idx);
+                }}
+              >
+                <option value="" disabled>跳转...</option>
+                {getOrderedNodes().map((n, idx) => (
+                  <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
+                ))}
+              </select>
+              <button onClick={() => runWorkflow(currentNodeIndex)} className="bg-blue-600/20 text-blue-500 p-2 rounded-lg border border-blue-500/20 shadow-lg"><Play className="w-4 h-4 fill-current" /></button>
+              <button
+                onClick={() => {
+                  const updatedNodes = nodes.map(n => ({ ...n, data: { ...n.data, status: 'pending' as const } }));
+                  setNodes(updatedNodes);
+                  setCurrentNodeIndex(-1);
+                  setIsPaused(false);
+                  setWorkflows(prev => prev.map(w => w.id === activeWorkflowId ? { ...w, nodes: updatedNodes, currentNodeIndex: -1 } : w));
+                }}
+                className="p-2 bg-gray-700/50 text-gray-400 rounded-lg border border-gray-600/50"
+                title="重置"
+              >
+                <Settings2 className="w-4 h-4" />
+              </button>
             </div>
           ) : (
-            <button onClick={() => runWorkflow(0)} disabled={nodes.length === 0} className="bg-green-600/20 text-green-500 p-2 rounded-lg border border-green-500/20 disabled:opacity-50"><Play className="w-4 h-4 fill-current" /></button>
+            <div className="flex items-center gap-2">
+               <select
+                className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 outline-none max-w-[100px]"
+                value=""
+                onChange={(e) => {
+                  const idx = parseInt(e.target.value);
+                  if (!isNaN(idx)) runWorkflow(idx);
+                }}
+              >
+                <option value="" disabled>指定起始...</option>
+                {getOrderedNodes().map((n, idx) => (
+                  <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
+                ))}
+              </select>
+              <button onClick={() => runWorkflow(0)} disabled={nodes.length === 0} className="bg-green-600/20 text-green-500 p-2 rounded-lg border border-green-500/20 shadow-lg disabled:opacity-50"><Play className="w-4 h-4 fill-current" /></button>
+            </div>
           )}
           <button onClick={onClose} className="p-1 text-gray-400"><X className="w-6 h-6" /></button>
         </div>

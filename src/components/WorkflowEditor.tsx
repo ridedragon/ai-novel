@@ -38,6 +38,7 @@ import {
   Play,
   Plus,
   Save,
+  Settings2,
   Square,
   Trash2,
   Upload,
@@ -52,6 +53,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
 import { GeneratorPreset, GeneratorPrompt, Novel, PromptItem, RegexScript } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
+import { keepAliveManager } from '../utils/KeepAliveManager';
 
 // --- 类型定义 ---
 
@@ -101,6 +103,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   promptItems?: GeneratorPrompt[]; // 新的多条目系统
   presencePenalty?: number;
   frequencyPenalty?: number;
+  skipped?: boolean;
 }
 
 export type WorkflowNode = Node<WorkflowNodeData>;
@@ -129,7 +132,7 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
   const getStatusColor = () => {
     switch (data.status) {
       case 'executing': return 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] animate-pulse';
-      case 'completed': return 'border-green-600/50 shadow-none'; // 移除发光效果，保持低调
+      case 'completed': return data.skipped ? 'border-gray-500 opacity-60' : 'border-green-600/50 shadow-none';
       case 'failed': return 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]';
       default: return selected ? 'border-[var(--theme-color)] ring-2 ring-[var(--theme-color)]/20 shadow-[var(--theme-color)]/10' : 'border-gray-700';
     }
@@ -144,9 +147,11 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-none mb-1 flex items-center justify-between">
-            {data.typeLabel}
+            <span className="flex items-center gap-1">
+              {data.typeLabel}
+              {data.skipped && <span className="text-[8px] bg-gray-700 px-1 rounded text-gray-400">已跳过</span>}
+            </span>
             {data.status === 'executing' && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>}
-            {/* 移除已完成状态的打钩图标，使其恢复普通外观 */}
           </div>
           <div className="text-sm font-semibold text-gray-100 truncate">{data.label}</div>
         </div>
@@ -463,9 +468,18 @@ const NodePropertiesModal = ({
       <div className="absolute inset-0" onClick={onClose} />
       <div className="relative w-full max-w-[650px] bg-[#1e2230] rounded-xl shadow-2xl border border-gray-700/50 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="p-5 border-b border-gray-700/50 flex items-center justify-between bg-[#1a1d29]">
-          <div className="flex items-center gap-2.5 text-indigo-400">
-            {node.data.icon && <node.data.icon className="w-5 h-5" />}
-            <span className="font-bold text-gray-100 text-lg">配置: {localLabel}</span>
+          <div className="flex items-center gap-4 text-indigo-400">
+            <div className="flex items-center gap-2.5">
+              {node.data.icon && <node.data.icon className="w-5 h-5" />}
+              <span className="font-bold text-gray-100 text-lg">配置: {localLabel}</span>
+            </div>
+            <button
+              onClick={() => updateNodeData(node.id, { skipped: !node.data.skipped })}
+              className={`text-[10px] px-2 py-1 rounded transition-all font-bold uppercase tracking-wider flex items-center gap-1 ${node.data.skipped ? 'bg-gray-600 text-gray-300' : 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'}`}
+            >
+              {node.data.skipped ? <Square className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
+              {node.data.skipped ? '已跳过' : '执行此节点'}
+            </button>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-gray-700/50 rounded-md text-gray-400 hover:text-white transition-all">
             <X className="w-5 h-5" />
@@ -1625,6 +1639,13 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     setError(null);
     stopRequestedRef.current = false;
     abortControllerRef.current = new AbortController();
+
+    // 开启保活，防止移动端切后台导致执行中断
+    try {
+      await keepAliveManager.enable();
+    } catch (e) {
+      console.warn('[Workflow] KeepAlive failed to enable:', e);
+    }
     
     try {
       if (!activeNovel) return;
@@ -1690,6 +1711,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
         const node = sortedNodes[i];
         setCurrentNodeIndex(i);
+
+        if (node.data.skipped) {
+          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          continue;
+        }
         
         // 更新节点状态为正在执行
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'executing' } } : n));
@@ -2448,8 +2474,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         setIsRunning(false);
         // 执行结束，彻底关闭所有连线动画
         setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+        keepAliveManager.disable();
       }
     } catch (e: any) {
+      keepAliveManager.disable();
       if (e.name === 'AbortError') {
         console.log('Workflow execution aborted by user');
         return; // 用户主动中止，不显示错误弹窗
@@ -2491,6 +2519,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       abortControllerRef.current.abort();
     }
     setIsRunning(false);
+    keepAliveManager.disable();
   };
 
   const resumeWorkflow = () => {
@@ -2603,7 +2632,24 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                           <span className="text-sm font-medium truncate">{wf.name}</span>
                           <span className="text-[10px] opacity-50">{new Date(wf.lastModified).toLocaleString()}</span>
                         </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const targetIndex = (wf.id === activeWorkflowId) ? -1 : 0;
+                              const updatedNodes = wf.nodes.map(n => ({ ...n, data: { ...n.data, status: 'pending' as const } }));
+                              setWorkflows(prev => prev.map(w => w.id === wf.id ? { ...w, nodes: updatedNodes, currentNodeIndex: targetIndex } : w));
+                              if (wf.id === activeWorkflowId) {
+                                setNodes(updatedNodes);
+                                setCurrentNodeIndex(-1);
+                                setIsPaused(false);
+                              }
+                            }}
+                            className="p-1 hover:text-indigo-400 transition-colors"
+                            title="重置进度"
+                          >
+                            <Settings2 className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             onClick={(e) => deleteWorkflow(wf.id, e)}
                             className="p-1 hover:text-red-400 transition-colors"
@@ -2658,6 +2704,19 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                   <Play className="w-4 h-4 fill-current" />
                   从停止处继续
                 </button>
+                <select
+                  className="bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-xs text-gray-200 outline-none"
+                  value=""
+                  onChange={(e) => {
+                    const idx = parseInt(e.target.value);
+                    if (!isNaN(idx)) runWorkflow(idx);
+                  }}
+                >
+                  <option value="" disabled>跳转至节点...</option>
+                  {getOrderedNodes().map((n, idx) => (
+                    <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
+                  ))}
+                </select>
                 <button
                   onClick={() => runWorkflow(0)}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-sm font-medium transition-all"
@@ -2666,14 +2725,29 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => runWorkflow(0)}
-                disabled={isRunning || nodes.length === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-green-900/20"
-              >
-                <Play className="w-4 h-4 fill-current" />
-                运行工作流
-              </button>
+              <div className="flex items-center gap-2">
+                <select
+                  className="bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-xs text-gray-200 outline-none"
+                  value=""
+                  onChange={(e) => {
+                    const idx = parseInt(e.target.value);
+                    if (!isNaN(idx)) runWorkflow(idx);
+                  }}
+                >
+                  <option value="" disabled>从指定节点开始...</option>
+                  {getOrderedNodes().map((n, idx) => (
+                    <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => runWorkflow(0)}
+                  disabled={isRunning || nodes.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-green-900/20"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  全量运行
+                </button>
+              </div>
             )}
             <button 
               onClick={handleSaveWorkflow}
