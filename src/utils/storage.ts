@@ -7,14 +7,32 @@ const VERSIONS_PREFIX = 'versions_';
 
 // 用于在内存中缓存章节内容的哈希或副本，实现脏检查，避免重复写入
 const lastSavedContentCache = new Map<number, string>();
+// 缓存上一次保存的主索引 JSON 字符串，用于脏检查
+let lastSavedMetadataJson = '';
 
 export const storage = {
+  // 辅助函数：生成不含正文和版本的瘦身版数据，用于比对
+  _getStrippedMetadata(novels: Novel[]): string {
+    return JSON.stringify(
+      novels.map(novel => ({
+        ...novel,
+        chapters: novel.chapters.map(chapter => {
+          const { versions, content, ...rest } = chapter;
+          return rest;
+        }),
+      })),
+    );
+  },
+
   async getNovels(): Promise<Novel[]> {
     try {
       // 1. 先获取主索引数据
       const novels = await get<Novel[]>(NOVELS_KEY);
 
       if (novels) {
+        // 初始化主索引缓存：必须使用与保存时相同的瘦身逻辑，否则首次比对必不相等
+        lastSavedMetadataJson = this._getStrippedMetadata(novels);
+
         // 2. 并行加载所有章节的正文内容 (优化 985 个章节的加载速度)
         for (const novel of novels) {
           // 使用 Promise.all 批量获取当前小说的所有章节内容
@@ -92,17 +110,30 @@ export const storage = {
       }));
 
       const serializeTime = Date.now();
-      await set(NOVELS_KEY, strippedNovels);
+      const currentMetadataJson = JSON.stringify(strippedNovels);
+      let indexWriteCount = 0;
+      let indexWriteTime = 0;
+
+      // 核心优化：主索引脏检查
+      // 只有当小说列表结构、标题、分卷状态等发生变化时，才写入 IndexedDB
+      if (currentMetadataJson !== lastSavedMetadataJson) {
+        await set(NOVELS_KEY, strippedNovels);
+        lastSavedMetadataJson = currentMetadataJson;
+        indexWriteCount = 1;
+        indexWriteTime = Date.now() - serializeTime;
+      }
+
       const endTime = Date.now();
 
-      // 在 PowerShell 终端打印详细性能数据
-      terminal.log(`
+      // 在 PowerShell 终端打印详细性能数据 (仅在有实际写入时打印，减少日志噪音)
+      if (contentWriteCount > 0 || indexWriteCount > 0) {
+        terminal.log(`
 [PERF] storage.saveNovels (增量模式):
-- 章节增量保存耗时: ${contentEndTime - startTime}ms (更新章节数: ${contentWriteCount})
-- 主表瘦身保存耗时: ${endTime - serializeTime}ms
-- 总计总计: ${endTime - startTime}ms
-- 章节总数: ${novels.reduce((acc, n) => acc + n.chapters.length, 0)}
-      `);
+- 章节内容写入: ${contentWriteCount} 节 (耗时: ${contentEndTime - startTime}ms)
+- 主表索引写入: ${indexWriteCount} 次 (耗时: ${indexWriteTime}ms)
+- 总耗时: ${endTime - startTime}ms
+        `);
+      }
     } catch (e) {
       console.error('Failed to save novels to IndexedDB', e);
       throw e;
