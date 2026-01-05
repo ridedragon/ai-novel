@@ -576,7 +576,7 @@ const NodePropertiesModal = ({
             </div>
           )}
 
-          {node.data.presetType && (
+          {node.data.typeKey === 'aiChat' && (
             <div className="space-y-4 pt-6 border-t border-gray-700/30">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">

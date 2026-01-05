@@ -50,7 +50,7 @@ import {
 import OpenAI from 'openai';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
-import { GeneratorPreset, Novel } from '../types';
+import { GeneratorPreset, GeneratorPrompt, Novel } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
 import { keepAliveManager } from '../utils/KeepAliveManager';
 import { WorkflowData, WorkflowEditorProps, WorkflowNode, WorkflowNodeData } from './WorkflowEditor';
@@ -386,7 +386,7 @@ const ConfigPanel = React.memo(({
           </div>
         )}
 
-        {editingNode.data.presetType && (
+        {editingNode.data.typeKey === 'aiChat' && (
           <div className="space-y-4 pt-4 border-t border-gray-800">
             <div className="flex items-center justify-between">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
@@ -663,6 +663,120 @@ const ConfigPanel = React.memo(({
           确定并返回
         </button>
       </div>
+
+      {/* --- 提示词条目管理弹窗 (移动端全屏适配) --- */}
+      {isEditingPrompts && (
+        <div className="fixed inset-0 z-[160] flex flex-col bg-[#1e2230] animate-in slide-in-from-right duration-300">
+          <div className="p-4 bg-[#1a1d29] border-b border-gray-700/50 flex items-center justify-between sticky top-0 z-10">
+            <div className="flex items-center gap-2.5 text-indigo-400">
+              <Wand2 className="w-5 h-5" />
+              <span className="font-bold text-gray-100 text-base">编辑对话提示词</span>
+            </div>
+            <button
+              onClick={() => setIsEditingPrompts(false)}
+              className="flex flex-col items-center justify-center p-1.5 bg-gray-700 rounded-xl text-gray-400"
+            >
+              <X className="w-4 h-4" />
+              <span className="text-[8px] font-bold mt-0.5">返回</span>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-[#1e2230] pb-24">
+            {(() => {
+              const items = (editingNode.data.promptItems as GeneratorPrompt[]) || (editingNode.data.systemPrompt ? [{ id: 'default', role: 'system', content: editingNode.data.systemPrompt as string, enabled: true }] : []);
+              
+              return (
+                <>
+                  {items.length === 0 && (
+                    <div className="text-center py-12 border-2 border-dashed border-gray-800 rounded-2xl">
+                      <MessageSquare className="w-8 h-8 text-gray-700 mx-auto mb-3" />
+                      <p className="text-sm text-gray-500">暂无自定义提示词条目</p>
+                    </div>
+                  )}
+                  
+                  {items.map((item, idx) => (
+                    <div key={item.id || idx} className="bg-[#161922] border border-gray-700 rounded-xl overflow-hidden shadow-lg">
+                      <div className="flex items-center justify-between px-4 py-3 bg-gray-800/50 border-b border-gray-700/50">
+                        <div className="flex items-center gap-3">
+                          <select
+                            value={item.role}
+                            onChange={(e) => {
+                              const newItems = [...items];
+                              newItems[idx] = { ...newItems[idx], role: e.target.value as any };
+                              onUpdateNodeData(editingNode.id, { promptItems: newItems });
+                            }}
+                            className="bg-indigo-500/10 text-indigo-400 text-[10px] font-bold uppercase tracking-widest border border-indigo-500/30 rounded px-2 py-1.5 outline-none"
+                          >
+                            <option value="system">System</option>
+                            <option value="user">User</option>
+                            <option value="assistant">Assistant</option>
+                          </select>
+                          <label className="flex items-center gap-2 cursor-pointer active:opacity-70">
+                            <input
+                              type="checkbox"
+                              checked={item.enabled !== false}
+                              onChange={(e) => {
+                                const newItems = [...items];
+                                newItems[idx] = { ...newItems[idx], enabled: e.target.checked };
+                                onUpdateNodeData(editingNode.id, { promptItems: newItems });
+                              }}
+                              className="w-4 h-4 rounded border-gray-700 bg-gray-900 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">启用</span>
+                          </label>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (confirm('确定要删除此提示词条目吗？')) {
+                              const newItems = items.filter((_, i) => i !== idx);
+                              onUpdateNodeData(editingNode.id, { promptItems: newItems });
+                            }
+                          }}
+                          className="p-2 text-gray-500 active:text-red-400 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <textarea
+                        defaultValue={item.content}
+                        onBlur={(e) => {
+                          if (e.target.value !== item.content) {
+                            const newItems = [...items];
+                            newItems[idx] = { ...newItems[idx], content: e.target.value };
+                            onUpdateNodeData(editingNode.id, { promptItems: newItems });
+                          }
+                        }}
+                        placeholder="输入内容... 支持 {{context}} 和 {{input}}"
+                        className="w-full h-32 bg-transparent p-4 text-sm text-gray-300 focus:text-white outline-none resize-none font-mono leading-relaxed"
+                      />
+                    </div>
+                  ))}
+
+                  <button
+                    onClick={() => {
+                      const newItems = [...items, { id: `prompt-${Date.now()}`, role: 'user' as const, content: '', enabled: true }];
+                      onUpdateNodeData(editingNode.id, { promptItems: newItems });
+                    }}
+                    className="w-full py-5 border-2 border-dashed border-gray-700 rounded-2xl text-gray-500 active:text-indigo-400 active:border-indigo-500/50 active:bg-indigo-500/5 transition-all flex items-center justify-center gap-2 font-bold text-sm"
+                  >
+                    <Plus className="w-5 h-5" />
+                    添加提示词条目
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+
+          <div className="p-6 bg-[#1a1d29] border-t border-gray-700/50 sticky bottom-0 z-10 shadow-[0_-10px_20px_rgba(0,0,0,0.2)]">
+            <button
+              onClick={() => setIsEditingPrompts(false)}
+              className="w-full py-4 bg-indigo-600 active:bg-indigo-500 text-white rounded-2xl text-base font-bold shadow-lg shadow-indigo-900/40 transition-all active:scale-95"
+            >
+              完成编辑
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
