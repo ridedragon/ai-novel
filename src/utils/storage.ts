@@ -6,18 +6,32 @@ const NOVELS_KEY = 'novels';
 const METADATA_PREFIX = 'novel_metadata_';
 const VERSIONS_PREFIX = 'versions_';
 
+// 新增拆分存储的前缀，用于将大对象从元数据中剥离
+const WORLDVIEW_PREFIX = 'novel_worldview_';
+const CHARACTERS_PREFIX = 'novel_characters_';
+const OUTLINE_PREFIX = 'novel_outline_';
+const PLOT_OUTLINE_PREFIX = 'novel_plot_outline_';
+const REFERENCE_PREFIX = 'novel_reference_';
+
 // 用于在内存中缓存内容的哈希或副本，实现脏检查，避免重复写入
 const lastSavedContentCache = new Map<number, string>();
-// 缓存单本书元数据的脏检查
+// 缓存单本书元数据的脏检查 (仅包含章节索引和分卷，不含重型设定)
 const lastSavedMetadataCache = new Map<string, string>();
+// 缓存拆分部分的脏检查，彻底避免重型对象的重复序列化和写入
+const lastSavedWorldviewCache = new Map<string, string>();
+const lastSavedCharactersCache = new Map<string, string>();
+const lastSavedOutlineCache = new Map<string, string>();
+const lastSavedPlotOutlineCache = new Map<string, string>();
+const lastSavedReferenceCache = new Map<string, string>();
+
 // 缓存全局书籍列表的脏检查
 let lastSavedNovelsJson = '';
 
 export const storage = {
-  // 辅助函数：生成单本小说的结构化元数据（不含正文）
+  // 辅助函数：生成单本小说的结构化索引元数据（极简，不含重型设定集）
   _getNovelMetadataJson(novel: Novel): string {
     return JSON.stringify({
-      chapters: novel.chapters.map(chapter => ({
+      chapters: (novel.chapters || []).map(chapter => ({
         id: chapter.id,
         title: chapter.title,
         volumeId: chapter.volumeId,
@@ -27,13 +41,25 @@ export const storage = {
         summaryRange: chapter.summaryRange,
         analysisResult: chapter.analysisResult?.substring(0, 20),
       })),
-      worldviewSets: novel.worldviewSets,
-      characterSets: novel.characterSets,
-      outlineSets: novel.outlineSets,
-      plotOutlineSets: novel.plotOutlineSets,
-      referenceFolders: novel.referenceFolders,
-      referenceFiles: novel.referenceFiles,
+      volumes: novel.volumes || [],
     });
+  },
+
+  // 辅助脏检查函数：针对拆分块
+  _getWorldviewJson(novel: Novel): string {
+    return JSON.stringify(novel.worldviewSets || []);
+  },
+  _getCharactersJson(novel: Novel): string {
+    return JSON.stringify(novel.characterSets || []);
+  },
+  _getOutlineJson(novel: Novel): string {
+    return JSON.stringify(novel.outlineSets || []);
+  },
+  _getPlotOutlineJson(novel: Novel): string {
+    return JSON.stringify(novel.plotOutlineSets || []);
+  },
+  _getReferenceJson(novel: Novel): string {
+    return JSON.stringify({ f: novel.referenceFiles || [], d: novel.referenceFolders || [] });
   },
 
   async getNovels(): Promise<Novel[]> {
@@ -77,20 +103,44 @@ export const storage = {
     }
   },
 
-  // 新增：按需加载特定小说的结构元数据和正文内容
+  // 核心优化：按需加载特定小说的结构元数据 (原子化加载 + 并行化)
   async loadNovelContent(novel: Novel): Promise<Novel> {
     const startTime = Date.now();
-    terminal.log(`[STORAGE] 正在按需加载《${novel.title}》的数据...`);
+    terminal.log(`[STORAGE] 正在按需加载《${novel.title}》的数据 (原子化并行模式)...`);
 
-    // 1. 加载书籍结构元数据 (Metadata)
-    const metadata = await get<any>(`${METADATA_PREFIX}${novel.id}`);
+    // 1. 并行读取所有潜在的存储块
+    const [metadata, wv, char, out, plot, ref] = await Promise.all([
+      get<any>(`${METADATA_PREFIX}${novel.id}`),
+      get<any>(`${WORLDVIEW_PREFIX}${novel.id}`),
+      get<any>(`${CHARACTERS_PREFIX}${novel.id}`),
+      get<any>(`${OUTLINE_PREFIX}${novel.id}`),
+      get<any>(`${PLOT_OUTLINE_PREFIX}${novel.id}`),
+      get<any>(`${REFERENCE_PREFIX}${novel.id}`),
+    ]);
+
     if (metadata) {
       Object.assign(novel, metadata);
-      // 初始化元数据脏检查缓存
+
+      // --- 双轨兼容逻辑：如果新 Key 有值则优先使用，否则沿用 Metadata 里的旧值 (实现无损平滑迁移) ---
+      if (wv) novel.worldviewSets = wv;
+      if (char) novel.characterSets = char;
+      if (out) novel.outlineSets = out;
+      if (plot) novel.plotOutlineSets = plot;
+      if (ref) {
+        novel.referenceFiles = ref.f;
+        novel.referenceFolders = ref.d;
+      }
+
+      // 初始化所有脏检查缓存，防止首次保存时触发误判
       lastSavedMetadataCache.set(novel.id, this._getNovelMetadataJson(novel));
+      lastSavedWorldviewCache.set(novel.id, this._getWorldviewJson(novel));
+      lastSavedCharactersCache.set(novel.id, this._getCharactersJson(novel));
+      lastSavedOutlineCache.set(novel.id, this._getOutlineJson(novel));
+      lastSavedPlotOutlineCache.set(novel.id, this._getPlotOutlineJson(novel));
+      lastSavedReferenceCache.set(novel.id, this._getReferenceJson(novel));
     }
 
-    // 2. 加载章节正文
+    // 2. 加载章节正文 (保持并行)
     const contentPromises = (novel.chapters || []).map(async chapter => {
       if (chapter.content && lastSavedContentCache.has(chapter.id)) return;
       const content = await get<string>(`chapter_content_${chapter.id}`);
@@ -107,54 +157,100 @@ export const storage = {
     return novel;
   },
 
+  // 终极优化：原子化存储 + 真正并行化，目标将日常保存压缩至 30ms 以内
   async saveNovels(novels: Novel[]): Promise<void> {
     const startTime = Date.now();
+    const tasks: Promise<any>[] = []; // 并行任务清单
+
     let contentWriteCount = 0;
-    let metadataWriteCount = 0;
-    let metadataWriteTime = 0;
+    let metadataUpdateCount = 0;
 
     try {
       for (const novel of novels) {
-        // 1. 结构元数据 (Metadata) 分离保存
-        // 只有当章节列表已经加载（即长度 > 0 或 metadataCache 已存在）时才处理保存
-        if (novel.chapters && novel.chapters.length > 0) {
-          const metaStartTime = Date.now();
-          const currentMetaJson = this._getNovelMetadataJson(novel);
-          if (currentMetaJson !== lastSavedMetadataCache.get(novel.id)) {
-            const {
-              chapters,
-              worldviewSets,
-              characterSets,
-              outlineSets,
-              plotOutlineSets,
-              referenceFolders,
-              referenceFiles,
-            } = novel;
-            await set(`${METADATA_PREFIX}${novel.id}`, {
-              chapters: chapters.map(({ versions, content, ...rest }) => rest), // 确保不含正文
-              worldviewSets,
-              characterSets,
-              outlineSets,
-              plotOutlineSets,
-              referenceFolders,
-              referenceFiles,
-            });
-            lastSavedMetadataCache.set(novel.id, currentMetaJson);
-            metadataWriteCount++;
-            metadataWriteTime += Date.now() - metaStartTime;
+        // 核心安全检查：只有加载过章节（非 Skeleton 状态）的书籍才触发原子化保存
+        if (!novel.chapters || novel.chapters.length === 0) continue;
+
+        // --- 1. 原子化脏检查与异步任务分发 ---
+
+        // 1.1 索引元数据 (Metadata: 章节索引、分卷)
+        const currentMetaJson = this._getNovelMetadataJson(novel);
+        if (currentMetaJson !== lastSavedMetadataCache.get(novel.id)) {
+          tasks.push(
+            set(`${METADATA_PREFIX}${novel.id}`, {
+              chapters: novel.chapters.map(({ versions, content, ...rest }) => rest),
+              volumes: novel.volumes || [],
+            }),
+          );
+          lastSavedMetadataCache.set(novel.id, currentMetaJson);
+          metadataUpdateCount++;
+        }
+
+        // 1.2 世界观拆分块 (Worldview)
+        if (novel.worldviewSets) {
+          const currentWvJson = this._getWorldviewJson(novel);
+          if (currentWvJson !== lastSavedWorldviewCache.get(novel.id)) {
+            tasks.push(set(`${WORLDVIEW_PREFIX}${novel.id}`, novel.worldviewSets));
+            lastSavedWorldviewCache.set(novel.id, currentWvJson);
+            metadataUpdateCount++;
           }
         }
 
-        // 2. 章节正文增量保存
-        for (const chapter of novel.chapters || []) {
+        // 1.3 角色集拆分块 (Characters)
+        if (novel.characterSets) {
+          const currentCharJson = this._getCharactersJson(novel);
+          if (currentCharJson !== lastSavedCharactersCache.get(novel.id)) {
+            tasks.push(set(`${CHARACTERS_PREFIX}${novel.id}`, novel.characterSets));
+            lastSavedCharactersCache.set(novel.id, currentCharJson);
+            metadataUpdateCount++;
+          }
+        }
+
+        // 1.4 大纲集拆分块 (Outline)
+        if (novel.outlineSets) {
+          const currentOutJson = this._getOutlineJson(novel);
+          if (currentOutJson !== lastSavedOutlineCache.get(novel.id)) {
+            tasks.push(set(`${OUTLINE_PREFIX}${novel.id}`, novel.outlineSets));
+            lastSavedOutlineCache.set(novel.id, currentOutJson);
+            metadataUpdateCount++;
+          }
+        }
+
+        // 1.5 剧情粗纲拆分块 (Plot Outline)
+        if (novel.plotOutlineSets) {
+          const currentPlotJson = this._getPlotOutlineJson(novel);
+          if (currentPlotJson !== lastSavedPlotOutlineCache.get(novel.id)) {
+            tasks.push(set(`${PLOT_OUTLINE_PREFIX}${novel.id}`, novel.plotOutlineSets));
+            lastSavedPlotOutlineCache.set(novel.id, currentPlotJson);
+            metadataUpdateCount++;
+          }
+        }
+
+        // 1.6 资料库拆分块 (Reference)
+        if (novel.referenceFiles || novel.referenceFolders) {
+          const currentRefJson = this._getReferenceJson(novel);
+          if (currentRefJson !== lastSavedReferenceCache.get(novel.id)) {
+            tasks.push(
+              set(`${REFERENCE_PREFIX}${novel.id}`, {
+                f: novel.referenceFiles || [],
+                d: novel.referenceFolders || [],
+              }),
+            );
+            lastSavedReferenceCache.set(novel.id, currentRefJson);
+            metadataUpdateCount++;
+          }
+        }
+
+        // --- 2. 章节正文增量保存 (纳入并行清单) ---
+        for (const chapter of novel.chapters) {
+          // 修正隐患：版本历史现在也纳入并行保存队列
           if (chapter.versions && chapter.versions.length > 0) {
-            this.saveChapterVersions(chapter.id, chapter.versions);
+            tasks.push(this.saveChapterVersions(chapter.id, chapter.versions));
           }
 
           if (typeof chapter.content === 'string') {
             const currentContent = chapter.content;
             if (currentContent !== lastSavedContentCache.get(chapter.id)) {
-              await set(`chapter_content_${chapter.id}`, currentContent);
+              tasks.push(set(`chapter_content_${chapter.id}`, currentContent));
               lastSavedContentCache.set(chapter.id, currentContent);
               contentWriteCount++;
             }
@@ -162,8 +258,7 @@ export const storage = {
         }
       }
 
-      // 3. 全局书籍列表 (Skeletons) 瘦身保存
-      // 现在的 novels 键只存书籍的基本信息，绝不包含章节列表
+      // --- 3. 全局书籍列表 (Skeleton) 并行保存 ---
       const strippedNovels = novels.map(
         ({
           chapters,
@@ -176,30 +271,33 @@ export const storage = {
           worldview,
           characters,
           outline,
+          volumes,
           ...rest
         }) => rest,
       );
       const currentNovelsJson = JSON.stringify(strippedNovels);
       let novelsWriteCount = 0;
-      let novelsWriteTime = 0;
 
       if (currentNovelsJson !== lastSavedNovelsJson) {
-        const nStartTime = Date.now();
-        await set(NOVELS_KEY, strippedNovels);
+        tasks.push(set(NOVELS_KEY, strippedNovels));
         lastSavedNovelsJson = currentNovelsJson;
         novelsWriteCount = 1;
-        novelsWriteTime = Date.now() - nStartTime;
       }
 
+      // --- 终极并发提交：利用 Promise.all 让所有任务并排过桥 ---
+      const commitStartTime = Date.now();
+      await Promise.all(tasks);
       const endTime = Date.now();
 
-      if (contentWriteCount > 0 || metadataWriteCount > 0 || novelsWriteCount > 0) {
+      if (tasks.length > 0) {
         terminal.log(`
-[PERF] storage.saveNovels (二级拆分模式):
+[PERF] storage.saveNovels (原子化并行模式):
+- 写入任务数: ${tasks.length} (并发提交)
 - 正文写入: ${contentWriteCount} 节
-- 书籍元数据更新: ${metadataWriteCount} 次 (耗时: ${metadataWriteTime}ms)
-- 全局列表更新: ${novelsWriteCount} 次 (耗时: ${novelsWriteTime}ms)
-- 总耗时: ${endTime - startTime}ms
+- 元数据/设定更新项: ${metadataUpdateCount} (拆分存储)
+- 全局列表更新: ${novelsWriteCount}
+- 数据库 I/O 耗时: ${endTime - commitStartTime}ms
+- 总执行耗时: ${endTime - startTime}ms
         `);
       }
     } catch (e) {
