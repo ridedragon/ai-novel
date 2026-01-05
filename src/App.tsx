@@ -1122,7 +1122,68 @@ function App() {
       const novel = novelsRef.current.find(n => n.id === activeNovelId)
       if (novel) {
         // 当切换小说时，触发按需加载
-        storage.loadNovelContent(novel).then(loadedNovel => {
+        storage.loadNovelContent(novel).then(async loadedNovel => {
+          // --- 分卷找回逻辑：跨源数据修复 ---
+          const currentVolumes = loadedNovel.volumes || [];
+          const orphanVolumeIds = new Set(
+            (loadedNovel.chapters || [])
+              .map(c => c.volumeId)
+              .filter(id => id && !currentVolumes.some(v => String(v.id) === String(id)))
+          );
+
+          if (orphanVolumeIds.size > 0) {
+            terminal.log(`[DATA HEALING] 检测到 ${orphanVolumeIds.size} 个丢失名称的分卷，启动找回程序...`);
+            let healed = false;
+            const newVolumes = [...currentVolumes];
+            const remainingOrphans = new Set(orphanVolumeIds);
+
+            // 1. 尝试从工作流配置中找回
+            try {
+              const savedWfs = localStorage.getItem('novel_workflows');
+              if (savedWfs) {
+                const wfs = JSON.parse(savedWfs);
+                remainingOrphans.forEach(id => {
+                  for (const wf of wfs) {
+                    const matchedNode = wf.nodes?.find((n: any) => String(n.data?.targetVolumeId) === String(id) && n.data?.folderName);
+                    if (matchedNode) {
+                      newVolumes.push({ id: String(id), title: matchedNode.data.folderName, collapsed: false });
+                      remainingOrphans.delete(id);
+                      healed = true;
+                      terminal.log(`[DATA HEALING] 从工作流节点找回分卷名称: ${matchedNode.data.folderName}`);
+                      break;
+                    }
+                  }
+                });
+              }
+            } catch (e) {}
+
+            // 2. 尝试从资料集 ID 匹配中找回 (通常 ID 一致)
+            remainingOrphans.forEach(id => {
+              const matchedSet =
+                loadedNovel.outlineSets?.find(s => String(s.id) === String(id)) ||
+                loadedNovel.worldviewSets?.find(s => String(s.id) === String(id)) ||
+                loadedNovel.characterSets?.find(s => String(s.id) === String(id));
+              
+              if (matchedSet) {
+                newVolumes.push({ id: String(id), title: matchedSet.name, collapsed: false });
+                remainingOrphans.delete(id);
+                healed = true;
+                terminal.log(`[DATA HEALING] 从资料集匹配找回分卷名称: ${matchedSet.name}`);
+              }
+            });
+
+            // 3. 兜底策略：如果依然没找回，为了恢复 UI 结构，创建一个占位分卷
+            remainingOrphans.forEach(id => {
+              newVolumes.push({ id: String(id), title: `恢复的分卷 (${String(id).substring(0,4)})`, collapsed: false });
+              healed = true;
+              terminal.log(`[DATA HEALING] 无法找回名称，创建占位分卷: ${id}`);
+            });
+
+            if (healed) {
+              loadedNovel.volumes = newVolumes;
+            }
+          }
+
           setNovels(prev => prev.map(n => n.id === loadedNovel.id ? loadedNovel : n))
           
           // 核心优化：异步加载完成后，如果当前没有活跃章节，自动选择第一章
@@ -2023,15 +2084,16 @@ function App() {
   // 性能优化：预先将章节按分卷 ID 进行分组，避免在循环中重复过滤
   const chaptersByVolume = React.useMemo(() => {
     const group: Record<string, Chapter[]> = { 'uncategorized': [] };
-    // 建立有效分卷 ID 集合，用于快速校验
-    const validVolumeIds = new Set(volumes.map(v => v.id));
+    // 建立有效分卷 ID 集合，用于快速校验。统一转换为字符串，增强容错性。
+    const validVolumeIds = new Set(volumes.map(v => String(v.id)));
 
     sortedChapters.forEach(c => {
       // 核心修复：只有当 volumeId 存在且确实在分卷列表中时，才按分卷分组
       // 否则一律归类到“未分卷”，防止因分卷被删或数据异常导致的章节“隐身”
-      if (c.volumeId && validVolumeIds.has(c.volumeId)) {
-        if (!group[c.volumeId]) group[c.volumeId] = [];
-        group[c.volumeId].push(c);
+      const cid = c.volumeId ? String(c.volumeId) : null;
+      if (cid && validVolumeIds.has(cid)) {
+        if (!group[cid]) group[cid] = [];
+        group[cid].push(c);
       } else {
         group['uncategorized'].push(c);
       }
@@ -6945,7 +7007,7 @@ ${taskDescription}`
                       
                       {!volume.collapsed && (
                         <div className="ml-2 pl-2 border-l border-gray-700/50 mt-1 space-y-1">
-                          {(chaptersByVolume[volume.id] || []).map(chapter => (
+                          {(chaptersByVolume[String(volume.id)] || []).map(chapter => (
                             <ChapterSidebarItem
                               key={chapter.id}
                               chapter={chapter}
@@ -9729,11 +9791,17 @@ ${taskDescription}`
             // 使用 Map 收集后的所有章节进行稳定排序
             const mergedChapters = sortChapters(Array.from(allLocalChaptersMap.values()));
             
+            // 关键修复：合并时显式保留 volumes 的折叠状态
+            const mergedVolumes = (updatedNovel.volumes || localNovel.volumes || []).map(v => {
+              const existingVol = localNovel.volumes?.find(ev => ev.id === v.id);
+              return existingVol ? { ...v, collapsed: existingVol.collapsed } : v;
+            });
+
             localNovelsCopy[localNovelIndex] = {
               ...localNovel,
               ...updatedNovel, // 优先保留传入的所有更新
               chapters: mergedChapters,
-              volumes: updatedNovel.volumes || localNovel.volumes,
+              volumes: mergedVolumes,
             };
             
             return localNovelsCopy;

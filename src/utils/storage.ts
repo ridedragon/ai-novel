@@ -271,9 +271,8 @@ export const storage = {
           worldview,
           characters,
           outline,
-          volumes,
           ...rest
-        }) => rest,
+        }) => ({ ...rest, volumes: rest.volumes || [] }),
       );
       const currentNovelsJson = JSON.stringify(strippedNovels);
       let novelsWriteCount = 0;
