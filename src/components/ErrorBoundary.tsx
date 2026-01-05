@@ -1,5 +1,6 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { Component, ErrorInfo, ReactNode } from 'react'
+import terminal from 'virtual:terminal'
 
 interface Props {
   children?: ReactNode
@@ -24,6 +25,13 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // --- 性能调查：将手机端崩溃信息实时发送到 PowerShell ---
+    terminal.log(`
+[FATAL ERROR] 应用程序崩溃:
+- Error: ${error.toString()}
+- Stack: ${errorInfo.componentStack}
+- UserAgent: ${navigator.userAgent}
+    `);
     console.error('Uncaught error:', error, errorInfo)
     this.setState({ errorInfo })
   }

@@ -15,6 +15,7 @@ import {
   X
 } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
+import terminal from 'virtual:terminal'
 import { CharacterSet, InspirationSet, Novel, OutlineSet, WorldviewItem, WorldviewSet } from '../types'
 import { ReferenceSelector } from './ReferenceSelector'
 
@@ -259,10 +260,15 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = React.memo(({
 
   const updateEntries = (newEntries: WorldviewItem[]) => {
     if (!activeSet) return
-    const updatedSets = (novel.worldviewSets || []).map(s => 
+    const startTime = Date.now();
+    const updatedSets = (novel.worldviewSets || []).map(s =>
       s.id === activeSet.id ? { ...s, entries: newEntries } : s
     )
     onUpdateNovel({ ...novel, worldviewSets: updatedSets })
+    const endTime = Date.now();
+    if (endTime - startTime > 30) {
+      terminal.log(`[PERF] WorldviewManager.updateEntries: ${endTime - startTime}ms (Entries: ${newEntries.length})`);
+    }
   }
 
   const handleAddEntry = () => {

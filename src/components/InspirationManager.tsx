@@ -18,6 +18,7 @@ import {
   X
 } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
+import terminal from 'virtual:terminal'
 import { CharacterSet, InspirationItem, InspirationSet, Novel, OutlineSet, WorldviewSet } from '../types'
 import { ReferenceSelector } from './ReferenceSelector'
 
@@ -269,10 +270,15 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
 
   const updateEntries = (newItems: InspirationItem[]) => {
     if (!activeSet) return
-    const updatedSets = (novel.inspirationSets || []).map(s => 
+    const startTime = Date.now();
+    const updatedSets = (novel.inspirationSets || []).map(s =>
       s.id === activeSet.id ? { ...s, items: newItems } : s
     )
     onUpdateNovel({ ...novel, inspirationSets: updatedSets })
+    const endTime = Date.now();
+    if (endTime - startTime > 30) {
+      terminal.log(`[PERF] InspirationManager.updateEntries: ${endTime - startTime}ms (Items: ${newItems.length})`);
+    }
   }
 
   const handleAddEntry = () => {

@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import terminal from 'virtual:terminal';
 import { Chapter, Novel } from '../types';
 
 /**
@@ -9,6 +10,7 @@ import { Chapter, Novel } from '../types';
  * 3. 同一位置小总结在前，大总结在后
  */
 export const sortChapters = (chapters: Chapter[]): Chapter[] => {
+  const startTime = Date.now();
   // 1. 分离非总结章节（保持原始顺序）和总结章节
   const storyChapters = chapters.filter(c => c.subtype !== 'small_summary' && c.subtype !== 'big_summary');
   const summaries = chapters.filter(c => c.subtype === 'small_summary' || c.subtype === 'big_summary');
@@ -63,6 +65,11 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
     }
   });
 
+  const endTime = Date.now();
+  if (endTime - startTime > 30) {
+    terminal.log(`[PERF] SummaryManager.sortChapters: ${endTime - startTime}ms (Chapters: ${chapters.length})`);
+  }
+
   return finalChapters;
 };
 
@@ -103,6 +110,7 @@ export const checkAndGenerateSummary = async (
   log: (msg: string) => void,
   errorLog: (msg: string) => void,
 ): Promise<Novel | undefined> => {
+  const startTime = Date.now();
   const {
     apiKey,
     baseUrl,
@@ -402,6 +410,11 @@ export const checkAndGenerateSummary = async (
         }
       }
     }
+  }
+
+  const endTime = Date.now();
+  if (endTime - startTime > 100) {
+    terminal.log(`[PERF] SummaryManager.checkAndGenerateSummary total time: ${endTime - startTime}ms`);
   }
 
   return lastUpdatedNovel;

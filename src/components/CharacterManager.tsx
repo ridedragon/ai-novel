@@ -15,6 +15,7 @@ import {
   X
 } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
+import terminal from 'virtual:terminal'
 import { CharacterItem, CharacterSet, InspirationSet, Novel, OutlineSet, WorldviewSet } from '../types'
 import { ReferenceSelector } from './ReferenceSelector'
 
@@ -259,10 +260,15 @@ export const CharacterManager: React.FC<CharacterManagerProps> = React.memo(({
 
   const updateCharacters = (newCharacters: CharacterItem[]) => {
     if (!activeSet) return
-    const updatedSets = (novel.characterSets || []).map(s => 
+    const startTime = Date.now();
+    const updatedSets = (novel.characterSets || []).map(s =>
       s.id === activeSet.id ? { ...s, characters: newCharacters } : s
     )
     onUpdateNovel({ ...novel, characterSets: updatedSets })
+    const endTime = Date.now();
+    if (endTime - startTime > 30) {
+      terminal.log(`[PERF] CharacterManager.updateCharacters: ${endTime - startTime}ms (Chars: ${newCharacters.length})`);
+    }
   }
 
   const handleAddCharacter = () => {

@@ -1,3 +1,5 @@
+import terminal from 'virtual:terminal';
+
 export class KeepAliveManager {
   private audio: HTMLAudioElement;
   private wakeLock: any = null;
@@ -14,30 +16,32 @@ export class KeepAliveManager {
 
   public async enable() {
     if (this.isEnabled) return;
-    
+
     try {
       // 1. Play Silent Audio
       await this.audio.play();
       this.isEnabled = true;
-      console.log('[KeepAlive] Audio started');
-      
+      terminal.log('[KeepAlive] Audio started successfully (playing silent loop)');
+
       // 2. Request Wake Lock (Screen)
       if ('wakeLock' in navigator) {
         try {
-           // @ts-ignore
-           this.wakeLock = await navigator.wakeLock.request('screen');
-           console.log('[KeepAlive] Wake Lock active');
-           
-           // Re-acquire on visibility change
-           document.addEventListener('visibilitychange', this.handleVisibilityChange);
+          // @ts-ignore
+          this.wakeLock = await navigator.wakeLock.request('screen');
+          terminal.log('[KeepAlive] Wake Lock acquired successfully');
+
+          // Re-acquire on visibility change
+          document.addEventListener('visibilitychange', this.handleVisibilityChange);
         } catch (err) {
-           console.warn('[KeepAlive] Wake Lock failed:', err);
+          terminal.log(`[KeepAlive] Wake Lock Error: ${err instanceof Error ? err.message : String(err)}`);
+          console.warn('[KeepAlive] Wake Lock failed:', err);
         }
       }
     } catch (err) {
+      terminal.log(`[KeepAlive] Critical Start Error: ${err instanceof Error ? err.message : String(err)}`);
       console.error('[KeepAlive] Failed to start:', err);
       // Usually due to lack of user interaction. UI should handle this.
-      throw err; 
+      throw err;
     }
   }
 
@@ -47,7 +51,7 @@ export class KeepAliveManager {
     // 1. Stop Audio
     this.audio.pause();
     this.audio.currentTime = 0;
-    
+
     // 2. Release Wake Lock
     if (this.wakeLock) {
       this.wakeLock.release().then(() => {
@@ -55,7 +59,7 @@ export class KeepAliveManager {
         console.log('[KeepAlive] Wake Lock released');
       });
     }
-    
+
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.isEnabled = false;
     console.log('[KeepAlive] Stopped');
@@ -66,12 +70,13 @@ export class KeepAliveManager {
       try {
         // @ts-ignore
         this.wakeLock = await navigator.wakeLock.request('screen');
-        console.log('[KeepAlive] Wake Lock re-acquired');
+        terminal.log('[KeepAlive] Wake Lock re-acquired (visibility changed to visible)');
       } catch (err) {
+        terminal.log(`[KeepAlive] Wake Lock Re-acquire Error: ${err instanceof Error ? err.message : String(err)}`);
         console.warn('[KeepAlive] Re-acquire Wake Lock failed:', err);
       }
     }
-  }
+  };
 
   public isActive() {
     return this.isEnabled;

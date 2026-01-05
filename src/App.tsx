@@ -1003,9 +1003,14 @@ function App() {
   
   // 统一状态更新包装器：确保 Ref 与 State 始终同步，彻底消除竞态隐患
   const setNovels = React.useCallback((value: Novel[] | ((prev: Novel[]) => Novel[])) => {
+    const startTime = Date.now();
     _setNovels(prev => {
       const next = typeof value === 'function' ? (value as any)(prev) : value;
       novelsRef.current = next;
+      const endTime = Date.now();
+      if (endTime - startTime > 50) {
+        terminal.log(`[PERF] App.tsx setNovels State Update: ${endTime - startTime}ms`);
+      }
       return next;
     });
   }, []);
@@ -1915,8 +1920,10 @@ function App() {
   
   const setChapters = React.useCallback((value: Chapter[] | ((prev: Chapter[]) => Chapter[])) => {
       if (!activeNovelId) return
+      const startTime = Date.now();
       setNovels(prevNovels => {
-          return prevNovels.map(n => {
+          const updateStart = Date.now();
+          const result = prevNovels.map(n => {
               if (n.id === activeNovelId) {
                   const currentChapters = n.chapters
                   const newChapters = typeof value === 'function' ? (value as any)(currentChapters) : value
@@ -1925,7 +1932,16 @@ function App() {
               }
               return n
           })
+          const updateEnd = Date.now();
+          if (updateEnd - updateStart > 50) {
+            terminal.log(`[PERF] App.tsx setChapters Map/Sort: ${updateEnd - updateStart}ms`);
+          }
+          return result;
       })
+      const endTime = Date.now();
+      if (endTime - startTime > 100) {
+        terminal.log(`[PERF] App.tsx setChapters total block: ${endTime - startTime}ms`);
+      }
   }, [activeNovelId, setNovels]);
 
   const setVolumes = React.useCallback((value: NovelVolume[]) => {
@@ -5094,15 +5110,18 @@ function App() {
         let hasReceivedContent = false
         let lastUpdateTime = 0
 
+        let chunkCount = 0;
         for await (const chunk of stream) {
           if (abortController.signal.aborted) throw new Error('Aborted')
           const content = chunk.choices[0]?.delta?.content || ''
           if (content) hasReceivedContent = true
           newContent += content
+          chunkCount++;
           
           const now = Date.now()
           // 节流处理：每 150ms 更新一次 UI，显著降低大规模渲染带来的主线程阻塞
           if (now - lastUpdateTime > 150) {
+            const renderStart = Date.now();
             lastUpdateTime = now
             setChapters(prev => prev.map(c => {
                 if (c.id === idToUse) {
@@ -5117,8 +5136,15 @@ function App() {
                 }
                 return c
             }))
+            
+            // --- 性能调查：监控渲染耗时 ---
+            const renderEnd = Date.now();
+            if (renderEnd - renderStart > 50) {
+                terminal.log(`[PERF] App.tsx Optimize Render: ${renderEnd - renderStart}ms (Slow render detected!)`);
+            }
           }
         }
+        terminal.log(`[PERF] Optimize stream complete. Total chunks: ${chunkCount}, Final length: ${newContent.length}`);
         
         if (!hasReceivedContent && stream) {
            throw new Error("Empty response received")
@@ -5376,14 +5402,17 @@ ${taskDescription}`
         // Stream Handler
         if (stream) {
             let lastUpdateTime = 0
+            let chunkCount = 0;
             for await (const chunk of response) {
               if (!isAutoWritingRef.current) throw new Error('Aborted')
               const content = chunk.choices[0]?.delta?.content || ''
               if (content) hasReceivedContent = true
               fullGeneratedContent += content
+              chunkCount++;
               
               const now = Date.now()
               if (now - lastUpdateTime > 200) { // 自动化写作节流：每 200ms 更新一次 UI
+                const renderStart = Date.now();
                 lastUpdateTime = now
                 setNovels(prev => {
                     const next = prev.map(n => {
@@ -5424,8 +5453,13 @@ ${taskDescription}`
                     novelsRef.current = next;
                     return next;
                 })
+                const renderEnd = Date.now();
+                if (renderEnd - renderStart > 50) {
+                    terminal.log(`[PERF] App.tsx AutoWrite Render: ${renderEnd - renderStart}ms`);
+                }
               }
             }
+            terminal.log(`[PERF] AutoWrite stream complete. Total chunks: ${chunkCount}`);
         } else {
             // Non-stream
             if (!isAutoWritingRef.current) throw new Error('Aborted')

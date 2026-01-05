@@ -956,6 +956,9 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     }
 
     saveTimeoutRef.current = setTimeout(() => {
+      // --- 性能调查：监控 MobileWorkflowEditor 自动保存耗时 ---
+      const startTime = Date.now();
+      
       setWorkflows(prevWorkflows => {
         const updatedWorkflows = prevWorkflows.map(w => {
           if (w.id === activeWorkflowId) {
@@ -970,8 +973,25 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           return w;
         });
         
-        localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
+        const serializeStart = Date.now();
+        const workflowsJson = JSON.stringify(updatedWorkflows);
+        const serializeEnd = Date.now();
+        
+        localStorage.setItem('novel_workflows', workflowsJson);
         localStorage.setItem('active_workflow_id', activeWorkflowId);
+        
+        const endTime = Date.now();
+        
+        // 在 PowerShell 终端打印耗时
+        terminal.log(`
+[PERF] MobileWorkflowEditor AutoSave:
+- 数据处理耗时: ${serializeStart - startTime}ms
+- JSON 序列化耗时: ${serializeEnd - serializeStart}ms
+- localStorage 写入耗时: ${endTime - serializeEnd}ms
+- 总计: ${endTime - startTime}ms
+- 工作流总数: ${updatedWorkflows.length}
+- 当前节点数: ${nodes.length}
+        `);
         
         return updatedWorkflows;
       });
@@ -1235,6 +1255,14 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
   // --- 执行引擎 ---
   const runWorkflow = async (startIndex: number = 0) => {
+    // --- 性能调查：监控工作流执行期间的内存情况 ---
+    const logMemory = () => {
+      if ((performance as any).memory) {
+        const mem = (performance as any).memory;
+        terminal.log(`[MEM] Used: ${Math.round(mem.usedJSHeapSize / 1048576)}MB, Total: ${Math.round(mem.totalJSHeapSize / 1048576)}MB, Limit: ${Math.round(mem.jsHeapSizeLimit / 1048576)}MB`);
+      }
+    };
+
     if (!globalConfig?.apiKey) {
       setError('请先在主设置中配置 API Key');
       return;
@@ -1329,6 +1357,9 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
         const node = sortedNodes[i];
         setCurrentNodeIndex(i);
+        
+        terminal.log(`[WORKFLOW] Executing Node: ${node.data.label} (${node.data.typeLabel})`);
+        logMemory();
 
         if (node.data.skipped) {
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));

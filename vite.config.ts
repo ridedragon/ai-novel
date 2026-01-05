@@ -1,7 +1,7 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import Terminal from 'vite-plugin-terminal'
-import { VitePWA } from 'vite-plugin-pwa'
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
+import Terminal from 'vite-plugin-terminal';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -25,29 +25,34 @@ export default defineConfig({
           {
             src: 'pwa-192x192.png',
             sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
           },
           {
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
-          }
-        ]
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
+        ],
       },
       devOptions: {
-        enabled: true
-      }
-    })
+        enabled: true,
+      },
+    }),
   ],
   server: {
     port: 8002,
     host: true,
-    strictPort: true
-  }
-})
+    strictPort: true,
+    // --- 性能调查：确保手机端 terminal 请求能顺利通过 CORS ---
+    cors: true,
+    hmr: {
+      overlay: true,
+    },
+  },
+});

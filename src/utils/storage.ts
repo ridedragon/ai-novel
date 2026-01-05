@@ -1,4 +1,5 @@
 import { del, get, set } from 'idb-keyval';
+import terminal from 'virtual:terminal';
 import { ChapterVersion, Novel } from '../types';
 
 const NOVELS_KEY = 'novels';
@@ -41,7 +42,9 @@ export const storage = {
   },
 
   async saveNovels(novels: Novel[]): Promise<void> {
+    const startTime = Date.now();
     try {
+      // --- 性能调查：监控主数据保存流程 ---
       // 冷热分离：保存主数据时剥离 versions
       const strippedNovels = novels.map(novel => ({
         ...novel,
@@ -55,7 +58,19 @@ export const storage = {
           return rest;
         }),
       }));
+
+      const serializeTime = Date.now();
       await set(NOVELS_KEY, strippedNovels);
+      const endTime = Date.now();
+
+      // 在 PowerShell 终端打印耗时
+      terminal.log(`
+[PERF] storage.saveNovels:
+- 处理数据耗时: ${serializeTime - startTime}ms
+- IndexedDB 写入耗时: ${endTime - serializeTime}ms
+- 总计: ${endTime - startTime}ms
+- 章节总数: ${novels.reduce((acc, n) => acc + n.chapters.length, 0)}
+      `);
     } catch (e) {
       console.error('Failed to save novels to IndexedDB', e);
       throw e;
