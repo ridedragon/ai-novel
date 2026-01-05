@@ -853,6 +853,17 @@ const normalizeGeneratorResult = (data: any[], type: 'outline' | 'character' | '
 }
 
 function App() {
+  // --- UI & AI Task States (Moved to top to ensure initialization) ---
+  const [isLoading, setIsLoading] = useState(false)
+  const [isAutoWriting, setIsAutoWriting] = useState(false)
+  const [optimizingChapterIds, setOptimizingChapterIds] = useState<Set<number>>(new Set())
+  const [isGeneratingOutline, setIsGeneratingOutline] = useState(false)
+  const [isGeneratingCharacters, setIsGeneratingCharacters] = useState(false)
+  const [isGeneratingWorldview, setIsGeneratingWorldview] = useState(false)
+  const [isGeneratingInspiration, setIsGeneratingInspiration] = useState(false)
+  const [isGeneratingPlotOutline, setIsGeneratingPlotOutline] = useState(false)
+  const [autoWriteStatus, setAutoWriteStatus] = useState('')
+
   // Theme Settings
   const [themeColor, setThemeColor] = useState(() => localStorage.getItem('themeColor') || '#2563eb')
 
@@ -1247,8 +1258,11 @@ function App() {
   // Persistence - 增加防抖处理，避免频繁写入导致的卡顿
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
-    // 增加保存间隔，减轻手机端压力
-    if (novels.length > 0) {
+    // 如果正在进行高强度 AI 任务，则暂时跳过自动保存，等任务结束或空闲时再存
+    // 这能有效防止流式输出期间 JSON 序列化和 IDB 写入抢占 CPU 导致浏览器无响应
+    const isIntensiveTaskRunning = isAutoWriting || optimizingChapterIds.size > 0 || isLoading || isGeneratingOutline || isGeneratingCharacters || isGeneratingWorldview || isGeneratingInspiration || isGeneratingPlotOutline;
+
+    if (novels.length > 0 && !isIntensiveTaskRunning) {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
         storage.saveNovels(novels).catch(e => console.error('Failed to save novels', e));
@@ -1257,7 +1271,7 @@ function App() {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [novels])
+  }, [novels, isAutoWriting, optimizingChapterIds.size, isLoading, isGeneratingOutline, isGeneratingCharacters, isGeneratingWorldview, isGeneratingInspiration, isGeneratingPlotOutline])
 
   useEffect(() => {
     localStorage.setItem('outlinePresets', JSON.stringify(outlinePresets))
@@ -1540,15 +1554,7 @@ function App() {
   const [showOutline, setShowOutline] = useState(false)
   const [creationModule, setCreationModule] = useState<'menu' | 'outline' | 'plotOutline' | 'characters' | 'worldview' | 'inspiration' | 'reference'>('menu')
   useEffect(() => { creationModuleRef.current = creationModule }, [creationModule])
-  const [isGeneratingOutline, setIsGeneratingOutline] = useState(false)
   const [regeneratingOutlineItemIndices, setRegeneratingOutlineItemIndices] = useState<Set<number>>(new Set())
-  const [isGeneratingCharacters, setIsGeneratingCharacters] = useState(false)
-  const [isGeneratingWorldview, setIsGeneratingWorldview] = useState(false)
-  const [isGeneratingInspiration, setIsGeneratingInspiration] = useState(false)
-  const [isGeneratingPlotOutline, setIsGeneratingPlotOutline] = useState(false)
-  const [optimizingChapterIds, setOptimizingChapterIds] = useState<Set<number>>(new Set())
-  const [isAutoWriting, setIsAutoWriting] = useState(false)
-  const [autoWriteStatus, setAutoWriteStatus] = useState('')
 
   // Optimization Queue Processor
   useEffect(() => {
@@ -2139,8 +2145,7 @@ function App() {
   }
 
   
-  // UI State
-  const [isLoading, setIsLoading] = useState(false)
+  // Settings UI State
   const [showSettings, setShowSettings] = useState(false)
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
   const [error, setError] = useState('')
@@ -5018,6 +5023,7 @@ function App() {
 
         let newContent = ''
         let hasReceivedContent = false
+        let lastUpdateTime = 0
 
         for await (const chunk of stream) {
           if (abortController.signal.aborted) throw new Error('Aborted')
@@ -5025,19 +5031,24 @@ function App() {
           if (content) hasReceivedContent = true
           newContent += content
           
-          setChapters(prev => prev.map(c => {
-              if (c.id === idToUse) {
-                  // 使用 buildVersions 确保版本完整性
-                  const newVersions = buildVersions(c.versions, newContent)
-                  return { 
-                      ...c, 
-                      content: newContent,
-                      versions: newVersions,
-                      activeVersionId: newVersionId
-                  }
-              }
-              return c
-          }))
+          const now = Date.now()
+          // 节流处理：每 150ms 更新一次 UI，显著降低大规模渲染带来的主线程阻塞
+          if (now - lastUpdateTime > 150) {
+            lastUpdateTime = now
+            setChapters(prev => prev.map(c => {
+                if (c.id === idToUse) {
+                    // 使用 buildVersions 确保版本完整性
+                    const newVersions = buildVersions(c.versions, newContent)
+                    return {
+                        ...c,
+                        content: newContent,
+                        versions: newVersions,
+                        activeVersionId: newVersionId
+                    }
+                }
+                return c
+            }))
+          }
         }
         
         if (!hasReceivedContent && stream) {
@@ -5295,114 +5306,55 @@ ${taskDescription}`
         
         // Stream Handler
         if (stream) {
+            let lastUpdateTime = 0
             for await (const chunk of response) {
               if (!isAutoWritingRef.current) throw new Error('Aborted')
               const content = chunk.choices[0]?.delta?.content || ''
               if (content) hasReceivedContent = true
               fullGeneratedContent += content
               
-              // Real-time update (Basic: put everything in first chapter or try to split on fly?)
-              // Splitting on fly is hard. Let's just dump into the first chapter temporarily or a status field?
-              // For UX, maybe just show in the first chapter being generated.
-              // Better: Try to split naively.
-              
-              if (preparedBatch.length > 1) {
-                  // Naive split for display
-                  const parts = fullGeneratedContent.split(/###\s*(.*)\n/)
-                  // This regex split is complex during stream.
-                  // Let's just update the FIRST chapter with everything to show liveness, 
-                  // or just not update state until done? 
-                  // Users prefer seeing output.
-                  // Let's update the first chapter with full content for now.
-                  setNovels(prev => {
-                      const next = prev.map(n => {
-                          if (n.id === novelId) {
-                              return {
-                                  ...n,
-                                  chapters: n.chapters.map(c => {
-                                      if (c.id === preparedBatch[0].id) {
-                                          // 修正：在流式写入前，先确保旧内容被备份
-                                          let chapterWithHistory = c.versions && c.versions.length > 0 ? c : ensureChapterVersions(c);
-                                          
-                                          // 创建或定位 AI 创作版本
-                                          const aiVersionId = `v_autowrite_${preparedBatch[0].id}`;
-                                          let versions = [...(chapterWithHistory.versions || [])];
-                                          let aiVerIdx = versions.findIndex(v => v.id === aiVersionId);
-                                          
-                                          if (aiVerIdx !== -1) {
-                                              versions[aiVerIdx] = { ...versions[aiVerIdx], content: fullGeneratedContent };
-                                          } else {
-                                              versions.push({
-                                                  id: aiVersionId,
-                                                  content: fullGeneratedContent,
-                                                  timestamp: Date.now(),
-                                                  type: 'optimized' // AI 生成的内容统一标记为优化/生成版
-                                              });
-                                          }
+              const now = Date.now()
+              if (now - lastUpdateTime > 200) { // 自动化写作节流：每 200ms 更新一次 UI
+                lastUpdateTime = now
+                setNovels(prev => {
+                    const next = prev.map(n => {
+                        if (n.id === novelId) {
+                            return {
+                                ...n,
+                                chapters: n.chapters.map(c => {
+                                    if (c.id === preparedBatch[0].id) {
+                                        let chapterWithHistory = c.versions && c.versions.length > 0 ? c : ensureChapterVersions(c);
+                                        const aiVersionId = `v_autowrite_${preparedBatch[0].id}`;
+                                        let versions = [...(chapterWithHistory.versions || [])];
+                                        let aiVerIdx = versions.findIndex(v => v.id === aiVersionId);
+                                        
+                                        if (aiVerIdx !== -1) {
+                                            versions[aiVerIdx] = { ...versions[aiVerIdx], content: fullGeneratedContent };
+                                        } else {
+                                            versions.push({
+                                                id: aiVersionId,
+                                                content: fullGeneratedContent,
+                                                timestamp: Date.now(),
+                                                type: 'optimized'
+                                            });
+                                        }
 
-                                          return {
-                                              ...c,
-                                              content: fullGeneratedContent,
-                                              versions: versions,
-                                              activeVersionId: aiVersionId
-                                          };
-                                      }
-                                      return c;
-                                  })
-                              }
-                          }
-                          return n
-                      });
-                      novelsRef.current = next;
-                      return next;
-                  })
-              } else {
-                  // 【BUG 风险点 - 原文丢失】：全自动创作流式覆盖
-                  // 谨慎修改：此处在流式输出过程中直接调用了 ensureChapterVersions。
-                  // 如果用户在自动创作开始前进行了手动编辑但未手动创建版本，
-                  // 这里的逻辑会瞬间将 AI 输出的第一块内容误认为是“原文”并初始化版本，
-                  // 从而永久丢失用户在创作开始前的手动修改。
-                  setNovels(prev => {
-                      const next = prev.map(n => {
-                          if (n.id === novelId) {
-                              return {
-                                  ...n,
-                                  chapters: n.chapters.map(c => {
-                                      if (c.id === preparedBatch[0].id) {
-                                          // 修正：全自动创作流式版本保护
-                                          let chapterWithHistory = c.versions && c.versions.length > 0 ? c : ensureChapterVersions(c);
-                                          
-                                          const aiVersionId = `v_autowrite_${preparedBatch[0].id}`;
-                                          let versions = [...(chapterWithHistory.versions || [])];
-                                          let aiVerIdx = versions.findIndex(v => v.id === aiVersionId);
-                                          
-                                          if (aiVerIdx !== -1) {
-                                              versions[aiVerIdx] = { ...versions[aiVerIdx], content: fullGeneratedContent };
-                                          } else {
-                                              versions.push({
-                                                  id: aiVersionId,
-                                                  content: fullGeneratedContent,
-                                                  timestamp: Date.now(),
-                                                  type: 'optimized' // AI 生成的内容统一标记为优化/生成版
-                                              });
-                                          }
-
-                                          return {
-                                              ...c,
-                                              content: fullGeneratedContent,
-                                              versions: versions,
-                                              activeVersionId: aiVersionId
-                                          };
-                                      }
-                                      return c;
-                                  })
-                              }
-                          }
-                          return n
-                      });
-                      novelsRef.current = next;
-                      return next;
-                  })
+                                        return {
+                                            ...c,
+                                            content: fullGeneratedContent,
+                                            versions: versions,
+                                            activeVersionId: aiVersionId
+                                        };
+                                    }
+                                    return c;
+                                })
+                            }
+                        }
+                        return n
+                    });
+                    novelsRef.current = next;
+                    return next;
+                })
               }
             }
         } else {
@@ -5840,42 +5792,45 @@ ${taskDescription}`
         let hasReceivedContent = false
 
         if (stream) {
+            let lastUpdateTime = 0
             for await (const chunk of response) {
               if (generateAbortControllerRef.current?.signal.aborted) throw new Error('Aborted')
               const content = chunk.choices[0]?.delta?.content || ''
               if (content) hasReceivedContent = true
               newGeneratedContent += content
               
-              const fullRawContent = currentContent + newGeneratedContent
-              // 【BUG 修复】：续写逻辑版本保护
-              // 续写开始时，先确保当前内容已备份为版本，然后 AI 增加的内容更新到新版本中
-              setChapters(prev => prev.map(c => {
-                  if (c.id === activeChapterId) {
-                    let chapterWithHistory = c.versions && c.versions.length > 0 ? c : ensureChapterVersions(c);
-                    const continueId = `v_continue_${c.id}`;
-                    let versions = [...(chapterWithHistory.versions || [])];
-                    let verIdx = versions.findIndex(v => v.id === continueId);
-                    
-                    if (verIdx !== -1) {
-                        versions[verIdx] = { ...versions[verIdx], content: fullRawContent };
-                    } else {
-                        versions.push({
-                            id: continueId,
-                            content: fullRawContent,
-                            timestamp: Date.now(),
-                            type: 'user_edit' // 续写生成的混合内容标记为编辑版
-                        });
-                    }
+              const now = Date.now()
+              if (now - lastUpdateTime > 150) {
+                lastUpdateTime = now
+                const fullRawContent = currentContent + newGeneratedContent
+                setChapters(prev => prev.map(c => {
+                    if (c.id === activeChapterId) {
+                      let chapterWithHistory = c.versions && c.versions.length > 0 ? c : ensureChapterVersions(c);
+                      const continueId = `v_continue_${c.id}`;
+                      let versions = [...(chapterWithHistory.versions || [])];
+                      let verIdx = versions.findIndex(v => v.id === continueId);
+                      
+                      if (verIdx !== -1) {
+                          versions[verIdx] = { ...versions[verIdx], content: fullRawContent };
+                      } else {
+                          versions.push({
+                              id: continueId,
+                              content: fullRawContent,
+                              timestamp: Date.now(),
+                              type: 'user_edit'
+                          });
+                      }
 
-                    return {
-                        ...c,
-                        content: fullRawContent,
-                        versions: versions,
-                        activeVersionId: continueId
+                      return {
+                          ...c,
+                          content: fullRawContent,
+                          versions: versions,
+                          activeVersionId: continueId
+                      }
                     }
-                  }
-                  return c;
-                }))
+                    return c;
+                  }))
+              }
             }
         } else {
             if (generateAbortControllerRef.current?.signal.aborted) throw new Error('Aborted')
