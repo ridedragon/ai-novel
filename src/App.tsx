@@ -1641,29 +1641,41 @@ function App() {
         
         if (chapter) {
             // 自动加载版本历史：解决冷热分离后，重新加载页面导致版本切换按钮消失的问题
-            if (!chapter.versions || chapter.versions.length === 0) {
-                storage.getChapterVersions(chapter.id).then(versions => {
-                    if (versions && versions.length > 0) {
-                        setChapters(prev => prev.map(c => {
-                            if (c.id === chapter.id) {
-                                // 只有在内存中版本为空时才更新，避免覆盖正在进行的润色
-                                if (!c.versions || c.versions.length === 0) {
-                                    // 核心修复：加载版本历史后，同步更新活跃版本 ID 和 正文内容
-                                    // 使用 ensureChapterVersions 确保 activeVersionId 合法（默认指向最后一个版本）
-                                    const chapterWithVersions = ensureChapterVersions({ ...c, versions });
-                                    const activeVer = chapterWithVersions.versions?.find(v => v.id === chapterWithVersions.activeVersionId);
-                                    
+            // 同时确保点击章节时显示的是最新版本（优化版优先）
+            storage.getChapterVersions(chapter.id).then(versions => {
+                if (versions && versions.length > 0) {
+                    setChapters(prev => prev.map(c => {
+                        if (c.id === chapter.id) {
+                            // 核心改进：无论内存中是否有版本，切换章节时都应同步到最新版本
+                            // 但要避开正在优化的章节，以免干扰流式输出
+                            if (!optimizingChapterIds.has(c.id)) {
+                                const chapterWithVersions = ensureChapterVersions({ ...c, versions });
+                                
+                                // 策略：如果存在版本，且当前不是最新版本，则切换到最新版本
+                                const latestVersion = chapterWithVersions.versions![chapterWithVersions.versions!.length - 1];
+                                if (chapterWithVersions.activeVersionId !== latestVersion.id) {
                                     return {
                                         ...chapterWithVersions,
-                                        content: activeVer ? activeVer.content : chapterWithVersions.content
+                                        activeVersionId: latestVersion.id,
+                                        content: latestVersion.content
                                     };
                                 }
+                                
+                                // 如果已经是最新版本，但 content 不一致（可能加载延迟），也同步一下
+                                if (c.content !== latestVersion.content) {
+                                    return {
+                                        ...chapterWithVersions,
+                                        content: latestVersion.content
+                                    };
+                                }
+                                
+                                return chapterWithVersions;
                             }
-                            return c;
-                        }));
-                    }
-                });
-            }
+                        }
+                        return c;
+                    }));
+                }
+            });
 
             // Load Optimize Preset
             const savedOptId = chapter.activeOptimizePresetId
