@@ -214,6 +214,12 @@ export class AutoWriteEngine {
 
           if (this.config.stream) {
             let lastUpdateTime = 0;
+            // 优化：预编译章节标题匹配正则，避免流式输出时高频创建正则对象
+            const precompiledRegexes = batchItems.map(b => {
+              const escapedTitle = b.item.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              return new RegExp(`(?:\\r\\n|\\r|\\n|^)###\\s*${escapedTitle}(?:\\s|\\r|\\n|$)`, 'i');
+            });
+
             for await (const chunk of response) {
               if (!this.isRunning || this.abortController?.signal.aborted) throw new Error('Aborted');
               const content = chunk.choices[0]?.delta?.content || '';
@@ -227,7 +233,7 @@ export class AutoWriteEngine {
               // 支持流式分章节更新
               const liveContents =
                 batchItems.length > 1
-                  ? this.splitBatchContent(fullGeneratedContent, batchItems)
+                  ? this.splitBatchContent(fullGeneratedContent, batchItems, precompiledRegexes)
                   : [fullGeneratedContent];
 
               this.novel = {
@@ -305,7 +311,12 @@ export class AutoWriteEngine {
           if (!fullGeneratedContent) throw new Error('Empty response received');
 
           // Split logic
-          let finalContents = this.splitBatchContent(fullGeneratedContent, batchItems);
+          // 优化：重用预编译正则
+          const finalRegexes = batchItems.map(b => {
+            const escapedTitle = b.item.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return new RegExp(`(?:\\r\\n|\\r|\\n|^)###\\s*${escapedTitle}(?:\\s|\\r|\\n|$)`, 'i');
+          });
+          let finalContents = this.splitBatchContent(fullGeneratedContent, batchItems, finalRegexes);
 
           // 兜底处理：如果分割出来的有效章节数不足，尝试更激进的正则分割
           if (batchItems.length > 1 && finalContents.filter(c => c.trim()).length < batchItems.length) {
@@ -625,15 +636,21 @@ export class AutoWriteEngine {
   /**
    * 将合并生成的文本拆分为多个章节内容（支持流式过程中动态拆分）
    */
-  private splitBatchContent(text: string, batchItems: { item: OutlineItem; id: number }[]): string[] {
+  private splitBatchContent(
+    text: string,
+    batchItems: { item: OutlineItem; id: number }[],
+    precompiledRegexes?: RegExp[],
+  ): string[] {
     const contents: string[] = new Array(batchItems.length).fill('');
     const ranges: { start: number; bIdx: number }[] = [];
 
     batchItems.forEach((b, idx) => {
-      const title = b.item.title;
-      const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // 匹配 ### 标题，兼容多种换行及空格情况
-      const regex = new RegExp(`(?:\\r\\n|\\r|\\n|^)###\\s*${escapedTitle}(?:\\s|\\r|\\n|$)`, 'i');
+      const regex =
+        precompiledRegexes?.[idx] ||
+        new RegExp(
+          `(?:\\r\\n|\\r|\\n|^)###\\s*${b.item.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|\\r|\\n|$)`,
+          'i',
+        );
       const match = text.match(regex);
       if (match && match.index !== undefined) {
         ranges.push({ start: match.index, bIdx: idx });

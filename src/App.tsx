@@ -1648,7 +1648,15 @@ function App() {
                             if (c.id === chapter.id) {
                                 // 只有在内存中版本为空时才更新，避免覆盖正在进行的润色
                                 if (!c.versions || c.versions.length === 0) {
-                                    return { ...c, versions };
+                                    // 核心修复：加载版本历史后，同步更新活跃版本 ID 和 正文内容
+                                    // 使用 ensureChapterVersions 确保 activeVersionId 合法（默认指向最后一个版本）
+                                    const chapterWithVersions = ensureChapterVersions({ ...c, versions });
+                                    const activeVer = chapterWithVersions.versions?.find(v => v.id === chapterWithVersions.activeVersionId);
+                                    
+                                    return {
+                                        ...chapterWithVersions,
+                                        content: activeVer ? activeVer.content : chapterWithVersions.content
+                                    };
                                 }
                             }
                             return c;
@@ -6165,6 +6173,7 @@ ${taskDescription}`
         smallSummaryPrompt,
         bigSummaryPrompt,
         contextChapterCount: Number(contextChapterCountRef.current) || 1,
+        contextScope: contextScopeRef.current,
       },
       (msg) => terminal.log(msg),
       (msg) => terminal.error(msg)
@@ -6218,7 +6227,7 @@ ${taskDescription}`
                  .filter(c => {
                      if (c.subtype !== 'small_summary' || !c.summaryRange) return false
                      const [s, e] = c.summaryRange.split('-').map(Number)
-                     return s >= 1 && e <= end
+                     return s >= start && e <= end;
                  })
                  .sort((a, b) => {
                      const sA = parseInt(a.summaryRange!.split('-')[0])
@@ -6230,7 +6239,7 @@ ${taskDescription}`
                  .filter(c => {
                      if (c.subtype !== 'big_summary' || !c.summaryRange) return false
                      const [s, e] = c.summaryRange.split('-').map(Number)
-                     return s === 1 && e < end
+                     return s === start && e < end;
                  })
                  .sort((a, b) => {
                      const eA = parseInt(a.summaryRange!.split('-')[1])
@@ -6242,7 +6251,7 @@ ${taskDescription}`
              let contextParts: string[] = []
 
              if (latestBigSummary) {
-                 contextParts.push(`【历史全局剧情总结 (1-${bigEnd}章)】：\n${latestBigSummary.content}`)
+                 contextParts.push(`【历史剧情大总结 (${start}-${bigEnd}章)】：\n${latestBigSummary.content}`)
              }
 
              const incrementalSmallSummaries = allSmallSummaries.filter(s => {
@@ -6348,9 +6357,26 @@ ${taskDescription}`
         }
     }
     
-    // 2. Scan Big Summaries (累积式：范围始终从 1 开始)
+    // 2. Scan Big Summaries (累积式：根据 contextScope 决定大总结的起点)
     for (let i = bInterval; i <= total; i += bInterval) {
-        const start = 1
+        let start = 1;
+        if (contextScopeRef.current === 'current') {
+            // 如果是仅当前卷，寻找当前章节所属分卷的起点
+            const targetChapter = storyChapters[i - 1]; // 当前扫描到的章节
+            if (targetChapter) {
+                const firstInVolume = storyChapters.find(c => c.volumeId === targetChapter.volumeId);
+                if (firstInVolume) {
+                    start = storyChapters.indexOf(firstInVolume) + 1;
+                }
+            }
+        } else if (contextScopeRef.current !== 'all') {
+            // 指定分卷
+            const firstInVolume = storyChapters.find(c => c.volumeId === contextScopeRef.current);
+            if (firstInVolume) {
+                start = storyChapters.indexOf(firstInVolume) + 1;
+            }
+        }
+
         const end = i
         const rangeStr = `${start}-${end}`
         

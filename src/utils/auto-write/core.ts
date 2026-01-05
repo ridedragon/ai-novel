@@ -172,7 +172,8 @@ export const applyRegexToText = async (text: string, scripts: RegexScript[]) => 
 
   for (const script of scripts) {
     // 每一秒或每个脚本处理前 yield 一次主线程，防止长文本+多脚本导致页面完全无响应
-    if (Date.now() - startTime > 50) {
+    // 优化：将阈值从 50ms 降至 16ms (约1帧)，提升流式输出时的 UI 响应速度
+    if (Date.now() - startTime > 16) {
       await new Promise(resolve => setTimeout(resolve, 0));
     }
 

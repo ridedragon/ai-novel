@@ -1663,19 +1663,26 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       // 使用 localNovel 跟踪执行过程中的最新状态，避免闭包捕获 stale props
       let localNovel = { ...activeNovel };
       const updateLocalAndGlobal = async (newNovel: Novel) => {
-        // 核心修复：合并状态时保留 UI 特有的折叠状态
+        // 优化：合并状态时保留 UI 特有的折叠状态。
+        // 使用 Map 优化搜索效率，将 O(N^2) 复杂度降低到 O(N)，解决章节/分卷多时的卡顿
         const currentActiveNovel = activeNovelRef.current;
+        const volumeStateMap = new Map();
+        currentActiveNovel?.volumes.forEach(v => volumeStateMap.set(v.id, v.collapsed));
+
         const mergedNovel: Novel = {
           ...newNovel,
-          volumes: newNovel.volumes.map(v => {
-            const existingVol = currentActiveNovel?.volumes.find(ev => ev.id === v.id);
-            return existingVol ? { ...v, collapsed: existingVol.collapsed } : v;
-          })
+          volumes: newNovel.volumes.map(v => ({
+            ...v,
+            collapsed: volumeStateMap.has(v.id) ? volumeStateMap.get(v.id) : v.collapsed
+          }))
         };
         localNovel = mergedNovel;
         
         // 性能优化：在大型对象更新前 yield 一次，确保浏览器有时间处理用户输入
-        await new Promise(resolve => setTimeout(resolve, 0));
+        // 只有在流式生成期间才执行此 yield，以维持 UI 响应
+        if (isRunning) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
         
         if (onUpdateNovel) {
           onUpdateNovel(mergedNovel);
