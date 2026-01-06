@@ -39,9 +39,30 @@ export interface OutlineItem {
   chapterAnalysis?: string;
 }
 
+export interface MessageContentText {
+  type: 'text';
+  text: string;
+}
+
+export interface MessageContentImage {
+  type: 'image_url';
+  image_url: {
+    url: string; // base64 or url
+  };
+}
+
+export interface MessageContentFile {
+  type: 'file'; // For PDF etc, support varies by model
+  file_url: {
+    url: string;
+  };
+}
+
+export type MessageContent = string | (MessageContentText | MessageContentImage | MessageContentFile)[];
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: MessageContent;
 }
 
 export interface OutlineSet {

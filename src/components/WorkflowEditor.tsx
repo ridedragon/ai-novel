@@ -27,10 +27,12 @@ import {
   Cpu,
   Download,
   Edit2,
+  File,
   FileText,
   Folder,
   FolderPlus,
   Globe,
+  Image as ImageIcon,
   LayoutList,
   Library,
   Lightbulb,
@@ -873,16 +875,27 @@ const NodePropertiesModal = ({
                   <Folder className="w-3 h-3 text-blue-500"/> 参考资料库文件夹 (全量关联)
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {activeNovel.referenceFolders?.map(folder => (
-                    <button
-                      key={folder.id}
-                      onClick={() => toggleSetReference('folder', folder.id)}
-                      className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${((node.data.selectedReferenceFolders || []) as string[]).includes(folder.id) ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium' : 'bg-[#161922] hover:bg-gray-700 text-gray-400 border border-gray-700/50'}`}
-                    >
-                      {((node.data.selectedReferenceFolders || []) as string[]).includes(folder.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
-                      <span className="truncate">{folder.name}</span>
-                    </button>
-                  ))}
+                  {activeNovel.referenceFolders?.map(folder => {
+                    const folderFiles = activeNovel.referenceFiles?.filter(f => f.parentId === folder.id) || [];
+                    const hasImages = folderFiles.some(f => f.type.startsWith('image/'));
+                    const hasPdf = folderFiles.some(f => f.type === 'application/pdf');
+                    return (
+                      <button
+                        key={folder.id}
+                        onClick={() => toggleSetReference('folder', folder.id)}
+                        className={`w-full text-left px-2.5 py-2 rounded-md text-xs transition-all flex items-center gap-2.5 ${((node.data.selectedReferenceFolders || []) as string[]).includes(folder.id) ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium' : 'bg-[#161922] hover:bg-gray-700 text-gray-400 border border-gray-700/50'}`}
+                      >
+                        {((node.data.selectedReferenceFolders || []) as string[]).includes(folder.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                        <div className="flex-1 min-w-0 flex items-center justify-between gap-1">
+                          <span className="truncate">{folder.name}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {hasImages && <ImageIcon className="w-2.5 h-2.5 text-blue-400" />}
+                            {hasPdf && <File className="w-2.5 h-2.5 text-red-400" />}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                   {(!activeNovel.referenceFolders || activeNovel.referenceFolders.length === 0) && (
                     <div className="col-span-2 py-4 text-center text-[10px] text-gray-600 border border-dashed border-gray-700 rounded-lg">
                       资料库中暂无文件夹，请先在资料库中创建
@@ -1922,8 +1935,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           if (!preset) continue;
         }
 
-        // 2. 构建参考资料上下文 (Context)
+        // 2. 构建参考资料上下文 (Context) & 附件 (Attachments)
         let refContext = '';
+        const attachments: { type: 'image' | 'pdf', url: string, name: string }[] = [];
         
         // 优先使用节点选中的资料集，如果没有选中且存在当前工作流文件夹，则尝试自动匹配
         let selectedWorldview = [...(node.data.selectedWorldviewSets || [])];
@@ -1974,10 +1988,18 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 if (folderFiles.length > 0) {
                     refContext += `【参考资料库文件夹 (${folder.name})】：\n`;
                     folderFiles.forEach(f => {
-                        // 简单处理：如果是文本类则包含内容，如果是图片/PDF则只列出文件名（因为大模型无法直接处理二进制content数据）
                         const isText = f.type.startsWith('text/') || f.name.endsWith('.md') || f.name.endsWith('.txt');
+                        const isImage = f.type.startsWith('image/');
+                        const isPdf = f.type === 'application/pdf';
+
                         if (isText) {
                             refContext += `· 文件: ${f.name}\n内容: ${f.content}\n---\n`;
+                        } else if (isImage) {
+                            refContext += `· 图片文件: ${f.name} (已作为附件发送)\n`;
+                            attachments.push({ type: 'image', url: f.content, name: f.name });
+                        } else if (isPdf) {
+                            refContext += `· PDF文件: ${f.name} (已作为附件发送)\n`;
+                            attachments.push({ type: 'pdf', url: f.content, name: f.name });
                         } else {
                             refContext += `· 文件: ${f.name} (非文本格式，仅供参考文件名)\n`;
                         }
@@ -1990,11 +2012,38 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         // 去重逻辑：如果上个节点的输出已经包含在参考资料中，则不再重复追加 lastNodeOutput
         const isDuplicate = lastNodeOutput && refContext.includes(lastNodeOutput.substring(0, 100)); // 取前100字符判断
         const finalContext = `${refContext}${accumContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
+        
+        // 辅助函数：将 string 内容转换为 OpenAI 多模态 content 格式
+        const formatContentWithAttachments = (text: string) => {
+          if (attachments.length === 0) return text;
+          const content: any[] = [{ type: 'text', text }];
+          attachments.forEach(att => {
+            if (att.type === 'image') {
+              content.push({ type: 'image_url', image_url: { url: att.url } });
+            } else if (att.type === 'pdf') {
+              // 注意：并非所有模型都支持 PDF 附件，此处按 OpenAI 兼容格式或 base64 文本补充提示
+              // 目前 OpenAI API 主要是通过 Vision 支持图片，PDF 通常需要提取文本或使用 Assistants API
+              // 但为了满足用户“作为附件发送”的需求，我们尝试以多模态方式构造，或在 text 中补充说明
+              // 如果模型不支持，会由 AI 接口返回报错。
+              // 兼容性处理：对于 PDF，如果模型不支持，至少我们目前已经将文件名告知 AI 了。
+              // 有些兼容 OpenAI 的多模态接口（如 Claude/Gemini）支持 PDF 附件。
+              content.push({
+                type: 'file',
+                file_url: { url: att.url.startsWith('data:') ? att.url : `data:application/pdf;base64,${att.url}` }
+              } as any);
+            }
+          });
+          return content;
+        };
+
         let messages: any[] = [];
         
         if (node.data.typeKey === 'aiChat' && !preset) {
             // AI 聊天且未选预设的情况，使用最简单的 User 消息
-            messages = [{ role: 'user', content: `${finalContext}要求：${node.data.instruction || '请继续生成'}` }];
+            messages = [{
+              role: 'user',
+              content: formatContentWithAttachments(`${finalContext}要求：${node.data.instruction || '请继续生成'}`)
+            }];
         } else if (preset) {
           if (node.data.typeKey === 'chapter') {
             // 对话补全源 (CompletionPreset) 的处理
@@ -2002,22 +2051,28 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             const prompts = completionPreset.prompts || [];
             messages = prompts
               .filter((p: any) => p.active)
-              .map((p: any) => ({
-                role: p.role,
-                content: p.content
+              .map((p: any) => {
+                const content = p.content
                   .replace('{{context}}', finalContext)
-                  .replace('{{input}}', node.data.instruction)
-              }));
+                  .replace('{{input}}', node.data.instruction);
+                return {
+                  role: p.role,
+                  content: p.role === 'user' ? formatContentWithAttachments(content) : content
+                };
+              });
           } else {
             // 普通生成预设 (GeneratorPreset) 的处理
             messages = (preset.prompts || [])
               .filter(p => p.enabled)
-              .map(p => ({
-                role: p.role,
-                content: p.content
+              .map(p => {
+                const content = p.content
                   .replace('{{context}}', finalContext)
-                  .replace('{{input}}', node.data.instruction)
-              }));
+                  .replace('{{input}}', node.data.instruction);
+                return {
+                  role: p.role,
+                  content: p.role === 'user' ? formatContentWithAttachments(content) : content
+                };
+              });
           }
         }
 
@@ -2242,16 +2297,21 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 if (p.content.includes('{{context}}')) hasContextPlaceholder = true;
                 return {
                   role: p.role,
-                  content: p.content
+                  content: p.role === 'user' ? formatContentWithAttachments(p.content
                     .replace('{{context}}', finalContext)
-                    .replace('{{input}}', node.data.instruction)
+                    .replace('{{input}}', node.data.instruction)) : (p.content
+                    .replace('{{context}}', finalContext)
+                    .replace('{{input}}', node.data.instruction))
                 };
               });
             
             // 如果用户自定义的提示词中完全没有包含 {{context}}，则为了满足用户“直接给”的需求，
             // 强制将 finalContext 作为一个单独的 User 消息插入到最前面，确保 AI 能接收到全局输入
             if (!hasContextPlaceholder && finalContext.trim()) {
-              messages.unshift({ role: 'user', content: `【参考背景与全局输入】：\n${finalContext}` });
+              messages.unshift({
+                role: 'user',
+                content: formatContentWithAttachments(`【参考背景与全局输入】：\n${finalContext}`)
+              });
             }
           } else if (node.data.systemPrompt) {
             // 兼容旧的单一 systemPrompt
