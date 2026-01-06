@@ -1089,14 +1089,30 @@ function App() {
   const novelsRef = useRef<Novel[]>([])
   
   // 统一状态更新包装器：确保 Ref 与 State 始终同步，彻底消除竞态隐患
+  const _setNovelsCountRef = useRef(0);
+  const _setNovelsLastTimeRef = useRef(0);
+
   const setNovels = React.useCallback((value: Novel[] | ((prev: Novel[]) => Novel[])) => {
     const startTime = Date.now();
+
+    // 监控 setNovels 触发频率
+    if (startTime - _setNovelsLastTimeRef.current < 1000) {
+      _setNovelsCountRef.current++;
+      if (_setNovelsCountRef.current > 15) {
+        terminal.warn(`[FREQ ALERT] App.setNovels 触发频率过高: 1秒内达 ${_setNovelsCountRef.current} 次 (高频状态更新将严重拖慢 UI)`);
+      }
+    } else {
+      _setNovelsCountRef.current = 1;
+      _setNovelsLastTimeRef.current = startTime;
+    }
+
     _setNovels(prev => {
       const next = typeof value === 'function' ? (value as any)(prev) : value;
       novelsRef.current = next;
       const endTime = Date.now();
-      if (endTime - startTime > 50) {
-        terminal.log(`[PERF] App.tsx setNovels State Update: ${endTime - startTime}ms`);
+      const duration = endTime - startTime;
+      if (duration > 30) {
+        terminal.log(`[PERF] App.tsx setNovels State Update: ${duration}ms`);
       }
       return next;
     });
@@ -1144,12 +1160,13 @@ function App() {
                 const wfs = JSON.parse(savedWfs);
                 remainingOrphans.forEach(id => {
                   for (const wf of wfs) {
-                    const matchedNode = wf.nodes?.find((n: any) => String(n.data?.targetVolumeId) === String(id) && n.data?.folderName);
+                    const matchedNode = wf.nodes?.find((n: any) => String(n.data?.targetVolumeId) === String(id));
                     if (matchedNode) {
-                      newVolumes.push({ id: String(id), title: matchedNode.data.folderName, collapsed: false });
+                      const foundName = matchedNode.data.folderName || '恢复的分卷';
+                      newVolumes.push({ id: String(id), title: foundName, collapsed: false });
                       remainingOrphans.delete(id);
                       healed = true;
-                      terminal.log(`[DATA HEALING] 从工作流节点找回分卷名称: ${matchedNode.data.folderName}`);
+                      terminal.log(`[DATA HEALING] 从工作流节点找回分卷名称: ${foundName}`);
                       break;
                     }
                   }
@@ -2181,9 +2198,39 @@ function App() {
        onConfirm: () => {
          setVolumes(volumes.filter(v => v.id !== volumeId))
          
-         // Delete chapters in this volume
-         const newChapters = chapters.filter(c => c.volumeId !== volumeId)
-         setChapters(newChapters)
+         // 核心修复：显式执行物理清理与级联清理，防止删除分卷后旧数据（特别是总结）残留或“复活”
+         // 1. 先确定哪些章节明确属于这个分卷
+         const chaptersInVolume = chapters.filter(c => c.volumeId === volumeId);
+         const chapterIdsToDelete = new Set(chaptersInVolume.map(c => c.id));
+
+         // 2. 计算级联删除：识别那些因为剧情章节被删而失去归属的总结章节
+         const storyChapters = chapters.filter(c => !c.subtype || c.subtype === 'story');
+         const orphanSummaryIds = new Set<number>();
+         
+         chapters.forEach(c => {
+            if (c.subtype === 'small_summary' || c.subtype === 'big_summary') {
+               const range = c.summaryRange?.split('-').map(Number);
+               if (range && range.length === 2) {
+                  const lastStoryIdx = range[1] - 1;
+                  const targetStoryChapter = storyChapters[lastStoryIdx];
+                  // 关键：如果总结指向的那个原始剧情章节正在被删除，则该总结也必须作为级联产物被清理
+                  if (targetStoryChapter && chapterIdsToDelete.has(targetStoryChapter.id)) {
+                     orphanSummaryIds.add(c.id);
+                  }
+               }
+            }
+         });
+
+         // 3. 执行物理清理 (DB 层)
+         const allIdsToDelete = new Set([...chapterIdsToDelete, ...orphanSummaryIds]);
+         allIdsToDelete.forEach(id => {
+            storage.deleteChapterContent(id).catch(() => {});
+            storage.deleteChapterVersions(id).catch(() => {});
+         });
+
+         // 4. 更新内存状态 (UI 层)
+         const newChapters = chapters.filter(c => !allIdsToDelete.has(c.id));
+         setChapters(newChapters);
 
          // If active chapter was in this volume, reset active chapter
          if (activeChapterId && chapters.find(c => c.id === activeChapterId)?.volumeId === volumeId) {
@@ -2285,7 +2332,32 @@ function App() {
         onConfirm: () => {
           const novel = novelsRef.current.find(n => n.id === activeNovelIdRef.current)
           if (!novel) return
-          const newChapters = novel.chapters.filter(c => c.id !== chapterId)
+          
+          // 核心修复：执行物理清理与总结级联清理
+          // 1. 识别被删章节是否带动了某个总结变成孤儿
+          const storyChapters = novel.chapters.filter(c => !c.subtype || c.subtype === 'story');
+          const cascadeIds = new Set<number>([chapterId]);
+          
+          novel.chapters.forEach(c => {
+             if (c.subtype === 'small_summary' || c.subtype === 'big_summary') {
+                const range = c.summaryRange?.split('-').map(Number);
+                if (range && range.length === 2) {
+                   const lastStoryIdx = range[1] - 1;
+                   const targetStoryChapter = storyChapters[lastStoryIdx];
+                   if (targetStoryChapter && targetStoryChapter.id === chapterId) {
+                      cascadeIds.add(c.id);
+                   }
+                }
+             }
+          });
+
+          // 2. 物理清理
+          cascadeIds.forEach(id => {
+             storage.deleteChapterContent(id).catch(() => {});
+             storage.deleteChapterVersions(id).catch(() => {});
+          });
+
+          const newChapters = novel.chapters.filter(c => !cascadeIds.has(c.id))
           setChapters(newChapters)
           if (activeChapterId === chapterId) {
               setActiveChapterId(newChapters[0]?.id || null)
@@ -9736,6 +9808,7 @@ ${taskDescription}`
           updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
         } as any}
         onUpdateNovel={(updatedNovel: Novel) => {
+          const mergeStartTime = Date.now();
           setNovels(prevNovels => {
             const localNovelIndex = prevNovels.findIndex(n => n.id === updatedNovel.id);
             if (localNovelIndex === -1) return prevNovels;
@@ -9804,6 +9877,10 @@ ${taskDescription}`
               volumes: mergedVolumes,
             };
             
+            const mergeDuration = Date.now() - mergeStartTime;
+            if (mergeDuration > 30) {
+              terminal.log(`[PERF] 状态合并耗时: ${mergeDuration}ms (包含版本去重与排序)`);
+            }
             return localNovelsCopy;
           });
         }}

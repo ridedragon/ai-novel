@@ -66,13 +66,18 @@ export class KeepAliveManager {
   }
 
   private handleVisibilityChange = async () => {
-    if (this.wakeLock !== null && document.visibilityState === 'visible') {
+    if (this.isEnabled && document.visibilityState === 'visible') {
       try {
+        // 先释放旧锁（如果有）
+        if (this.wakeLock) {
+          await this.wakeLock.release();
+          this.wakeLock = null;
+        }
         // @ts-ignore
         this.wakeLock = await navigator.wakeLock.request('screen');
-        terminal.log('[KeepAlive] Wake Lock re-acquired (visibility changed to visible)');
+        terminal.log('[KeepAlive] Wake Lock re-acquired');
       } catch (err) {
-        terminal.log(`[KeepAlive] Wake Lock Re-acquire Error: ${err instanceof Error ? err.message : String(err)}`);
+        // 降低日志频率，不再使用 terminal.log 轰炸
         console.warn('[KeepAlive] Re-acquire Wake Lock failed:', err);
       }
     }

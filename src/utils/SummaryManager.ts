@@ -9,9 +9,56 @@ import { Chapter, Novel } from '../types';
  * 2. 总结章节紧跟在其 summaryRange 涵盖范围的最后一章之后
  * 3. 同一位置小总结在前，大总结在后
  */
+let _sortCount = 0;
+let _lastSortTime = 0;
+let _lastResult: Chapter[] = [];
+let _lastSignature = '';
+
+/**
+ * 获取章节列表的结构化签名，用于判断是否真正需要重新计算排序逻辑
+ */
+const getChaptersSignature = (chapters: Chapter[]): string => {
+  // 仅提取影响排序的字段：ID、子类型、总结范围
+  return chapters.map(c => `${c.id}-${c.subtype || 's'}-${c.summaryRange || ''}`).join('|');
+};
+
 export const sortChapters = (chapters: Chapter[]): Chapter[] => {
   if (!chapters || !Array.isArray(chapters)) return [];
+
   const startTime = Date.now();
+  const currentSignature = getChaptersSignature(chapters);
+
+  // 1. 快速路径：结构完全未变，直接按原顺序重新映射新对象（保持引用最新但跳过排序耗时）
+  if (currentSignature === _lastSignature && _lastResult.length === chapters.length) {
+    // 即使签名一样，对象引用可能变了（内容更新），我们需要返回包含最新内容的数组，但顺序按旧的来
+    const idMap = new Map(chapters.map(c => [c.id, c]));
+    const fastResult = _lastResult.map(old => idMap.get(old.id) || old);
+
+    // 仍然检查频率，但不输出警告，因为这是廉价操作
+    if (startTime - _lastSortTime >= 1000) {
+      _sortCount = 0;
+      _lastSortTime = startTime;
+    }
+    return fastResult;
+  }
+
+  // 2. 严格频率限制：针对“结构变化”的排序请求进行限流
+  if (startTime - _lastSortTime < 1000) {
+    _sortCount++;
+    if (_sortCount > 1) {
+      // 如果在冷却期内且不是第一次，除非是极重要的变动（如长度剧增），否则返回缓存
+      if (_lastResult.length > 0 && Math.abs(_lastResult.length - chapters.length) < 1) {
+        if (_sortCount % 10 === 0) {
+          terminal.warn(`[FREQ LIMIT] sortChapters 结构排序限流中: 1秒内已屏蔽 ${_sortCount} 次计算`);
+        }
+        return _lastResult;
+      }
+    }
+  } else {
+    _sortCount = 1;
+    _lastSortTime = startTime;
+  }
+
   // 1. 分离非总结章节（保持原始顺序）和总结章节
   const storyChapters = chapters.filter(c => c.subtype !== 'small_summary' && c.subtype !== 'big_summary');
   const summaries = chapters.filter(c => c.subtype === 'small_summary' || c.subtype === 'big_summary');
@@ -70,6 +117,10 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
   if (endTime - startTime > 30) {
     terminal.log(`[PERF] SummaryManager.sortChapters: ${endTime - startTime}ms (Chapters: ${chapters.length})`);
   }
+
+  // 更新缓存
+  _lastSignature = currentSignature;
+  _lastResult = finalChapters;
 
   return finalChapters;
 };
@@ -165,10 +216,13 @@ export const checkAndGenerateSummary = async (
 
   let lastUpdatedNovel: Novel = { ...currentNovel, chapters: currentChaptersSnapshot };
 
+  const pendingSummaries: Chapter[] = [];
+
   const generate = async (type: 'small' | 'big', start: number, end: number, lastChapterId: number) => {
     const rangeStr = `${start}-${end}`;
     const subtype = type === 'small' ? 'small_summary' : ('big_summary' as const);
 
+    terminal.log(`[SUMMARY] 正在检查并准备生成${type === 'small' ? '小总结' : '大总结'}: 范围 ${rangeStr}`);
     log(`[Summary] Checking ${type} summary for range ${rangeStr}...`);
 
     // Prepare Context using the Snapshot
@@ -304,7 +358,8 @@ export const checkAndGenerateSummary = async (
             content: summaryContent,
             subtype: subtype,
             summaryRange: rangeStr,
-            volumeId: targetVolumeId,
+            // 强化：确保总结章节的 volumeId 与其涵盖的末尾章节一致
+            volumeId: targetVolumeId || undefined,
           };
 
           // Update Snapshot - Insert after the last chapter of the range
@@ -325,37 +380,11 @@ export const checkAndGenerateSummary = async (
           log(`[Summary] Created ${type} summary for ${rangeStr}.`);
         }
 
-        // Sync to Novel and React State
-        const finalChapters = [...currentChaptersSnapshot];
-        lastUpdatedNovel = { ...currentNovel, chapters: finalChapters };
-        // 核心修复：这里不再直接全量覆盖 prevNovels，
-        // 而是将生成的总结条目插入到最新的 prevNovels 章节列表中，
-        // 防止由于工作流执行速度过快导致的章节内容回滚或总结丢失。
-        setNovels(prevNovels =>
-          prevNovels.map(n => {
-            if (n.id !== targetNovelId) return n;
-
-            // 1. 识别新增的总结条目
-            const newSummaries = finalChapters.filter(
-              c =>
-                (c.subtype === 'small_summary' || c.subtype === 'big_summary') &&
-                !n.chapters.some(nc => nc.id === c.id),
-            );
-
-            if (newSummaries.length === 0) {
-              // 2. 如果没有新条目，仅更新现有总结的内容（如果 range 匹配）
-              const updatedChapters = n.chapters.map(nc => {
-                const match = finalChapters.find(fc => fc.id === nc.id && fc.subtype === nc.subtype);
-                return match ? { ...nc, content: match.content } : nc;
-              });
-              return { ...n, chapters: updatedChapters };
-            }
-
-            // 3. 将新总结合并并进行全局稳定排序
-            const mergedChapters = sortChapters([...n.chapters, ...newSummaries]);
-            return { ...n, chapters: mergedChapters };
-          }),
-        );
+        // 收集待更新的总结
+        const lastCreated = currentChaptersSnapshot.find(c => c.subtype === subtype && c.summaryRange === rangeStr);
+        if (lastCreated) {
+          pendingSummaries.push(lastCreated);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -425,6 +454,33 @@ export const checkAndGenerateSummary = async (
         }
       }
     }
+  }
+
+  // 批量更新：一次性将所有生成的总结同步到状态中
+  if (pendingSummaries.length > 0) {
+    setNovels(prevNovels =>
+      prevNovels.map(n => {
+        if (n.id !== targetNovelId) return n;
+
+        // 1. 识别新增的总结条目
+        const newSummaries = pendingSummaries.filter(c => !n.chapters.some(nc => nc.id === c.id));
+
+        // 2. 更新现有总结的内容
+        const updatedChapters = n.chapters.map(nc => {
+          const match = pendingSummaries.find(
+            ps => ps.id === nc.id || (ps.subtype === nc.subtype && ps.summaryRange === nc.summaryRange),
+          );
+          return match ? { ...nc, content: match.content } : nc;
+        });
+
+        // 3. 合并新条目并排序
+        const finalChapters = sortChapters([...updatedChapters, ...newSummaries]);
+        return { ...n, chapters: finalChapters };
+      }),
+    );
+
+    // 同步到最终返回的 Novel 对象
+    lastUpdatedNovel = { ...currentNovel, chapters: sortChapters([...currentNovel.chapters, ...pendingSummaries]) };
   }
 
   const endTime = Date.now();

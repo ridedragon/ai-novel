@@ -12,9 +12,12 @@ const CHARACTERS_PREFIX = 'novel_characters_';
 const OUTLINE_PREFIX = 'novel_outline_';
 const PLOT_OUTLINE_PREFIX = 'novel_plot_outline_';
 const REFERENCE_PREFIX = 'novel_reference_';
+const INSPIRATION_PREFIX = 'novel_inspiration_';
 
 // 用于在内存中缓存内容的哈希或副本，实现脏检查，避免重复写入
 const lastSavedContentCache = new Map<number, string>();
+// 缓存章节版本的脏检查，彻底消除重复的磁盘 I/O
+const lastSavedVersionsCache = new Map<number, string>();
 // 缓存单本书元数据的脏检查 (仅包含章节索引和分卷，不含重型设定)
 const lastSavedMetadataCache = new Map<string, string>();
 // 缓存拆分部分的脏检查，彻底避免重型对象的重复序列化和写入
@@ -23,6 +26,7 @@ const lastSavedCharactersCache = new Map<string, string>();
 const lastSavedOutlineCache = new Map<string, string>();
 const lastSavedPlotOutlineCache = new Map<string, string>();
 const lastSavedReferenceCache = new Map<string, string>();
+const lastSavedInspirationCache = new Map<string, string>();
 
 // 缓存全局书籍列表的脏检查
 let lastSavedNovelsJson = '';
@@ -60,6 +64,9 @@ export const storage = {
   },
   _getReferenceJson(novel: Novel): string {
     return JSON.stringify({ f: novel.referenceFiles || [], d: novel.referenceFolders || [] });
+  },
+  _getInspirationJson(novel: Novel): string {
+    return JSON.stringify(novel.inspirationSets || []);
   },
 
   async getNovels(): Promise<Novel[]> {
@@ -109,13 +116,14 @@ export const storage = {
     terminal.log(`[STORAGE] 正在按需加载《${novel.title}》的数据 (原子化并行模式)...`);
 
     // 1. 并行读取所有潜在的存储块
-    const [metadata, wv, char, out, plot, ref] = await Promise.all([
+    const [metadata, wv, char, out, plot, ref, insp] = await Promise.all([
       get<any>(`${METADATA_PREFIX}${novel.id}`),
       get<any>(`${WORLDVIEW_PREFIX}${novel.id}`),
       get<any>(`${CHARACTERS_PREFIX}${novel.id}`),
       get<any>(`${OUTLINE_PREFIX}${novel.id}`),
       get<any>(`${PLOT_OUTLINE_PREFIX}${novel.id}`),
       get<any>(`${REFERENCE_PREFIX}${novel.id}`),
+      get<any>(`${INSPIRATION_PREFIX}${novel.id}`),
     ]);
 
     if (metadata) {
@@ -130,6 +138,7 @@ export const storage = {
         novel.referenceFiles = ref.f;
         novel.referenceFolders = ref.d;
       }
+      if (insp) novel.inspirationSets = insp;
 
       // 初始化所有脏检查缓存，防止首次保存时触发误判
       lastSavedMetadataCache.set(novel.id, this._getNovelMetadataJson(novel));
@@ -138,6 +147,7 @@ export const storage = {
       lastSavedOutlineCache.set(novel.id, this._getOutlineJson(novel));
       lastSavedPlotOutlineCache.set(novel.id, this._getPlotOutlineJson(novel));
       lastSavedReferenceCache.set(novel.id, this._getReferenceJson(novel));
+      lastSavedInspirationCache.set(novel.id, this._getInspirationJson(novel));
     }
 
     // 2. 加载章节正文 (保持并行)
@@ -158,14 +168,49 @@ export const storage = {
   },
 
   // 终极优化：原子化存储 + 真正并行化，目标将日常保存压缩至 30ms 以内
+  // 监控写入频率
+  _lastSaveTime: 0,
+  _saveCountInWindow: 0,
+
   async saveNovels(novels: Novel[]): Promise<void> {
     const startTime = Date.now();
+
+    // 验证假设：检测高频写入
+    if (startTime - this._lastSaveTime < 500) {
+      this._saveCountInWindow++;
+      if (this._saveCountInWindow > 5) {
+        terminal.warn(
+          `[FREQ ALERT] storage.saveNovels 触发频率过高: 500ms内达 ${this._saveCountInWindow} 次 (建议检查组件更新源)`,
+        );
+      }
+    } else {
+      this._saveCountInWindow = 0;
+    }
+    this._lastSaveTime = startTime;
+
     const tasks: Promise<any>[] = []; // 并行任务清单
 
     let contentWriteCount = 0;
+    let versionsWriteCount = 0;
     let metadataUpdateCount = 0;
 
     try {
+      // 监控缓存 Map 的大小
+      const totalCacheEntries =
+        lastSavedContentCache.size +
+        lastSavedVersionsCache.size +
+        lastSavedMetadataCache.size +
+        lastSavedWorldviewCache.size +
+        lastSavedCharactersCache.size +
+        lastSavedOutlineCache.size +
+        lastSavedPlotOutlineCache.size +
+        lastSavedReferenceCache.size +
+        lastSavedInspirationCache.size;
+
+      if (totalCacheEntries > 500) {
+        terminal.log(`[MEM] 当前 storage 内存缓存项总数: ${totalCacheEntries} (注意：长期运行可能导致内存持续增加)`);
+      }
+
       for (const novel of novels) {
         // 核心安全检查：只有加载过章节（非 Skeleton 状态）的书籍才触发原子化保存
         if (!novel.chapters || novel.chapters.length === 0) continue;
@@ -177,12 +222,16 @@ export const storage = {
         if (currentMetaJson !== lastSavedMetadataCache.get(novel.id)) {
           tasks.push(
             set(`${METADATA_PREFIX}${novel.id}`, {
-              chapters: novel.chapters.map(({ versions, content, ...rest }) => rest),
+              chapters: novel.chapters.map(({ versions, content, analysisResult, ...rest }) => ({
+                ...rest,
+                analysisResult: analysisResult?.substring(0, 100), // 仅保留摘要，防止元数据膨胀
+              })),
               volumes: novel.volumes || [],
             }),
           );
           lastSavedMetadataCache.set(novel.id, currentMetaJson);
           metadataUpdateCount++;
+          terminal.log(`[STORAGE] 更新元数据: 《${novel.title}》`);
         }
 
         // 1.2 世界观拆分块 (Worldview)
@@ -192,6 +241,7 @@ export const storage = {
             tasks.push(set(`${WORLDVIEW_PREFIX}${novel.id}`, novel.worldviewSets));
             lastSavedWorldviewCache.set(novel.id, currentWvJson);
             metadataUpdateCount++;
+            terminal.log(`[STORAGE] 更新世界观: 《${novel.title}》`);
           }
         }
 
@@ -202,6 +252,7 @@ export const storage = {
             tasks.push(set(`${CHARACTERS_PREFIX}${novel.id}`, novel.characterSets));
             lastSavedCharactersCache.set(novel.id, currentCharJson);
             metadataUpdateCount++;
+            terminal.log(`[STORAGE] 更新角色集: 《${novel.title}》`);
           }
         }
 
@@ -212,6 +263,7 @@ export const storage = {
             tasks.push(set(`${OUTLINE_PREFIX}${novel.id}`, novel.outlineSets));
             lastSavedOutlineCache.set(novel.id, currentOutJson);
             metadataUpdateCount++;
+            terminal.log(`[STORAGE] 更新大纲: 《${novel.title}》`);
           }
         }
 
@@ -222,6 +274,7 @@ export const storage = {
             tasks.push(set(`${PLOT_OUTLINE_PREFIX}${novel.id}`, novel.plotOutlineSets));
             lastSavedPlotOutlineCache.set(novel.id, currentPlotJson);
             metadataUpdateCount++;
+            terminal.log(`[STORAGE] 更新剧情粗纲: 《${novel.title}》`);
           }
         }
 
@@ -237,6 +290,18 @@ export const storage = {
             );
             lastSavedReferenceCache.set(novel.id, currentRefJson);
             metadataUpdateCount++;
+            terminal.log(`[STORAGE] 更新资料库: 《${novel.title}》`);
+          }
+        }
+
+        // 1.7 灵感集拆分块 (Inspiration)
+        if (novel.inspirationSets) {
+          const currentInspJson = this._getInspirationJson(novel);
+          if (currentInspJson !== lastSavedInspirationCache.get(novel.id)) {
+            tasks.push(set(`${INSPIRATION_PREFIX}${novel.id}`, novel.inspirationSets));
+            lastSavedInspirationCache.set(novel.id, currentInspJson);
+            metadataUpdateCount++;
+            terminal.log(`[STORAGE] 更新灵感集: 《${novel.title}》`);
           }
         }
 
@@ -244,7 +309,13 @@ export const storage = {
         for (const chapter of novel.chapters) {
           // 修正隐患：版本历史现在也纳入并行保存队列
           if (chapter.versions && chapter.versions.length > 0) {
-            tasks.push(this.saveChapterVersions(chapter.id, chapter.versions));
+            const currentVersionsJson = JSON.stringify(chapter.versions);
+            if (currentVersionsJson !== lastSavedVersionsCache.get(chapter.id)) {
+              tasks.push(this.saveChapterVersions(chapter.id, chapter.versions));
+              lastSavedVersionsCache.set(chapter.id, currentVersionsJson);
+              versionsWriteCount++;
+              terminal.log(`[STORAGE] 更新章节版本: ChapterID=${chapter.id}`);
+            }
           }
 
           if (typeof chapter.content === 'string') {
@@ -253,6 +324,7 @@ export const storage = {
               tasks.push(set(`chapter_content_${chapter.id}`, currentContent));
               lastSavedContentCache.set(chapter.id, currentContent);
               contentWriteCount++;
+              terminal.log(`[STORAGE] 更新章节正文: ChapterID=${chapter.id}, 长度=${currentContent.length}`);
             }
           }
         }
@@ -268,12 +340,14 @@ export const storage = {
           plotOutlineSets,
           referenceFolders,
           referenceFiles,
+          inspirationSets,
           worldview,
           characters,
           outline,
           ...rest
         }) => ({ ...rest, volumes: rest.volumes || [] }),
       );
+
       const currentNovelsJson = JSON.stringify(strippedNovels);
       let novelsWriteCount = 0;
 
@@ -293,6 +367,7 @@ export const storage = {
 [PERF] storage.saveNovels (原子化并行模式):
 - 写入任务数: ${tasks.length} (并发提交)
 - 正文写入: ${contentWriteCount} 节
+- 版本更新: ${versionsWriteCount} 节
 - 元数据/设定更新项: ${metadataUpdateCount} (拆分存储)
 - 全局列表更新: ${novelsWriteCount}
 - 数据库 I/O 耗时: ${endTime - commitStartTime}ms
@@ -328,6 +403,15 @@ export const storage = {
       await del(`${VERSIONS_PREFIX}${chapterId}`);
     } catch (e) {
       console.error('Failed to delete chapter versions', e);
+    }
+  },
+
+  async deleteChapterContent(chapterId: number): Promise<void> {
+    try {
+      await del(`chapter_content_${chapterId}`);
+      lastSavedContentCache.delete(chapterId);
+    } catch (e) {
+      console.error('Failed to delete chapter content', e);
     }
   },
 };

@@ -1422,9 +1422,15 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   // 关闭弹窗（isOpen 变为 false）不应停止执行，实现后台运行
   useEffect(() => {
     return () => {
-      // 这里的清理函数在组件卸载时执行
+      // 这里的清理函数在组件真正卸载时执行
+      // 注意：ReactFlowProvider 内部的组件在弹窗关闭（isOpen=false）时由于其父级渲染逻辑可能被卸载
+      // 我们需要确保只有在用户显式终止或任务彻底完成时才不进行清理
       if (stopRequestedRef.current === false && isRunning) {
-        stopWorkflow();
+        // terminal.log('[WORKFLOW] 检测到组件卸载，尝试后台维持执行 (或由父组件决定是否终止)');
+        // 如果我们希望支持真正的后台运行且不被卸载干扰，此处不应直接调用 stopWorkflow()
+        // 但由于本应用中 WorkflowEditorContent 是在 WorkflowEditor 内部根据 isOpen 渲染的，
+        // 弹窗关闭会导致此处卸载。
+        // 为修复“章节没有润色优化完成”的问题，我们在这里需要更加谨慎。
       }
     };
   }, [isRunning]);
@@ -1637,6 +1643,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
   // --- 自动化执行引擎 (AI 调用) ---
   const runWorkflow = async (startIndex: number = 0) => {
+    terminal.log(`[WORKFLOW] 准备执行工作流: ${workflows.find(w => w.id === activeWorkflowId)?.name}, 起始节点索引: ${startIndex}`);
     if (!globalConfig?.apiKey) {
       setError('请先在主设置中配置 API Key');
       return;
@@ -1699,10 +1706,30 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       
       // 重置后续节点的执行状态
       if (startIndex === 0) {
-        setNodes(nds => nds.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } })));
+        terminal.log(`[WORKFLOW] 正在进行全量运行初始化，清空所有节点状态与执行期关联...`);
+        
+        // 核心修复：全量运行时，不仅清空 status，还要清空 targetVolumeId 等执行期产生的 ID 关联
+        // 否则 Data Healing 会根据这些残留 ID 找回已删除的旧分卷
+        const resetNodeData = (n: WorkflowNode): WorkflowNode => {
+          const updates: Partial<WorkflowNodeData> = {
+            status: 'pending',
+            outputEntries: []
+          };
+          
+          // 如果是正文生成节点，必须重置目标分卷，让它在本次运行中重新匹配或创建
+          if (n.data.typeKey === 'chapter') {
+            updates.targetVolumeId = '';
+            updates.targetVolumeName = '';
+          }
+          
+          return { ...n, data: { ...n.data, ...updates } };
+        };
+
+        setNodes(nds => nds.map(resetNodeData));
         setEdges(eds => eds.map(e => ({ ...e, animated: false })));
-        // 同步清空快照
-        sortedNodes = sortedNodes.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } }));
+        
+        // 同步更新本地排序后的副本，确保 loop 使用的是干净的数据
+        sortedNodes = sortedNodes.map(resetNodeData);
 
         // 重新开始时仅清理节点内部产出状态，不再干涉全局资料集和分卷章节
       }

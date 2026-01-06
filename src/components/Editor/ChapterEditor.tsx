@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import terminal from 'virtual:terminal';
 import { Chapter, ChapterVersion } from '../../types';
 
 interface ChapterEditorProps {
@@ -77,6 +78,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
     // 采用 500ms 防抖同步回全局状态，保证后台保存
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
     syncTimeoutRef.current = setTimeout(() => {
+      terminal.log(`[EDITOR] 正在同步内容到全局状态: ${activeChapter?.title} (字数: ${newValue.length})`);
       onChapterContentChange(e);
     }, 500);
   };

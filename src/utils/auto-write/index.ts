@@ -214,6 +214,9 @@ export class AutoWriteEngine {
 
           if (this.config.stream) {
             let lastUpdateTime = 0;
+            let streamTokenCount = 0;
+            let streamUpdateCount = 0;
+
             // 优化：预编译章节标题匹配正则，避免流式输出时高频创建正则对象
             const precompiledRegexes = batchItems.map(b => {
               const escapedTitle = b.item.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -224,10 +227,16 @@ export class AutoWriteEngine {
               if (!this.isRunning || this.abortController?.signal.aborted) throw new Error('Aborted');
               const content = chunk.choices[0]?.delta?.content || '';
               fullGeneratedContent += content;
+              streamTokenCount++;
+              if (streamTokenCount % 50 === 0) {
+                terminal.log(`[AUTOWRITE] 正在生成流式内容: 已接收 ${streamTokenCount} tokens...`);
+              }
 
               const now = Date.now();
               // 节流处理：每 200ms 更新一次 UI，防止高频重绘导致的闪烁和性能下降
               if (now - lastUpdateTime < 200) continue;
+
+              streamUpdateCount++;
               lastUpdateTime = now;
 
               // 支持流式分章节更新
@@ -303,6 +312,17 @@ export class AutoWriteEngine {
                 }),
               };
               onNovelUpdate(this.novel);
+            }
+            const avgUpdateFreq = streamUpdateCount / ((Date.now() - taskStartTime) / 1000);
+            terminal.log(
+              `[PERF] 流式输出统计: Token总数=${streamTokenCount}, 触发状态更新次数=${streamUpdateCount}, 预估平均每秒更新=${avgUpdateFreq.toFixed(
+                1,
+              )}次`,
+            );
+            if (avgUpdateFreq > 10) {
+              terminal.warn(
+                `[FREQ ALERT] AutoWrite 流式更新频率过高: 平均每秒达 ${avgUpdateFreq.toFixed(1)} 次 (建议调大节流阈值)`,
+              );
             }
           } else {
             fullGeneratedContent = response.choices[0]?.message?.content || '';
@@ -531,8 +551,13 @@ export class AutoWriteEngine {
           };
           onNovelUpdate(this.novel);
         }
-      } catch (e) {
-        terminal.error(`[AutoWrite Optimize] Analysis failed: ${e}`);
+      } catch (e: any) {
+        const isAbort = e.name === 'AbortError' || e.message === 'Request was aborted.' || e.message === 'Aborted';
+        if (isAbort) {
+          terminal.log(`[AutoWrite Optimize] Analysis for chapter ${chapterId} aborted.`);
+        } else {
+          terminal.error(`[AutoWrite Optimize] Analysis failed: ${e}`);
+        }
       }
     }
 
