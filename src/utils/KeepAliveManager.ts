@@ -56,13 +56,13 @@ export class KeepAliveManager {
     if (this.wakeLock) {
       this.wakeLock.release().then(() => {
         this.wakeLock = null;
-        console.log('[KeepAlive] Wake Lock released');
+        terminal.log('[KeepAlive] Wake Lock released');
       });
     }
 
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.isEnabled = false;
-    console.log('[KeepAlive] Stopped');
+    terminal.log('[KeepAlive] Stopped');
   }
 
   private handleVisibilityChange = async () => {

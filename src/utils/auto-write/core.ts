@@ -61,6 +61,7 @@ export const getChapterContext = (
   targetChapter: Chapter | undefined,
   config: { longTextMode: boolean; contextScope: string; contextChapterCount?: number },
 ) => {
+  const startTime = Date.now();
   if (!targetNovel || !targetChapter) return '';
 
   const chapters = targetNovel.chapters;
@@ -164,6 +165,10 @@ export const getChapterContext = (
     }
   }
 
+  const duration = Date.now() - startTime;
+  if (duration > 20) {
+    terminal.log(`[PERF] auto-write/core.getChapterContext: ${duration}ms`);
+  }
   return contextContent;
 };
 

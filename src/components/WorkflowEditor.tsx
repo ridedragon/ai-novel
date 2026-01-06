@@ -1591,6 +1591,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
   // 拓扑排序函数：根据连线确定执行顺序
   const getOrderedNodes = useCallback(() => {
+    const startTime = Date.now();
     const adjacencyList = new Map<string, string[]>();
     const inDegree = new Map<string, number>();
     
@@ -1638,7 +1639,12 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     const remainingNodes = nodes.filter(n => !result.includes(n.id))
                                .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
     
-    return [...orderedNodes, ...remainingNodes];
+    const resultNodes = [...orderedNodes, ...remainingNodes];
+    const duration = Date.now() - startTime;
+    if (duration > 10) {
+      terminal.log(`[PERF] WorkflowEditor.getOrderedNodes: ${duration}ms (Nodes: ${nodes.length})`);
+    }
+    return resultNodes;
   }, [nodes, edges]);
 
   // --- 自动化执行引擎 (AI 调用) ---
@@ -1671,6 +1677,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       let localNovel = { ...activeNovel };
       const updateLocalAndGlobal = async (newNovel: Novel) => {
         // 优化：合并状态时保留 UI 特有的折叠状态。
+        const startTime = Date.now();
         // 使用 Map 优化搜索效率，将 O(N^2) 复杂度降低到 O(N)，解决章节/分卷多时的卡顿
         const currentActiveNovel = activeNovelRef.current;
         const volumeStateMap = new Map();
@@ -1693,6 +1700,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         
         if (onUpdateNovel) {
           onUpdateNovel(mergedNovel);
+        }
+        const duration = Date.now() - startTime;
+        if (duration > 30) {
+          terminal.log(`[PERF] WorkflowEditor.updateLocalAndGlobal: ${duration}ms`);
         }
       };
 
@@ -2307,6 +2318,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           try {
             // 极致鲁棒的 JSON 提取与清理逻辑 (同步 MobileWorkflowEditor 逻辑)
             const cleanAndParseJSON = async (text: string) => {
+              const startTime = Date.now();
               let processed = text.trim();
               
               // 1. 异步化的正则清理 (Yield thread)
@@ -2340,11 +2352,21 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               };
 
               try {
-                return JSON.parse(processed);
+                const parsed = JSON.parse(processed);
+                const duration = Date.now() - startTime;
+                if (duration > 20) {
+                  terminal.log(`[PERF] WorkflowEditor.cleanAndParseJSON: ${duration}ms`);
+                }
+                return parsed;
               } catch (e: any) {
                 const fixed = heuristicFix(processed);
                 try {
-                  return JSON.parse(fixed);
+                  const parsed = JSON.parse(fixed);
+                  const duration = Date.now() - startTime;
+                  if (duration > 20) {
+                    terminal.log(`[PERF] WorkflowEditor.cleanAndParseJSON (with fix): ${duration}ms`);
+                  }
+                  return parsed;
                 } catch (e2: any) {
                   // 如果不是强行 JSON 的节点，静默报错，平滑回退到纯文本处理
                   const jsonRequiredNodes = ['outline', 'plotOutline', 'characters', 'worldview'];
