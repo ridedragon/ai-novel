@@ -67,7 +67,10 @@ export class AutoWriteEngine {
         if (currIdx >= outline.length) break;
 
         const item = outline[currIdx];
-        const existingChapter = this.novel.chapters.find(c => c.title === item.title);
+        // 核心修复：查重逻辑必须绑定分卷。支持用户在不同分卷（如：草稿卷 vs 正式卷）中生成相同大纲的内容而不被跳过。
+        const existingChapter = this.novel.chapters.find(
+          c => c.title === item.title && (!targetVolumeId || c.volumeId === targetVolumeId),
+        );
 
         if (existingChapter && existingChapter.content && existingChapter.content.trim().length > 0) {
           if (batchItems.length === 0) {
@@ -100,7 +103,9 @@ export class AutoWriteEngine {
       const newChapters = [...this.novel.chapters];
       batchItems.forEach(batchItem => {
         const existingById = newChapters.find(c => c.id === batchItem.id);
-        const existingByTitle = newChapters.find(c => c.title === batchItem.item.title);
+        const existingByTitle = newChapters.find(
+          c => c.title === batchItem.item.title && (!targetVolumeId || c.volumeId === targetVolumeId),
+        );
 
         if (!existingById && !existingByTitle) {
           newChapters.push({

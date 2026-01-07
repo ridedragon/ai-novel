@@ -1713,11 +1713,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             outputEntries: []
           };
           
-          // 如果是正文生成节点，必须重置目标分卷，让它在本次运行中重新匹配或创建
-          if (n.data.typeKey === 'chapter') {
-            updates.targetVolumeId = '';
-            updates.targetVolumeName = '';
-          }
+          // 不再重置 targetVolumeId，保留用户手动配置或上次运行自动匹配的结果
+          // 仅在状态彻底损坏时通过 Data Healing 修复
           
           return { ...n, data: { ...n.data, ...updates } };
         };
@@ -2182,7 +2179,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           const items = currentSet?.items || [];
           for (let k = 0; k < items.length; k++) {
             const item = items[k];
-            const existingChapter = localNovel.chapters.find(c => c.title === item.title);
+            // 核心修复：章节查重必须限制在目标分卷内，支持在不同分卷生成同一套大纲的内容
+            const existingChapter = localNovel.chapters.find(c =>
+              c.title === item.title &&
+              (!finalVolumeId || c.volumeId === finalVolumeId)
+            );
             if (!existingChapter || !existingChapter.content || existingChapter.content.trim().length === 0) {
               writeStartIndex = k;
               break;

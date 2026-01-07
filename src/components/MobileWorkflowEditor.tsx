@@ -1325,7 +1325,11 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       
       // 重置后续节点的执行状态
       if (startIndex === 0) {
-        setNodes(nds => nds.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } })));
+        setNodes(nds => nds.map(n => {
+          const updates: any = { status: 'pending', outputEntries: [] };
+          // 不再重置 targetVolumeId，保留用户配置
+          return { ...n, data: { ...n.data, ...updates } };
+        }));
         setEdges(eds => eds.map(e => ({ ...e, animated: false })));
         
         // 同步清空快照，防止历史记录累加
@@ -1699,7 +1703,11 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           const items = currentSet?.items || [];
           for (let k = 0; k < items.length; k++) {
             const item = items[k];
-            const existingChapter = localNovel.chapters.find(c => c.title === item.title);
+            // 核心修复：查重逻辑限制在目标分卷内
+            const existingChapter = localNovel.chapters.find(c =>
+              c.title === item.title &&
+              (!finalVolumeId || c.volumeId === finalVolumeId)
+            );
             if (!existingChapter || !existingChapter.content || existingChapter.content.trim().length === 0) {
               writeStartIndex = k;
               break;
@@ -1729,8 +1737,20 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               updateNodeData(node.id, { label: displayStatus });
             },
             (updatedNovel) => {
-              localNovel = updatedNovel; // 实时同步本地副本
-              updateLocalAndGlobal(updatedNovel);
+              // 核心修复：支持增量更新合并，防止 localNovel 被 deltaChapters 覆盖而丢失历史章节
+              const allLocalChaptersMap = new Map((localNovel.chapters || []).map(c => [c.id, c]));
+              
+              for (const deltaChapter of (updatedNovel.chapters || [])) {
+                const localChapter = allLocalChaptersMap.get(deltaChapter.id);
+                if (localChapter) {
+                  allLocalChaptersMap.set(deltaChapter.id, { ...localChapter, ...deltaChapter });
+                } else {
+                  allLocalChaptersMap.set(deltaChapter.id, deltaChapter);
+                }
+              }
+              
+              localNovel = { ...localNovel, chapters: Array.from(allLocalChaptersMap.values()) };
+              updateLocalAndGlobal(localNovel);
             },
             async (chapterId, content, updatedNovel) => {
               if (updatedNovel) {
@@ -1900,7 +1920,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                 } catch (e2: any) {
                   // 如果是聊天节点，解析失败是预期的（AI 返回了纯文本），不作为错误上报
                   const jsonRequiredNodes = ['outline', 'plotOutline', 'characters', 'worldview'];
-                  if (jsonRequiredNodes.includes(editingNode.data.typeKey as string)) {
+                  if (jsonRequiredNodes.includes(node.data.typeKey as string)) {
                     const errorPos = parseInt(e2.message.match(/at position (\d+)/)?.[1] || "0", 10);
                     const context = fixed.substring(Math.max(0, errorPos - 50), Math.min(fixed.length, errorPos + 50));
                     terminal.log(`[Mobile JSON Parse Error] ${e2.message}\nContext near error:\n...${context}...`);
