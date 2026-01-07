@@ -18,10 +18,12 @@ export class KeepAliveManager {
     if (this.isEnabled) return;
 
     try {
-      // 1. Play Silent Audio
-      await this.audio.play();
+      // 核心修复 4.4：彻底移除音频保活，仅保留 Wake Lock
+      // 深度原因：持续循环播放音频可能导致浏览器多媒体进程与主进程在高负载下出现同步死锁，进而引发主进程内存爆炸。
+      // 在现代浏览器中，Wake Lock 已经足够维持工作流运行。
+
       this.isEnabled = true;
-      terminal.log('[KeepAlive] Audio started successfully (playing silent loop)');
+      terminal.log('[KeepAlive] System enabled (Wake Lock mode)');
 
       // 2. Request Wake Lock (Screen)
       if ('wakeLock' in navigator) {
@@ -33,7 +35,7 @@ export class KeepAliveManager {
           // Re-acquire on visibility change
           document.addEventListener('visibilitychange', this.handleVisibilityChange);
         } catch (err) {
-          terminal.log(`[KeepAlive] Wake Lock Error: ${err instanceof Error ? err.message : String(err)}`);
+          terminal.warn(`[KeepAlive] Wake Lock Warning: ${err instanceof Error ? err.message : String(err)}`);
           console.warn('[KeepAlive] Wake Lock failed:', err);
         }
       }
@@ -47,10 +49,6 @@ export class KeepAliveManager {
 
   public disable() {
     if (!this.isEnabled) return;
-
-    // 1. Stop Audio
-    this.audio.pause();
-    this.audio.currentTime = 0;
 
     // 2. Release Wake Lock
     if (this.wakeLock) {

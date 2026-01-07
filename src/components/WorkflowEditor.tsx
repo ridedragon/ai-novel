@@ -215,25 +215,15 @@ const CoolEdge = ({
 
   return (
     <>
-      {/* 底部发光层 - 最宽且模糊 */}
+      {/* 核心修复 4.1：合并渲染层级，移除内联 <style> 以解决主进程内存爆炸 */}
+      {/* 仅保留一层外发光 (使用 strokeOpacity 模拟，不再使用多层 Path 叠加) */}
       <path
-        id={`${id}-glow-outer`}
-        d={edgePath}
-        fill="none"
-        stroke={COLORS.glow}
-        strokeWidth={selected ? 8 : 4}
-        strokeOpacity={selected ? 0.3 : 0.15}
-        style={{ filter: 'blur(6px)' }}
-      />
-      {/* 中间核心层 - 较窄且明亮 */}
-      <path
-        id={`${id}-glow-inner`}
+        id={`${id}-glow-combined`}
         d={edgePath}
         fill="none"
         stroke={selected ? COLORS.highlight : COLORS.primary}
-        strokeWidth={selected ? 4 : 2.5}
-        strokeOpacity={selected ? 0.8 : 0.6}
-        style={{ filter: 'blur(2px)' }}
+        strokeWidth={selected ? 6 : 3}
+        strokeOpacity={selected ? 0.3 : 0.15}
       />
       {/* 核心线条 */}
       <BaseEdge
@@ -245,38 +235,21 @@ const CoolEdge = ({
           strokeWidth: selected ? 2 : 1.5,
         }}
       />
-      {/* 科技感动画粒子 - 仅在选中或运行状态下更明显，这里默认加一点微弱的流动感 */}
-      <path
-        d={edgePath}
-        fill="none"
-        stroke="#fff"
-        strokeWidth={1.5}
-        strokeDasharray="4, 16"
-        strokeLinecap="round"
-        className="animate-[dash_3s_linear_infinite]"
-        style={{
-          opacity: selected ? 0.8 : 0.3,
-          filter: 'drop-shadow(0 0 2px #fff)',
-        }}
-      />
-      
-      {/* 如果是 animated (比如执行中)，添加一个快速流动的光点 */}
-      {animated && (
-        <circle r="3" fill="#fff" className="animate-[move_2s_linear_infinite]">
-          <animateMotion path={edgePath} dur="2s" repeatCount="indefinite" />
-        </circle>
+      {/* 科技感流动效果：使用全局 CSS 动画 .animate-workflow-dash 替代 inline style 和 animateMotion */}
+      {(selected || animated) && (
+        <path
+          d={edgePath}
+          fill="none"
+          stroke="#fff"
+          strokeWidth={1.5}
+          strokeDasharray="4, 16"
+          strokeLinecap="round"
+          className="animate-workflow-dash"
+          style={{
+            opacity: selected ? 0.6 : 0.2,
+          }}
+        />
       )}
-
-      <style>{`
-        @keyframes dash {
-          from { stroke-dashoffset: 40; }
-          to { stroke-dashoffset: 0; }
-        }
-        @keyframes move {
-          from { offset-distance: 0%; }
-          to { offset-distance: 100%; }
-        }
-      `}</style>
     </>
   );
 };
@@ -1218,7 +1191,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     setActiveWorkflowId(targetId);
     loadWorkflow(targetId, loadedWorkflows);
     isInitialLoadRef.current = false;
-  }, [isOpen, activeNovel]); // 增加 activeNovel 依赖，确保智能清理逻辑能根据最新数据执行
+  }, [isOpen]); // 移除 activeNovel 依赖，防止执行期间或结束时因 novel 更新触发重新加载，导致状态回跳到旧的 Storage 数据
 
   const loadWorkflow = (id: string, workflowList: WorkflowData[]) => {
     // 如果工作流正在运行，不要从缓存恢复状态，避免覆盖内存中最新的执行进度
@@ -1730,7 +1703,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       
       // 重置后续节点的执行状态
       if (startIndex === 0) {
-        terminal.log(`[WORKFLOW] 正在进行全量运行初始化，清空所有节点状态与执行期关联...`);
+        terminal.warn(`[DEBUG] 工作流全量重置触发，清空历史执行数据`);
         
         // 核心修复：全量运行时，不仅清空 status，还要清空 targetVolumeId 等执行期产生的 ID 关联
         // 否则 Data Healing 会根据这些残留 ID 找回已删除的旧分卷
@@ -1749,7 +1722,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           return { ...n, data: { ...n.data, ...updates } };
         };
 
-        setNodes(nds => nds.map(resetNodeData));
+        setNodes(nds => {
+            const nextNodes = nds.map(resetNodeData);
+            terminal.log(`[DEBUG] 重置后首个节点状态: ${nextNodes[0]?.data.status}`);
+            return nextNodes;
+        });
         setEdges(eds => eds.map(e => ({ ...e, animated: false })));
         
         // 同步更新本地排序后的副本，确保 loop 使用的是干净的数据
@@ -2236,8 +2213,21 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               updateNodeData(node.id, { label: displayStatus });
             },
             (updatedNovel) => {
-              localNovel = updatedNovel; // 实时同步本地副本
-              updateLocalAndGlobal(updatedNovel);
+              // 核心修复 4.2：增量合并逻辑 (Merge Delta)
+              // 由于 Engine 现在仅发送发生变化的章节，我们需要在此处将其合并回 localNovel
+              const allLocalChaptersMap = new Map((localNovel.chapters || []).map(c => [c.id, c]));
+              
+              for (const deltaChapter of (updatedNovel.chapters || [])) {
+                const localChapter = allLocalChaptersMap.get(deltaChapter.id);
+                if (localChapter) {
+                  allLocalChaptersMap.set(deltaChapter.id, { ...localChapter, ...deltaChapter });
+                } else {
+                  allLocalChaptersMap.set(deltaChapter.id, deltaChapter);
+                }
+              }
+              
+              localNovel = { ...localNovel, chapters: Array.from(allLocalChaptersMap.values()) };
+              updateLocalAndGlobal(localNovel);
             },
             async (chapterId, content, updatedNovel) => {
               if (updatedNovel) {
@@ -2698,14 +2688,26 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
   const resetWorkflowStatus = () => {
     if (confirm('确定要重置当前工作流的所有节点执行进度吗？已生成的产出条目将被清理。')) {
-      const updatedNodes = nodes.map(n => ({
-        ...n,
-        data: {
-          ...n.data,
+      const updatedNodes = nodes.map(n => {
+        const updates: Partial<WorkflowNodeData> = {
           status: 'pending' as const,
           outputEntries: []
+        };
+        
+        // 彻底清理执行期产生的动态关联
+        if (n.data.typeKey === 'chapter') {
+          updates.targetVolumeId = '';
+          updates.targetVolumeName = '';
         }
-      }));
+        
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            ...updates
+          }
+        };
+      });
       setNodes(updatedNodes);
       setEdges(eds => eds.map(e => ({ ...e, animated: false })));
       setCurrentNodeIndex(-1);

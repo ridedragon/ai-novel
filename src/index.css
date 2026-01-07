@@ -1,6 +1,28 @@
 @tailwind base;
 @tailwind components;
+
+/* 强制隐藏 SDK 默认的小悬浮窗，避免干扰炫酷监控 UI */
+#memory-monitor-display {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
 @tailwind utilities;
+
+/* 优化：将工作流连线动画移出 React 渲染循环，减少 GPU 负担与样式节点爆炸 */
+@keyframes workflow-dash {
+  from {
+    stroke-dashoffset: 40;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-workflow-dash {
+  animation: workflow-dash 3s linear infinite;
+}
 
 @layer utilities {
   .will-change-transform {

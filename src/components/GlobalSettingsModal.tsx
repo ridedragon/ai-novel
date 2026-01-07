@@ -2,6 +2,7 @@ import {
   ChevronDown,
   Loader2,
   Plus,
+  RefreshCw,
   Trash2,
   Wand2,
   X
@@ -48,6 +49,7 @@ interface GlobalSettingsModalProps {
   bigSummaryPrompt: string
   setBigSummaryPrompt: (prompt: string) => void
   handleScanSummaries: () => void
+  handleRecalibrateSummaries: () => void
   isLoading: boolean
   consecutiveChapterCount: number | ''
   setConsecutiveChapterCount: (val: number | '') => void
@@ -98,6 +100,7 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   bigSummaryPrompt,
   setBigSummaryPrompt,
   handleScanSummaries,
+  handleRecalibrateSummaries,
   isLoading,
   consecutiveChapterCount,
   setConsecutiveChapterCount,
@@ -311,6 +314,15 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                 >
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
                   扫描并补充缺失的总结
+                </button>
+                <button
+                  onClick={handleRecalibrateSummaries}
+                  disabled={isLoading}
+                  className="w-full py-2 mt-2 bg-indigo-900/30 hover:bg-indigo-900/50 border border-indigo-800 rounded text-sm text-indigo-200 transition-colors flex items-center justify-center gap-2"
+                  title="当手动删除或大幅移动章节导致总结位置错乱时使用"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                  一键校准总结索引 (修复错乱)
                 </button>
               </div>
             </div>

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kilo-Memory Cyber-Monitor 3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=JetBrains+Mono&display=swap');
+
+      body {
+        background-color: #020617;
+        color: #22d3ee;
+        font-family: 'JetBrains Mono', monospace;
+        overflow: hidden;
+        margin: 0;
+      }
+
+      .cyber-font {
+        font-family: 'Orbitron', sans-serif;
+      }
+
+      .glass-panel {
+        background: rgba(15, 23, 42, 0.7);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(34, 211, 238, 0.2);
+        box-shadow: 0 0 20px rgba(34, 211, 238, 0.1);
+      }
+
+      .neon-text {
+        text-shadow: 0 0 10px rgba(34, 211, 238, 0.8), 0 0 20px rgba(34, 211, 238, 0.3);
+      }
+
+      .neon-border-danger {
+        border-color: #f43f5e;
+        box-shadow: 0 0 15px rgba(244, 63, 94, 0.4);
+        color: #f43f5e;
+      }
+
+      #three-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: -1;
+      }
+
+      .scanline {
+        width: 100%;
+        height: 2px;
+        background: rgba(34, 211, 238, 0.1);
+        position: absolute;
+        top: 0;
+        left: 0;
+        animation: scan 4s linear infinite;
+        z-index: 10;
+        pointer-events: none;
+      }
+
+      @keyframes scan {
+        from {
+          top: 0;
+        }
+        to {
+          top: 100%;
+        }
+      }
+
+      .glitch-active {
+        animation: glitch 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both infinite;
+      }
+
+      @keyframes glitch {
+        0% {
+          transform: translate(0);
+        }
+        20% {
+          transform: translate(-2px, 2px);
+        }
+        40% {
+          transform: translate(-2px, -2px);
+        }
+        60% {
+          transform: translate(2px, 2px);
+        }
+        80% {
+          transform: translate(2px, -2px);
+        }
+        100% {
+          transform: translate(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="scanline"></div>
+    <canvas id="three-canvas"></canvas>
+
+    <!-- Main HUD -->
+    <div class="relative h-screen w-screen p-6 grid grid-cols-12 grid-rows-6 gap-4">
+      <!-- Header -->
+      <header class="col-span-12 row-span-1 flex justify-between items-center glass-panel px-8 rounded-lg">
+        <div>
+          <h1 class="text-2xl cyber-font font-bold neon-text tracking-widest">MEMORY MONITOR v1.2</h1>
+          <p class="text-xs text-cyan-500/60 mt-1">
+            SYSTEM STATUS: <span id="sys-status" class="text-green-400">OPTIMAL</span>
+          </p>
+        </div>
+        <div class="flex gap-8 items-center">
+          <div class="text-right">
+            <p class="text-[10px] text-cyan-500/50">UPTIME</p>
+            <p id="uptime" class="text-sm font-bold">00:00:00</p>
+          </div>
+          <div class="h-10 w-px bg-cyan-500/20"></div>
+          <div class="flex items-center gap-2">
+            <i data-lucide="cpu" class="w-5 h-5"></i>
+            <span id="refresh-rate" class="text-sm">1.0s Refresh</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Sidebar Metrics -->
+      <aside class="col-span-3 row-span-4 flex flex-col gap-4">
+        <div class="glass-panel p-4 rounded-lg flex-1">
+          <div class="flex items-center gap-2 mb-4 border-b border-cyan-500/20 pb-2">
+            <i data-lucide="activity" class="w-4 h-4"></i>
+            <span class="text-xs font-bold cyber-font">HEAP USED</span>
+          </div>
+          <div class="text-4xl font-bold mb-2 neon-text" id="val-heapUsed">0<span class="text-sm ml-1">MB</span></div>
+          <div class="w-full bg-cyan-950 h-1.5 rounded-full overflow-hidden">
+            <div id="bar-heapUsed" class="bg-cyan-400 h-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="glass-panel p-4 rounded-lg flex-1">
+          <div class="flex items-center gap-2 mb-4 border-b border-cyan-500/20 pb-2">
+            <i data-lucide="layers" class="w-4 h-4"></i>
+            <span class="text-xs font-bold cyber-font">HEAP TOTAL</span>
+          </div>
+          <div class="text-4xl font-bold mb-2 text-cyan-200" id="val-heapTotal">
+            0<span class="text-sm ml-1">MB</span>
+          </div>
+          <div class="w-full bg-cyan-950 h-1.5 rounded-full overflow-hidden">
+            <div id="bar-heapTotal" class="bg-cyan-200 h-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div
+          id="leak-warning"
+          class="glass-panel p-4 rounded-lg flex-1 border-transparent transition-colors duration-300"
+        >
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+            <span class="text-xs font-bold cyber-font">LEAK PROBABILITY</span>
+          </div>
+          <div class="text-3xl font-bold" id="val-leakScore">0%</div>
+          <p class="text-[10px] text-cyan-500/40 mt-2">Analysis engine monitoring GC cycles...</p>
+        </div>
+      </aside>
+
+      <!-- Main Chart -->
+      <main class="col-span-9 row-span-4 glass-panel p-4 rounded-lg overflow-hidden">
+        <canvas id="memoryChart"></canvas>
+      </main>
+
+      <!-- Footer / Logs -->
+      <footer class="col-span-12 row-span-1 glass-panel p-4 rounded-lg flex gap-4 overflow-hidden">
+        <div class="w-1/4 border-r border-cyan-500/20 pr-4">
+          <div class="text-[10px] text-cyan-500/50 mb-1">EVENT LOG</div>
+          <div id="logs" class="text-[9px] h-full overflow-y-auto space-y-1">
+            <div class="text-cyan-600">[SYSTEM] Connection established.</div>
+          </div>
+        </div>
+        <div class="flex-1 grid grid-cols-4 gap-4">
+          <div class="flex flex-col justify-center">
+            <span class="text-[10px] text-cyan-500/50">DOM NODES</span>
+            <span id="val-domNodes" class="text-lg font-bold text-yellow-400">0</span>
+          </div>
+          <div class="flex flex-col justify-center">
+            <span class="text-[10px] text-cyan-500/50">HEAP LIMIT</span>
+            <span id="val-rss" class="text-lg font-bold">0 MB</span>
+          </div>
+          <div class="flex flex-col justify-center">
+            <span class="text-[10px] text-cyan-500/50">ARRAY BUFFERS</span>
+            <span id="val-arrayBuffers" class="text-lg font-bold">0 MB</span>
+          </div>
+          <div class="flex flex-col justify-center">
+            <span class="text-[10px] text-cyan-500/50">NODE VERSION</span>
+            <span id="val-nodeVer" class="text-lg font-bold text-cyan-400">v20.x</span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      // Init Lucide
+      lucide.createIcons();
+
+      // --- THREE.JS 3D SCENE ---
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer({
+        canvas: document.getElementById('three-canvas'),
+        alpha: true,
+        antialias: true,
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+
+      // Core Geometry
+      const geometry = new THREE.IcosahedronGeometry(2.5, 2);
+      const material = new THREE.MeshBasicMaterial({
+        color: 0x22d3ee,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.3,
+      });
+      const sphere = new THREE.Mesh(geometry, material);
+      scene.add(sphere);
+
+      // Outer Geometry
+      const outerGeo = new THREE.IcosahedronGeometry(3.5, 1);
+      const outerMat = new THREE.MeshBasicMaterial({
+        color: 0x0ea5e9,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.1,
+      });
+      const outerSphere = new THREE.Mesh(outerGeo, outerMat);
+      scene.add(outerSphere);
+
+      camera.position.z = 8;
+
+      let targetScale = 1;
+      let currentScale = 1;
+
+      function animate() {
+        requestAnimationFrame(animate);
+        sphere.rotation.x += 0.005;
+        sphere.rotation.y += 0.005;
+        outerSphere.rotation.y -= 0.002;
+        outerSphere.rotation.z += 0.002;
+
+        // Pulsing logic
+        currentScale += (targetScale - currentScale) * 0.1;
+        sphere.scale.set(currentScale, currentScale, currentScale);
+
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // --- CHART.JS CONFIG ---
+      const ctx = document.getElementById('memoryChart').getContext('2d');
+      const memoryChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Heap Used (MB)',
+              data: [],
+              borderColor: '#22d3ee',
+              backgroundColor: 'rgba(34, 211, 238, 0.1)',
+              fill: true,
+              tension: 0.4,
+              borderWidth: 2,
+              pointRadius: 0,
+            },
+            {
+              label: 'Heap Total (MB)',
+              data: [],
+              borderColor: '#94a3b8',
+              borderDash: [5, 5],
+              fill: false,
+              tension: 0,
+              borderWidth: 1,
+              pointRadius: 0,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              grid: { color: 'rgba(34, 211, 238, 0.05)' },
+              ticks: { color: '#64748b' },
+            },
+            y: {
+              grid: { color: 'rgba(34, 211, 238, 0.05)' },
+              ticks: { color: '#64748b' },
+            },
+          },
+          plugins: {
+            legend: { display: false },
+          },
+        },
+      });
+
+      // --- REAL-TIME DATA LOGIC ---
+      let lastUsed = 0;
+      let leakScore = 0;
+      let startTime = Date.now();
+
+      function updateUptime() {
+        const diff = Math.floor((Date.now() - startTime) / 1000);
+        const h = Math.floor(diff / 3600)
+          .toString()
+          .padStart(2, '0');
+        const m = Math.floor((diff % 3600) / 60)
+          .toString()
+          .padStart(2, '0');
+        const s = (diff % 60).toString().padStart(2, '0');
+        document.getElementById('uptime').textContent = `${h}:${m}:${s}`;
+      }
+      setInterval(updateUptime, 1000);
+
+      function addLog(msg, type = 'info') {
+        const logs = document.getElementById('logs');
+        const div = document.createElement('div');
+        const time = new Date().toLocaleTimeString();
+        div.className = type === 'warn' ? 'text-rose-500' : 'text-cyan-600/80';
+        div.textContent = `[${time}] ${msg}`;
+        logs.prepend(div);
+        if (logs.childNodes.length > 50) logs.removeChild(logs.lastChild);
+      }
+
+      // SSE CONNECTION
+      const evtSource = new EventSource('/events');
+
+      evtSource.onmessage = event => {
+        const data = JSON.parse(event.data);
+        processData(data);
+      };
+
+      evtSource.onerror = err => {
+        console.error('SSE Error:', err);
+        addLog('Connection lost. Retrying...', 'warn');
+        document.getElementById('sys-status').textContent = 'DISCONNECTED';
+        document.getElementById('sys-status').className = 'text-rose-500';
+      };
+
+      function processData(data) {
+        const used = (data.heapUsed / 1024 / 1024).toFixed(2);
+        const total = (data.heapTotal / 1024 / 1024).toFixed(2);
+        const rss = (data.rss / 1024 / 1024).toFixed(2);
+        const external = (data.external / 1024 / 1024).toFixed(2);
+        const arrayBuffers = (data.arrayBuffers / 1024 / 1024).toFixed(2);
+
+        // Update UI Numbers
+        document.getElementById('val-heapUsed').innerHTML = `${used}<span class="text-sm ml-1">MB</span>`;
+        document.getElementById('val-heapTotal').innerHTML = `${total}<span class="text-sm ml-1">MB</span>`;
+        document.getElementById('val-rss').textContent = `${rss} MB`;
+        document.getElementById('val-domNodes').textContent = data.domNodes || 0;
+        document.getElementById('val-arrayBuffers').textContent = `${arrayBuffers} MB`;
+
+        // Update Progress Bars
+        const usedPercent = ((data.heapUsed / data.heapTotal) * 100).toFixed(1);
+        document.getElementById('bar-heapUsed').style.width = `${usedPercent}%`;
+        document.getElementById('bar-heapTotal').style.width = `100%`;
+
+        // 3D Pulse
+        targetScale = 1 + used / 200; // Pulse based on usage (baseline 200MB)
+        material.color.setHex(used > 150 ? 0xf43f5e : 0x22d3ee);
+
+        // Chart Update
+        const now = new Date().toLocaleTimeString();
+        memoryChart.data.labels.push(now);
+        memoryChart.data.datasets[0].data.push(used);
+        memoryChart.data.datasets[1].data.push(total);
+
+        if (memoryChart.data.labels.length > 30) {
+          memoryChart.data.labels.shift();
+          memoryChart.data.datasets[0].data.shift();
+          memoryChart.data.datasets[1].data.shift();
+        }
+        memoryChart.update('none');
+
+        // Simple Leak Detection Logic
+        if (lastUsed > 0) {
+          const diff = used - lastUsed;
+          if (diff > 0.5) {
+            // 持续增长超过 0.5MB
+            leakScore = Math.min(100, leakScore + 5);
+            addLog(`Increase detected: +${diff.toFixed(2)}MB`, 'info');
+          } else if (diff < -2) {
+            // 显著下降 (GC 触发)
+            leakScore = Math.max(0, leakScore - 20);
+            addLog('GC Activity detected.', 'info');
+          }
+        }
+        lastUsed = used;
+
+        document.getElementById('val-leakScore').textContent = `${leakScore}%`;
+        const warningPanel = document.getElementById('leak-warning');
+        if (leakScore > 70) {
+          warningPanel.classList.add('neon-border-danger', 'glitch-active');
+          document.getElementById('sys-status').textContent = 'CRITICAL';
+          document.getElementById('sys-status').className = 'text-rose-500 animate-pulse';
+          addLog('CRITICAL LEAK WARNING!', 'warn');
+        } else {
+          warningPanel.classList.remove('neon-border-danger', 'glitch-active');
+          document.getElementById('sys-status').textContent = 'OPTIMAL';
+          document.getElementById('sys-status').className = 'text-green-400';
+        }
+      }
+    </script>
+  </body>
+</html>

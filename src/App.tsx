@@ -84,7 +84,7 @@ import {
   WorldviewSet
 } from './types'
 import { keepAliveManager } from './utils/KeepAliveManager'
-import { checkAndGenerateSummary as checkAndGenerateSummaryUtil, sortChapters } from './utils/SummaryManager'
+import { checkAndGenerateSummary as checkAndGenerateSummaryUtil, recalibrateSummaries, sortChapters } from './utils/SummaryManager'
 import { storage } from './utils/storage'
  
  const defaultInspirationPresets: GeneratorPreset[] = [
@@ -1087,6 +1087,10 @@ function App() {
   const [novels, _setNovels] = useState<Novel[]>([])
   
   const novelsRef = useRef<Novel[]>([])
+
+  // 【BUG 修复】：章节复活黑名单
+  // 记录最近删除的章节 ID，防止异步创作循环（Stale Closure）将其意外带回
+  const deletedChapterIdsRef = useRef<Set<number>>(new Set())
   
   // 统一状态更新包装器：确保 Ref 与 State 始终同步，彻底消除竞态隐患
   const _setNovelsCountRef = useRef(0);
@@ -1107,12 +1111,22 @@ function App() {
     }
 
     _setNovels(prev => {
-      const next = typeof value === 'function' ? (value as any)(prev) : value;
+      let next = typeof value === 'function' ? (value as any)(prev) : value;
+
+      // 强制过滤已删除章节，防止“亡灵复活”
+      if (deletedChapterIdsRef.current.size > 0) {
+          next = next.map(novel => ({
+              ...novel,
+              chapters: novel.chapters.filter(c => !deletedChapterIdsRef.current.has(c.id))
+          }));
+      }
+
       novelsRef.current = next;
       const endTime = Date.now();
       const duration = endTime - startTime;
-      if (duration > 30) {
-        terminal.log(`[PERF] App.tsx setNovels State Update: ${duration}ms`);
+      // 优化 4.3：仅记录严重阻塞 (超过 100ms) 的状态更新，减少 IPC 日志量
+      if (duration > 100) {
+        terminal.warn(`[PERF ALERT] App.tsx setNovels State Update: ${duration}ms (Extremely Slow)`);
       }
       return next;
     });
@@ -1863,12 +1877,16 @@ function App() {
   }
 
   const applyRegexToText = async (text: string, scripts: RegexScript[]) => {
+      if (!text || scripts.length === 0) return text;
+      
       let processed = text
       const startTime = Date.now();
+      terminal.log(`[PERF DEBUG] applyRegexToText 开始处理: 长度=${text.length}, 脚本数=${scripts.length}`);
       
       for (const script of scripts) {
-          // 时间分片：如果处理时间超过 50ms，yield 给主线程
-          if (Date.now() - startTime > 50) {
+          // 真正的异步切片：在每个脚本处理前都检查时间，并确保 yielding
+          const scriptStartTime = Date.now();
+          if (scriptStartTime - startTime > 30) {
               await new Promise(resolve => setTimeout(resolve, 0));
           }
 
@@ -1884,10 +1902,21 @@ function App() {
 
               const regexParts = script.findRegex.match(/^\/(.*?)\/([a-z]*)$/)
               const regex = regexParts ? new RegExp(regexParts[1], regexParts[2]) : new RegExp(script.findRegex, 'g')
+              
+              // 性能优化：如果文本极其巨大（>10万字），且正则不包含复杂反向引用，考虑简单分片替换（本处暂采用 yielding 优化）
               processed = processed.replace(regex, script.replaceString)
+              
+              const scriptDuration = Date.now() - scriptStartTime;
+              if (scriptDuration > 100) {
+                  terminal.warn(`[PERF] 单个正则脚本 [${script.scriptName}] 耗时过长: ${scriptDuration}ms (文本长度: ${processed.length})`);
+              }
           } catch (e) {
               console.error(`Regex error in ${script.scriptName}`, e)
           }
+      }
+      const duration = Date.now() - startTime;
+      if (duration > 100) {
+          terminal.warn(`[PERF DEBUG] applyRegexToText 耗时过长: ${duration}ms, 文本长度: ${text.length}`);
       }
       return processed
   }
@@ -2128,20 +2157,23 @@ function App() {
               if (n.id === activeNovelId) {
                   const currentChapters = n.chapters
                   const newChapters = typeof value === 'function' ? (value as any)(currentChapters) : value
-                  // 核心修复：所有通过 UI 触发的章节列表更新都强制进行稳定排序，解决“闪烁”根源
-                  return { ...n, chapters: sortChapters(newChapters) }
+                  
+                  // 【第五代核心增强】：物理位置决定逻辑归属
+                  // 每当章节列表变动（增删、移动），首先执行校准逻辑：确保每一个总结都“归属于”它前面的那个剧情章所属的分卷
+                  // 然后执行 V5 物理排序：将总结强制挂载到该剧情章之后，防止在侧边栏出现跨卷偏移。
+                  const finalChapters = sortChapters(recalibrateSummaries(newChapters));
+
+                  return { ...n, chapters: finalChapters }
               }
               return n
           })
           const updateEnd = Date.now();
-          if (updateEnd - updateStart > 50) {
-            terminal.log(`[PERF] App.tsx setChapters Map/Sort: ${updateEnd - updateStart}ms`);
-          }
+          // 优化 4.3：静默处理普通性能指标
           return result;
       })
       const endTime = Date.now();
-      if (endTime - startTime > 100) {
-        terminal.log(`[PERF] App.tsx setChapters total block: ${endTime - startTime}ms`);
+      if (endTime - startTime > 300) {
+        terminal.error(`[PERF CRITICAL] App.tsx setChapters total block: ${endTime - startTime}ms`);
       }
   }, [activeNovelId, setNovels]);
 
@@ -2223,6 +2255,10 @@ function App() {
 
          // 3. 执行物理清理 (DB 层)
          const allIdsToDelete = new Set([...chapterIdsToDelete, ...orphanSummaryIds]);
+         
+         // 写入黑名单防止复活
+         allIdsToDelete.forEach(id => deletedChapterIdsRef.current.add(id));
+
          allIdsToDelete.forEach(id => {
             storage.deleteChapterContent(id).catch(() => {});
             storage.deleteChapterVersions(id).catch(() => {});
@@ -2352,6 +2388,9 @@ function App() {
           });
 
           // 2. 物理清理
+          // 写入黑名单防止异步复活
+          cascadeIds.forEach(id => deletedChapterIdsRef.current.add(id));
+
           cascadeIds.forEach(id => {
              storage.deleteChapterContent(id).catch(() => {});
              storage.deleteChapterVersions(id).catch(() => {});
@@ -5414,12 +5453,12 @@ function App() {
             
             // --- 性能调查：监控渲染耗时 ---
             const renderEnd = Date.now();
-            if (renderEnd - renderStart > 50) {
-                terminal.log(`[PERF] App.tsx Optimize Render: ${renderEnd - renderStart}ms (Slow render detected!)`);
+            if (renderEnd - renderStart > 100) {
+                terminal.warn(`[PERF] App.tsx Optimize Render: ${renderEnd - renderStart}ms (Slow render detected!)`);
             }
           }
         }
-        terminal.log(`[PERF] Optimize stream complete. Total chunks: ${chunkCount}, Final length: ${newContent.length}`);
+        // 优化 4.3：仅打印最终统计，不再通过 terminal 打印流式 Chunk 细节
         
         if (!hasReceivedContent && stream) {
            throw new Error("Empty response received")
@@ -5607,7 +5646,7 @@ function App() {
 
         const rawContext = getChapterContext(tempNovel, firstChapterInBatch)
         const scripts = getActiveScripts()
-        const processedContext = processTextWithRegex(rawContext, scripts, 'input')
+        const processedContext = await processTextWithRegex(rawContext, scripts, 'input')
         const contextMsg = processedContext ? `【前文剧情回顾】：\n${processedContext}\n\n` : ""
 
         const fullOutlineContext = includeFullOutline 
@@ -5729,12 +5768,11 @@ ${taskDescription}`
                     return next;
                 })
                 const renderEnd = Date.now();
-                if (renderEnd - renderStart > 50) {
-                    terminal.log(`[PERF] App.tsx AutoWrite Render: ${renderEnd - renderStart}ms`);
+                if (renderEnd - renderStart > 100) {
+                    terminal.warn(`[PERF] App.tsx AutoWrite Render: ${renderEnd - renderStart}ms`);
                 }
               }
             }
-            terminal.log(`[PERF] AutoWrite stream complete. Total chunks: ${chunkCount}`);
         } else {
             // Non-stream
             if (!isAutoWritingRef.current) throw new Error('Aborted')
@@ -5807,9 +5845,10 @@ ${taskDescription}`
         }
 
         // Apply Regex Scripts to each part
-        finalContents = finalContents.map(c => processTextWithRegex(c, scripts, 'output'))
+        finalContents = await Promise.all(finalContents.map(c => processTextWithRegex(c, scripts, 'output')))
 
         // Update State with final separated content - 使用函数式更新避免覆盖其他状态更改（如分卷折叠）
+        terminal.warn(`[DEBUG] 创作循环准备写回，准备匹配 ID: ${preparedBatch.map(b => b.id).join(', ')}`);
         setNovels(prevNovels => {
             const updated = prevNovels.map(n => {
                 if (n.id === novelId) {
@@ -5862,7 +5901,8 @@ ${taskDescription}`
             if (content && content.length > 0 && !content.includes("生成错误")) {
                 // Summary
                 if (longTextModeRef.current) {
-                    await checkAndGenerateSummary(chap.id, content, novelId)
+                    // 打通信号：传递 autoWriteAbortController 的中止信号，确保终止工作流时能取消正在进行的总结
+                    await checkAndGenerateSummary(chap.id, content, novelId, undefined, autoWriteAbortControllerRef.current?.signal)
                 }
                 
                 // Auto Optimize (Enqueue)
@@ -6305,7 +6345,7 @@ ${taskDescription}`
   }
 
   // Summary Generation Helper
-  const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string, targetNovelId: string = activeNovelId || '', updatedNovel?: Novel) => {
+  const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string, targetNovelId: string = activeNovelId || '', updatedNovel?: Novel, signal?: AbortSignal) => {
     if (!longTextModeRef.current) return
 
     return await checkAndGenerateSummaryUtil(
@@ -6326,7 +6366,8 @@ ${taskDescription}`
         contextScope: contextScopeRef.current,
       },
       (msg) => terminal.log(msg),
-      (msg) => terminal.error(msg)
+      (msg) => terminal.error(msg),
+      signal
     )
   }
 
@@ -6550,6 +6591,25 @@ ${taskDescription}`
         onConfirm: closeDialog
     })
   }
+
+  const handleRecalibrateSummaries = React.useCallback(() => {
+    if (!activeNovelId) return;
+    
+    setChapters(prev => {
+        const recalibrated = recalibrateSummaries(prev);
+        terminal.log(`[USER ACTION] 用户执行了一键校准，处理了 ${prev.length} 个章节`);
+        return recalibrated;
+    });
+
+    setDialog({
+        isOpen: true,
+        type: 'alert',
+        title: '校准完成',
+        message: '已根据当前物理顺序重新对齐所有总结章节的索引范围。这将解决因删除分卷或大幅移动章节导致的总结位置错乱。',
+        inputValue: '',
+        onConfirm: closeDialog
+    });
+  }, [activeNovelId, setChapters]);
 
   // Regex Management
   const handleAddNewRegex = (type: 'global' | 'preset') => {
@@ -6840,6 +6900,7 @@ ${taskDescription}`
           workflowEdgeColor={workflowEdgeColor}
           setWorkflowEdgeColor={setWorkflowEdgeColor}
           handleScanSummaries={handleScanSummaries}
+          handleRecalibrateSummaries={handleRecalibrateSummaries}
           isLoading={isLoading}
           consecutiveChapterCount={consecutiveChapterCount}
           setConsecutiveChapterCount={setConsecutiveChapterCount}
@@ -8092,6 +8153,7 @@ ${taskDescription}`
         workflowEdgeColor={workflowEdgeColor}
         setWorkflowEdgeColor={setWorkflowEdgeColor}
         handleScanSummaries={handleScanSummaries}
+        handleRecalibrateSummaries={handleRecalibrateSummaries}
         isLoading={isLoading}
         consecutiveChapterCount={consecutiveChapterCount}
         setConsecutiveChapterCount={setConsecutiveChapterCount}
@@ -9878,8 +9940,8 @@ ${taskDescription}`
             };
             
             const mergeDuration = Date.now() - mergeStartTime;
-            if (mergeDuration > 30) {
-              terminal.log(`[PERF] 状态合并耗时: ${mergeDuration}ms (包含版本去重与排序)`);
+            if (mergeDuration > 100) {
+              terminal.warn(`[PERF] 状态合并耗时: ${mergeDuration}ms (包含版本去重与排序)`);
             }
             return localNovelsCopy;
           });

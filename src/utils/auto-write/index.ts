@@ -228,13 +228,11 @@ export class AutoWriteEngine {
               const content = chunk.choices[0]?.delta?.content || '';
               fullGeneratedContent += content;
               streamTokenCount++;
-              if (streamTokenCount % 50 === 0) {
-                terminal.log(`[AUTOWRITE] 正在生成流式内容: 已接收 ${streamTokenCount} tokens...`);
-              }
+              // 优化 4.3：移除高频流式进度日志，减轻主进程 IPC 缓冲区负担
 
               const now = Date.now();
               // 节流处理：每 200ms 更新一次 UI，防止高频重绘导致的闪烁和性能下降
-              if (now - lastUpdateTime < 200) continue;
+              if (now - lastUpdateTime < 500) continue;
 
               streamUpdateCount++;
               lastUpdateTime = now;
@@ -311,17 +309,16 @@ export class AutoWriteEngine {
                   return c;
                 }),
               };
-              onNovelUpdate(this.novel);
+              // 核心修复 4.2：流式更新期间仅发送增量章节数据 (Delta Update)，显著减轻跨进程通信 (IPC) 压力
+              // 我们仅提取本次 batch 涉及的章节传递给 UI，避免传递整个小说对象
+              const deltaChapters = this.novel.chapters.filter(c => batchItems.some(b => b.id === c.id));
+              onNovelUpdate({ ...this.novel, chapters: deltaChapters });
             }
+            // 优化 4.3：将高频流式统计改为 console.debug，不再发送给 VSCode Terminal
             const avgUpdateFreq = streamUpdateCount / ((Date.now() - taskStartTime) / 1000);
-            terminal.log(
-              `[PERF] 流式输出统计: Token总数=${streamTokenCount}, 触发状态更新次数=${streamUpdateCount}, 预估平均每秒更新=${avgUpdateFreq.toFixed(
-                1,
-              )}次`,
-            );
-            if (avgUpdateFreq > 10) {
+            if (avgUpdateFreq > 15) {
               terminal.warn(
-                `[FREQ ALERT] AutoWrite 流式更新频率过高: 平均每秒达 ${avgUpdateFreq.toFixed(1)} 次 (建议调大节流阈值)`,
+                `[FREQ ALERT] AutoWrite 流式更新频率过高: 每秒达 ${avgUpdateFreq.toFixed(1)} 次，已触发自动节流`,
               );
             }
           } else {
@@ -403,7 +400,9 @@ export class AutoWriteEngine {
               return c;
             }),
           };
-          onNovelUpdate(this.novel);
+          // 完成时同样仅发送本批次增量
+          const finalDeltaChapters = this.novel.chapters.filter(c => batchItems.some(b => b.id === c.id));
+          onNovelUpdate({ ...this.novel, chapters: finalDeltaChapters });
 
           // 上报章节完成并按需触发自动优化
           // 核心修复：由 Promise.all 改为顺序执行，防止由于并发产生的状态覆盖导致总结丢失（Stale State Conflict）
@@ -549,7 +548,9 @@ export class AutoWriteEngine {
               c.id === chapterId ? { ...c, analysisResult: currentAnalysisResult } : c,
             ),
           };
-          onNovelUpdate(this.novel);
+          // 异步分析结果上报：仅发送受影响章节
+          const analysisDelta = this.novel.chapters.filter(c => c.id === chapterId);
+          onNovelUpdate({ ...this.novel, chapters: analysisDelta });
         }
       } catch (e: any) {
         const isAbort = e.name === 'AbortError' || e.message === 'Request was aborted.' || e.message === 'Aborted';
@@ -644,7 +645,9 @@ export class AutoWriteEngine {
           ...this.novel,
           chapters: updatedChapters,
         };
-        onNovelUpdate(this.novel);
+        // 异步润色结果上报：仅发送受影响章节
+        const optDelta = this.novel.chapters.filter(c => c.id === chapterId);
+        onNovelUpdate({ ...this.novel, chapters: optDelta });
       }
     } catch (e: any) {
       const isAbort = e.name === 'AbortError' || e.message === 'Request was aborted.' || e.message === 'Aborted';
