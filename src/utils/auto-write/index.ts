@@ -39,6 +39,9 @@ export class AutoWriteEngine {
     outlineSetId: string | null = null,
     signal?: AbortSignal,
   ) {
+    terminal.log(
+      `[DEBUG] AutoWriteEngine.run STARTED: startIndex=${startIndex}, targetVolumeId=${targetVolumeId}, novelTitle=${this.novel.title}`,
+    );
     this.isRunning = true;
     this.abortController = new AbortController();
 
@@ -69,22 +72,28 @@ export class AutoWriteEngine {
         const item = outline[currIdx];
         // 核心修复：查重逻辑必须绑定分卷。支持用户在不同分卷（如：草稿卷 vs 正式卷）中生成相同大纲的内容而不被跳过。
         const existingChapter = this.novel.chapters.find(
-          c => c.title === item.title && (!targetVolumeId || c.volumeId === targetVolumeId),
+          c =>
+            c.title === item.title &&
+            ((targetVolumeId && c.volumeId === targetVolumeId) ||
+              (!targetVolumeId && (!c.volumeId || c.volumeId === ''))),
         );
 
         if (existingChapter && existingChapter.content && existingChapter.content.trim().length > 0) {
-          if (batchItems.length === 0) {
-            console.log(`[AutoWrite] Skipping existing chapter and checking for summaries: ${item.title}`);
-            // 即使跳过已存在的章节，也触发一次完成回调，确保由于跳过导致的缺失总结能被补全
-            const resultNovel = await onChapterComplete(existingChapter.id, existingChapter.content, this.novel);
-            if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
-              this.novel = resultNovel as Novel;
-            }
-            startIndex++;
-            continue;
-          } else {
-            break;
+          terminal.log(
+            `[DEBUG] AutoWriteEngine: Skipping ${item.title} - already exists in volume ${targetVolumeId || 'default'}`,
+          );
+
+          console.log(`[AutoWrite] Skipping existing chapter and checking for summaries: ${item.title}`);
+          // 即使跳过已存在的章节，也触发一次完成回调，确保由于跳过导致的缺失总结能被补全
+          const resultNovel = await onChapterComplete(existingChapter.id, existingChapter.content, this.novel);
+          if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
+            this.novel = resultNovel as Novel;
           }
+
+          // 核心修复：无论 batchItems 是否有值，只要当前项已存在，就应该递增 startIndex 并继续检查下一项
+          // 否则会导致死循环或批次偏移
+          startIndex++;
+          continue;
         }
 
         batchItems.push({

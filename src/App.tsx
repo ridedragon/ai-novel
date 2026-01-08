@@ -1117,7 +1117,7 @@ function App() {
       if (deletedChapterIdsRef.current.size > 0) {
           next = next.map(novel => ({
               ...novel,
-              chapters: novel.chapters.filter(c => !deletedChapterIdsRef.current.has(c.id))
+              chapters: (novel.chapters || []).filter(c => !deletedChapterIdsRef.current.has(c.id))
           }));
       }
 
@@ -2470,7 +2470,8 @@ function App() {
     content += `System Prompt: ${novel.systemPrompt}\n\n`
     content += `=================================\n\n`
 
-    const processContent = (text: string) => {
+    const processContent = (text: string | undefined) => {
+      if (!text) return ''
       let processed = text.replace(/<[^>]+>/g, '')
       processed = processed.replace(/(\r\n|\n|\r)+/g, '\n').trim()
       return processed
@@ -2502,7 +2503,8 @@ function App() {
     const volume = volumes.find(v => v.id === volumeId)
     if (!volume) return
     
-    const processContent = (text: string) => {
+    const processContent = (text: string | undefined) => {
+      if (!text) return ''
       let processed = text.replace(/<[^>]+>/g, '')
       processed = processed.replace(/(\r\n|\n|\r)+/g, '\n').trim()
       return processed
@@ -2521,7 +2523,7 @@ function App() {
     const chapter = chapters.find(c => c.id === chapterId)
     if (!chapter) return
     
-    let processedContent = chapter.content.replace(/<[^>]+>/g, '')
+    let processedContent = (chapter.content || '').replace(/<[^>]+>/g, '')
     processedContent = processedContent.replace(/(\r\n|\n|\r)+/g, '\n').trim()
 
     const content = `${chapter.title}\n${processedContent}`

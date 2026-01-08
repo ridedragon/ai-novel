@@ -144,36 +144,39 @@ const CoolEdge = ({
 
   return (
     <>
+      {/* 核心修复 4.1：合并渲染层级，移除内联 <style> 以解决主进程内存爆炸 */}
       <path
-        id={`${id}-glow`}
+        id={`${id}-glow-combined`}
         d={edgePath}
         fill="none"
-        stroke={COLORS.glow}
+        stroke={selected ? 'var(--workflow-edge-color-light, #818cf8)' : COLORS.primary}
         strokeWidth={selected ? 6 : 3}
-        strokeOpacity={0.2}
-        style={{ filter: 'blur(4px)' }}
+        strokeOpacity={selected ? 0.3 : 0.15}
       />
       <BaseEdge
         path={edgePath}
         markerEnd={markerEnd}
         style={{
           ...style,
-          stroke: COLORS.primary,
-          strokeWidth: selected ? 2.5 : 1.5,
-          strokeOpacity: 0.8,
+          stroke: selected ? '#fff' : 'var(--workflow-edge-color-light, #818cf8)',
+          strokeWidth: selected ? 2 : 1.5,
         }}
       />
-      {(animated || selected) && (
-        <circle r="2.5" fill="#fff" className="animate-[move_3s_linear_infinite]">
-          <animateMotion path={edgePath} dur="3s" repeatCount="indefinite" />
-        </circle>
+      {/* 科技感流动效果：使用全局 CSS 动画 .animate-workflow-dash 替代 inline style 和 animateMotion */}
+      {(selected || animated) && (
+        <path
+          d={edgePath}
+          fill="none"
+          stroke="#fff"
+          strokeWidth={1.5}
+          strokeDasharray="4, 16"
+          strokeLinecap="round"
+          className="animate-workflow-dash"
+          style={{
+            opacity: selected ? 0.6 : 0.2,
+          }}
+        />
       )}
-      <style>{`
-        @keyframes move {
-          from { offset-distance: 0%; }
-          to { offset-distance: 100%; }
-        }
-      `}</style>
     </>
   );
 };
@@ -837,10 +840,15 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   const isInitialLoadRef = useRef(true);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const activeNovelRef = useRef(activeNovel);
+  const nodesRef = useRef(nodes);
 
   useEffect(() => {
     activeNovelRef.current = activeNovel;
   }, [activeNovel]);
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
 
@@ -1306,16 +1314,26 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       // 使用 localNovel 跟踪执行过程中的最新状态
       let localNovel = { ...activeNovel };
       const updateLocalAndGlobal = async (newNovel: Novel) => {
-        // 核心修复：合并状态时保留 UI 特有的折叠状态
+        // 优化：合并状态时保留 UI 特有的折叠状态。
+        // 使用 Map 优化搜索效率，解决章节/分卷多时的卡顿
         const currentActiveNovel = activeNovelRef.current;
+        const volumeStateMap = new Map();
+        currentActiveNovel?.volumes.forEach(v => volumeStateMap.set(v.id, v.collapsed));
+
         const mergedNovel: Novel = {
           ...newNovel,
-          volumes: newNovel.volumes.map(v => {
-            const existingVol = currentActiveNovel?.volumes.find(ev => ev.id === v.id);
-            return existingVol ? { ...v, collapsed: existingVol.collapsed } : v;
-          })
+          volumes: newNovel.volumes.map(v => ({
+            ...v,
+            collapsed: volumeStateMap.has(v.id) ? volumeStateMap.get(v.id) : v.collapsed
+          }))
         };
         localNovel = mergedNovel;
+        
+        // 性能优化：在大型对象更新前 yield 一次，确保浏览器有时间处理用户输入
+        if (isRunning) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        
         if (onUpdateNovel) {
           onUpdateNovel(mergedNovel);
         }
@@ -1377,7 +1395,12 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           break;
         }
 
-        const node = sortedNodes[i];
+        // 核心修复：执行时从 Ref 中获取最新的节点数据，防止使用启动时的陈旧快照
+        // 这样如果上一次执行停止后，用户修改了分卷名称或其他配置，这里能立即感知到
+        const currentNode = nodesRef.current.find(n => n.id === sortedNodes[i].id);
+        if (!currentNode) continue;
+
+        const node = currentNode;
         setCurrentNodeIndex(i);
         
         terminal.log(`[WORKFLOW] Executing Node: ${node.data.label} (${node.data.typeLabel})`);
@@ -1699,6 +1722,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             contextChapterCount: globalConfig.contextChapterCount,
           }, localNovel);
 
+          terminal.log(`[DEBUG] MobileWorkflow: Preparing to run engine. finalVolumeId=${finalVolumeId}, currentWorkflowFolder=${currentWorkflowFolder}`);
+
           let writeStartIndex = 0;
           const items = currentSet?.items || [];
           for (let k = 0; k < items.length; k++) {
@@ -1706,7 +1731,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             // 核心修复：查重逻辑限制在目标分卷内
             const existingChapter = localNovel.chapters.find(c =>
               c.title === item.title &&
-              (!finalVolumeId || c.volumeId === finalVolumeId)
+              (
+                (finalVolumeId && c.volumeId === finalVolumeId) ||
+                (!finalVolumeId && (!c.volumeId || c.volumeId === ''))
+              )
             );
             if (!existingChapter || !existingChapter.content || existingChapter.content.trim().length === 0) {
               writeStartIndex = k;
@@ -1719,6 +1747,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
             continue;
           }
+
+          terminal.log(`[DEBUG] MobileWorkflow: engine.run starting from index ${writeStartIndex}`);
 
           await engine.run(
             items,
@@ -1737,7 +1767,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               updateNodeData(node.id, { label: displayStatus });
             },
             (updatedNovel) => {
-              // 核心修复：支持增量更新合并，防止 localNovel 被 deltaChapters 覆盖而丢失历史章节
+              // 核心修复 4.2：支持增量更新合并，防止 localNovel 被 deltaChapters 覆盖而丢失历史章节
               const allLocalChaptersMap = new Map((localNovel.chapters || []).map(c => [c.id, c]));
               
               for (const deltaChapter of (updatedNovel.chapters || [])) {
@@ -1750,6 +1780,13 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               }
               
               localNovel = { ...localNovel, chapters: Array.from(allLocalChaptersMap.values()) };
+              
+              // 在增量上报时，主进程内存压力主要来自 JSON 序列化
+              // 移动端由于 IPC 性能更弱，这里显式记录上报的章节数
+              if ((updatedNovel.chapters || []).length > 0) {
+                // terminal.log(`[IPC] Mobile Delta Report: ${(updatedNovel.chapters || []).length} chapters`);
+              }
+              
               updateLocalAndGlobal(localNovel);
             },
             async (chapterId, content, updatedNovel) => {
@@ -1878,11 +1915,13 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           
           // 6. 结构化解析 AI 输出并更新节点产物
           try {
-            // 极致鲁棒的 JSON 提取与清理逻辑
-            const cleanAndParseJSON = (text: string) => {
+            // 极致鲁棒的 JSON 提取与清理逻辑 (同步 PC 端异步优化逻辑，解决大型 JSON 造成的 UI 假死)
+            const cleanAndParseJSON = async (text: string) => {
+              const startTime = Date.now();
               let processed = text.trim();
               
-              // 移除 Markdown 标记
+              // 1. 异步化的正则清理 (Yield thread)
+              await new Promise(resolve => setTimeout(resolve, 0));
               processed = processed.replace(/```json\s*([\s\S]*?)```/gi, '$1')
                                    .replace(/```\s*([\s\S]*?)```/gi, '$1')
                                    .replace(/\[\/?JSON\]/gi, '');
@@ -1912,11 +1951,17 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               };
 
               try {
-                return JSON.parse(processed);
+                const parsed = JSON.parse(processed);
+                const duration = Date.now() - startTime;
+                if (duration > 20) {
+                  terminal.log(`[PERF] Mobile Workflow.cleanAndParseJSON: ${duration}ms`);
+                }
+                return parsed;
               } catch (e: any) {
                 const fixed = heuristicFix(processed);
                 try {
-                  return JSON.parse(fixed);
+                  const parsed = JSON.parse(fixed);
+                  return parsed;
                 } catch (e2: any) {
                   // 如果是聊天节点，解析失败是预期的（AI 返回了纯文本），不作为错误上报
                   const jsonRequiredNodes = ['outline', 'plotOutline', 'characters', 'worldview'];
@@ -1930,31 +1975,44 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               }
             };
 
-            const parsed = cleanAndParseJSON(result);
+            const parsed = await cleanAndParseJSON(result);
             
-            const extractEntries = (data: any): {title: string, content: string}[] => {
+            const extractEntries = async (data: any): Promise<{title: string, content: string}[]> => {
               if (!data) return [];
               
               // 递归处理嵌套对象（如 { "outline": [...] }）
               if (typeof data === 'object' && !Array.isArray(data)) {
                 const arrayKey = Object.keys(data).find(k => Array.isArray(data[k]));
-                if (arrayKey) return extractEntries(data[arrayKey]);
+                if (arrayKey) return await extractEntries(data[arrayKey]);
               }
 
               const items = Array.isArray(data) ? data : [data];
-              return items.map((item, idx) => {
-                if (typeof item === 'string') return { title: `条目 ${idx + 1}`, content: item };
-                if (typeof item !== 'object' || item === null) return { title: '未命名', content: String(item) };
+              const resultItems: {title: string, content: string}[] = [];
+              
+              for (let idx = 0; idx < items.length; idx++) {
+                // 每处理 50 个条目 yield 一次，确保移动端 UI 响应
+                if (idx > 0 && idx % 50 === 0) await new Promise(resolve => setTimeout(resolve, 0));
+                
+                const item = items[idx];
+                if (typeof item === 'string') {
+                  resultItems.push({ title: `条目 ${idx + 1}`, content: item });
+                  continue;
+                }
+                if (typeof item !== 'object' || item === null) {
+                  resultItems.push({ title: '未命名', content: String(item) });
+                  continue;
+                }
                 
                 // 拓宽键名匹配范围
                 const title = String(item.title || item.chapter || item.name || item.item || item.label || item.header || Object.values(item)[0] || '未命名');
                 const content = String(item.summary || item.content || item.description || item.plot || item.setting || item.bio || item.value || Object.values(item)[1] || '');
                 
-                return { title, content };
-              });
+                resultItems.push({ title, content });
+              }
+              return resultItems;
             };
 
-            entriesToStore = extractEntries(parsed);
+            entriesToStore = await extractEntries(parsed);
             isSuccess = true;
           } catch (e) {
             const jsonRequiredNodes = ['outline', 'plotOutline', 'characters', 'worldview'];
