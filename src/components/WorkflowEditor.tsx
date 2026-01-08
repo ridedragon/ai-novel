@@ -51,7 +51,7 @@ import {
   X
 } from 'lucide-react';
 import OpenAI from 'openai';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
 import { GeneratorPreset, GeneratorPrompt, Novel, PromptItem, RegexScript } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
@@ -1576,17 +1576,22 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   };
 
   // 拓扑排序函数：根据连线确定执行顺序
-  const getOrderedNodes = useCallback(() => {
+  // 性能优化：使用 useMemo 缓存拓扑排序结果，避免频繁重排导致的 UI 闪烁和动画卡顿
+  const orderedNodes = useMemo(() => {
     const startTime = Date.now();
     const adjacencyList = new Map<string, string[]>();
     const inDegree = new Map<string, number>();
     
-    nodes.forEach(node => {
+    // 基础过滤，确保节点数据有效
+    const validNodes = nodes.filter(n => n && n.id);
+    const validEdges = edges.filter(e => e && e.source && e.target);
+
+    validNodes.forEach(node => {
       adjacencyList.set(node.id, []);
       inDegree.set(node.id, 0);
     });
     
-    edges.forEach(edge => {
+    validEdges.forEach(edge => {
       if (adjacencyList.has(edge.source) && adjacencyList.has(edge.target)) {
         adjacencyList.get(edge.source)?.push(edge.target);
         inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
@@ -1594,24 +1599,23 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     });
     
     const queue: string[] = [];
-    // 找到所有起始节点（入度为0），并按坐标排序作为初始顺序
-    const startNodes = nodes.filter(n => (inDegree.get(n.id) || 0) === 0)
-                           .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+    const startNodes = validNodes.filter(n => (inDegree.get(n.id) || 0) === 0)
+                           .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
     
     startNodes.forEach(n => queue.push(n.id));
     
-    const result: string[] = [];
+    const resultIds: string[] = [];
     const currentInDegree = new Map(inDegree);
 
     while (queue.length > 0) {
       const uId = queue.shift()!;
-      result.push(uId);
+      resultIds.push(uId);
       
       const neighbors = adjacencyList.get(uId) || [];
-      // 对邻居按坐标排序以保持执行稳定性
       const sortedNeighbors = neighbors
-        .map(id => nodes.find(n => n.id === id)!)
-        .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+        .map(id => validNodes.find(n => n.id === id)!)
+        .filter(Boolean)
+        .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
 
       sortedNeighbors.forEach(v => {
         const newDegree = (currentInDegree.get(v.id) || 0) - 1;
@@ -1620,18 +1624,20 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       });
     }
     
-    // 补全那些因为循环引用或孤立而被遗漏的节点
-    const orderedNodes = result.map(id => nodes.find(n => n.id === id)!);
-    const remainingNodes = nodes.filter(n => !result.includes(n.id))
-                               .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+    const ordered = resultIds.map(id => validNodes.find(n => n.id === id)!);
+    const remaining = validNodes.filter(n => !resultIds.includes(n.id))
+                               .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
     
-    const resultNodes = [...orderedNodes, ...remainingNodes];
+    const finalNodes = [...ordered, ...remaining];
     const duration = Date.now() - startTime;
-    if (duration > 10) {
-      terminal.log(`[PERF] WorkflowEditor.getOrderedNodes: ${duration}ms (Nodes: ${nodes.length})`);
+    if (duration > 15) {
+      terminal.log(`[PERF] WorkflowEditor.orderedNodes recalculate: ${duration}ms (Nodes: ${nodes.length})`);
     }
-    return resultNodes;
+    return finalNodes;
   }, [nodes, edges]);
+
+  // 保持兼容性的 Getter
+  const getOrderedNodes = useCallback(() => orderedNodes, [orderedNodes]);
 
   // --- 自动化执行引擎 (AI 调用) ---
   const runWorkflow = async (startIndex: number = 0) => {
@@ -1764,6 +1770,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
         if (node.data.skipped) {
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          // 确保跳过时也清理可能残留的连线动画
+          setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;
         }
         
@@ -1771,10 +1779,18 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'executing' } } : n));
         
         // 让指向该节点的连线产生动画效果
-        setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: true } : e));
+        setEdges(eds => eds.map(e => {
+          if (e.target === node.id) return { ...e, animated: true };
+          // 同时关闭其他不再执行的节点的动画，确保视觉焦点唯一
+          if (e.animated) return { ...e, animated: false };
+          return e;
+        }));
+
+        // 核心修复：在状态更新后强制 yield，确保 React 有机会渲染 "executing" 状态和动画起效
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         // 视觉反馈增强：为非 AI 调用节点增加最小执行感，确保用户能看到脉冲发光提示
-        if (node.data.typeKey === 'userInput' || node.data.typeKey === 'createFolder') {
+        if (node.data.typeKey === 'userInput' || node.data.typeKey === 'createFolder' || node.data.typeKey === 'reuseDirectory') {
           await new Promise(resolve => setTimeout(resolve, 600));
         }
 
@@ -1883,6 +1899,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
           // 停止入线动画
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
+          await new Promise(resolve => setTimeout(resolve, 50));
           continue;
         }
 
@@ -1892,6 +1909,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
           // 停止入线动画
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
+          await new Promise(resolve => setTimeout(resolve, 50));
           continue;
         }
 
@@ -2648,6 +2666,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       if (failedNode) {
         setNodes(nds => nds.map(n => n.id === failedNode.id ? { ...n, data: { ...n.data, status: 'failed' } } : n));
       }
+      // 核心修复：发生错误时，务必清理所有连线动画，防止视觉卡死
+      setEdges(eds => eds.map(e => ({ ...e, animated: false })));
       // 将报错信息显示在 UI 上，而不是使用 alert
       setError(`执行失败: ${e.message}`);
       setIsRunning(false);

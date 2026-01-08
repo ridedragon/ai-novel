@@ -1233,37 +1233,45 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     e.target.value = '';
   };
 
-  // --- 拓扑排序 (增加缓存优化) ---
+  // --- 拓扑排序 (性能优化：使用 useMemo 避免渲染阻塞) ---
   const orderedNodes = React.useMemo(() => {
+    const startTime = Date.now();
     const adjacencyList = new Map<string, string[]>();
     const inDegree = new Map<string, number>();
-    nodes.forEach(node => { adjacencyList.set(node.id, []); inDegree.set(node.id, 0); });
-    edges.forEach(edge => {
+    
+    const validNodes = nodes.filter(n => n && n.id);
+    const validEdges = edges.filter(e => e && e.source && e.target);
+
+    validNodes.forEach(node => {
+      adjacencyList.set(node.id, []);
+      inDegree.set(node.id, 0);
+    });
+    
+    validEdges.forEach(edge => {
       if (adjacencyList.has(edge.source) && adjacencyList.has(edge.target)) {
         adjacencyList.get(edge.source)?.push(edge.target);
         inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
       }
     });
+    
     const queue: string[] = [];
-    // 找到所有起始节点（入度为0），并按坐标排序作为初始顺序
-    const startNodes = nodes.filter(n => (inDegree.get(n.id) || 0) === 0)
-                           .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+    const startNodes = validNodes.filter(n => (inDegree.get(n.id) || 0) === 0)
+                           .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
     
     startNodes.forEach(n => queue.push(n.id));
     
-    const result: string[] = [];
+    const resultIds: string[] = [];
     const currentInDegree = new Map(inDegree);
 
     while (queue.length > 0) {
       const uId = queue.shift()!;
-      result.push(uId);
+      resultIds.push(uId);
       
       const neighbors = adjacencyList.get(uId) || [];
-      // 对邻居按坐标排序以保持执行稳定性
       const sortedNeighbors = neighbors
-        .map(id => nodes.find(n => n.id === id)!)
+        .map(id => validNodes.find(n => n.id === id)!)
         .filter(Boolean)
-        .sort((a: any, b: any) => a.position.y - b.position.y || a.position.x - b.position.x);
+        .sort((a: any, b: any) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
 
       sortedNeighbors.forEach((v: any) => {
         const newDegree = (currentInDegree.get(v.id) || 0) - 1;
@@ -1272,11 +1280,16 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       });
     }
     
-    const ordered = result.map(id => nodes.find(n => n.id === id)!).filter(Boolean);
-    const remaining = nodes.filter(n => !result.includes(n.id))
-                          .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+    const ordered = resultIds.map(id => validNodes.find(n => n.id === id)!).filter(Boolean);
+    const remaining = validNodes.filter(n => !resultIds.includes(n.id))
+                          .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
     
-    return [...ordered, ...remaining];
+    const finalNodes = [...ordered, ...remaining];
+    const duration = Date.now() - startTime;
+    if (duration > 15) {
+      terminal.log(`[PERF] MobileWorkflowEditor.orderedNodes recalculated: ${duration}ms`);
+    }
+    return finalNodes;
   }, [nodes, edges]);
 
   // --- 执行引擎 ---
@@ -1408,17 +1421,26 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
         if (node.data.skipped) {
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          // 确保跳过时也清理连线动画
+          setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;
         }
         
         // 更新节点状态为正在执行
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'executing' } } : n));
         
-        // 让指向该节点的连线产生动画效果
-        setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: true } : e));
+        // 让指向该节点的连线产生动画效果，并关闭其他节点的动画
+        setEdges(eds => eds.map(e => {
+          if (e.target === node.id) return { ...e, animated: true };
+          if (e.animated) return { ...e, animated: false };
+          return e;
+        }));
+
+        // 核心修复：强制 yield 确保 React 渲染 executing 状态
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         // 视觉反馈增强
-        if (node.data.typeKey === 'userInput' || node.data.typeKey === 'createFolder') {
+        if (node.data.typeKey === 'userInput' || node.data.typeKey === 'createFolder' || node.data.typeKey === 'reuseDirectory') {
           await new Promise(resolve => setTimeout(resolve, 600));
         }
 
@@ -1522,6 +1544,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           // 更新节点状态为已完成
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
+          await new Promise(resolve => setTimeout(resolve, 50));
           continue;
         }
 
@@ -1529,6 +1552,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           accumContext += `【全局输入】：\n${node.data.instruction}\n\n`;
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
+          await new Promise(resolve => setTimeout(resolve, 50));
           continue;
         }
 
@@ -2088,7 +2112,16 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         keepAliveManager.disable();
       }
     } catch (e: any) {
-      if (e.name !== 'AbortError') setError(`执行失败: ${e.message}`);
+      if (e.name !== 'AbortError') {
+        setError(`执行失败: ${e.message}`);
+        // 错误时将当前节点标记为失败
+        const failedNodeId = orderedNodes[currentNodeIndex]?.id;
+        if (failedNodeId) {
+          setNodes(nds => nds.map(n => n.id === failedNodeId ? { ...n, data: { ...n.data, status: 'failed' } } : n));
+        }
+      }
+      // 错误时清理所有连线动画
+      setEdges(eds => eds.map(e => ({ ...e, animated: false })));
       setIsRunning(false);
       keepAliveManager.disable();
     }
