@@ -1876,17 +1876,17 @@ function App() {
       ]
   }
 
-  const applyRegexToText = async (text: string, scripts: RegexScript[]) => {
+  const applyRegexToText = async (text: string, scripts: RegexScript[], label: string = 'unknown') => {
       if (!text || scripts.length === 0) return text;
       
       let processed = text
       const startTime = Date.now();
-      terminal.log(`[PERF DEBUG] applyRegexToText 开始处理: 长度=${text.length}, 脚本数=${scripts.length}`);
+      terminal.log(`[PERF DEBUG] App.applyRegexToText [${label}] 开始: 长度=${text.length}, 脚本数=${scripts.length}`);
       
       for (const script of scripts) {
           // 真正的异步切片：在每个脚本处理前都检查时间，并确保 yielding
           const scriptStartTime = Date.now();
-          if (scriptStartTime - startTime > 30) {
+          if (Date.now() - startTime > 30) {
               await new Promise(resolve => setTimeout(resolve, 0));
           }
 
@@ -1908,7 +1908,7 @@ function App() {
               
               const scriptDuration = Date.now() - scriptStartTime;
               if (scriptDuration > 100) {
-                  terminal.warn(`[PERF] 单个正则脚本 [${script.scriptName}] 耗时过长: ${scriptDuration}ms (文本长度: ${processed.length})`);
+                  terminal.warn(`[PERF ALERT] 单个正则脚本 [${script.scriptName}] 耗时过长: ${scriptDuration}ms (标签=${label}, 文本长度: ${processed.length})`);
               }
           } catch (e) {
               console.error(`Regex error in ${script.scriptName}`, e)
@@ -1916,7 +1916,7 @@ function App() {
       }
       const duration = Date.now() - startTime;
       if (duration > 100) {
-          terminal.warn(`[PERF DEBUG] applyRegexToText 耗时过长: ${duration}ms, 文本长度: ${text.length}`);
+          terminal.warn(`[PERF ALERT] App.applyRegexToText [${label}] 耗时过长: ${duration}ms, 文本长度: ${text.length}`);
       }
       return processed
   }
@@ -1924,7 +1924,7 @@ function App() {
   const processTextWithRegex = async (text: string, scripts: RegexScript[], type: 'input' | 'output') => {
       if (!text) return text
       const relevantScripts = scripts.filter(s => !s.disabled && s.placement.includes(type === 'input' ? 1 : 2))
-      return await applyRegexToText(text, relevantScripts)
+      return await applyRegexToText(text, relevantScripts, type)
   }
 
   const handleToggleEdit = (contentOverride?: string) => {
@@ -6179,7 +6179,13 @@ ${taskDescription}`
             else if (p.fixedType === 'outline') content = outlineContent ? `【剧情粗纲参考】：\n${outlineContent}` : ""
             
             if (content) {
-              messages.push({ role: p.role, content: await processTextWithRegex(content, scripts, 'input') })
+              // 性能优化：跳过对 chat_history 的二次正则清洗，因为它通常包含数万字的长文本，
+              // 且这些章节在生成或保存时已经运行过一次正则清洗（output阶段）。
+              // 仅对较短的 world_info 和 outline 运行清洗。
+              const processedContent = p.fixedType === 'chat_history'
+                ? content
+                : await processTextWithRegex(content, scripts, 'input');
+              messages.push({ role: p.role, content: processedContent })
             }
           } else if (p.content && p.content.trim()) {
             messages.push({ role: p.role, content: p.content })

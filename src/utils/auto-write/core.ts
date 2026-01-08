@@ -172,14 +172,17 @@ export const getChapterContext = (
   return contextContent;
 };
 
-export const applyRegexToText = async (text: string, scripts: RegexScript[]) => {
+export const applyRegexToText = async (text: string, scripts: RegexScript[], label: string = 'unknown') => {
   if (scripts.length === 0) return text;
   let processed = text;
   const startTime = Date.now();
   const totalScripts = scripts.length;
 
+  terminal.log(`[PERF DEBUG] applyRegexToText [${label}] 开始: 文本长度=${text.length}, 脚本数=${totalScripts}`);
+
   for (let i = 0; i < scripts.length; i++) {
     const script = scripts[i];
+    const scriptStartTime = Date.now();
     // 每一秒或每个脚本处理前 yield 一次主线程，防止长文本+多脚本导致页面完全无响应
     // 优化：将阈值从 50ms 降至 16ms (约1帧)，提升流式输出时的 UI 响应速度
     if (Date.now() - startTime > 16) {
@@ -200,6 +203,14 @@ export const applyRegexToText = async (text: string, scripts: RegexScript[]) => 
 
       // 这里的 replace 是同步的，如果是灾难性回溯仍可能卡顿，但至少脚本之间有了喘息机会
       processed = processed.replace(regex, script.replaceString);
+
+      const scriptDuration = Date.now() - scriptStartTime;
+      // 降低警告阈值至 50ms，并包含更多上下文信息
+      if (scriptDuration > 50) {
+        terminal.warn(
+          `[PERF ALERT] 正则脚本 [${script.scriptName}] 耗时较长: ${scriptDuration}ms (标签=${label}, 文本长度=${text.length}, 正则=${script.findRegex})`,
+        );
+      }
     } catch (e) {
       console.error(`Regex error in ${script.scriptName}`, e);
     }
@@ -207,10 +218,12 @@ export const applyRegexToText = async (text: string, scripts: RegexScript[]) => 
   const duration = Date.now() - startTime;
   if (duration > 50) {
     terminal.warn(
-      `[PERF ALERT] applyRegexToText 耗时过长: ${duration}ms (处理 ${totalScripts} 个脚本, 文本长度 ${text.length})`,
+      `[PERF ALERT] applyRegexToText [${label}] 耗时过长: ${duration}ms (处理 ${totalScripts} 个脚本, 文本长度 ${text.length})`,
     );
   } else if (duration > 10) {
-    terminal.log(`[PERF] applyRegexToText: 处理 ${totalScripts} 个脚本, 耗时 ${duration}ms, 文本长度 ${text.length}`);
+    terminal.log(
+      `[PERF] applyRegexToText [${label}]: 处理 ${totalScripts} 个脚本, 耗时 ${duration}ms, 文本长度 ${text.length}`,
+    );
   }
   return processed;
 };
@@ -218,5 +231,5 @@ export const applyRegexToText = async (text: string, scripts: RegexScript[]) => 
 export const processTextWithRegex = async (text: string, scripts: RegexScript[], type: 'input' | 'output') => {
   if (!text) return text;
   const relevantScripts = scripts.filter(s => !s.disabled && s.placement.includes(type === 'input' ? 1 : 2));
-  return await applyRegexToText(text, relevantScripts);
+  return await applyRegexToText(text, relevantScripts, type);
 };

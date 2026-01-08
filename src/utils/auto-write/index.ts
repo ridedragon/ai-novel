@@ -170,9 +170,12 @@ export class AutoWriteEngine {
             contextChapterCount: this.config.contextChapterCount,
           });
 
+          // 虽然跳过长上下文清洗，但我们仍需要 scripts 用于后续的章节输出清洗
           const scripts = getActiveScripts();
-          const processedContext = await processTextWithRegex(rawContext, scripts, 'input');
-          const contextMsg = processedContext ? `【前文剧情回顾】：\n${processedContext}\n\n` : '';
+
+          // 核心优化：不再对几万字的历史背景运行正则清洗
+          // 理由：历史章节在生成时已经运行过一次正则清洗（output阶段），重复清洗在大文本下会造成极高的延迟（如 6s+）。
+          const contextMsg = rawContext ? `【前文剧情回顾】：\n${rawContext}\n\n` : '';
 
           const fullOutlineContext = includeFullOutline
             ? `【全书粗纲参考】：\n${outline
@@ -349,6 +352,33 @@ export class AutoWriteEngine {
           });
           let finalContents = this.splitBatchContent(fullGeneratedContent, batchItems, finalRegexes);
 
+          // 核心修复：防止因批次拆分失败导致的超长文本重复运行正则
+          // 如果 AI 生成的内容没能被正确分割，且当前是多章节生成模式
+          if (
+            batchItems.length > 1 &&
+            finalContents.filter(c => c.trim()).length === 1 &&
+            fullGeneratedContent.length > 30000
+          ) {
+            terminal.warn(
+              `[PERF ALERT] 检测到批次拆分失败且文本超长(${fullGeneratedContent.length}), 正在尝试强制兜底拆分以防止正则卡死`,
+            );
+
+            // 尝试基于通用分隔符拆分
+            const parts = fullGeneratedContent.split(/(?:\r\n|\r|\n|^)###\s*[^\n]*/).filter(p => p.trim());
+            if (parts.length >= batchItems.length) {
+              finalContents = parts.slice(0, batchItems.length);
+            } else {
+              // 极端情况：如果连 ### 都没搜到，说明 AI 格式完全错误。
+              // 此时为了防止后续 applyRegexToText 对 5 万字长文本运行同步正则导致假死 6s
+              // 我们强制进行按长度粗略分片（仅作为保护，总比卡死强）
+              const avgLen = Math.floor(fullGeneratedContent.length / batchItems.length);
+              finalContents = [];
+              for (let k = 0; k < batchItems.length; k++) {
+                finalContents.push(fullGeneratedContent.substring(k * avgLen, (k + 1) * avgLen));
+              }
+            }
+          }
+
           // 兜底处理：如果分割出来的有效章节数不足，尝试更激进的正则分割
           if (batchItems.length > 1 && finalContents.filter(c => c.trim()).length < batchItems.length) {
             const aggressiveSplit = fullGeneratedContent
@@ -366,7 +396,10 @@ export class AutoWriteEngine {
           }
 
           const processedContents: string[] = [];
-          for (const content of finalContents) {
+          for (let idx = 0; idx < finalContents.length; idx++) {
+            const content = finalContents[idx];
+            // 增加日志：标记具体章节产出处理
+            const label = batchItems[idx] ? `output:${batchItems[idx].item.title}` : 'output:unknown';
             processedContents.push(await processTextWithRegex(content, scripts, 'output'));
           }
           finalContents = processedContents;
