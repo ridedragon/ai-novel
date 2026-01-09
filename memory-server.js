@@ -34,7 +34,8 @@ app.use(express.static(uiPath));
  */
 app.post('/api/report', (req, res) => {
   const memoryData = req.body;
-  console.log(`[Monitor] Received report: ${Math.round(memoryData.heapUsed / 1024 / 1024)}MB`);
+  // 静默处理上报日志，避免在 PowerShell 中产生大量滚动
+  // console.log(`[Monitor] Received report: ${Math.round(memoryData.heapUsed / 1024 / 1024)}MB`);
 
   // 广播给所有连接的监控页面
   clients.forEach(client => {

@@ -48,11 +48,12 @@ import {
   X
 } from 'lucide-react';
 import OpenAI from 'openai';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
 import { GeneratorPreset, GeneratorPrompt, Novel } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
 import { keepAliveManager } from '../utils/KeepAliveManager';
+import { workflowManager } from '../utils/WorkflowManager';
 import { WorkflowData, WorkflowEditorProps, WorkflowNode, WorkflowNodeData } from './WorkflowEditor';
 
 // --- 类型定义 ---
@@ -181,13 +182,6 @@ const CoolEdge = ({
   );
 };
 
-const nodeTypes = {
-  custom: CustomNode,
-};
-
-const edgeTypes = {
-  custom: CoolEdge,
-};
 
 // --- 配置定义 ---
 type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter';
@@ -816,13 +810,22 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   const [isEditingWorkflowName, setIsEditingWorkflowName] = useState(false);
   const [newWorkflowName, setNewWorkflowName] = useState('');
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [currentNodeIndex, setCurrentNodeIndex] = useState<number>(-1);
+  const [isRunning, setIsRunning] = useState(workflowManager.getState().isRunning);
+  const [isPaused, setIsPaused] = useState(workflowManager.getState().isPaused);
+  const [currentNodeIndex, setCurrentNodeIndex] = useState<number>(workflowManager.getState().currentNodeIndex);
   const [stopRequested, setStopRequested] = useState(false);
   const [edgeToDelete, setEdgeToDelete] = useState<Edge | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OutputEntry | null>(null);
+
+  // 性能优化：显式使用 useMemo 锁定 nodeTypes 和 edgeTypes，消除 React Flow 的重绘警告
+  const nodeTypes = useMemo(() => ({
+    custom: CustomNode,
+  }), []);
+
+  const edgeTypes = useMemo(() => ({
+    custom: CoolEdge,
+  }), []);
 
   // 性能监控埋点
   const renderStartTimeRef = useRef<number>(0);
@@ -851,6 +854,19 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   }, [nodes]);
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
+
+  // 同步全局工作流状态
+  useEffect(() => {
+    const unsubscribe = workflowManager.subscribe((state) => {
+      if (state.activeWorkflowId === activeWorkflowId || !activeWorkflowId || activeWorkflowId === 'default') {
+        setIsRunning(state.isRunning);
+        setIsPaused(state.isPaused);
+        setCurrentNodeIndex(state.currentNodeIndex);
+        if (state.error) setError(state.error);
+      }
+    });
+    return () => unsubscribe();
+  }, [activeWorkflowId]);
 
   // 获取工作流中所有“初始化目录”节点定义的文件夹名
   const pendingFolders = nodes
@@ -931,6 +947,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   const loadWorkflow = (id: string, workflowList: WorkflowData[]) => {
     if (isRunning) return;
     const workflow = workflowList.find(w => w.id === id);
+    const globalIsRunning = workflowManager.getState().isRunning;
     if (workflow) {
       const restoredNodes = (workflow.nodes || []).map((n: WorkflowNode) => {
         const workflowFolderName = (workflow.nodes || []).find(node => node.data.typeKey === 'createFolder')?.data.folderName;
@@ -955,6 +972,11 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           ...n,
           data: {
             ...n.data,
+            // 核心修复：数据自愈
+            status: (!globalIsRunning && n.data.status === 'executing') ? 'completed' : n.data.status,
+            label: (!globalIsRunning && n.data.status === 'executing' && n.data.typeKey === 'chapter')
+              ? NODE_CONFIGS.chapter.defaultLabel
+              : n.data.label,
             icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon,
             selectedWorldviewSets: filterLegacyRefs(n.data.selectedWorldviewSets, 'worldview'),
             selectedCharacterSets: filterLegacyRefs(n.data.selectedCharacterSets, 'character'),
@@ -1307,8 +1329,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       return;
     }
     
-    setIsRunning(true);
-    setIsPaused(false);
+    workflowManager.start(activeWorkflowId, startIndex);
     setStopRequested(false);
     setError(null);
     stopRequestedRef.current = false;
@@ -1358,6 +1379,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       if (startIndex === 0) {
         setNodes(nds => nds.map(n => {
           const updates: any = { status: 'pending', outputEntries: [] };
+          // 重置正文生成节点的显示名称
+          if (n.data.typeKey === 'chapter') {
+            updates.label = NODE_CONFIGS.chapter.defaultLabel;
+          }
           // 不再重置 targetVolumeId，保留用户配置
           return { ...n, data: { ...n.data, ...updates } };
         }));
@@ -1403,8 +1428,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       
       for (let i = startIndex; i < sortedNodes.length; i++) {
         if (stopRequestedRef.current) {
-          setIsPaused(true);
-          setCurrentNodeIndex(i);
+          workflowManager.pause(i);
           break;
         }
 
@@ -1414,7 +1438,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         if (!currentNode) continue;
 
         const node = currentNode;
-        setCurrentNodeIndex(i);
+        workflowManager.updateProgress(i);
         
         terminal.log(`[WORKFLOW] Executing Node: ${node.data.label} (${node.data.typeLabel})`);
         logMemory();
@@ -1836,6 +1860,28 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             label: NODE_CONFIGS.chapter.defaultLabel,
             status: 'completed'
           });
+
+          // 核心修复：移动端手动持久化
+          try {
+            const savedWfs = JSON.parse(localStorage.getItem('novel_workflows') || '[]');
+            const updatedWfs = savedWfs.map((w: any) => {
+              if (w.id === activeWorkflowId) {
+                return {
+                  ...w,
+                  nodes: w.nodes.map((n: any) => n.id === node.id ? {
+                    ...n,
+                    data: { ...n.data, status: 'completed', label: NODE_CONFIGS.chapter.defaultLabel }
+                  } : n),
+                  lastModified: Date.now()
+                };
+              }
+              return w;
+            });
+            localStorage.setItem('novel_workflows', JSON.stringify(updatedWfs));
+          } catch (e) {
+            console.error('Failed to persist mobile node completion state', e);
+          }
+
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;
         }
@@ -1921,6 +1967,11 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             updateNodeData(node.id, { label: `重试中(${retryCount}/${maxRetries}): ${node.data.typeLabel}` });
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
+
+          // 调试：F12 打印发送给 AI 的全部内容
+          console.group(`[AI REQUEST] 移动端工作流 - ${node.data.label} (${node.data.typeLabel})`);
+          console.log('Messages:', messages);
+          console.groupEnd();
 
           const completion = await openai.chat.completions.create({
             model: finalModel,
@@ -2059,6 +2110,27 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         const newEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({ id: `${Date.now()}-${idx}`, title: e.title, content: e.content }));
         updateNodeData(node.id, { status: 'completed', outputEntries: [...newEntries, ...(node.data.outputEntries || [])] });
 
+        // 核心修复：移动端通用 AI 节点的手动持久化
+        try {
+          const savedWfs = JSON.parse(localStorage.getItem('novel_workflows') || '[]');
+          const updatedWfs = savedWfs.map((w: any) => {
+            if (w.id === activeWorkflowId) {
+              return {
+                ...w,
+                nodes: w.nodes.map((n: any) => n.id === node.id ? {
+                  ...n,
+                  data: { ...n.data, status: 'completed' }
+                } : n),
+                lastModified: Date.now()
+              };
+            }
+            return w;
+          });
+          localStorage.setItem('novel_workflows', JSON.stringify(updatedWfs));
+        } catch (e) {
+          console.error('Failed to persist mobile generic node completion state', e);
+        }
+
         // 持久化到 Novel
         if (currentWorkflowFolder) {
           const folderName = currentWorkflowFolder;
@@ -2107,13 +2179,14 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       setEdges(eds => eds.map(e => ({ ...e, animated: false })));
 
       if (!stopRequestedRef.current) {
-        setCurrentNodeIndex(-1);
-        setIsRunning(false);
+        workflowManager.stop();
         keepAliveManager.disable();
       }
     } catch (e: any) {
-      if (e.name !== 'AbortError') {
+      const isAbort = e.name === 'AbortError' || /aborted/i.test(e.message);
+      if (!isAbort) {
         setError(`执行失败: ${e.message}`);
+        workflowManager.setError(e.message);
         // 错误时将当前节点标记为失败
         const failedNodeId = orderedNodes[currentNodeIndex]?.id;
         if (failedNodeId) {
@@ -2122,12 +2195,12 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       }
       // 错误时清理所有连线动画
       setEdges(eds => eds.map(e => ({ ...e, animated: false })));
-      setIsRunning(false);
       keepAliveManager.disable();
     }
   };
 
   const stopWorkflow = () => {
+    terminal.log('[MOBILE WORKFLOW] STOP requested by user.');
     keepAliveManager.disable();
     // 停止时显式更新工作流列表并保存
     const updatedWorkflows = workflows.map(w => {
@@ -2150,7 +2223,16 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    setIsRunning(false);
+    workflowManager.pause(currentNodeIndex);
+    // 强制清理执行状态，确保 UI 动画立即停止
+    setNodes(nds => nds.map(n => ({
+      ...n,
+      data: {
+        ...n.data,
+        status: n.data.status === 'executing' ? 'pending' : n.data.status
+      }
+    })));
+    setEdges(eds => eds.map(e => ({ ...e, animated: false })));
   };
 
   if (!isOpen) return null;
@@ -2265,12 +2347,14 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                       data: {
                         ...n.data,
                         status: 'pending' as const,
+                        label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label,
+                        outputEntries: [],
                         targetVolumeId: n.data.typeKey === 'chapter' ? '' : n.data.targetVolumeId
                       }
                     }));
                     setNodes(updatedNodes);
-                    setCurrentNodeIndex(-1);
-                    setIsPaused(false);
+                    workflowManager.stop();
+                    setError(null);
                     setWorkflows(prev => prev.map(w => w.id === activeWorkflowId ? { ...w, nodes: updatedNodes, currentNodeIndex: -1 } : w));
                   }
                 }}

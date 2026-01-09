@@ -241,6 +241,10 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
       title: '删除灵感集',
       message: '确定要删除这个灵感集吗？里面的所有灵感条目都会被删除。',
       onConfirm: () => {
+        // 核心修复：通过 storage 暴露的黑名单机制拦截 Data Healing 的自动复活
+        // 注意：由于 InspirationManager 没有直接访问 App.tsx 的 deletedChapterIdsRef，
+        // 这里依赖 App.tsx 中对 novel.inspirationSets 的状态监听来同步。
+        // 但为了保险，我们建议用户刷新页面前先触发一次保存。
         const updatedSets = (novel.inspirationSets || []).filter(s => s.id !== id)
         onUpdateNovel({ ...novel, inspirationSets: updatedSets })
         if (activeInspirationSetId === id) {
@@ -625,7 +629,14 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
                                        ? 'bg-[var(--theme-color)] text-white rounded-tr-none'
                                        : 'bg-gray-800 text-gray-200 rounded-tl-none border border-gray-700'
                                  }`}>
-                                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                                    <div className="whitespace-pre-wrap">
+                                       {typeof msg.content === 'string'
+                                         ? msg.content
+                                         : Array.isArray(msg.content)
+                                           ? msg.content.map((c: any, i: number) => c.type === 'text' ? c.text : `[${c.type}]`).join('')
+                                           : JSON.stringify(msg.content)
+                                       }
+                                    </div>
                                  </div>
                               </div>
                            ))}

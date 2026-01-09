@@ -12,6 +12,9 @@ if [ ! -d "node_modules" ]; then
     fi
 fi
 
+echo "Starting Kilo-Memory Cyber-Monitor..."
+npm run monitor &
+
 echo "Starting development server..."
 
 # 端口清理逻辑

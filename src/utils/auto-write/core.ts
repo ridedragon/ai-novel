@@ -99,10 +99,20 @@ export const getChapterContext = (
         return true;
       });
 
+      // --- 核心修复：确定当前 Scope 的起始边界 ---
+      let scopeStartNum = 1;
+      if (filterVolumeId || filterUncategorized) {
+        const firstInScope = storyChapters.find(c => (filterVolumeId ? c.volumeId === filterVolumeId : !c.volumeId));
+        if (firstInScope) {
+          scopeStartNum = storyChapters.indexOf(firstInScope) + 1;
+        }
+      }
+
       // 1. 收集所有结束于当前章之前的总结 (不进行大总结吃小总结的过滤，保留细节)
       const relevantSummaries = chapters
         .filter(c => (c.subtype === 'big_summary' || c.subtype === 'small_summary') && c.summaryRange)
         .filter(s => {
+          // 强化过滤：如果是特定 Scope，总结必须属于该 Scope
           if (filterVolumeId) return s.volumeId === filterVolumeId;
           if (filterUncategorized) return !s.volumeId;
           return true;
@@ -110,7 +120,8 @@ export const getChapterContext = (
         .filter(s => parseRange(s.summaryRange!).end < currentNum)
         .sort((a, b) => parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start);
 
-      let maxSummarizedIdx = 0;
+      // 修正 maxSummarizedIdx 的初始值，防止回退到 Scope 之外
+      let maxSummarizedIdx = scopeStartNum - 1;
       relevantSummaries.forEach(s => {
         const typeStr = s.subtype === 'big_summary' ? '剧情大纲' : '剧情概要';
         contextContent += `【${typeStr} (${s.title})】：\n${s.content}\n\n`;
@@ -124,17 +135,20 @@ export const getChapterContext = (
       // 策略：确保深度为 1 时，至少能看到上一章。
       // 发送 (maxSummarizedIdx - contextChapterCount + 1) 之后的所有正文内容。
       // 如果 maxSummarizedIdx 是 3 (总结到第 3 章)，深度是 1，则 storyStartNum 为 3 - 1 + 1 = 3，包含第 3 章。
-      const storyStartNum = Math.max(1, maxSummarizedIdx - contextChapterCount + 1);
+      // 核心修复：storyStartNum 不得小于 scopeStartNum
+      const storyStartNum = Math.max(scopeStartNum, maxSummarizedIdx - contextChapterCount + 1);
 
       const previousStoryChapters = storyChapters.filter((c, idx) => {
+        // First apply volume filter
         if (filterVolumeId && c.volumeId !== filterVolumeId) return false;
         if (filterUncategorized && c.volumeId) return false;
 
         const cNum = idx + 1;
         if (cNum >= currentNum) return false;
 
-        // 发送范围：从 (总结边界 - 深度) 开始，直到当前章之前
-        if (cNum >= storyStartNum) return true;
+        // 发送范围：从 (总结边界 - 深度 + 1) 开始，直到当前章之前
+        // 核心限制：绝对不跨越 Scope 边界
+        if (cNum >= storyStartNum && cNum >= scopeStartNum) return true;
 
         return false;
       });

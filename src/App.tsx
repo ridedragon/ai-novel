@@ -971,9 +971,10 @@ function App() {
   // Workflow Edge Color Settings
   const [workflowEdgeColor, setWorkflowEdgeColor] = useState(() => {
     try {
-      return localStorage.getItem('workflowEdgeColor') || ''
+      // 核心修复：颜色输入框不支持空字符串，设为默认灰色
+      return localStorage.getItem('workflowEdgeColor') || '#b1b1b7'
     } catch (e) {
-      return ''
+      return '#b1b1b7'
     }
   })
 
@@ -1113,13 +1114,19 @@ function App() {
     _setNovels(prev => {
       let next = typeof value === 'function' ? (value as any)(prev) : value;
 
+      // 性能优化：浅比较。如果数据引用未变，直接跳过后续处理
+      if (next === prev) return prev;
+
       // 强制过滤已删除章节，防止“亡灵复活”
       if (deletedChapterIdsRef.current.size > 0) {
-          next = next.map(novel => ({
+          next = next.map((novel: Novel) => ({
               ...novel,
-              chapters: (novel.chapters || []).filter(c => !deletedChapterIdsRef.current.has(c.id))
+              chapters: (novel.chapters || []).filter((c: Chapter) => !deletedChapterIdsRef.current.has(c.id))
           }));
       }
+
+      // 如果过滤后与原引用一致，说明无实质变化，跳过 Ref 更新与日志
+      if (next === prev) return prev;
 
       novelsRef.current = next;
       const endTime = Date.now();
@@ -1153,12 +1160,16 @@ function App() {
       if (novel) {
         // 当切换小说时，触发按需加载
         storage.loadNovelContent(novel).then(async loadedNovel => {
-          // --- 分卷找回逻辑：跨源数据修复 ---
+          // --- 分卷找回逻辑：跨源数据修复 (Data Healing) ---
+          // 核心修复：只有在明确检测到“有内容但没对应分卷/文件夹”的情况下才触发找回。
+          // 特别要注意：如果工作流配置中依然保留着对已删除分卷的 targetVolumeId 引用，
+          // 而 Data Healing 此时又根据工作流配置“找回”了该 ID，就会导致文件夹“复活”。
+          // 策略：如果 orphanVolumeIds 中包含刚刚被删除的 ID（存在于黑名单中），则坚决不找回。
           const currentVolumes = loadedNovel.volumes || [];
           const orphanVolumeIds = new Set(
             (loadedNovel.chapters || [])
               .map(c => c.volumeId)
-              .filter(id => id && !currentVolumes.some(v => String(v.id) === String(id)))
+              .filter(id => id && id.trim() !== '' && !currentVolumes.some(v => String(v.id) === String(id)))
           );
 
           if (orphanVolumeIds.size > 0) {
@@ -1167,12 +1178,18 @@ function App() {
             const newVolumes = [...currentVolumes];
             const remainingOrphans = new Set(orphanVolumeIds);
 
-            // 1. 尝试从工作流配置中找回
+            // 1. 尝试从工作流配置中找回 (仅当该 ID 不在删除黑名单中时)
             try {
               const savedWfs = localStorage.getItem('novel_workflows');
               if (savedWfs) {
                 const wfs = JSON.parse(savedWfs);
                 remainingOrphans.forEach(id => {
+                  // 如果该分卷 ID 是用户刚刚通过 UI 显式删除的，不要由于工作流的过时引用将其带回
+                  if (deletedChapterIdsRef.current.has(id as any)) {
+                    terminal.warn(`[DATA HEALING] 拦截到黑名单中的分卷复活请求: ${id}`);
+                    return;
+                  }
+
                   for (const wf of wfs) {
                     const matchedNode = wf.nodes?.find((n: any) => String(n.data?.targetVolumeId) === String(id));
                     if (matchedNode) {
@@ -1190,6 +1207,8 @@ function App() {
 
             // 2. 尝试从资料集 ID 匹配中找回 (通常 ID 一致)
             remainingOrphans.forEach(id => {
+              if (deletedChapterIdsRef.current.has(id as any)) return;
+
               const matchedSet =
                 loadedNovel.outlineSets?.find(s => String(s.id) === String(id)) ||
                 loadedNovel.worldviewSets?.find(s => String(s.id) === String(id)) ||
@@ -1203,8 +1222,10 @@ function App() {
               }
             });
 
-            // 3. 兜底策略：如果依然没找回，为了恢复 UI 结构，创建一个占位分卷
+            // 3. 兜底策略：如果依然没找回，为了恢复 UI 结构，创建一个占位分卷 (同样避开黑名单)
             remainingOrphans.forEach(id => {
+              if (deletedChapterIdsRef.current.has(id as any)) return;
+              
               newVolumes.push({ id: String(id), title: `恢复的分卷 (${String(id).substring(0,4)})`, collapsed: false });
               healed = true;
               terminal.log(`[DATA HEALING] 无法找回名称，创建占位分卷: ${id}`);
@@ -2069,7 +2090,10 @@ function App() {
         setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, characterSets: [defaultSet], characters: undefined } : n))
         setActiveCharacterSetId('default')
       } else if (charSets.length > 0) {
-        if (!charSets.some(s => s.id === activeCharacterSetId)) setActiveCharacterSetId(charSets[0].id)
+        if (!charSets.some(s => s.id === activeCharacterSetId)) {
+          // 保持静默，不再强行修改 setActiveCharacterSetId，除非它当前为 null
+          setActiveCharacterSetId(prev => prev || charSets[0].id)
+        }
       }
 
       // 2. Worldview Sets
@@ -2080,7 +2104,9 @@ function App() {
         setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, worldviewSets: [defaultSet], worldview: undefined } : n))
         setActiveWorldviewSetId('default_world')
       } else if (wvSets.length > 0) {
-        if (!wvSets.some(s => s.id === activeWorldviewSetId)) setActiveWorldviewSetId(wvSets[0].id)
+        if (!wvSets.some(s => s.id === activeWorldviewSetId)) {
+          setActiveWorldviewSetId(prev => prev || wvSets[0].id)
+        }
       }
 
       // 3. Outline Sets
@@ -2091,7 +2117,9 @@ function App() {
         setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, outlineSets: [defaultSet], outline: undefined } : n))
         setActiveOutlineSetId('default_outline')
       } else if (outSets.length > 0) {
-        if (!outSets.some(s => s.id === activeOutlineSetId)) setActiveOutlineSetId(outSets[0].id)
+        if (!outSets.some(s => s.id === activeOutlineSetId)) {
+          setActiveOutlineSetId(prev => prev || outSets[0].id)
+        }
       }
 
       // 4. Plot Outline Sets
@@ -3441,6 +3469,8 @@ function App() {
         message: '确定要删除这个大纲文件吗？里面的所有章节规划都会被删除。',
         inputValue: '',
         onConfirm: () => {
+           // 记录黑名单，防止 Data Healing 恢复它
+           deletedChapterIdsRef.current.add(id as any);
            const newSets = currentSets.filter(s => s.id !== id)
            updateOutlineSets(newSets)
            if (activeOutlineSetId === id) {
@@ -3910,6 +3940,8 @@ function App() {
         message: '确定要删除这个角色文件吗？里面的所有角色卡都会被删除。',
         inputValue: '',
         onConfirm: () => {
+           // 记录黑名单
+           deletedChapterIdsRef.current.add(id as any);
            const newSets = currentSets.filter(s => s.id !== id)
            updateCharacterSets(newSets)
            if (activeCharacterSetId === id) {
@@ -4235,6 +4267,8 @@ function App() {
         message: '确定要删除这个世界观文件吗？里面的所有设定都会被删除。',
         inputValue: '',
         onConfirm: () => {
+           // 记录黑名单
+           deletedChapterIdsRef.current.add(id as any);
            const newSets = currentSets.filter(s => s.id !== id)
            updateWorldviewSets(newSets)
            if (activeWorldviewSetId === id) {
@@ -4900,13 +4934,14 @@ function App() {
               if (!Array.isArray(items)) return [];
               return items.map(item => {
                   if (typeof item !== 'object' || !item) return null;
-                  return {
+                  const newItem: PlotOutlineItem = {
                     id: item.id || (typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2)),
                     title: item.title || item.name || item.header || item.label || '未命名',
                     description: item.description || item.content || item.setting || item.summary || item.plot || '',
                     type: item.type || '剧情',
                     children: item.children ? processItems(item.children) : []
                   };
+                  return newItem;
               }).filter((i): i is PlotOutlineItem => i !== null);
           }
           const plotData = processItems(rawData)
@@ -5647,9 +5682,9 @@ function App() {
         if (!firstChapterInBatch) throw new Error("Chapter placeholder missing")
 
         const rawContext = getChapterContext(tempNovel, firstChapterInBatch)
-        const scripts = getActiveScripts()
-        const processedContext = await processTextWithRegex(rawContext, scripts, 'input')
-        const contextMsg = processedContext ? `【前文剧情回顾】：\n${processedContext}\n\n` : ""
+        // 核心优化：不再对几万字的历史背景运行正则清洗
+        // 理由：历史章节在生成时已经运行过一次正则清洗（output阶段），重复清洗在大文本下会造成极高的延迟（如 26s+）。
+        const contextMsg = rawContext ? `【前文剧情回顾】：\n${rawContext}\n\n` : ""
 
         const fullOutlineContext = includeFullOutline 
           ? `【全书粗纲参考】：\n${outline.map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`).join('\n')}\n\n`
@@ -5698,6 +5733,11 @@ ${taskDescription}`
           }
         })
         messages.push({ role: 'user', content: mainPrompt })
+
+        // 调试：F12 打印发送给 AI 的全部内容
+        console.group(`[AI REQUEST] 全自动正文创作 - ${novelTitle}`);
+        console.log('Messages:', messages);
+        console.groupEnd();
 
         // Increase max tokens for batch
         const batchMaxTokens = maxReplyLength * preparedBatch.length > 128000 ? 128000 : maxReplyLength * (preparedBatch.length > 1 ? 1.5 : 1) // Heuristic increase
@@ -5847,7 +5887,8 @@ ${taskDescription}`
         }
 
         // Apply Regex Scripts to each part
-        finalContents = await Promise.all(finalContents.map(c => processTextWithRegex(c, scripts, 'output')))
+        const activeScripts = getActiveScripts();
+        finalContents = await Promise.all(finalContents.map(c => processTextWithRegex(c, activeScripts, 'output')))
 
         // Update State with final separated content - 使用函数式更新避免覆盖其他状态更改（如分卷折叠）
         terminal.warn(`[DEBUG] 创作循环准备写回，准备匹配 ID: ${preparedBatch.map(b => b.id).join(', ')}`);
@@ -6199,6 +6240,11 @@ ${taskDescription}`
         if (messages.length === 0 || messages[messages.length - 1].role !== 'user' || userPrompt.trim()) {
           messages.push({ role: 'user', content: finalUserPrompt })
         }
+
+        // 调试：F12 打印发送给 AI 的全部内容
+        console.group(`[AI REQUEST] 对话续写生成 - ${activeChapter.title}`);
+        console.log('Messages:', messages);
+        console.groupEnd();
 
         const response = await openai.chat.completions.create({
           model: config.model,
@@ -8276,8 +8322,8 @@ ${taskDescription}`
                     <div className="space-y-3">
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <input type="checkbox" checked className="rounded bg-gray-700 border-gray-600 text-[var(--theme-color)]" />
-                          <span className="text-gray-300">解锁上下文长度</span>
+                            <input type="checkbox" checked readOnly className="rounded bg-gray-700 border-gray-600 text-[var(--theme-color)]" />
+                            <span className="text-gray-300">解锁上下文长度</span>
                         </div>
                         <span className="text-gray-400 text-xs">AI可见的最大上下文长度</span>
                       </div>

@@ -18,6 +18,9 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8002') do (
     taskkill /f /pid %%a >nul 2>&1
 )
 
+echo Starting Kilo-Memory Cyber-Monitor...
+start /b cmd /c "npm run monitor"
+
 echo Starting development server...
 call npm run dev
 pause

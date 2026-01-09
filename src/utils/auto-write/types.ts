@@ -31,6 +31,7 @@ export interface AutoWriteConfig {
   onChapterComplete?: (chapterId: number, content: string) => Promise<void>;
   contextChapterCount?: number; // 上下文参考章节数
   maxConcurrentOptimizations?: number; // 最大并行优化数
+  contextScope?: string; // 上下文发送范围
 }
 
 export interface AutoWriteStatus {

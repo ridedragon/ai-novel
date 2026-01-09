@@ -56,6 +56,7 @@ import terminal from 'virtual:terminal';
 import { GeneratorPreset, GeneratorPrompt, Novel, PromptItem, RegexScript } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
 import { keepAliveManager } from '../utils/KeepAliveManager';
+import { workflowManager } from '../utils/WorkflowManager';
 
 // --- 类型定义 ---
 
@@ -254,13 +255,6 @@ const CoolEdge = ({
   );
 };
 
-const nodeTypes = {
-  custom: CustomNode,
-};
-
-const edgeTypes = {
-  custom: CoolEdge,
-};
 
 // --- 配置定义 ---
 
@@ -1088,13 +1082,22 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const [isEditingWorkflowName, setIsEditingWorkflowName] = useState(false);
   const [newWorkflowName, setNewWorkflowName] = useState('');
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [currentNodeIndex, setCurrentNodeIndex] = useState<number>(-1);
+  const [isRunning, setIsRunning] = useState(workflowManager.getState().isRunning);
+  const [isPaused, setIsPaused] = useState(workflowManager.getState().isPaused);
+  const [currentNodeIndex, setCurrentNodeIndex] = useState<number>(workflowManager.getState().currentNodeIndex);
   const [stopRequested, setStopRequested] = useState(false);
   const [edgeToDelete, setEdgeToDelete] = useState<Edge | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OutputEntry | null>(null);
+
+  // 性能优化：显式使用 useMemo 锁定 nodeTypes 和 edgeTypes，消除 React Flow 的重绘警告
+  const nodeTypes = useMemo(() => ({
+    custom: CustomNode,
+  }), []);
+
+  const edgeTypes = useMemo(() => ({
+    custom: CoolEdge,
+  }), []);
 
   const stopRequestedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -1104,6 +1107,21 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   useEffect(() => {
     activeNovelRef.current = activeNovel;
   }, [activeNovel]);
+
+  // 同步全局工作流状态
+  useEffect(() => {
+    const unsubscribe = workflowManager.subscribe((state) => {
+      // 只有当本地状态与全局状态不一致且当前工作流 ID 匹配时才更新
+      // 或者是刚刚打开界面（isInitialLoadRef 为 true）
+      if (state.activeWorkflowId === activeWorkflowId || !activeWorkflowId || activeWorkflowId === 'default') {
+        setIsRunning(state.isRunning);
+        setIsPaused(state.isPaused);
+        setCurrentNodeIndex(state.currentNodeIndex);
+        if (state.error) setError(state.error);
+      }
+    });
+    return () => unsubscribe();
+  }, [activeWorkflowId]);
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
 
@@ -1198,6 +1216,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     if (isRunning) return;
 
     const workflow = workflowList.find(w => w.id === id);
+    const globalIsRunning = workflowManager.getState().isRunning;
     if (workflow) {
       // 兼容存量边数据：确保所有边都使用新的 'custom' 类型
       const restoredEdges = (workflow.edges || []).map(edge => ({
@@ -1238,7 +1257,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           ...n,
           data: {
             ...n.data,
-            status: n.data.status,
+            // 核心修复：数据自愈。如果全局未运行，但节点状态卡在执行中，则重置为完成
+            status: (!globalIsRunning && n.data.status === 'executing') ? 'completed' : n.data.status,
+            label: (!globalIsRunning && n.data.status === 'executing' && n.data.typeKey === 'chapter')
+              ? NODE_CONFIGS.chapter.defaultLabel
+              : n.data.label,
             icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon,
             selectedWorldviewSets: filterLegacyRefs(n.data.selectedWorldviewSets, 'worldview'),
             selectedCharacterSets: filterLegacyRefs(n.data.selectedCharacterSets, 'character'),
@@ -1647,8 +1670,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       return;
     }
     
-    setIsRunning(true);
-    setIsPaused(false);
+    workflowManager.start(activeWorkflowId, startIndex);
     setStopRequested(false);
     setError(null);
     stopRequestedRef.current = false;
@@ -1661,7 +1683,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     
     try {
       if (!activeNovel) {
-        setIsRunning(false);
+        workflowManager.stop();
         return;
       }
 
@@ -1703,7 +1725,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
       if (sortedNodes.length === 0) {
         setError('工作流中没有任何节点可执行');
-        setIsRunning(false);
+        workflowManager.stop();
         return;
       }
       
@@ -1719,6 +1741,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             outputEntries: []
           };
           
+          // 重置正文生成节点的显示名称
+          if (n.data.typeKey === 'chapter') {
+            updates.label = NODE_CONFIGS.chapter.defaultLabel;
+          }
+
           // 不再重置 targetVolumeId，保留用户手动配置或上次运行自动匹配的结果
           // 仅在状态彻底损坏时通过 Data Healing 修复
           
@@ -1760,13 +1787,12 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       
       for (let i = startIndex; i < sortedNodes.length; i++) {
         if (stopRequestedRef.current) {
-          setIsPaused(true);
-          setCurrentNodeIndex(i);
+          workflowManager.pause(i);
           break;
         }
 
         const node = sortedNodes[i];
-        setCurrentNodeIndex(i);
+        workflowManager.updateProgress(i);
 
         if (node.data.skipped) {
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
@@ -2272,6 +2298,28 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             label: NODE_CONFIGS.chapter.defaultLabel,
             status: 'completed'
           });
+
+          // 核心修复：手动持久化。即便 UI 卸载，也要确保这一步状态存入磁盘
+          try {
+            const savedWfs = JSON.parse(localStorage.getItem('novel_workflows') || '[]');
+            const updatedWfs = savedWfs.map((w: any) => {
+              if (w.id === activeWorkflowId) {
+                return {
+                  ...w,
+                  nodes: w.nodes.map((n: any) => n.id === node.id ? {
+                    ...n,
+                    data: { ...n.data, status: 'completed', label: NODE_CONFIGS.chapter.defaultLabel }
+                  } : n),
+                  lastModified: Date.now()
+                };
+              }
+              return w;
+            });
+            localStorage.setItem('novel_workflows', JSON.stringify(updatedWfs));
+          } catch (e) {
+            console.error('Failed to persist node completion state', e);
+          }
+
           // 停止入线动画
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;
@@ -2642,20 +2690,42 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
         // 更新节点状态为已完成 (确保在 novel 更新后同步更新节点状态，避免竞争)
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+
+        // 核心修复：通用 AI 节点的手动持久化
+        try {
+          const savedWfs = JSON.parse(localStorage.getItem('novel_workflows') || '[]');
+          const updatedWfs = savedWfs.map((w: any) => {
+            if (w.id === activeWorkflowId) {
+              return {
+                ...w,
+                nodes: w.nodes.map((n: any) => n.id === node.id ? {
+                  ...n,
+                  data: { ...n.data, status: 'completed' }
+                } : n),
+                lastModified: Date.now()
+              };
+            }
+            return w;
+          });
+          localStorage.setItem('novel_workflows', JSON.stringify(updatedWfs));
+        } catch (e) {
+          console.error('Failed to persist generic node completion state', e);
+        }
+
         // 停止入线动画
         setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
       }
       
       if (!stopRequestedRef.current) {
-        setCurrentNodeIndex(-1);
-        setIsRunning(false);
+        workflowManager.stop();
         // 执行结束，彻底关闭所有连线动画
         setEdges(eds => eds.map(e => ({ ...e, animated: false })));
         keepAliveManager.disable();
       }
     } catch (e: any) {
       keepAliveManager.disable();
-      if (e.name === 'AbortError') {
+      const isAbort = e.name === 'AbortError' || /aborted/i.test(e.message);
+      if (isAbort) {
         console.log('Workflow execution aborted by user');
         return; // 用户主动中止，不显示错误弹窗
       }
@@ -2670,12 +2740,12 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       setEdges(eds => eds.map(e => ({ ...e, animated: false })));
       // 将报错信息显示在 UI 上，而不是使用 alert
       setError(`执行失败: ${e.message}`);
-      setIsRunning(false);
-      setIsPaused(true);
+      workflowManager.setError(e.message);
     }
   };
 
   const stopWorkflow = () => {
+    terminal.log('[WORKFLOW] STOP requested by user.');
     // 停止时显式更新工作流列表并保存
     const updatedWorkflows = workflows.map(w => {
       if (w.id === activeWorkflowId) {
@@ -2697,7 +2767,16 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    setIsRunning(false);
+    workflowManager.pause(currentNodeIndex);
+    // 强制清理执行状态，确保 UI 动画立即停止
+    setNodes(nds => nds.map(n => ({
+      ...n,
+      data: {
+        ...n.data,
+        status: n.data.status === 'executing' ? 'pending' : n.data.status
+      }
+    })));
+    setEdges(eds => eds.map(e => ({ ...e, animated: false })));
     keepAliveManager.disable();
   };
 
@@ -2719,6 +2798,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         if (n.data.typeKey === 'chapter') {
           updates.targetVolumeId = '';
           updates.targetVolumeName = '';
+          // 重置正文生成节点的显示名称为默认值
+          updates.label = NODE_CONFIGS.chapter.defaultLabel;
         }
         
         return {
@@ -2731,8 +2812,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       });
       setNodes(updatedNodes);
       setEdges(eds => eds.map(e => ({ ...e, animated: false })));
-      setCurrentNodeIndex(-1);
-      setIsPaused(false);
+      workflowManager.stop();
+      setError(null);
       
       // 同步更新持久化状态
       const updatedWorkflows = workflows.map(w => {

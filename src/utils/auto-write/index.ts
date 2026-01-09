@@ -17,6 +17,7 @@ export class AutoWriteEngine {
   }
 
   public stop() {
+    terminal.log('[AutoWriteEngine] STOP requested.');
     this.isRunning = false;
     if (this.abortController) {
       this.abortController.abort();
@@ -166,7 +167,7 @@ export class AutoWriteEngine {
 
           const rawContext = getChapterContext(this.novel, firstChapterInBatch, {
             longTextMode: this.config.longTextMode,
-            contextScope: 'all', // Default to all for now
+            contextScope: this.config.contextScope || 'all',
             contextChapterCount: this.config.contextChapterCount,
           });
 
@@ -206,6 +207,11 @@ export class AutoWriteEngine {
             }
           });
           messages.push({ role: 'user', content: mainPrompt });
+
+          // 调试：F12 打印发送给 AI 的全部内容
+          console.group(`[AI REQUEST] 工作流正文创作 - ${this.novel.title}`);
+          console.log('Messages:', messages);
+          console.groupEnd();
 
           const batchMaxTokens =
             this.config.maxReplyLength * batchItems.length > 128000
@@ -475,7 +481,12 @@ export class AutoWriteEngine {
           startIndex += batchItems.length;
           break;
         } catch (err: any) {
-          if (err.name === 'AbortError' || !this.isRunning) return;
+          const isAbort =
+            err.name === 'AbortError' ||
+            err.message?.includes('aborted') ||
+            err.message?.includes('Aborted') ||
+            !this.isRunning;
+          if (isAbort) return;
           attempt++;
           if (attempt >= maxAttempts) {
             onStatusUpdate(`生成失败：${err.message}`);
@@ -561,6 +572,11 @@ export class AutoWriteEngine {
               content: p.content.replace('{{content}}', sourceContent).replace('{{input}}', ''),
             }));
 
+          // 调试：F12 打印发送给 AI 的全部内容
+          console.group(`[AI REQUEST] 润色前分析 - Chapter ${chapterId}`);
+          console.log('Messages:', analysisMessages);
+          console.groupEnd();
+
           terminal.log(`
 >> AI REQUEST [工作流: 优化前分析]
 >> -----------------------------------------------------------
@@ -600,7 +616,7 @@ export class AutoWriteEngine {
           onNovelUpdate({ ...this.novel, chapters: analysisDelta });
         }
       } catch (e: any) {
-        const isAbort = e.name === 'AbortError' || e.message === 'Request was aborted.' || e.message === 'Aborted';
+        const isAbort = e.name === 'AbortError' || /aborted/i.test(e.message);
         if (isAbort) {
           terminal.log(`[AutoWrite Optimize] Analysis for chapter ${chapterId} aborted.`);
         } else {
@@ -627,6 +643,15 @@ export class AutoWriteEngine {
           }
           return { role: p.role, content };
         });
+
+      if (currentAnalysisResult && !isAnalysisUsed) {
+        messages.push({ role: 'user', content: `请基于以下修改建议优化正文：\n\n${currentAnalysisResult}` });
+      }
+
+      // 调试：F12 打印发送给 AI 的全部内容
+      console.group(`[AI REQUEST] 正文润色优化 - Chapter ${chapterId}`);
+      console.log('Messages:', messages);
+      console.groupEnd();
 
       if (currentAnalysisResult && !isAnalysisUsed) {
         messages.push({ role: 'user', content: `请基于以下修改建议优化正文：\n\n${currentAnalysisResult}` });
@@ -697,7 +722,7 @@ export class AutoWriteEngine {
         onNovelUpdate({ ...this.novel, chapters: optDelta });
       }
     } catch (e: any) {
-      const isAbort = e.name === 'AbortError' || e.message === 'Request was aborted.' || e.message === 'Aborted';
+      const isAbort = e.name === 'AbortError' || /aborted/i.test(e.message);
       if (isAbort) {
         terminal.log(`[AutoWrite Optimize] Optimization for chapter ${chapterId} aborted.`);
       } else {
