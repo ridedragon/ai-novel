@@ -3,6 +3,8 @@ import terminal from 'virtual:terminal';
 import { ChapterVersion, Novel } from '../types';
 
 const NOVELS_KEY = 'novels';
+const WORKFLOWS_KEY = 'novel_workflows_idb';
+const ACTIVE_WF_ID_KEY = 'active_workflow_id_idb';
 const METADATA_PREFIX = 'novel_metadata_';
 const VERSIONS_PREFIX = 'versions_';
 
@@ -30,6 +32,9 @@ const lastSavedInspirationCache = new Map<string, string>();
 
 // 缓存全局书籍列表的脏检查
 let lastSavedNovelsJson = '';
+
+// 引入序列化锁，确保工作流保存操作按顺序执行，防止异步写入竞态导致的旧数据覆盖新数据
+let workflowSaveQueue: Promise<void> = Promise.resolve();
 
 export const storage = {
   // 辅助函数：生成单本小说的结构化索引元数据（极简，不含重型设定集）
@@ -413,5 +418,90 @@ export const storage = {
     } catch (e) {
       console.error('Failed to delete chapter content', e);
     }
+  },
+
+  // --- 工作流持久化增强 ---
+  async getWorkflows(): Promise<any[]> {
+    try {
+      // 1. 优先从 IndexedDB 获取
+      let workflows = await get<any[]>(WORKFLOWS_KEY);
+
+      if (workflows) {
+        return workflows;
+      }
+
+      // 2. 兜底与迁移：从 localStorage 获取旧数据
+      const legacyWorkflows = localStorage.getItem('novel_workflows');
+      if (legacyWorkflows) {
+        try {
+          const parsed = JSON.parse(legacyWorkflows);
+          // 异步搬迁到 IndexedDB，但不删除旧数据以防万一
+          await set(WORKFLOWS_KEY, parsed);
+          terminal.log('[STORAGE] 已成功从 localStorage 迁移工作流数据到 IndexedDB');
+          return parsed;
+        } catch (e) {
+          console.error('Failed to parse legacy workflows', e);
+        }
+      }
+
+      // 3. 兼容更久以前的版本
+      const veryOldWorkflow = localStorage.getItem('novel_workflow');
+      if (veryOldWorkflow) {
+        try {
+          const { nodes, edges } = JSON.parse(veryOldWorkflow);
+          const initialWf = [
+            {
+              id: 'default',
+              name: '默认工作流',
+              nodes: nodes || [],
+              edges: edges || [],
+              lastModified: Date.now(),
+            },
+          ];
+          await set(WORKFLOWS_KEY, initialWf);
+          return initialWf;
+        } catch (e) {}
+      }
+
+      return [];
+    } catch (e) {
+      console.error('Failed to load workflows from IDB', e);
+      return [];
+    }
+  },
+
+  async saveWorkflows(workflows: any[]): Promise<void> {
+    // 将新的写入请求排入队列，通过 Promise 链实现串行化
+    workflowSaveQueue = workflowSaveQueue.then(async () => {
+      try {
+        // 防御性处理：确保传入的数据是可克隆的。
+        // 如果数据中包含 React 组件或 Symbol，JSON 序列化会将其过滤掉或抛出错误，
+        // 从而避免 IndexedDB 的 DataCloneError 导致应用崩溃。
+        const serializableWorkflows = JSON.parse(JSON.stringify(workflows));
+
+        // 核心修复：使用 IndexedDB 存储，彻底解决 5MB 限制
+        await set(WORKFLOWS_KEY, serializableWorkflows);
+      } catch (e) {
+        terminal.error(`[STORAGE] 工作流保存至 IndexedDB 失败 (队列执行): ${e}`);
+        // 这里不抛出异常，防止某个任务失败导致后续队列永久中断，仅记录错误
+      }
+    });
+
+    return workflowSaveQueue;
+  },
+
+  async getActiveWorkflowId(): Promise<string | null> {
+    try {
+      return (await get<string>(ACTIVE_WF_ID_KEY)) || localStorage.getItem('active_workflow_id');
+    } catch (e) {
+      return localStorage.getItem('active_workflow_id');
+    }
+  },
+
+  async setActiveWorkflowId(id: string): Promise<void> {
+    try {
+      await set(ACTIVE_WF_ID_KEY, id);
+      localStorage.setItem('active_workflow_id', id); // 保持同步以兼容
+    } catch (e) {}
   },
 };

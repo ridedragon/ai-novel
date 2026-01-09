@@ -198,6 +198,7 @@ export const checkAndGenerateSummary = async (
   log: (msg: string) => void,
   errorLog: (msg: string) => void,
   signal?: AbortSignal,
+  forceFinal?: boolean,
 ): Promise<Novel | undefined> => {
   if (signal?.aborted) return;
   const startTime = Date.now();
@@ -416,6 +417,81 @@ export const checkAndGenerateSummary = async (
           await generate('big', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
         } finally {
           activeGenerations.delete(lockKey);
+        }
+      }
+    }
+  }
+
+  // 强制收尾逻辑 (Force Final Completion)
+  if (forceFinal) {
+    log(`[Summary] Force final summary check triggered for volume: ${targetVolumeId || 'default'}`);
+
+    // 1. 补全小总结
+    const existingSmallSummaries = currentChaptersSnapshot.filter(
+      c => c.subtype === 'small_summary' && (targetVolumeId ? c.volumeId === targetVolumeId : !c.volumeId),
+    );
+
+    let lastSmallEnd = 0;
+    existingSmallSummaries.forEach(s => {
+      const range = s.summaryRange?.split('-').map(Number);
+      if (range && range.length === 2 && range[1] > lastSmallEnd) {
+        lastSmallEnd = range[1];
+      }
+    });
+
+    // 如果分卷内最后一章还没被小总结覆盖
+    const lastStoryChapterInVol = volumeStoryChapters[volumeStoryChapters.length - 1];
+    if (lastStoryChapterInVol) {
+      const lastGlobalIdx = storyChapters.findIndex(c => c.id === lastStoryChapterInVol.id) + 1;
+
+      if (lastSmallEnd < lastGlobalIdx) {
+        const start = lastSmallEnd + 1;
+        const end = lastGlobalIdx;
+        const rangeStr = `${start}-${end}`;
+        const lockKey = `${targetNovelId}_final_small_${rangeStr}`;
+
+        if (!activeGenerations.has(lockKey)) {
+          activeGenerations.add(lockKey);
+          try {
+            await generate('small', start, end, lastStoryChapterInVol.id);
+          } finally {
+            activeGenerations.delete(lockKey);
+          }
+        }
+      }
+    }
+
+    // 2. 补全大总结
+    const existingBigSummaries = currentChaptersSnapshot.filter(
+      c => c.subtype === 'big_summary' && (targetVolumeId ? c.volumeId === targetVolumeId : !c.volumeId),
+    );
+
+    let lastBigEnd = 0;
+    existingBigSummaries.forEach(s => {
+      const range = s.summaryRange?.split('-').map(Number);
+      if (range && range.length === 2 && range[1] > lastBigEnd) {
+        lastBigEnd = range[1];
+      }
+    });
+
+    if (lastStoryChapterInVol) {
+      const lastGlobalIdx = storyChapters.findIndex(c => c.id === lastStoryChapterInVol.id) + 1;
+      if (lastBigEnd < lastGlobalIdx) {
+        let globalStart = 1;
+        if (contextScope !== 'all') {
+          const firstInVol = volumeStoryChapters[0];
+          if (firstInVol) globalStart = storyChapters.findIndex(c => c.id === firstInVol.id) + 1;
+        }
+        const rangeStr = `${globalStart}-${lastGlobalIdx}`;
+        const lockKey = `${targetNovelId}_final_big_${rangeStr}`;
+
+        if (!activeGenerations.has(lockKey)) {
+          activeGenerations.add(lockKey);
+          try {
+            await generate('big', globalStart, lastGlobalIdx, lastStoryChapterInVol.id);
+          } finally {
+            activeGenerations.delete(lockKey);
+          }
         }
       }
     }

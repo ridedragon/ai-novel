@@ -29,11 +29,7 @@ class WorkflowManager {
   private listeners: Set<StateListener> = new Set();
 
   constructor() {
-    // 尝试从持久化存储恢复部分状态（可选）
-    const savedActiveId = localStorage.getItem('active_workflow_id');
-    if (savedActiveId) {
-      this.state.activeWorkflowId = savedActiveId;
-    }
+    // 构造函数保持干净，异步状态恢复将由 UI 组件触发
   }
 
   public getState(): WorkflowState {

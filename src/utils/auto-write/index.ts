@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import terminal from 'virtual:terminal';
 import { ChapterVersion, Novel, OutlineItem, PromptItem, RegexScript } from '../../types';
-import { buildWorldInfoContext, getChapterContext, processTextWithRegex } from './core';
+import { buildWorldInfoMessages, getChapterContextMessages, processTextWithRegex } from './core';
 import { AutoWriteConfig } from './types';
 
 export class AutoWriteEngine {
@@ -34,7 +34,12 @@ export class AutoWriteEngine {
     getActiveScripts: () => RegexScript[],
     onStatusUpdate: (status: string) => void,
     onNovelUpdate: (novel: Novel) => void,
-    onChapterComplete: (chapterId: number, content: string, updatedNovel?: Novel) => Promise<Novel | void>,
+    onChapterComplete: (
+      chapterId: number,
+      content: string,
+      updatedNovel?: Novel,
+      forceFinal?: boolean,
+    ) => Promise<Novel | void>,
     targetVolumeId?: string,
     includeFullOutline: boolean = false,
     outlineSetId: string | null = null,
@@ -165,52 +170,62 @@ export class AutoWriteEngine {
           const firstChapterInBatch = this.novel.chapters.find(c => c.id === batchItems[0].id);
           if (!firstChapterInBatch) throw new Error('Chapter placeholder missing');
 
-          const rawContext = getChapterContext(this.novel, firstChapterInBatch, {
+          const contextMessages = getChapterContextMessages(this.novel, firstChapterInBatch, {
             longTextMode: this.config.longTextMode,
-            contextScope: this.config.contextScope || 'all',
+            contextScope: this.config.contextScope || 'current',
             contextChapterCount: this.config.contextChapterCount,
           });
 
           // 虽然跳过长上下文清洗，但我们仍需要 scripts 用于后续的章节输出清洗
           const scripts = getActiveScripts();
 
-          // 核心优化：不再对几万字的历史背景运行正则清洗
-          // 理由：历史章节在生成时已经运行过一次正则清洗（output阶段），重复清洗在大文本下会造成极高的延迟（如 6s+）。
-          const contextMsg = rawContext ? `【前文剧情回顾】：\n${rawContext}\n\n` : '';
-
-          const fullOutlineContext = includeFullOutline
-            ? `【全书粗纲参考】：\n${outline
-                .map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`)
-                .join('\n')}\n\n`
-            : '';
-
-          const worldInfo = buildWorldInfoContext(this.novel, outlineSetId);
+          const worldInfoMessages = buildWorldInfoMessages(this.novel, outlineSetId);
 
           let taskDescription = '';
           if (batchItems.length > 1) {
-            taskDescription = `请一次性撰写以下 ${batchItems.length} 章的内容。\n**重要：请严格使用 "### 章节标题" 作为每一章的分隔符。**\n\n`;
+            taskDescription = `你正在创作小说《${this.novel.title}》。请一次性撰写以下 ${batchItems.length} 章的内容。\n**重要：请严格使用 "### 章节标题" 作为每一章的分隔符。**\n\n`;
             batchItems.forEach((b, idx) => {
               taskDescription += `第 ${idx + 1} 部分：\n标题：${b.item.title}\n大纲：${b.item.summary}\n\n`;
             });
             taskDescription += `\n请开始撰写，确保内容连贯，不要包含任何多余的解释，直接输出正文。格式示例：\n### ${batchItems[0].item.title}\n(第一章正文...)\n### ${batchItems[1].item.title}\n(第二章正文...)\n`;
           } else {
-            taskDescription = `当前章节：${batchItems[0].item.title}\n本章大纲：${batchItems[0].item.summary}\n\n请根据大纲和前文剧情，撰写本章正文。文笔要生动流畅。`;
+            taskDescription = `你正在创作小说《${this.novel.title}》。\n当前章节：${batchItems[0].item.title}\n本章大纲：${batchItems[0].item.summary}\n\n请根据大纲和前文剧情，撰写本章正文。文笔要生动流畅。`;
           }
-
-          const mainPrompt = `${worldInfo}${contextMsg}${fullOutlineContext}你正在创作小说《${this.novel.title}》。\n${taskDescription}`;
 
           const messages: any[] = [{ role: 'system', content: this.config.systemPrompt }];
 
+          // 1. 注入世界观和角色信息 (System)
+          messages.push(...worldInfoMessages);
+
+          // 2. 注入灵感/自定义提示词 (透传预设角色和内容)
           activePrompts.forEach(p => {
             if (!p.isFixed && p.content && p.content.trim()) {
-              messages.push({ role: p.role, content: p.content });
+              messages.push({
+                role: p.role,
+                content: p.content,
+              });
             }
           });
-          messages.push({ role: 'user', content: mainPrompt });
+
+          // 3. 注入前文背景/剧情摘要 (System)
+          messages.push(...contextMessages);
+
+          // 4. 注入全书粗纲 (System)
+          if (includeFullOutline) {
+            const fullOutlineStr = outline.map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`).join('\n');
+            messages.push({
+              role: 'system',
+              content: `【全书粗纲参考】：\n${fullOutlineStr}`,
+            });
+          }
+
+          // 5. 注入最终的任务描述 (唯一的 User 消息)
+          messages.push({ role: 'user', content: taskDescription });
 
           // 调试：F12 打印发送给 AI 的全部内容
           console.group(`[AI REQUEST] 工作流正文创作 - ${this.novel.title}`);
-          console.log('Messages:', messages);
+          console.log('Final Message Count:', messages.length);
+          console.log('Messages Structure:', messages);
           console.groupEnd();
 
           const batchMaxTokens =
@@ -225,7 +240,7 @@ export class AutoWriteEngine {
               stream: this.config.stream,
               temperature: this.config.temperature,
               top_p: this.config.topP,
-              top_k: this.config.topK,
+              top_k: this.config.topK && this.config.topK > 0 ? this.config.topK : undefined,
               max_tokens: Math.round(batchMaxTokens),
             } as any,
             {
@@ -508,6 +523,21 @@ export class AutoWriteEngine {
     // 工作流的“正文生成”节点应该在所有正文生成完毕后立即标记为完成。
     // 后台的润色任务（如果存在）将继续在后台运行，不影响工作流跳转到下一个节点。
 
+    // 核心改进：全自动创作彻底结束前，对最后一章触发一次“强制收尾”总结检查
+    // 这将补全那些不满步长（如 3 或 6）的残余章节总结
+    const lastBatchItem = startIndex > 0 ? outline[startIndex - 1] : null;
+    if (lastBatchItem && this.isRunning) {
+      const lastChapter = this.novel.chapters.find(
+        c =>
+          c.title === lastBatchItem.title &&
+          ((targetVolumeId && c.volumeId === targetVolumeId) || (!targetVolumeId && !c.volumeId)),
+      );
+      if (lastChapter) {
+        terminal.log(`[AutoWrite] Triggering final summary completion for chapter: ${lastChapter.title}`);
+        await onChapterComplete(lastChapter.id, lastChapter.content, this.novel, true);
+      }
+    }
+
     onStatusUpdate('完成');
     this.isRunning = false;
   }
@@ -593,7 +623,7 @@ export class AutoWriteEngine {
               messages: analysisMessages,
               temperature: analysisPreset.temperature ?? 1.0,
               top_p: analysisPreset.topP ?? 1.0,
-              top_k: analysisPreset.topK ?? 200,
+              top_k: analysisPreset.topK && analysisPreset.topK > 0 ? analysisPreset.topK : 200,
             } as any,
             { signal: optimizationAbortController.signal },
           );
@@ -673,7 +703,7 @@ export class AutoWriteEngine {
           messages: messages,
           temperature: activePreset.temperature ?? 1.0,
           top_p: activePreset.topP ?? 1.0,
-          top_k: activePreset.topK ?? 200,
+          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 200,
         } as any,
         { signal: optimizationAbortController.signal },
       );

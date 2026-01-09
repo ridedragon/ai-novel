@@ -74,28 +74,31 @@ export function AIChatModal({
         dangerouslyAllowBrowser: true
       })
 
-      // 1. 查找与当前大纲集同名的世界观和角色集，作为“当前创作中”的参考
+      // 1. 查找与当前大纲集同名的世界观和角色集
       let targetName = ''
       if (activeOutlineSetId) {
         targetName = novel?.outlineSets?.find(s => s.id === activeOutlineSetId)?.name || ''
       }
 
-      // 2. 构建各个部分的内容
-      // Worldview & Characters
-      let worldInfo = ''
+      // 2. 构建消息列表 (遵守 System Ref / User Task 规则)
+      const chatMessages: any[] = [
+        { role: 'system', content: systemPrompt }
+      ]
+
+      // Worldview & Characters (System)
       const worldviewSets = novel?.worldviewSets || []
       const relevantWorldview = activeOutlineSetId
         ? worldviewSets.filter(s => s.id === activeOutlineSetId || (targetName && s.name === targetName))
         : worldviewSets.slice(0, 1)
       
       if (relevantWorldview.length > 0) {
-          worldInfo += '【当前小说世界观设定】：\n'
+          let worldInfo = '【当前小说世界观设定】：\n'
           relevantWorldview.forEach(set => {
                set.entries.forEach(entry => {
                    worldInfo += `· ${entry.item}: ${entry.setting}\n`
                })
           })
-          worldInfo += '\n'
+          chatMessages.push({ role: 'system', content: worldInfo })
       }
       
       const characterSets = novel?.characterSets || []
@@ -104,49 +107,37 @@ export function AIChatModal({
         : characterSets.slice(0, 1)
 
       if (relevantCharacters.length > 0) {
-          worldInfo += '【当前小说角色档案】：\n'
+          let charInfo = '【当前小说角色档案】：\n'
           relevantCharacters.forEach(set => {
                set.characters.forEach(char => {
-                   worldInfo += `· ${char.name}: ${char.bio}\n`
+                   charInfo += `· ${char.name}: ${char.bio}\n`
                })
           })
-          worldInfo += '\n'
+          chatMessages.push({ role: 'system', content: charInfo })
       }
 
-      // Outline
-      let outlineContent = ''
+      // Outline (System)
       if (activeOutlineSetId) {
           const currentOutlineSet = novel?.outlineSets?.find(s => s.id === activeOutlineSetId)
           if (currentOutlineSet && currentOutlineSet.items.length > 0) {
-              outlineContent = `【当前小说大纲策划】：\n` + currentOutlineSet.items.map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+              const outlineStr = `【当前小说大纲策划】：\n` + currentOutlineSet.items.map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+              chatMessages.push({ role: 'system', content: outlineStr })
           }
       }
 
-      // 3. 根据 prompts 预设的顺序构建消息列表
-      const chatMessages: any[] = [
-        { role: 'system', content: systemPrompt }
-      ]
+      // Context (System)
+      if (context) {
+        chatMessages.push({ role: 'system', content: `【当前创作上下文参考】：\n${context}` })
+      }
 
-      prompts.filter(p => p.active).forEach(p => {
-        if (p.isFixed) {
-          let content = ""
-          if (p.fixedType === 'chat_history') {
-            content = context ? `【当前创作上下文参考】：\n${context}` : ""
-          } else if (p.fixedType === 'world_info') {
-            content = worldInfo ? `【世界观与角色设定】：\n${worldInfo}` : ""
-          } else if (p.fixedType === 'outline') {
-            content = outlineContent ? `【剧情粗纲参考】：\n${outlineContent}` : ""
-          }
-          
-          if (content) {
-            chatMessages.push({ role: p.role, content: content })
-          }
-        } else if (p.content && p.content.trim()) {
+      // 其他灵感/提示词 (透传预设角色和内容)
+      prompts.filter(p => p.active && !p.isFixed).forEach(p => {
+        if (p.content && p.content.trim()) {
           chatMessages.push({ role: p.role, content: p.content })
         }
       })
 
-      // 添加当前的对话历史
+      // 对话历史
       chatMessages.push(...newMessages.map(m => ({ role: m.role, content: m.content })))
 
       terminal.log(`
@@ -239,12 +230,12 @@ export function AIChatModal({
                     : 'bg-gray-800 border border-gray-700 text-gray-200'
               }`}>
                 <div className="prose prose-invert prose-sm max-w-none">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  <ReactMarkdown>{typeof msg.content === 'string' ? msg.content : ''}</ReactMarkdown>
                 </div>
                 {msg.role === 'assistant' && msg.content && !isLoading && (
                   <div className="mt-2 pt-2 border-t border-gray-700 flex justify-end">
-                    <button 
-                      onClick={() => onAttach(msg.content)}
+                    <button
+                      onClick={() => typeof msg.content === 'string' && onAttach(msg.content)}
                       className="flex items-center gap-1.5 px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-[var(--theme-color-light)] transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5" />

@@ -53,6 +53,7 @@ import terminal from 'virtual:terminal';
 import { GeneratorPreset, GeneratorPrompt, Novel } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
 import { keepAliveManager } from '../utils/KeepAliveManager';
+import { storage } from '../utils/storage';
 import { workflowManager } from '../utils/WorkflowManager';
 import { WorkflowData, WorkflowEditorProps, WorkflowNode, WorkflowNodeData } from './WorkflowEditor';
 
@@ -69,7 +70,7 @@ interface OutputEntry {
 
 // --- 移动端优化节点组件 ---
 const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
-  const Icon = data.icon;
+  const Icon = NODE_CONFIGS[data.typeKey as NodeTypeKey]?.icon;
   const color = data.color;
 
   const refCount = (data.selectedWorldviewSets?.length || 0) +
@@ -297,7 +298,10 @@ const ConfigPanel = React.memo(({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg" style={{ backgroundColor: `${editingNode.data.color}20`, color: editingNode.data.color }}>
-              {(() => { const Icon = editingNode.data.icon; return <Icon className="w-5 h-5" /> })()}
+              {(() => {
+                const Icon = NODE_CONFIGS[editingNode.data.typeKey as NodeTypeKey]?.icon;
+                return Icon && <Icon className="w-5 h-5" />;
+              })()}
             </div>
             <h3 className="font-bold text-gray-100 truncate max-w-[150px]">{editingNode.data.label}</h3>
           </div>
@@ -807,6 +811,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showWorkflowMenu, setShowWorkflowMenu] = useState(false);
+  const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(true);
   const [isEditingWorkflowName, setIsEditingWorkflowName] = useState(false);
   const [newWorkflowName, setNewWorkflowName] = useState('');
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -844,6 +849,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const activeNovelRef = useRef(activeNovel);
   const nodesRef = useRef(nodes);
+  const workflowsRef = useRef(workflows);
 
   useEffect(() => {
     activeNovelRef.current = activeNovel;
@@ -852,6 +858,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   useEffect(() => {
     nodesRef.current = nodes;
   }, [nodes]);
+
+  useEffect(() => {
+    workflowsRef.current = workflows;
+  }, [workflows]);
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
 
@@ -865,7 +875,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         if (state.error) setError(state.error);
       }
     });
-    return () => unsubscribe();
+    return () => { unsubscribe(); };
   }, [activeWorkflowId]);
 
   // 获取工作流中所有“初始化目录”节点定义的文件夹名
@@ -897,55 +907,37 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     });
     setAllPresets(loaded);
 
-    const savedWorkflows = localStorage.getItem('novel_workflows');
-    const lastActiveId = localStorage.getItem('active_workflow_id');
-    
-    let loadedWorkflows: WorkflowData[] = [];
-    if (savedWorkflows) {
+    const initWorkflows = async () => {
+      if (!isInitialLoadRef.current && isRunning) return;
+      if (!isOpen && !isInitialLoadRef.current) return;
+
+      setIsLoadingWorkflows(true);
       try {
-        loadedWorkflows = JSON.parse(savedWorkflows);
+        const loadedWorkflows = await storage.getWorkflows();
+        const targetId = await storage.getActiveWorkflowId();
+
+        setWorkflows(loadedWorkflows);
+        
+        const finalId = targetId && loadedWorkflows.find(w => w.id === targetId)
+          ? targetId
+          : (loadedWorkflows[0]?.id || 'default');
+        
+        setActiveWorkflowId(finalId);
+        loadWorkflow(finalId, loadedWorkflows);
       } catch (e) {
-        console.error('Failed to load workflows', e);
+        console.error('[MOBILE WORKFLOW] 加载失败', e);
+      } finally {
+        setIsLoadingWorkflows(false);
+        isInitialLoadRef.current = false;
       }
-    }
-
-    if (loadedWorkflows.length === 0) {
-      const oldWorkflow = localStorage.getItem('novel_workflow');
-      if (oldWorkflow) {
-        try {
-          const { nodes: oldNodes, edges: oldEdges } = JSON.parse(oldWorkflow);
-          loadedWorkflows = [{
-            id: 'default',
-            name: '默认工作流',
-            nodes: oldNodes,
-            edges: oldEdges,
-            lastModified: Date.now()
-          }];
-        } catch (e) {}
-      } else {
-        loadedWorkflows = [{
-          id: 'default',
-          name: '默认工作流',
-          nodes: [],
-          edges: [],
-          lastModified: Date.now()
-        }];
-      }
-    }
-
-    setWorkflows(loadedWorkflows);
+    };
     
-    const targetId = lastActiveId && loadedWorkflows.find(w => w.id === lastActiveId)
-      ? lastActiveId
-      : loadedWorkflows[0].id;
-    
-    setActiveWorkflowId(targetId);
-    loadWorkflow(targetId, loadedWorkflows);
-    isInitialLoadRef.current = false;
-  }, [isOpen]); // 核心修复：切断与 activeNovel 的同步，防止后台保存导致 UI 重置
+    initWorkflows();
+  }, [isOpen]);
 
   const loadWorkflow = (id: string, workflowList: WorkflowData[]) => {
-    if (isRunning) return;
+    // 核心修复：解除加载死锁。如果是初次挂载（nodes为空），即使在运行中也允许加载初始结构
+    if (isRunning && nodesRef.current.length > 0) return;
     const workflow = workflowList.find(w => w.id === id);
     const globalIsRunning = workflowManager.getState().isRunning;
     if (workflow) {
@@ -977,7 +969,6 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             label: (!globalIsRunning && n.data.status === 'executing' && n.data.typeKey === 'chapter')
               ? NODE_CONFIGS.chapter.defaultLabel
               : n.data.label,
-            icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon,
             selectedWorldviewSets: filterLegacyRefs(n.data.selectedWorldviewSets, 'worldview'),
             selectedCharacterSets: filterLegacyRefs(n.data.selectedCharacterSets, 'character'),
             selectedOutlineSets: filterLegacyRefs(n.data.selectedOutlineSets, 'outline'),
@@ -994,62 +985,48 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     }
   };
 
-  // 自动保存 - 增加防抖处理
+  // 自动保存 - 增加防抖处理 (支持异步 IndexedDB)
   useEffect(() => {
+    if (isLoadingWorkflows) return;
     if (!isOpen || workflows.length === 0 || isInitialLoadRef.current) return;
     
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    saveTimeoutRef.current = setTimeout(() => {
-      // --- 性能调查：监控 MobileWorkflowEditor 自动保存耗时 ---
+    saveTimeoutRef.current = setTimeout(async () => {
       const startTime = Date.now();
       
-      setWorkflows(prevWorkflows => {
-        const updatedWorkflows = prevWorkflows.map(w => {
-          if (w.id === activeWorkflowId) {
-            return {
-              ...w,
-              nodes,
-              edges,
-              currentNodeIndex,
-              lastModified: Date.now()
-            };
-          }
-          return w;
-        });
-        
-        const serializeStart = Date.now();
-        const workflowsJson = JSON.stringify(updatedWorkflows);
-        const serializeEnd = Date.now();
-        
-        localStorage.setItem('novel_workflows', workflowsJson);
-        localStorage.setItem('active_workflow_id', activeWorkflowId);
-        
-        const endTime = Date.now();
-        
-        // 在 PowerShell 终端打印耗时
-        terminal.log(`
-[PERF] MobileWorkflowEditor AutoSave:
-- 数据处理耗时: ${serializeStart - startTime}ms
-- JSON 序列化耗时: ${serializeEnd - serializeStart}ms
-- localStorage 写入耗时: ${endTime - serializeEnd}ms
-- 总计: ${endTime - startTime}ms
-- 工作流总数: ${updatedWorkflows.length}
-- 当前节点数: ${nodes.length}
-        `);
-        
-        return updatedWorkflows;
+      const currentWorkflows = workflows.map(w => {
+        if (w.id === activeWorkflowId) {
+          return {
+            ...w,
+            nodes,
+            edges,
+            currentNodeIndex,
+            lastModified: Date.now()
+          };
+        }
+        return w;
       });
-    }, 1000);
+
+      try {
+        await storage.saveWorkflows(currentWorkflows);
+        await storage.setActiveWorkflowId(activeWorkflowId);
+        setWorkflows(currentWorkflows);
+        
+        terminal.log(`[PERF] Mobile AutoSave to IDB: ${Date.now() - startTime}ms`);
+      } catch (e) {
+        terminal.error(`[WORKFLOW] 移动端保存失败: ${e}`);
+      }
+    }, 5000); // 移动端 5秒防抖
 
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [nodes, edges, currentNodeIndex, activeWorkflowId, isOpen]);
+  }, [nodes, edges, currentNodeIndex, activeWorkflowId, isOpen, isLoadingWorkflows]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, type: 'custom', animated: false }, eds)),
@@ -1076,11 +1053,13 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     const centerY = window.innerHeight / 2;
     const position = screenToFlowPosition({ x: centerX, y: centerY });
 
+    const { icon, ...serializableConfig } = config;
+
     const newNode: WorkflowNode = {
       id: `node-${Date.now()}`,
       type: 'custom',
       data: {
-        ...config,
+        ...serializableConfig,
         typeKey,
         label: config.defaultLabel,
         presetId: '',
@@ -1160,16 +1139,12 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   };
 
   const handleSaveWorkflow = () => {
-    // 同时更新 workflows 列表中的当前项并保存，确保双重保险
     const updatedWorkflows = workflows.map(w =>
       w.id === activeWorkflowId ? { ...w, nodes, edges, currentNodeIndex, lastModified: Date.now() } : w
     );
     setWorkflows(updatedWorkflows);
-    localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
-    localStorage.setItem('active_workflow_id', activeWorkflowId);
-    
-    // 兼容旧版单一保存位置
-    localStorage.setItem('novel_workflow', JSON.stringify({ nodes, edges }));
+    storage.saveWorkflows(updatedWorkflows).catch(e => terminal.error(`[MOBILE] 手动保存失败: ${e}`));
+    storage.setActiveWorkflowId(activeWorkflowId).catch(e => terminal.error(`[MOBILE] ID保存失败: ${e}`));
     
     setError('工作流已手动保存');
     setTimeout(() => setError(null), 2000);
@@ -1314,6 +1289,37 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     return finalNodes;
   }, [nodes, edges]);
 
+  // 辅助函数：同步节点状态并强制持久化到磁盘
+  const syncNodeStatus = async (nodeId: string, updates: Partial<WorkflowNodeData>, currentIndex: number) => {
+    if (abortControllerRef.current?.signal.aborted) return;
+
+    // 1. 更新 React 状态
+    setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n));
+
+    // 2. 构造最新的节点列表并同步给 Ref
+    const latestNodes = nodesRef.current.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n);
+    
+    // 3. 显式持久化到存储
+    const currentWfs = workflowsRef.current.map(w => {
+      if (w.id === activeWorkflowId) {
+        return {
+          ...w,
+          nodes: latestNodes,
+          currentNodeIndex: currentIndex,
+          lastModified: Date.now()
+        };
+      }
+      return w;
+    });
+
+    try {
+      await storage.saveWorkflows(currentWfs);
+      setWorkflows(currentWfs);
+    } catch (e) {
+      terminal.error(`[MOBILE WORKFLOW] 持久化失败: ${e}`);
+    }
+  };
+
   // --- 执行引擎 ---
   const runWorkflow = async (startIndex: number = 0) => {
     // --- 性能调查：监控工作流执行期间的内存情况 ---
@@ -1450,8 +1456,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           continue;
         }
         
-        // 更新节点状态为正在执行
-        setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'executing' } } : n));
+        // 更新节点状态为正在执行并同步磁盘
+        await syncNodeStatus(node.id, { status: 'executing' }, i);
         
         // 让指向该节点的连线产生动画效果，并关闭其他节点的动画
         setEdges(eds => eds.map(e => {
@@ -1475,7 +1481,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           }
           
           if (node.data.typeKey === 'reuseDirectory') {
-             setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+             await syncNodeStatus(node.id, { status: 'completed' }, i);
              continue;
           }
 
@@ -1566,7 +1572,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             })));
           }
           // 更新节点状态为已完成
-          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          await syncNodeStatus(node.id, { status: 'completed' }, i);
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           await new Promise(resolve => setTimeout(resolve, 50));
           continue;
@@ -1574,7 +1580,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
         if (node.data.typeKey === 'userInput') {
           accumContext += `【全局输入】：\n${node.data.instruction}\n\n`;
-          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          await syncNodeStatus(node.id, { status: 'completed' }, i);
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           await new Promise(resolve => setTimeout(resolve, 50));
           continue;
@@ -1746,6 +1752,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               : (localNovel.systemPrompt || '你是一个专业的小说家。'),
             globalCreationPrompt: globalConfig.globalCreationPrompt,
             longTextMode: globalConfig.longTextMode,
+            contextScope: globalConfig.contextScope,
             autoOptimize: globalConfig.autoOptimize,
             twoStepOptimization: globalConfig.twoStepOptimization,
             contextChapterCount: globalConfig.contextChapterCount,
@@ -1792,7 +1799,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           }
 
           if (writeStartIndex >= items.length) {
-            setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+            await syncNodeStatus(node.id, { status: 'completed' }, i);
             continue;
           }
 
@@ -1856,31 +1863,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             selectedOutlineSetId,
             abortControllerRef.current?.signal
           );
-          updateNodeData(node.id, {
+          await syncNodeStatus(node.id, {
             label: NODE_CONFIGS.chapter.defaultLabel,
             status: 'completed'
-          });
-
-          // 核心修复：移动端手动持久化
-          try {
-            const savedWfs = JSON.parse(localStorage.getItem('novel_workflows') || '[]');
-            const updatedWfs = savedWfs.map((w: any) => {
-              if (w.id === activeWorkflowId) {
-                return {
-                  ...w,
-                  nodes: w.nodes.map((n: any) => n.id === node.id ? {
-                    ...n,
-                    data: { ...n.data, status: 'completed', label: NODE_CONFIGS.chapter.defaultLabel }
-                  } : n),
-                  lastModified: Date.now()
-                };
-              }
-              return w;
-            });
-            localStorage.setItem('novel_workflows', JSON.stringify(updatedWfs));
-          } catch (e) {
-            console.error('Failed to persist mobile node completion state', e);
-          }
+          }, i);
 
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;
@@ -1978,7 +1964,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             messages,
             temperature: finalTemperature,
             top_p: finalTopP,
-            top_k: finalTopK,
+            top_k: (finalTopK && finalTopK > 0) ? finalTopK : undefined,
             max_tokens: finalMaxTokens,
           } as any, { signal: abortControllerRef.current?.signal });
 
@@ -2108,28 +2094,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         }
 
         const newEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({ id: `${Date.now()}-${idx}`, title: e.title, content: e.content }));
-        updateNodeData(node.id, { status: 'completed', outputEntries: [...newEntries, ...(node.data.outputEntries || [])] });
-
-        // 核心修复：移动端通用 AI 节点的手动持久化
-        try {
-          const savedWfs = JSON.parse(localStorage.getItem('novel_workflows') || '[]');
-          const updatedWfs = savedWfs.map((w: any) => {
-            if (w.id === activeWorkflowId) {
-              return {
-                ...w,
-                nodes: w.nodes.map((n: any) => n.id === node.id ? {
-                  ...n,
-                  data: { ...n.data, status: 'completed' }
-                } : n),
-                lastModified: Date.now()
-              };
-            }
-            return w;
-          });
-          localStorage.setItem('novel_workflows', JSON.stringify(updatedWfs));
-        } catch (e) {
-          console.error('Failed to persist mobile generic node completion state', e);
-        }
+        await syncNodeStatus(node.id, { status: 'completed', outputEntries: [...newEntries, ...(node.data.outputEntries || [])] }, i);
 
         // 持久化到 Novel
         if (currentWorkflowFolder) {
@@ -2216,7 +2181,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       return w;
     });
     setWorkflows(updatedWorkflows);
-    localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
+    storage.saveWorkflows(updatedWorkflows).catch(e => terminal.error(`[MOBILE] 停止保存失败: ${e}`));
     
     setStopRequested(true);
     stopRequestedRef.current = true;
@@ -2236,6 +2201,15 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   };
 
   if (!isOpen) return null;
+
+  if (isLoadingWorkflows) {
+    return (
+      <div className="fixed inset-0 bg-gray-900 z-[100] flex flex-col items-center justify-center gap-4">
+        <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+        <div className="text-indigo-400 font-bold animate-pulse text-sm">加载工作流中...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-gray-900 z-[100] flex flex-col animate-in fade-in duration-200 overflow-hidden">

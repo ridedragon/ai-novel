@@ -309,49 +309,51 @@ const adjustColor = (hex: string, lum: number) => {
 
 const getStoryChapters = (chapters: Chapter[]) => chapters.filter(c => !c.subtype || c.subtype === 'story')
 
-const buildWorldInfoContext = (novel: Novel | undefined, activeOutlineSetId: string | null = null) => {
-  if (!novel) return ''
-  let context = ''
+const buildWorldInfoMessages = (novel: Novel | undefined, activeOutlineSetId: string | null = null): ChatMessage[] => {
+  if (!novel) return []
+  const messages: ChatMessage[] = []
   
-  // 查找与当前大纲集同名的世界观和角色集，作为“当前创作中”的参考
   let targetName = ''
   if (activeOutlineSetId) {
     targetName = novel.outlineSets?.find(s => s.id === activeOutlineSetId)?.name || ''
   }
 
-  // Worldview - 仅包含同名集的条目
   const worldviewSets = novel.worldviewSets || []
   const relevantWorldview = activeOutlineSetId
     ? worldviewSets.filter(s => s.id === activeOutlineSetId || (targetName && s.name === targetName))
     : worldviewSets.slice(0, 1)
   
   if (relevantWorldview.length > 0) {
-    context += '【当前小说世界观设定】：\n'
+    let context = '【当前小说世界观设定】：\n'
     relevantWorldview.forEach(set => {
          set.entries.forEach(entry => {
              context += `· ${entry.item}: ${entry.setting}\n`
          })
     })
-    context += '\n'
+    messages.push({ role: 'system', content: context })
   }
   
-  // Characters - 优先匹配 ID，其次匹配同名集
   const characterSets = novel.characterSets || []
   const relevantCharacters = activeOutlineSetId
     ? characterSets.filter(s => s.id === activeOutlineSetId || (targetName && s.name === targetName))
     : characterSets.slice(0, 1)
 
   if (relevantCharacters.length > 0) {
-      context += '【当前小说角色档案】：\n'
+      let context = '【当前小说角色档案】：\n'
       relevantCharacters.forEach(set => {
            set.characters.forEach(char => {
                context += `· ${char.name}: ${char.bio}\n`
            })
       })
-      context += '\n'
+      messages.push({ role: 'system', content: context })
   }
   
-  return context
+  return messages
+}
+
+const buildWorldInfoContext = (novel: Novel | undefined, activeOutlineSetId: string | null = null) => {
+  const msgs = buildWorldInfoMessages(novel, activeOutlineSetId)
+  return msgs.map(m => m.content).join('\n\n')
 }
 
 const buildReferenceContext = (
@@ -5018,15 +5020,14 @@ function App() {
   }
 
   // Context Builder Helper
-  const getChapterContext = (targetNovel: Novel | undefined, targetChapter: Chapter | undefined) => {
-      if (!targetNovel || !targetChapter) return ''
+  const getChapterContextMessages = (targetNovel: Novel | undefined, targetChapter: Chapter | undefined): ChatMessage[] => {
+      if (!targetNovel || !targetChapter) return []
+      const messages: ChatMessage[] = []
       
       const chapters = targetNovel.chapters
       const contextChapterCount = typeof contextChapterCountRef.current === 'number' ? contextChapterCountRef.current : 1
-      let contextContent = ''
     
       if (longTextModeRef.current) {
-          // Determine filtering volume
           let filterVolumeId: string | null = null
           let filterUncategorized = false
 
@@ -5050,7 +5051,6 @@ function App() {
                    return { start: parseInt(parts[0]) || 0, end: parseInt(parts[1]) || 0 }
                }
 
-               // --- 核心修复：确定当前 Scope 的起始边界 ---
                let scopeStartNum = 1;
                if (filterVolumeId || filterUncategorized) {
                    const firstInScope = storyChapters.find(c =>
@@ -5061,49 +5061,65 @@ function App() {
                    }
                }
                
-               // 1. 收集所有结束于当前章之前的总结 (不进行大总结吃小总结的过滤，保留细节)
-               const relevantSummaries = chapters
+               // 1. 收集并应用去重与精简策略
+               const allSummaries = chapters
                  .filter(c => (c.subtype === 'big_summary' || c.subtype === 'small_summary') && c.summaryRange)
                  .filter(s => {
-                   // 强化过滤：如果是特定 Scope，总结必须属于该 Scope
+                   if (contextScopeRef.current === 'all') return true;
                    if (filterVolumeId) return s.volumeId === filterVolumeId;
                    if (filterUncategorized) return !s.volumeId;
-                   return true;
+                   return false;
                  })
-                 .filter(s => parseRange(s.summaryRange!).end < currentNum)
+                 .filter(s => parseRange(s.summaryRange!).end < currentNum);
+
+               // 去重：同一范围保留最新
+               const rangeMap = new Map<string, Chapter>();
+               allSummaries.forEach(s => {
+                 const range = s.summaryRange!;
+                 if (!rangeMap.has(range) || s.id > rangeMap.get(range)!.id) rangeMap.set(range, s);
+               });
+               const uniqueSummaries = Array.from(rangeMap.values());
+
+               // 获取范围内最近的一个大总结
+               const latestBigSummary = uniqueSummaries
+                 .filter(s => s.subtype === 'big_summary')
+                 .sort((a, b) => parseRange(b.summaryRange!).end - parseRange(a.summaryRange!).end)[0];
+               
+               const bigSummaryEnd = latestBigSummary ? parseRange(latestBigSummary.summaryRange!).end : 0;
+
+               // 筛选有效总结：最近的大总结 + 该总结之后的所有小总结
+               const effectiveSummaries = uniqueSummaries
+                 .filter(s => {
+                   if (s.subtype === 'big_summary') return s.id === latestBigSummary?.id;
+                   return parseRange(s.summaryRange!).start > bigSummaryEnd;
+                 })
                  .sort((a, b) => parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start);
 
-               // 修正 maxSummarizedIdx 的初始值，防止回退到 Scope 之外
+               // 即使不发送所有总结，也要基于 uniqueSummaries 计算真实的 maxSummarizedIdx
                let maxSummarizedIdx = scopeStartNum - 1;
-               relevantSummaries.forEach(s => {
-                 const typeStr = s.subtype === 'big_summary' ? '剧情大纲' : '剧情概要';
-                 contextContent += `【${typeStr} (${s.title})】：\n${s.content}\n\n`;
+               uniqueSummaries.forEach(s => {
                  const { end } = parseRange(s.summaryRange!);
                  if (end > maxSummarizedIdx) maxSummarizedIdx = end;
                });
-               
-               // 2. 确定正文发送范围
-               // 策略：确保深度为 1 时，至少能看到上一章细节内容。
-               // 发送 (maxSummarizedIdx - contextChapterCount + 1) 之后的所有正文内容。
-               // 核心修复：storyStartNum 不得小于 scopeStartNum
-               const storyStartNum = Math.max(scopeStartNum, maxSummarizedIdx - contextChapterCount + 1);
 
+               effectiveSummaries.forEach(s => {
+                 const typeStr = s.subtype === 'big_summary' ? '剧情大纲' : '剧情概要';
+                 messages.push({
+                   role: 'system',
+                   content: `【${typeStr} (${s.title})】：\n${s.content}`
+                 })
+               });
+               
+               const storyStartNum = Math.max(scopeStartNum, maxSummarizedIdx - contextChapterCount + 1);
                const previousStoryChapters = storyChapters.filter((c, idx) => {
-                   // First apply volume filter
                    if (filterVolumeId && c.volumeId !== filterVolumeId) return false
                    if (filterUncategorized && c.volumeId) return false
-   
                    const cNum = idx + 1
                    if (cNum >= currentNum) return false
-                   
-                   // 发送范围：从 (总结边界 - 深度 + 1) 开始，直到当前章之前
-                   // 核心限制：绝对不跨越 Scope 边界
                    if (cNum >= storyStartNum && cNum >= scopeStartNum) return true;
-                   
                    return false
                })
                
-               // Deduplicate by ID
                const uniqueChapters = Array.from(new Set(previousStoryChapters.map(c => c.id)))
                   .map(id => previousStoryChapters.find(c => c.id === id))
                   .filter((c): c is Chapter => !!c)
@@ -5114,23 +5130,34 @@ function App() {
                   })
    
                uniqueChapters.forEach(c => {
-                   contextContent += `### ${c.title}\n${getEffectiveChapterContent(c)}\n\n`
+                   messages.push({
+                     role: 'system',
+                     content: `【前文回顾 - ${c.title}】：\n${getEffectiveChapterContent(c)}`
+                   })
                })
           }
       } else {
-          // Standard Context Logic: All previous chapters in the same volume (or uncategorized)
           const volumeId = targetChapter.volumeId
           const volumeChapters = chapters.filter(c => c.volumeId === volumeId && (!c.subtype || c.subtype === 'story'))
           const currentIdx = volumeChapters.findIndex(c => c.id === targetChapter.id)
           
           if (currentIdx !== -1) {
               const previousChapters = volumeChapters.slice(0, currentIdx)
-              contextContent = previousChapters.map(c => `### ${c.title}\n${getEffectiveChapterContent(c)}`).join('\n\n')
-              if (contextContent) contextContent += '\n\n'
+              previousChapters.forEach(c => {
+                messages.push({
+                  role: 'system',
+                  content: `【前文回顾 - ${c.title}】：\n${getEffectiveChapterContent(c)}`
+                })
+              })
           }
       }
       
-      return contextContent
+      return messages
+  }
+
+  const getChapterContext = (targetNovel: Novel | undefined, targetChapter: Chapter | undefined) => {
+      const msgs = getChapterContextMessages(targetNovel, targetChapter)
+      return msgs.map(m => m.content).join('\n\n')
   }
 
   const handleStopOptimize = React.useCallback((chapterId: number) => {
@@ -5681,62 +5708,57 @@ function App() {
         const firstChapterInBatch = tempNovel?.chapters.find(c => c.id === preparedBatch[0].id)
         if (!firstChapterInBatch) throw new Error("Chapter placeholder missing")
 
-        const rawContext = getChapterContext(tempNovel, firstChapterInBatch)
-        // 核心优化：不再对几万字的历史背景运行正则清洗
-        // 理由：历史章节在生成时已经运行过一次正则清洗（output阶段），重复清洗在大文本下会造成极高的延迟（如 26s+）。
-        const contextMsg = rawContext ? `【前文剧情回顾】：\n${rawContext}\n\n` : ""
-
-        const fullOutlineContext = includeFullOutline 
-          ? `【全书粗纲参考】：\n${outline.map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`).join('\n')}\n\n`
-          : ''
-
-        const worldInfo = buildWorldInfoContext(latestNovelState, outlineSetId)
+        const contextMessages = getChapterContextMessages(tempNovel, firstChapterInBatch)
+        const worldInfoMessages = buildWorldInfoMessages(latestNovelState, outlineSetId)
 
         // Construct Batch Prompt
         let taskDescription = ""
         if (preparedBatch.length > 1) {
-            taskDescription = `请一次性撰写以下 ${preparedBatch.length} 章的内容。
-**重要：请严格使用 "### 章节标题" 作为每一章的分隔符。**
-
-`
+            taskDescription = `你正在创作小说《${novelTitle}》。请一次性撰写以下 ${preparedBatch.length} 章的内容。\n**重要：请严格使用 "### 章节标题" 作为每一章的分隔符。**\n\n`
             preparedBatch.forEach((item, idx) => {
-                taskDescription += `第 ${idx + 1} 部分：
-标题：${item.title}
-大纲：${item.summary}
-
-`
+                taskDescription += `第 ${idx + 1} 部分：\n标题：${item.title}\n大纲：${item.summary}\n\n`
             })
-            taskDescription += `\n请开始撰写，确保内容连贯，不要包含任何多余的解释，直接输出正文。格式示例：
-### ${preparedBatch[0].title}
-(第一章正文...)
-### ${preparedBatch[1].title}
-(第二章正文...)
-`
+            taskDescription += `\n请开始撰写，确保内容连贯，不要包含任何多余的解释，直接输出正文。格式示例：\n### ${preparedBatch[0].title}\n(第一章正文...)\n### ${preparedBatch[1].title}\n(第二章正文...)\n`
         } else {
-            taskDescription = `当前章节：${preparedBatch[0].title}
-本章大纲：${preparedBatch[0].summary}
-
-请根据大纲和前文剧情，撰写本章正文。文笔要生动流畅。`
+            taskDescription = `你正在创作小说《${novelTitle}》。\n当前章节：${preparedBatch[0].title}\n本章大纲：${preparedBatch[0].summary}\n\n请根据大纲和前文剧情，撰写本章正文。文笔要生动流畅。`
         }
-
-        const mainPrompt = `${worldInfo}${contextMsg}${fullOutlineContext}你正在创作小说《${novelTitle}》。
-${taskDescription}`
 
         const messages: any[] = [
           { role: 'system', content: systemPrompt }
         ]
+
+        // 1. 注入世界观/角色信息 (System)
+        messages.push(...worldInfoMessages)
+
+        // 2. 注入灵感/自定义提示词 (透传预设角色和内容)
         promptsToUse.forEach(p => {
-          // 过滤掉固定条目（如对话历史、世界观等），因为这些内容在 autoWriteLoop 中是手动构建并放入 mainPrompt 的
-          // 同时过滤掉内容为空的提示词，避免 OpenAI API 报错
           if (!p.isFixed && p.content && p.content.trim()) {
-            messages.push({ role: p.role, content: p.content })
+            messages.push({
+              role: p.role,
+              content: p.content
+            })
           }
         })
-        messages.push({ role: 'user', content: mainPrompt })
+
+        // 3. 注入前文背景/剧情摘要 (System)
+        messages.push(...contextMessages)
+
+        // 4. 注入全书粗纲 (System)
+        if (includeFullOutline) {
+          const fullOutlineStr = outline.map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`).join('\n')
+          messages.push({
+            role: 'system',
+            content: `【全书粗纲参考】：\n${fullOutlineStr}`
+          })
+        }
+
+        // 5. 注入最终的任务描述 (唯一的 User 消息)
+        messages.push({ role: 'user', content: taskDescription })
 
         // 调试：F12 打印发送给 AI 的全部内容
         console.group(`[AI REQUEST] 全自动正文创作 - ${novelTitle}`);
-        console.log('Messages:', messages);
+        console.log('Final Message Count:', messages.length);
+        console.log('Messages Structure:', messages);
         console.groupEnd();
 
         // Increase max tokens for batch
@@ -6145,8 +6167,7 @@ ${taskDescription}`
     if (currentContent) currentContent += '\n\n'
 
     // Build context
-    const previousContext = getChapterContext(activeNovel || undefined, activeChapter)
-    const contextContent = previousContext + currentContent
+    const contextMessages = getChapterContextMessages(activeNovel || undefined, activeChapter)
 
     let attempt = 0
     const maxAttempts = maxRetries + 1
@@ -6168,14 +6189,10 @@ ${taskDescription}`
 
         const scripts = getActiveScripts()
         
-        // 1. Prepare dynamic content
-        const contextContent = getChapterContext(activeNovel || undefined, activeChapter)
-        const currentContent = getEffectiveChapterContent(activeChapter)
-        const fullHistory = activeChapter ? `${contextContent}### ${activeChapter.title}\n${currentContent}` : ""
-        // Respect contextLength setting
-        const chatHistoryContent = fullHistory.length > contextLength ? fullHistory.slice(-contextLength) : fullHistory
-
-        const worldInfoContent = buildReferenceContext(
+        // 1. Prepare Reference Contents (System)
+        const worldInfoMessages = buildWorldInfoMessages(activeNovel || undefined, activeOutlineSetId)
+        
+        const referenceLibraryStr = buildReferenceContext(
           activeNovel,
           selectedWorldviewSetIdForChat,
           selectedWorldviewIndicesForChat,
@@ -6185,65 +6202,69 @@ ${taskDescription}`
           selectedInspirationIndicesForChat,
           selectedOutlineSetIdForChat,
           selectedOutlineIndicesForChat
-        ) || buildWorldInfoContext(activeNovel || undefined, activeOutlineSetId)
-        
-        // 统一逻辑：根据用户在自动化面板的选择，决定是发送完整大纲还是仅发送当前大纲条目
+        )
+
         let outlineContent = ''
         if (activeOutlineSetId) {
             const currentOutlineSet = activeNovel?.outlineSets?.find(s => s.id === activeOutlineSetId)
             if (currentOutlineSet && currentOutlineSet.items.length > 0) {
                 if (includeFullOutlineInAutoWrite) {
-                    outlineContent = `【全书粗纲参考】：\n` + currentOutlineSet.items.map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+                    outlineContent = currentOutlineSet.items.map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
                 } else {
-                    // 如果没开启全局参考，则尝试寻找匹配当前章节的大纲条目
-                    const matchedItem = currentOutlineSet.items.find(item => item.title === activeChapter.title)
+                    const matchedItem = currentOutlineSet.items.find(item => item.title === activeChapter?.title)
                     if (matchedItem) {
-                        outlineContent = `【本章大纲参考】：\n${matchedItem.title}: ${matchedItem.summary}`
+                        outlineContent = `${matchedItem.title}: ${matchedItem.summary}`
                     } else {
-                        // 兜底：发送前几个条目
-                        outlineContent = `【当前大纲策划摘要】：\n` + currentOutlineSet.items.slice(0, 5).map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
+                        outlineContent = currentOutlineSet.items.slice(0, 5).map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
                     }
                 }
             }
         }
 
-        // 2. Build messages based on prompts order
+        // 2. Build messages based on rules: Refs are System, Task is User
         const messages: any[] = [
           { role: 'system', content: systemPrompt }
         ]
         
-        for (const p of prompts.filter(p => p.active)) {
-          if (p.isFixed) {
-            let content = ""
-            if (p.fixedType === 'chat_history') content = chatHistoryContent ? `【前文剧情回顾】：\n${chatHistoryContent}` : ""
-            else if (p.fixedType === 'world_info') content = worldInfoContent ? `【世界观与角色设定】：\n${worldInfoContent}` : ""
-            else if (p.fixedType === 'outline') content = outlineContent ? `【剧情粗纲参考】：\n${outlineContent}` : ""
-            
-            if (content) {
-              // 性能优化：跳过对 chat_history 的二次正则清洗，因为它通常包含数万字的长文本，
-              // 且这些章节在生成或保存时已经运行过一次正则清洗（output阶段）。
-              // 仅对较短的 world_info 和 outline 运行清洗。
-              const processedContent = p.fixedType === 'chat_history'
-                ? content
-                : await processTextWithRegex(content, scripts, 'input');
-              messages.push({ role: p.role, content: processedContent })
-            }
-          } else if (p.content && p.content.trim()) {
+        // 注入全局/同名集设定
+        messages.push(...worldInfoMessages)
+
+        // 注入资料库/手动选中的参考
+        if (referenceLibraryStr) {
+          messages.push({ role: 'system', content: `【写作参考资料】：\n${referenceLibraryStr}` })
+        }
+
+        // 注入大纲参考
+        if (outlineContent) {
+          messages.push({ role: 'system', content: `【本章大纲/剧情走向】：\n${outlineContent}` })
+        }
+
+        // 注入灵感/自定义提示词 (透传预设角色和内容)
+        for (const p of prompts.filter(p => p.active && !p.isFixed)) {
+          if (p.content && p.content.trim()) {
             messages.push({ role: p.role, content: p.content })
           }
         }
 
-        const processedUserPrompt = await processTextWithRegex(userPrompt, scripts, 'input')
-        const finalUserPrompt = processedUserPrompt || "请继续生成后续剧情。"
-        
-        // Ensure there's at least one user message at the end if not already present
-        if (messages.length === 0 || messages[messages.length - 1].role !== 'user' || userPrompt.trim()) {
-          messages.push({ role: 'user', content: finalUserPrompt })
+        // 注入前文回顾 (分章 System)
+        messages.push(...contextMessages)
+
+        // 注入当前章已写部分 (System)
+        const chapterTitle = activeChapter?.title || "当前章节"
+        const currentChapterContent = getEffectiveChapterContent(activeChapter)
+        if (currentChapterContent) {
+          messages.push({ role: 'system', content: `【当前章节 - ${chapterTitle} (已写部分)】：\n${currentChapterContent}` })
         }
 
+        // 注入最终任务描述 (唯一的 User 消息)
+        const processedUserPrompt = await processTextWithRegex(userPrompt, scripts, 'input')
+        const taskInstruction = processedUserPrompt || "请根据大纲和前文，继续撰写后续正文。文笔要生动流畅，保持风格一致。"
+        messages.push({ role: 'user', content: taskInstruction })
+
         // 调试：F12 打印发送给 AI 的全部内容
-        console.group(`[AI REQUEST] 对话续写生成 - ${activeChapter.title}`);
-        console.log('Messages:', messages);
+        console.group(`[AI REQUEST] 对话续写生成 - ${activeChapter?.title}`);
+        console.log('Final Message Count:', messages.length);
+        console.log('Messages Structure:', messages);
         console.groupEnd();
 
         const response = await openai.chat.completions.create({
@@ -6399,7 +6420,7 @@ ${taskDescription}`
   }
 
   // Summary Generation Helper
-  const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string, targetNovelId: string = activeNovelId || '', updatedNovel?: Novel, signal?: AbortSignal) => {
+  const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string, targetNovelId: string = activeNovelId || '', updatedNovel?: Novel, signal?: AbortSignal, forceFinal?: boolean) => {
     if (!longTextModeRef.current) return
 
     return await checkAndGenerateSummaryUtil(
@@ -6421,7 +6442,8 @@ ${taskDescription}`
       },
       (msg) => terminal.log(msg),
       (msg) => terminal.error(msg),
-      signal
+      signal,
+      forceFinal
     )
   }
 
@@ -9788,9 +9810,9 @@ ${taskDescription}`
             activeOptimizePresetId,
             analysisPresets,
             activeAnalysisPresetId,
-            onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel) => {
+            onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel, forceFinal?: boolean) => {
               if (longTextModeRef.current) {
-                return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel);
+                return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel, undefined, forceFinal);
               }
             },
             updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
@@ -9915,9 +9937,9 @@ ${taskDescription}`
           activeOptimizePresetId,
           analysisPresets,
           activeAnalysisPresetId,
-          onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel) => {
+          onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel, forceFinal?: boolean) => {
             if (longTextModeRef.current) {
-              return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel);
+              return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel, undefined, forceFinal);
             }
           },
           updateAutoOptimize: (val: boolean) => setAutoOptimize(val),

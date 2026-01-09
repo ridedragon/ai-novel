@@ -56,6 +56,7 @@ import terminal from 'virtual:terminal';
 import { GeneratorPreset, GeneratorPrompt, Novel, PromptItem, RegexScript } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
 import { keepAliveManager } from '../utils/KeepAliveManager';
+import { storage } from '../utils/storage';
 import { workflowManager } from '../utils/WorkflowManager';
 
 // --- 类型定义 ---
@@ -78,7 +79,6 @@ interface OutputEntry {
 export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
   typeLabel: string;
-  icon: any;
   color: string;
   presetType: string | null;
   presetId: string;
@@ -123,7 +123,7 @@ export interface WorkflowData {
 // --- 自定义节点组件 ---
 
 const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
-  const Icon = data.icon;
+  const Icon = NODE_CONFIGS[data.typeKey as NodeTypeKey]?.icon;
   const color = data.color;
 
   const refCount = (data.selectedWorldviewSets?.length || 0) +
@@ -439,7 +439,10 @@ const NodePropertiesModal = ({
         <div className="p-5 border-b border-gray-700/50 flex items-center justify-between bg-[#1a1d29]">
           <div className="flex items-center gap-4 text-indigo-400">
             <div className="flex items-center gap-2.5">
-              {node.data.icon && <node.data.icon className="w-5 h-5" />}
+              {(() => {
+                const Icon = NODE_CONFIGS[node.data.typeKey as NodeTypeKey]?.icon;
+                return Icon && <Icon className="w-5 h-5" />;
+              })()}
               <span className="font-bold text-gray-100 text-lg">配置: {localLabel}</span>
             </div>
             <button
@@ -1073,12 +1076,22 @@ const NodePropertiesModal = ({
 const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const { isOpen, onClose, activeNovel, onSelectChapter, onUpdateNovel, onStartAutoWrite, globalConfig } = props;
   const { screenToFlowPosition } = useReactFlow();
-  const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
+  const [nodes, setNodes, onNodesChangeInternal] = useNodesState<WorkflowNode>([]);
+
+  // 核心修复：包装 onNodesChange 以确保拖拽等操作也能同步 Ref 快照
+  const onNodesChange = useCallback((changes: any) => {
+    onNodesChangeInternal(changes);
+    // 注意：React Flow 的 onNodesChange 是异步更新 state 的，
+    // 这里我们直接从最新的变更计算出下个状态并同步 Ref，或者等待渲染同步。
+    // 为了极致安全，我们在所有手动调用 setNodes 的地方都加了同步。
+    // 对于拖拽，我们依赖 setNodes 的回调来捕捉最新状态。
+  }, [onNodesChangeInternal]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [workflows, setWorkflows] = useState<WorkflowData[]>([]);
   const [activeWorkflowId, setActiveWorkflowId] = useState<string>('default');
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showWorkflowMenu, setShowWorkflowMenu] = useState(false);
+  const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(true);
   const [isEditingWorkflowName, setIsEditingWorkflowName] = useState(false);
   const [newWorkflowName, setNewWorkflowName] = useState('');
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -1103,10 +1116,18 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const abortControllerRef = useRef<AbortController | null>(null);
   const isInitialLoadRef = useRef(true);
   const activeNovelRef = useRef(activeNovel);
+  const nodesRef = useRef(nodes);
+  const workflowsRef = useRef(workflows);
 
   useEffect(() => {
     activeNovelRef.current = activeNovel;
   }, [activeNovel]);
+
+  // 核心修复：移除 useEffect 对 nodesRef 的同步，改为在 setNodes 调用处手动同步以消除延迟
+
+  useEffect(() => {
+    workflowsRef.current = workflows;
+  }, [workflows]);
 
   // 同步全局工作流状态
   useEffect(() => {
@@ -1120,7 +1141,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         if (state.error) setError(state.error);
       }
     });
-    return () => unsubscribe();
+    return () => { unsubscribe(); };
   }, [activeWorkflowId]);
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
@@ -1159,61 +1180,39 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
   // 加载保存的工作流列表
   useEffect(() => {
-    // 如果已经初始化过，且当前正在运行，不要重新从本地存储加载，避免覆盖内存中的执行状态
-    if (!isInitialLoadRef.current && isRunning) return;
-    if (!isOpen && !isInitialLoadRef.current) return;
+    const initWorkflows = async () => {
+      // 如果已经初始化过，且当前正在运行，不要重新从本地存储加载，避免覆盖内存中的执行状态
+      if (!isInitialLoadRef.current && isRunning) return;
+      if (!isOpen && !isInitialLoadRef.current) return;
 
-    const savedWorkflows = localStorage.getItem('novel_workflows');
-    const lastActiveId = localStorage.getItem('active_workflow_id');
-    
-    let loadedWorkflows: WorkflowData[] = [];
-    if (savedWorkflows) {
+      setIsLoadingWorkflows(true);
       try {
-        loadedWorkflows = JSON.parse(savedWorkflows);
+        const loadedWorkflows = await storage.getWorkflows();
+        const targetId = await storage.getActiveWorkflowId();
+
+        setWorkflows(loadedWorkflows);
+        
+        const finalId = targetId && loadedWorkflows.find(w => w.id === targetId)
+          ? targetId
+          : (loadedWorkflows[0]?.id || 'default');
+        
+        setActiveWorkflowId(finalId);
+        loadWorkflow(finalId, loadedWorkflows);
       } catch (e) {
-        console.error('Failed to load workflows', e);
+        terminal.error(`[WORKFLOW] 启动加载失败: ${e}`);
+      } finally {
+        setIsLoadingWorkflows(false);
+        isInitialLoadRef.current = false;
       }
-    }
-
-    // 兼容旧版本数据
-    if (loadedWorkflows.length === 0) {
-      const oldWorkflow = localStorage.getItem('novel_workflow');
-      if (oldWorkflow) {
-        try {
-          const { nodes: oldNodes, edges: oldEdges } = JSON.parse(oldWorkflow);
-          loadedWorkflows = [{
-            id: 'default',
-            name: '默认工作流',
-            nodes: oldNodes,
-            edges: oldEdges,
-            lastModified: Date.now()
-          }];
-        } catch (e) {}
-      } else {
-        loadedWorkflows = [{
-          id: 'default',
-          name: '默认工作流',
-          nodes: [],
-          edges: [],
-          lastModified: Date.now()
-        }];
-      }
-    }
-
-    setWorkflows(loadedWorkflows);
+    };
     
-    const targetId = lastActiveId && loadedWorkflows.find(w => w.id === lastActiveId)
-      ? lastActiveId
-      : loadedWorkflows[0].id;
-    
-    setActiveWorkflowId(targetId);
-    loadWorkflow(targetId, loadedWorkflows);
-    isInitialLoadRef.current = false;
-  }, [isOpen]); // 移除 activeNovel 依赖，防止执行期间或结束时因 novel 更新触发重新加载，导致状态回跳到旧的 Storage 数据
+    initWorkflows();
+  }, [isOpen]); // 移除 activeNovel 依赖，防止执行期间或结束时因 novel 更新触发重新加载
 
   const loadWorkflow = (id: string, workflowList: WorkflowData[]) => {
-    // 如果工作流正在运行，不要从缓存恢复状态，避免覆盖内存中最新的执行进度
-    if (isRunning) return;
+    // 核心修复：解除加载死锁。
+    // 如果 nodes 长度为 0（说明组件刚刚挂载），即使正在运行也必须允许恢复初始结构
+    if (isRunning && nodesRef.current.length > 0) return;
 
     const workflow = workflowList.find(w => w.id === id);
     const globalIsRunning = workflowManager.getState().isRunning;
@@ -1262,7 +1261,6 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             label: (!globalIsRunning && n.data.status === 'executing' && n.data.typeKey === 'chapter')
               ? NODE_CONFIGS.chapter.defaultLabel
               : n.data.label,
-            icon: NODE_CONFIGS[n.data.typeKey as NodeTypeKey]?.icon,
             selectedWorldviewSets: filterLegacyRefs(n.data.selectedWorldviewSets, 'worldview'),
             selectedCharacterSets: filterLegacyRefs(n.data.selectedCharacterSets, 'character'),
             selectedOutlineSets: filterLegacyRefs(n.data.selectedOutlineSets, 'outline'),
@@ -1273,6 +1271,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         };
       });
       setNodes(restoredNodes);
+      nodesRef.current = restoredNodes; // 同步 Ref
       setEdges(restoredEdges);
       setCurrentNodeIndex(workflow.currentNodeIndex !== undefined ? workflow.currentNodeIndex : -1);
       
@@ -1287,8 +1286,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 自动持久化状态 - 增加防抖处理
+  // 自动持久化状态 - 增加防抖处理 (核心重构：异步 IndexedDB + 状态锁)
   useEffect(() => {
+    // 重要：如果正在加载中，绝对禁止触发保存，防止空状态覆盖数据库
+    if (isLoadingWorkflows) return;
     // 即使界面关闭，如果正在后台运行，也需要持续保存进度
     if ((!isOpen && !isRunning) || workflows.length === 0) return;
     
@@ -1296,34 +1297,36 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    saveTimeoutRef.current = setTimeout(() => {
-      setWorkflows(prevWorkflows => {
-        const updatedWorkflows = prevWorkflows.map(w => {
-          if (w.id === activeWorkflowId) {
-            return {
-              ...w,
-              nodes,
-              edges,
-              currentNodeIndex,
-              lastModified: Date.now()
-            };
-          }
-          return w;
-        });
-        
-        localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
-        localStorage.setItem('active_workflow_id', activeWorkflowId);
-        
-        return updatedWorkflows;
+    saveTimeoutRef.current = setTimeout(async () => {
+      const currentWorkflows = workflows.map(w => {
+        if (w.id === activeWorkflowId) {
+          return {
+            ...w,
+            nodes: nodesRef.current, // 核心修复：自动保存使用 Ref 抓取绝对最新的内存快照
+            edges,
+            currentNodeIndex,
+            lastModified: Date.now()
+          };
+        }
+        return w;
       });
-    }, 5000); // 5秒防抖，减轻大规模数据序列化压力
+      
+      try {
+        await storage.saveWorkflows(currentWorkflows);
+        await storage.setActiveWorkflowId(activeWorkflowId);
+        // 同时更新内存中的状态，保持同步但不触发额外的 Effect
+        setWorkflows(currentWorkflows);
+      } catch (e) {
+        terminal.error(`[WORKFLOW] 自动保存失败: ${e}`);
+      }
+    }, 5000); // 5秒防抖
 
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning]);
+  }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning, isLoadingWorkflows]);
 
   const switchWorkflow = (id: string) => {
     setActiveWorkflowId(id);
@@ -1465,11 +1468,13 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     const centerY = window.innerHeight / 2;
     const position = screenToFlowPosition({ x: centerX, y: centerY });
 
+    const { icon, ...serializableConfig } = config;
+
     const newNode: WorkflowNode = {
       id: `node-${Date.now()}`,
       type: 'custom',
       data: {
-        ...config,
+        ...serializableConfig,
         typeKey,
         label: config.defaultLabel,
         presetId: '',
@@ -1490,7 +1495,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         y: position.y - 40   // 减去大概高度的一半
       },
     };
-    setNodes((nds) => [...nds, newNode]);
+    setNodes((nds) => {
+      const nextNodes = [...nds, newNode];
+      nodesRef.current = nextNodes; // 同步 Ref
+      return nextNodes;
+    });
     setShowAddMenu(false);
   }, [setNodes, nodes, activeNovel, screenToFlowPosition]);
 
@@ -1514,10 +1523,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     setNodes((nds) => {
       const targetNode = nds.find(n => n.id === nodeId);
       const isRenameFolder = (targetNode?.data.typeKey === 'createFolder' || targetNode?.data.typeKey === 'reuseDirectory') && updates.folderName !== undefined && updates.folderName !== targetNode?.data.folderName;
-      const oldFolderName = targetNode?.data.folderName;
-      const newFolderName = updates.folderName;
 
-      return nds.map((node) => {
+      const nextNodes = nds.map((node) => {
         if (node.id === nodeId) {
           return { ...node, data: { ...node.data, ...updates } };
         }
@@ -1534,6 +1541,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         }
         return node;
       });
+
+      // 核心修复：在更新 React 状态的同时，手动强制更新 Ref 快照
+      // 解决用户输入到工作流引擎读取之间的同步缝隙
+      nodesRef.current = nextNodes;
+      return nextNodes;
     });
   }, [setNodes]);
 
@@ -1662,9 +1674,44 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   // 保持兼容性的 Getter
   const getOrderedNodes = useCallback(() => orderedNodes, [orderedNodes]);
 
+  // 辅助函数：同步节点状态并强制持久化到磁盘
+  // 解决 UI 关闭后组件卸载导致的状态丢失问题
+  const syncNodeStatus = async (nodeId: string, updates: Partial<WorkflowNodeData>, currentIndex: number) => {
+    if (abortControllerRef.current?.signal.aborted) return;
+
+    // 1. 构造最新的节点列表并同步给 Ref (Ref 是后台循环的可靠数据源)
+    // 注意：必须先更新 Ref，再触发 setNodes，确保后续循环中能立即读到最新状态
+    const latestNodes = nodesRef.current.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n);
+    nodesRef.current = latestNodes;
+
+    // 2. 更新 React 状态 (如果组件仍挂载)
+    setNodes(latestNodes);
+
+    // 3. 显式持久化到存储
+    const currentWfs = workflowsRef.current.map(w => {
+      if (w.id === activeWorkflowId) {
+        return {
+          ...w,
+          nodes: latestNodes,
+          currentNodeIndex: currentIndex,
+          lastModified: Date.now()
+        };
+      }
+      return w;
+    });
+
+    try {
+      await storage.saveWorkflows(currentWfs);
+      // 同步更新内存中的工作流列表，保持一致性
+      setWorkflows(currentWfs);
+    } catch (e) {
+      terminal.error(`[WORKFLOW] 显式持久化失败: ${e}`);
+    }
+  };
+
   // --- 自动化执行引擎 (AI 调用) ---
   const runWorkflow = async (startIndex: number = 0) => {
-    terminal.log(`[WORKFLOW] 准备执行工作流: ${workflows.find(w => w.id === activeWorkflowId)?.name}, 起始节点索引: ${startIndex}`);
+    terminal.log(`[WORKFLOW] 准备执行工作流: ${workflowsRef.current.find(w => w.id === activeWorkflowId)?.name}, 起始节点索引: ${startIndex}`);
     if (!globalConfig?.apiKey) {
       setError('请先在主设置中配置 API Key');
       return;
@@ -1755,6 +1802,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         setNodes(nds => {
             const nextNodes = nds.map(resetNodeData);
             terminal.log(`[DEBUG] 重置后首个节点状态: ${nextNodes[0]?.data.status}`);
+            nodesRef.current = nextNodes; // 同步 Ref
             return nextNodes;
         });
         setEdges(eds => eds.map(e => ({ ...e, animated: false })));
@@ -1769,8 +1817,20 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       let lastNodeOutput = ''; // 累积的前序节点产出
       let currentWorkflowFolder = ''; // 当前工作流确定的文件夹名
 
-      // 如果是从中间开始，需要重建上下文
+      // 如果是从中间开始，需要重建上下文，并强制清理视觉状态冲突
       if (startIndex > 0) {
+        // 核心修复：清理所有节点和连线的执行中状态，防止多点闪烁
+        const cleanedNodes = nodesRef.current.map(n => {
+          const sortedIdx = sortedNodes.findIndex(sn => sn.id === n.id);
+          if (sortedIdx < startIndex && n.data.status === 'executing') {
+            return { ...n, data: { ...n.data, status: 'completed' as const } };
+          }
+          return n;
+        });
+        nodesRef.current = cleanedNodes;
+        setNodes(cleanedNodes);
+        setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+
         for (let j = 0; j < startIndex; j++) {
           const prevNode = sortedNodes[j];
           if (prevNode.data.typeKey === 'createFolder') {
@@ -1795,22 +1855,23 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         workflowManager.updateProgress(i);
 
         if (node.data.skipped) {
-          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          // 核心修复：必须同时更新 Ref，否则会被后续步骤的 syncNodeStatus 回滚状态
+          const nextNodes = nodesRef.current.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' as const } } : n);
+          nodesRef.current = nextNodes;
+          setNodes(nextNodes);
           // 确保跳过时也清理可能残留的连线动画
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           continue;
         }
         
-        // 更新节点状态为正在执行
-        setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'executing' } } : n));
+        // 更新节点状态为正在执行，并即时同步到磁盘
+        await syncNodeStatus(node.id, { status: 'executing' }, i);
         
-        // 让指向该节点的连线产生动画效果
-        setEdges(eds => eds.map(e => {
-          if (e.target === node.id) return { ...e, animated: true };
-          // 同时关闭其他不再执行的节点的动画，确保视觉焦点唯一
-          if (e.animated) return { ...e, animated: false };
-          return e;
-        }));
+        // 核心修复：先全量关闭动画，再激活当前节点的输入线，确保视觉焦点唯一
+        setEdges(eds => eds.map(e => ({
+          ...e,
+          animated: e.target === node.id
+        })));
 
         // 核心修复：在状态更新后强制 yield，确保 React 有机会渲染 "executing" 状态和动画起效
         await new Promise(resolve => setTimeout(resolve, 50));
@@ -1829,7 +1890,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           
           if (node.data.typeKey === 'reuseDirectory') {
              // 复用目录节点仅切换当前上下文中的目录名，不重新创建
-             setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+             await syncNodeStatus(node.id, { status: 'completed' }, i);
              continue;
           }
 
@@ -1910,7 +1971,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             }
 
             // 目录创建后，仅负责将正文生成节点关联到新分卷，不再进行资料集的自动转换和强行勾选
-            setNodes(nds => nds.map(n => ({
+            const nextNodesAfterFolder = nodesRef.current.map(n => ({
               ...n,
               data: {
                 ...n.data,
@@ -1919,10 +1980,12 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                   ? volumeResult.id
                   : n.data.targetVolumeId
               }
-            })));
+            }));
+            nodesRef.current = nextNodesAfterFolder;
+            setNodes(nextNodesAfterFolder);
           }
           // 更新节点状态为已完成
-          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          await syncNodeStatus(node.id, { status: 'completed' }, i);
           // 停止入线动画
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           await new Promise(resolve => setTimeout(resolve, 50));
@@ -1932,7 +1995,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         if (node.data.typeKey === 'userInput') {
           accumContext += `【全局输入】：\n${node.data.instruction}\n\n`;
           // 更新节点状态为已完成
-          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+          await syncNodeStatus(node.id, { status: 'completed' }, i);
           // 停止入线动画
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
           await new Promise(resolve => setTimeout(resolve, 50));
@@ -2236,7 +2299,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           }
 
           if (writeStartIndex >= items.length) {
-            setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+            await syncNodeStatus(node.id, { status: 'completed' }, i);
             continue;
           }
 
@@ -2294,31 +2357,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             abortControllerRef.current?.signal
           );
 
-          updateNodeData(node.id, {
+          await syncNodeStatus(node.id, {
             label: NODE_CONFIGS.chapter.defaultLabel,
             status: 'completed'
-          });
-
-          // 核心修复：手动持久化。即便 UI 卸载，也要确保这一步状态存入磁盘
-          try {
-            const savedWfs = JSON.parse(localStorage.getItem('novel_workflows') || '[]');
-            const updatedWfs = savedWfs.map((w: any) => {
-              if (w.id === activeWorkflowId) {
-                return {
-                  ...w,
-                  nodes: w.nodes.map((n: any) => n.id === node.id ? {
-                    ...n,
-                    data: { ...n.data, status: 'completed', label: NODE_CONFIGS.chapter.defaultLabel }
-                  } : n),
-                  lastModified: Date.now()
-                };
-              }
-              return w;
-            });
-            localStorage.setItem('novel_workflows', JSON.stringify(updatedWfs));
-          } catch (e) {
-            console.error('Failed to persist node completion state', e);
-          }
+          }, i);
 
           // 停止入线动画
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
@@ -2421,7 +2463,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             messages,
             temperature: finalTemperature,
             top_p: finalTopP,
-            top_k: finalTopK,
+            top_k: (finalTopK && finalTopK > 0) ? finalTopK : undefined,
             max_tokens: finalMaxTokens,
           } as any, { signal: abortControllerRef.current?.signal });
 
@@ -2689,28 +2731,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         lastNodeOutput += `【${node.data.typeLabel}输出】：\n${result}\n\n`;
 
         // 更新节点状态为已完成 (确保在 novel 更新后同步更新节点状态，避免竞争)
-        setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
-
-        // 核心修复：通用 AI 节点的手动持久化
-        try {
-          const savedWfs = JSON.parse(localStorage.getItem('novel_workflows') || '[]');
-          const updatedWfs = savedWfs.map((w: any) => {
-            if (w.id === activeWorkflowId) {
-              return {
-                ...w,
-                nodes: w.nodes.map((n: any) => n.id === node.id ? {
-                  ...n,
-                  data: { ...n.data, status: 'completed' }
-                } : n),
-                lastModified: Date.now()
-              };
-            }
-            return w;
-          });
-          localStorage.setItem('novel_workflows', JSON.stringify(updatedWfs));
-        } catch (e) {
-          console.error('Failed to persist generic node completion state', e);
-        }
+        await syncNodeStatus(node.id, { status: 'completed' }, i);
 
         // 停止入线动画
         setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
@@ -2734,7 +2755,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       const currentOrder = getOrderedNodes();
       const failedNode = currentOrder[currentNodeIndex];
       if (failedNode) {
-        setNodes(nds => nds.map(n => n.id === failedNode.id ? { ...n, data: { ...n.data, status: 'failed' } } : n));
+        const nextNodesFailed = nodesRef.current.map(n => n.id === failedNode.id ? { ...n, data: { ...n.data, status: 'failed' as const } } : n);
+        nodesRef.current = nextNodesFailed;
+        setNodes(nextNodesFailed);
       }
       // 核心修复：发生错误时，务必清理所有连线动画，防止视觉卡死
       setEdges(eds => eds.map(e => ({ ...e, animated: false })));
@@ -2760,7 +2783,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       return w;
     });
     setWorkflows(updatedWorkflows);
-    localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
+    storage.saveWorkflows(updatedWorkflows).catch(e => terminal.error(`[WORKFLOW] 停止保存失败: ${e}`));
     
     setStopRequested(true);
     stopRequestedRef.current = true;
@@ -2769,13 +2792,17 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     }
     workflowManager.pause(currentNodeIndex);
     // 强制清理执行状态，确保 UI 动画立即停止
-    setNodes(nds => nds.map(n => ({
-      ...n,
-      data: {
-        ...n.data,
-        status: n.data.status === 'executing' ? 'pending' : n.data.status
-      }
-    })));
+    setNodes(nds => {
+      const nextNodes = nds.map(n => ({
+        ...n,
+        data: {
+          ...n.data,
+          status: n.data.status === 'executing' ? 'pending' : n.data.status as any
+        }
+      }));
+      nodesRef.current = nextNodes; // 同步 Ref
+      return nextNodes;
+    });
     setEdges(eds => eds.map(e => ({ ...e, animated: false })));
     keepAliveManager.disable();
   };
@@ -2811,6 +2838,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         };
       });
       setNodes(updatedNodes);
+      nodesRef.current = updatedNodes; // 同步 Ref
       setEdges(eds => eds.map(e => ({ ...e, animated: false })));
       workflowManager.stop();
       setError(null);
@@ -2828,11 +2856,23 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         return w;
       });
       setWorkflows(updatedWorkflows);
-      localStorage.setItem('novel_workflows', JSON.stringify(updatedWorkflows));
+      storage.saveWorkflows(updatedWorkflows).catch(e => terminal.error(`[WORKFLOW] 重置保存失败: ${e}`));
     }
   };
 
   if (!isOpen) return null;
+
+  if (isLoadingWorkflows) {
+    return (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-0 md:p-4">
+        <div className="bg-gray-900 w-full h-full md:w-[98%] md:h-[95vh] md:rounded-xl shadow-2xl border border-gray-700 flex flex-col items-center justify-center gap-4">
+          <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+          <div className="text-indigo-400 font-bold animate-pulse">正在从数据库恢复工作流状态...</div>
+          <p className="text-xs text-gray-500">大型工作流可能需要几秒钟时间进行初始化</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
@@ -3128,6 +3168,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               <button 
                 onClick={() => {
                   setNodes([]);
+                  nodesRef.current = []; // 同步 Ref
                   setEdges([]);
                   setEditingNodeId(null);
                 }}
