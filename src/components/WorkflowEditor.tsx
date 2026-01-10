@@ -673,7 +673,7 @@ const NodePropertiesModal = ({
                     if (newVal && (!node.data.promptItems || (node.data.promptItems as any[]).length === 0)) {
                       updates.promptItems = [
                         { id: 'sys-1', role: 'system', content: '你是一个专业的创作助手。', enabled: true },
-                        { id: 'user-1', role: 'user', content: '{{context}}\n\n要求：{{input}}', enabled: true }
+                        { id: 'user-1', role: 'user', content: '{{context}}', enabled: true }
                       ];
                     }
                     updateNodeData(node.id, updates);
@@ -1195,7 +1195,7 @@ const NodePropertiesModal = ({
                             newItems[idx] = { ...newItems[idx], content: e.target.value };
                             updateNodeData(node.id, { promptItems: newItems });
                           }}
-                          placeholder="输入提示词内容... 支持 {{context}} 和 {{input}} 变量"
+                          placeholder="输入提示词内容... 支持 {{context}} 变量"
                           className="w-full h-24 bg-transparent p-4 text-xs text-gray-300 focus:text-white outline-none resize-none font-mono leading-relaxed"
                         />
                       </div>
@@ -1723,7 +1723,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               {
                 id: 'user-1',
                 role: 'user',
-                content: '我想写一本小说，我的需求是：{{input}}\n\n请以此为基础，为我生成一套完整的工作流。如果我开启了自动填写，请在每个节点的 instruction 字段中为我写好专业的引导提示词。',
+                content: '请以此为基础，为我生成一套完整的工作流。如果我开启了自动填写，请在每个节点的 instruction 字段中为我写好专业的引导提示词。',
                 enabled: true
               }
             ]
@@ -1913,6 +1913,33 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
   // 保持兼容性的 Getter
   const getOrderedNodes = useCallback(() => orderedNodes, [orderedNodes]);
+
+  // 自动整理布局逻辑
+  const autoLayoutNodes = useCallback(() => {
+    const ordered = getOrderedNodes();
+    const cols = 4;
+    const spacingX = 320;
+    const spacingY = 180;
+    const startX = 100;
+    const startY = 250;
+
+    const nextNodes = nodes.map(node => {
+      const idx = ordered.findIndex(n => n.id === node.id);
+      if (idx !== -1) {
+        return {
+          ...node,
+          position: {
+            x: (idx % cols) * spacingX + startX,
+            y: Math.floor(idx / cols) * spacingY + startY
+          }
+        };
+      }
+      return node;
+    });
+
+    setNodes(nextNodes);
+    nodesRef.current = nextNodes;
+  }, [nodes, getOrderedNodes, setNodes]);
 
   // 辅助函数：同步节点状态并强制持久化到磁盘
   // 解决 UI 关闭后组件卸载导致的状态丢失问题
@@ -2269,8 +2296,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 role: p.role,
                 content: p.content
                   .replace('{{context}}', WORKFLOW_DSL_PROMPT)
-                  .replace('{{input}}', node.data.instruction || '请生成一个标准的小说创作流程')
               }));
+            // 始终将需求描述作为独立消息发送
+            if (node.data.instruction) {
+              generatorMessages.push({ role: 'user', content: node.data.instruction });
+            }
           } else if (genPreset && genPreset.prompts) {
             // 使用预设提示词
             generatorMessages = genPreset.prompts
@@ -2279,8 +2309,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 role: p.role,
                 content: p.content
                   .replace('{{context}}', WORKFLOW_DSL_PROMPT)
-                  .replace('{{input}}', node.data.instruction || '请生成一个标准的小说创作流程')
               }));
+            // 始终将需求描述作为独立消息发送
+            if (node.data.instruction) {
+              generatorMessages.push({ role: 'user', content: node.data.instruction });
+            }
           } else {
             // 默认兜底消息
             generatorMessages = [
@@ -2330,7 +2363,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                   targetVolumeId: n.typeKey === 'chapter' ? '' : (activeNovel?.volumes[0]?.id || ''),
                   targetVolumeName: '',
                 },
-                position: { x: idx * 320 + 100, y: 250 } // 水平自动布局
+                position: {
+                  x: (idx % 4) * 320 + 100,
+                  y: Math.floor(idx / 4) * 180 + 250
+                } // 4列网格换行布局
               };
             });
 
@@ -2493,26 +2529,32 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               .filter((p: any) => p.active)
               .map((p: any) => {
                 const content = p.content
-                  .replace('{{context}}', finalContext)
-                  .replace('{{input}}', node.data.instruction);
+                  .replace('{{context}}', finalContext);
                 return {
                   role: p.role,
                   content: p.role === 'user' ? formatContentWithAttachments(content) : content
                 };
               });
+            // 始终将指令作为独立消息发送
+            if (node.data.instruction) {
+              messages.push({ role: 'user', content: formatContentWithAttachments(node.data.instruction) });
+            }
           } else {
             // 普通生成预设 (GeneratorPreset) 的处理
             messages = (preset.prompts || [])
               .filter(p => p.enabled)
               .map(p => {
                 const content = p.content
-                  .replace('{{context}}', finalContext)
-                  .replace('{{input}}', node.data.instruction);
+                  .replace('{{context}}', finalContext);
                 return {
                   role: p.role,
                   content: p.role === 'user' ? formatContentWithAttachments(content) : content
                 };
               });
+            // 始终将指令作为独立消息发送
+            if (node.data.instruction) {
+              messages.push({ role: 'user', content: formatContentWithAttachments(node.data.instruction) });
+            }
           }
         }
 
@@ -2756,12 +2798,14 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 return {
                   role: p.role,
                   content: p.role === 'user' ? formatContentWithAttachments(p.content
-                    .replace('{{context}}', finalContext)
-                    .replace('{{input}}', node.data.instruction)) : (p.content
-                    .replace('{{context}}', finalContext)
-                    .replace('{{input}}', node.data.instruction))
+                    .replace('{{context}}', finalContext)) : (p.content
+                    .replace('{{context}}', finalContext))
                 };
               });
+            // 始终将指令作为独立消息发送
+            if (node.data.instruction) {
+              messages.push({ role: 'user', content: formatContentWithAttachments(node.data.instruction) });
+            }
             
             // 如果用户自定义的提示词中完全没有包含 {{context}}，则为了满足用户“直接给”的需求，
             // 强制将 finalContext 作为一个单独的 User 消息插入到最前面，确保 AI 能接收到全局输入
@@ -3566,7 +3610,15 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 )}
               </div>
 
-              <button 
+              <button
+                onClick={autoLayoutNodes}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-sm font-medium text-emerald-400 rounded-lg border border-emerald-500/30 transition-colors"
+              >
+                <LayoutList className="w-4 h-4" />
+                整理布局
+              </button>
+
+              <button
                 onClick={() => {
                   setNodes([]);
                   nodesRef.current = []; // 同步 Ref

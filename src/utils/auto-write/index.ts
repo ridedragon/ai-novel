@@ -599,7 +599,7 @@ export class AutoWriteEngine {
             .filter(p => p.enabled)
             .map(p => ({
               role: p.role,
-              content: p.content.replace('{{content}}', sourceContent).replace('{{input}}', ''),
+              content: p.content.replace('{{content}}', sourceContent),
             }));
 
           // 调试：F12 打印发送给 AI 的全部内容
@@ -666,7 +666,7 @@ export class AutoWriteEngine {
       const messages: any[] = activePreset.prompts
         .filter(p => p.enabled)
         .map(p => {
-          let content = p.content.replace('{{content}}', sourceContent).replace('{{input}}', '');
+          let content = p.content.replace('{{content}}', sourceContent);
           if (currentAnalysisResult && content.includes('{{analysis}}')) {
             content = content.replace('{{analysis}}', currentAnalysisResult);
             isAnalysisUsed = true;

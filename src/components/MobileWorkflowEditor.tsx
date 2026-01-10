@@ -185,9 +185,10 @@ const CoolEdge = ({
 
 
 // --- 配置定义 ---
-type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter';
+type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter' | 'workflowGenerator';
 
 const NODE_CONFIGS: Record<NodeTypeKey, any> = {
+  workflowGenerator: { typeLabel: '架构', icon: Wand2, color: '#f87171', defaultLabel: '工作流架构师', presetType: 'generator' },
   createFolder: { typeLabel: '目录', icon: FolderPlus, color: '#818cf8', defaultLabel: '初始化目录', presetType: null },
   reuseDirectory: { typeLabel: '复用', icon: Folder, color: '#fbbf24', defaultLabel: '切换目录节点', presetType: null },
   userInput: { typeLabel: '输入', icon: User, color: '#3b82f6', defaultLabel: '全局输入', presetType: null },
@@ -199,6 +200,41 @@ const NODE_CONFIGS: Record<NodeTypeKey, any> = {
   outline: { typeLabel: '大纲', icon: BookOpen, color: '#6366f1', defaultLabel: '细化章节', presetType: 'outline' },
   chapter: { typeLabel: '正文', icon: FileText, color: '#8b5cf6', defaultLabel: '生成章节正文', presetType: 'completion' },
 };
+
+const WORKFLOW_DSL_PROMPT = `你是一个顶级的 AI 小说工作流架构师。
+你的职责是将用户的创作需求拆解为一套标准化的自动化流程。你必须以 JSON 格式输出。
+
+### 1. 节点类型百科 (typeKey 指南)
+你必须根据创作逻辑合理安排以下节点的先后顺序：
+
+- **createFolder**: 【必需起点】初始化项目。参数: folderName (小说书名)。
+- **worldview**: 构建世界观。参数: instruction (地理、力量体系设定要求)。
+- **characters**: 塑造角色。参数: instruction (主角及配角的人设要求)。
+- **inspiration**: 灵感生成。参数: instruction (核心冲突、金手指、反转点要求)。
+- **plotOutline**: 剧情粗纲。参数: instruction (全书起承转合的高级逻辑规划)。
+- **outline**: 章节大纲。参数: instruction (详细到每一章的剧情细化要求)。
+- **chapter**: 【正文生成】根据 outline 自动写书。通常接在 outline 节点之后。
+- **userInput**: 用户干预。参数: instruction (明确告诉用户此处需要输入什么信息)。
+- **aiChat**: AI 顾问。参数: instruction (如"请以毒舌编辑身份对上述设定进行逻辑审核")。
+- **reuseDirectory**: 关联目录。参数: folderName (要复用的目录名)。
+
+### 2. 顶级指令编写规范 (Instruction)
+当用户开启"自动填写"时，你为 nodes 生成的 instruction 必须达到出版级水准：
+- **篇幅要求**: 每个节点的指令必须在 300-600 字之间。
+- **结构规范**: 包含【身份背景】、【任务目标】、【创作禁忌】、【风格参考】和【输出格式】。
+
+### 3. JSON 协议格式
+你必须返回纯净的 JSON，严禁 Markdown 代码块标记：
+{
+  "nodes": [
+    { "id": "node_0", "typeKey": "createFolder", "label": "书名初始化", "folderName": "用户需求书名" },
+    { "id": "node_1", "typeKey": "outline", "label": "长篇大纲规划", "instruction": "极其详细的300字以上提示词..." }
+  ],
+  "edges": [
+    { "id": "edge_0_1", "source": "node_0", "target": "node_1" }
+  ]
+}
+`;
 
 // --- 性能优化输入组件 ---
 const OptimizedInput = ({ value, onChange, className, placeholder, type = "text" }: any) => {
@@ -393,8 +429,54 @@ const ConfigPanel = React.memo(({
           </div>
         )}
 
-        {editingNode.data.typeKey === 'aiChat' && (
+        {(editingNode.data.typeKey === 'aiChat' || editingNode.data.typeKey === 'workflowGenerator') && (
           <div className="space-y-4 pt-4 border-t border-gray-800">
+            {editingNode.data.typeKey === 'workflowGenerator' && (
+              <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-4 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs">
+                    <Wand2 className="w-4 h-4" /> 架构师模式
+                  </div>
+                  <button
+                    onClick={() => {
+                      const configToSave = {
+                        instruction: editingNode.data.instruction,
+                        autoFillContent: editingNode.data.autoFillContent,
+                        overrideAiConfig: editingNode.data.overrideAiConfig,
+                        promptItems: editingNode.data.promptItems,
+                        model: editingNode.data.model,
+                        temperature: editingNode.data.temperature,
+                        topP: editingNode.data.topP,
+                        topK: editingNode.data.topK,
+                        maxTokens: editingNode.data.maxTokens,
+                        apiKey: editingNode.data.apiKey,
+                        baseUrl: editingNode.data.baseUrl,
+                      };
+                      localStorage.setItem('workflow_generator_default_config', JSON.stringify(configToSave));
+                      alert('配置已保存。');
+                    }}
+                    className="text-[8px] px-2 py-1 bg-indigo-600 text-white rounded-full font-bold flex items-center gap-1"
+                  >
+                    <Save className="w-2.5 h-2.5" /> 保存默认
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-400 leading-relaxed">此节点将根据需求生成整个画布。</p>
+                <div className="mt-3 pt-3 border-t border-indigo-500/10">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <div className={`w-8 h-4 rounded-full relative transition-colors ${editingNode.data.autoFillContent ? 'bg-indigo-600' : 'bg-gray-700'}`}>
+                      <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${editingNode.data.autoFillContent ? 'left-4.5' : 'left-0.5'}`} />
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="hidden"
+                      checked={editingNode.data.autoFillContent}
+                      onChange={(e) => onUpdateNodeData(editingNode.id, { autoFillContent: e.target.checked })}
+                    />
+                    <span className="text-[10px] text-gray-300 font-medium">AI 自动填写节点内容</span>
+                  </label>
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
                 <Wand2 className="w-3.5 h-3.5 text-amber-400" /> 强制自定义 (覆盖所有)
@@ -408,7 +490,7 @@ const ConfigPanel = React.memo(({
                   if (newVal && (!editingNode.data.promptItems || (editingNode.data.promptItems as any[]).length === 0)) {
                     updates.promptItems = [
                       { id: 'sys-1', role: 'system', content: '你是一个专业的创作助手。', enabled: true },
-                      { id: 'user-1', role: 'user', content: '{{context}}\n\n要求：{{input}}', enabled: true }
+                      { id: 'user-1', role: 'user', content: '{{context}}', enabled: true }
                     ];
                   }
                   onUpdateNodeData(editingNode.id, updates);
@@ -545,12 +627,14 @@ const ConfigPanel = React.memo(({
         )}
 
         <div className="space-y-3">
-          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">创作指令 (User Prompt)</label>
+          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+            {editingNode.data.typeKey === 'workflowGenerator' ? '工作流需求描述' : '创作指令 (User Prompt)'}
+          </label>
           <OptimizedTextarea
             value={editingNode.data.instruction}
             onChange={(val: string) => handleUpdate({ instruction: val })}
             className="w-full h-56 bg-gray-800 border border-gray-700 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed"
-            placeholder="在此输入具体要求..."
+            placeholder={editingNode.data.typeKey === 'workflowGenerator' ? "描述你想要的工作流结构..." : "在此输入具体要求..."}
           />
         </div>
 
@@ -765,7 +849,7 @@ const ConfigPanel = React.memo(({
                             onUpdateNodeData(editingNode.id, { promptItems: newItems });
                           }
                         }}
-                        placeholder="输入内容... 支持 {{context}} 和 {{input}}"
+                        placeholder="输入内容... 支持 {{context}} 变量"
                         className="w-full h-32 bg-transparent p-4 text-sm text-gray-300 focus:text-white outline-none resize-none font-mono leading-relaxed"
                       />
                     </div>
@@ -1051,6 +1135,16 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   const addNewNode = (typeKey: NodeTypeKey) => {
     const config = NODE_CONFIGS[typeKey];
     
+    // 互斥检查
+    if (typeKey === 'workflowGenerator' && nodes.length > 0) {
+      alert('“智能生成工作流”节点只能在空画布上创建。');
+      return;
+    }
+    if (nodes.some(n => n.data.typeKey === 'workflowGenerator')) {
+      alert('画布中已存在生成节点。');
+      return;
+    }
+
     // 计算视口中心位置
     const centerX = window.innerWidth / 2;
     const centerY = window.innerHeight / 2;
@@ -1075,7 +1169,66 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         selectedInspirationSets: [],
         outputEntries: [],
         targetVolumeId: typeKey === 'chapter' ? '' : (activeNovel?.volumes[0]?.id || ''),
-        status: 'pending'
+        status: 'pending',
+        // 为生成节点初始化示例提示词
+        ...(typeKey === 'workflowGenerator' ? (() => {
+          try {
+            const savedConfig = localStorage.getItem('workflow_generator_default_config');
+            if (savedConfig) {
+              const parsed = JSON.parse(savedConfig);
+              return {
+                overrideAiConfig: parsed.overrideAiConfig ?? true,
+                autoFillContent: parsed.autoFillContent ?? true,
+                instruction: parsed.instruction ?? '',
+                promptItems: parsed.promptItems ?? [],
+                model: parsed.model,
+                temperature: parsed.temperature,
+                topP: parsed.topP,
+                topK: parsed.topK,
+                maxTokens: parsed.maxTokens,
+                apiKey: parsed.apiKey,
+                baseUrl: parsed.baseUrl,
+              };
+            }
+          } catch (e) {}
+          return {
+            overrideAiConfig: true,
+            autoFillContent: true,
+            promptItems: [
+              {
+                id: 'sys-1',
+                role: 'system',
+                content: `你是一个顶级的 AI 小说工作流架构师。你的职责是将用户的创作需求拆解为一套标准化的自动化流程。你必须以 JSON 格式输出。
+
+### 1. 节点类型百科 (typeKey 指南)
+你必须根据创作逻辑合理安排以下节点的先后顺序：
+- createFolder: 【必需起点】初始化项目。参数: folderName (小说书名)。
+- worldview: 构建世界观。参数: instruction (设定要求)。
+- characters: 塑造角色。参数: instruction (人设要求)。
+- inspiration: 灵感生成。参数: instruction (脑洞要求)。
+- plotOutline: 剧情粗纲。参数: instruction (宏观逻辑规划)。
+- outline: 章节大纲。参数: instruction (细化到每章的要求)。
+- chapter: 【正文生成】通常接在 outline 节点之后。
+- userInput: 用户干预。参数: instruction (提示词)。
+- aiChat: AI 顾问。参数: instruction (审核要求)。
+- reuseDirectory: 关联目录。参数: folderName (目录名)。
+
+### 2. 顶级指令编写规范 (Instruction)
+如果你开启"自动填写"，你为 nodes 生成的 instruction 必须在 300-600 字之间，包含身份背景、任务目标、创作禁忌和风格规范。
+
+### 3. JSON 协议格式
+你必须返回纯净的 JSON，严禁 Markdown 代码块标记。`,
+                enabled: true
+              },
+              {
+                id: 'user-1',
+                role: 'user',
+                content: '请以此为基础，为我生成一套完整的工作流。',
+                enabled: true
+              }
+            ]
+          };
+        })() : {})
       },
       position: {
         x: position.x - 90, // 移动端节点宽度是 180px，减去一半
@@ -1158,6 +1311,30 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     loadWorkflow(id, workflows);
     setShowWorkflowMenu(false);
   };
+
+  // 自动整理布局逻辑 (移动端垂直单列)
+  const autoLayoutNodes = useCallback(() => {
+    const ordered = orderedNodes;
+    const startX = 50;
+    const startY = 100;
+    const spacingY = 120;
+
+    const nextNodes = nodes.map(node => {
+      const idx = ordered.findIndex(n => n.id === node.id);
+      if (idx !== -1) {
+        return {
+          ...node,
+          position: {
+            x: startX,
+            y: idx * spacingY + startY
+          }
+        };
+      }
+      return node;
+    });
+
+    setNodes(nextNodes);
+  }, [nodes, orderedNodes, setNodes]);
 
   const createNewWorkflow = () => {
     const newId = `wf_${Date.now()}`;
@@ -1589,6 +1766,91 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           continue;
         }
 
+        // --- 智能工作流生成逻辑拦截 ---
+        if (node.data.typeKey === 'workflowGenerator') {
+          if (nodesRef.current.length > 1) {
+            throw new Error('架构师节点必须在空画布上运行。');
+          }
+
+          const genPresets = (allPresets as any).generator || [];
+          let genPreset = genPresets.find((p: any) => p.id === node.data.presetId) || genPresets[0];
+
+          const openai = new OpenAI({
+            apiKey: (node.data.overrideAiConfig && node.data.apiKey) ? node.data.apiKey : (genPreset?.apiConfig?.apiKey || globalConfig.apiKey),
+            baseURL: (node.data.overrideAiConfig && node.data.baseUrl) ? node.data.baseUrl : (genPreset?.apiConfig?.baseUrl || globalConfig.baseUrl),
+            dangerouslyAllowBrowser: true
+          });
+
+          let generatorMessages: any[] = [];
+          if (node.data.overrideAiConfig && node.data.promptItems && (node.data.promptItems as any[]).length > 0) {
+            generatorMessages = (node.data.promptItems as any[]).filter(p => p.enabled !== false).map(p => ({
+              role: p.role,
+              content: p.content.replace('{{context}}', WORKFLOW_DSL_PROMPT)
+            }));
+            if (node.data.instruction) generatorMessages.push({ role: 'user', content: node.data.instruction });
+          } else {
+            generatorMessages = [
+              { role: 'system', content: WORKFLOW_DSL_PROMPT },
+              { role: 'user', content: `用户需求：${node.data.instruction || '请生成一个标准的小说创作流程'}` }
+            ];
+          }
+
+          const completion = await openai.chat.completions.create({
+            model: (node.data.overrideAiConfig && node.data.model) ? node.data.model : (genPreset?.apiConfig?.model || globalConfig.model),
+            messages: generatorMessages,
+            temperature: (node.data.overrideAiConfig && node.data.temperature !== undefined) ? node.data.temperature : 0.7,
+          });
+
+          const aiResponse = completion.choices[0]?.message?.content || '';
+          try {
+            const cleanJson = aiResponse.replace(/```json\s*([\s\S]*?)```/gi, '$1').trim();
+            const dslData = JSON.parse(cleanJson);
+            if (!dslData.nodes) throw new Error('无效协议');
+
+            const newNodes: WorkflowNode[] = dslData.nodes.map((n: any, idx: number) => {
+              const config = NODE_CONFIGS[n.typeKey as NodeTypeKey] || NODE_CONFIGS.aiChat;
+              const { icon, ...serializableConfig } = config;
+              return {
+                id: n.id || `node_${Date.now()}_${idx}`,
+                type: 'custom',
+                data: {
+                  ...serializableConfig,
+                  typeKey: n.typeKey,
+                  label: n.label || config.defaultLabel,
+                  presetId: '',
+                  presetName: '',
+                  instruction: n.instruction || '',
+                  folderName: n.folderName || '',
+                  selectedWorldviewSets: [],
+                  selectedCharacterSets: [],
+                  selectedOutlineSets: [],
+                  selectedInspirationSets: [],
+                  outputEntries: [],
+                  targetVolumeId: n.typeKey === 'chapter' ? '' : (activeNovel?.volumes[0]?.id || ''),
+                  status: 'pending'
+                },
+                position: { x: 50, y: idx * 120 + 100 } // 移动端垂直单列布局
+              };
+            });
+
+            const newEdges: Edge[] = (dslData.edges || []).map((e: any, idx: number) => ({
+              id: e.id || `edge_${Date.now()}_${idx}`,
+              source: e.source,
+              target: e.target,
+              type: 'custom',
+              animated: false
+            }));
+
+            setNodes(newNodes);
+            setEdges(newEdges);
+            workflowManager.stop();
+            keepAliveManager.disable();
+            return;
+          } catch (parseErr: any) {
+            throw new Error(`协议解析失败: ${parseErr.message}`);
+          }
+        }
+
         // 获取对应类型的预设
         let typePresets = allPresets[node.data.presetType as string] || [];
         if (node.data.typeKey === 'aiChat') {
@@ -1650,19 +1912,24 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               .filter((p: any) => p.active)
               .map((p: any) => ({
                 role: p.role,
-                content: p.content.replace('{{context}}', finalContext).replace('{{input}}', node.data.instruction)
+                content: p.content.replace('{{context}}', finalContext)
               }));
           } else {
             messages = (preset.prompts || [])
               .filter(p => p.enabled)
               .map(p => ({
                 role: p.role,
-                content: p.content.replace('{{context}}', finalContext).replace('{{input}}', node.data.instruction)
+                content: p.content.replace('{{context}}', finalContext)
               }));
           }
         }
 
-        if (messages.length === 0) messages.push({ role: 'user', content: node.data.instruction || '请生成内容' });
+        // 始终将指令作为独立消息发送 (如果 messages 中已经包含内容，则追加；如果为空，则作为唯一消息)
+        if (node.data.instruction) {
+          messages.push({ role: 'user', content: node.data.instruction });
+        } else if (messages.length === 0) {
+          messages.push({ role: 'user', content: '请生成内容' });
+        }
 
         // 处理正文生成节点
         if (node.data.typeKey === 'chapter') {
@@ -1904,7 +2171,6 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                   role: p.role,
                   content: p.content
                     .replace('{{context}}', finalContext)
-                    .replace('{{input}}', node.data.instruction)
                 };
               });
             
@@ -2288,7 +2554,17 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               <Square className="w-3.5 h-3.5 fill-current" />
               <span className="text-[8px] font-bold mt-0.5">停止</span>
             </button>
-          ) : isPaused && currentNodeIndex !== -1 ? (
+          ) : (
+            <button
+              onClick={autoLayoutNodes}
+              className="flex flex-col items-center justify-center p-1.5 bg-emerald-600/10 text-emerald-400 rounded-lg border border-emerald-500/20 active:scale-95 transition-all"
+            >
+              <LayoutList className="w-3.5 h-3.5" />
+              <span className="text-[8px] font-bold mt-0.5">整理</span>
+            </button>
+          )}
+
+          {isRunning ? null : isPaused && currentNodeIndex !== -1 ? (
             <div className="flex items-center gap-1.5">
               <div className="flex flex-col gap-0.5">
                 <span className="text-[7px] text-gray-500 font-bold uppercase pl-1">跳转执行</span>
