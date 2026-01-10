@@ -988,6 +988,9 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   // 自动保存 - 增加防抖处理 (支持异步 IndexedDB)
   useEffect(() => {
     if (isLoadingWorkflows) return;
+    // 核心修复：防止多实例竞争导致的任务回滚。
+    // 仅在 UI 打开时允许由 React 触发保存。
+    // 后台运行时的保存由 runWorkflow 内部的 syncNodeStatus 保证。
     if (!isOpen || workflows.length === 0 || isInitialLoadRef.current) return;
     
     if (saveTimeoutRef.current) {
@@ -1752,7 +1755,6 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               : (localNovel.systemPrompt || '你是一个专业的小说家。'),
             globalCreationPrompt: globalConfig.globalCreationPrompt,
             longTextMode: globalConfig.longTextMode,
-            contextScope: globalConfig.contextScope,
             autoOptimize: globalConfig.autoOptimize,
             twoStepOptimization: globalConfig.twoStepOptimization,
             contextChapterCount: globalConfig.contextChapterCount,
@@ -2315,7 +2317,13 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               
               <button
                 onClick={() => {
-                  if (confirm('确定要重置所有节点进度吗？')) {
+                  if (confirm('确定要重置当前工作流吗？\n\n1. 所有节点进度将归零\n2. 已生成的章节正文将保留\n3. 正在运行的任务将被强制中止')) {
+                    // 1. 立即物理中断
+                    stopRequestedRef.current = true;
+                    if (abortControllerRef.current) {
+                      abortControllerRef.current.abort();
+                    }
+
                     const updatedNodes = nodes.map(n => ({
                       ...n,
                       data: {
@@ -2323,12 +2331,21 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                         status: 'pending' as const,
                         label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label,
                         outputEntries: [],
-                        targetVolumeId: n.data.typeKey === 'chapter' ? '' : n.data.targetVolumeId
+                        // 不再重置 targetVolumeId，保留用户配置
+                        targetVolumeName: ''
                       }
                     }));
+
+                    // 2. 同步 UI 状态
                     setNodes(updatedNodes);
-                    workflowManager.stop();
+                    setCurrentNodeIndex(-1);
+                    setIsPaused(false);
                     setError(null);
+                    
+                    // 3. 停止全局管理
+                    workflowManager.stop();
+                    
+                    // 4. 持久化
                     setWorkflows(prev => prev.map(w => w.id === activeWorkflowId ? { ...w, nodes: updatedNodes, currentNodeIndex: -1 } : w));
                   }
                 }}

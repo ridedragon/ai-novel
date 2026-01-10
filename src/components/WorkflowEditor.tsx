@@ -107,6 +107,10 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   presencePenalty?: number;
   frequencyPenalty?: number;
   skipped?: boolean;
+  apiKey?: string;
+  baseUrl?: string;
+  // 工作流生成节点特定设置
+  autoFillContent?: boolean; // AI 是否自动填写生成的节点内容
 }
 
 export type WorkflowNode = Node<WorkflowNodeData>;
@@ -258,9 +262,16 @@ const CoolEdge = ({
 
 // --- 配置定义 ---
 
-type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter';
+type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter' | 'workflowGenerator';
 
 const NODE_CONFIGS: Record<NodeTypeKey, any> = {
+  workflowGenerator: {
+    typeLabel: '智能生成工作流',
+    icon: Wand2,
+    color: '#f87171',
+    defaultLabel: '工作流架构师',
+    presetType: 'generator',
+  },
   createFolder: {
     typeLabel: '创建项目目录',
     icon: FolderPlus,
@@ -332,6 +343,42 @@ const NODE_CONFIGS: Record<NodeTypeKey, any> = {
     presetType: 'completion',
   },
 };
+
+const WORKFLOW_DSL_PROMPT = `你是一个顶级的 AI 小说工作流架构师。
+你的职责是将用户的创作需求拆解为一套标准化的自动化流程。你必须以 JSON 格式输出。
+
+### 1. 节点类型百科 (typeKey 指南)
+你必须根据创作逻辑合理安排以下节点的先后顺序：
+
+- **createFolder**: 【必需起点】初始化项目。参数: folderName (小说书名)。
+- **worldview**: 构建世界观。参数: instruction (地理、力量体系设定要求)。
+- **characters**: 塑造角色。参数: instruction (主角及配角的人设要求)。
+- **inspiration**: 灵感生成。参数: instruction (核心冲突、金手指、反转点要求)。
+- **plotOutline**: 剧情粗纲。参数: instruction (全书起承转合的高级逻辑规划)。
+- **outline**: 章节大纲。参数: instruction (详细到每一章的剧情细化要求)。
+- **chapter**: 【正文生成】根据 outline 自动写书。通常接在 outline 节点之后。
+- **userInput**: 用户干预。参数: instruction (明确告诉用户此处需要输入什么信息)。
+- **aiChat**: AI 顾问。参数: instruction (如"请以毒舌编辑身份对上述设定进行逻辑审核")。
+- **reuseDirectory**: 关联目录。参数: folderName (要复用的目录名)。
+
+### 2. 顶级指令编写规范 (Instruction)
+当用户开启"自动填写"时，你为 nodes 生成的 instruction 必须达到出版级水准：
+- **篇幅要求**: 每个节点的指令必须在 300-600 字之间。
+- **结构规范**: 包含【身份背景】、【任务目标】、【创作禁忌】、【风格参考】和【输出格式】。
+- **示例**: "你是一个拥有20年经验的网文主编。现在请为本作设计一个'低魔高武'的世界观。严禁出现西式幻想元素，必须扎根于中式神话，引入独特的'气血交换'体系..."
+
+### 3. JSON 协议格式
+你必须返回纯净的 JSON，严禁 Markdown 代码块标记：
+{
+  "nodes": [
+    { "id": "node_0", "typeKey": "createFolder", "label": "书名初始化", "folderName": "用户需求书名" },
+    { "id": "node_1", "typeKey": "outline", "label": "长篇大纲规划", "instruction": "极其详细的300字以上提示词..." }
+  ],
+  "edges": [
+    { "id": "edge_0_1", "source": "node_0", "target": "node_1" }
+  ]
+}
+`;
 
 export interface WorkflowEditorProps {
   isOpen: boolean;
@@ -512,7 +559,7 @@ const NodePropertiesModal = ({
             </div>
           </div>
 
-          {node.data.presetType && (
+          {node.data.presetType && node.data.typeKey !== 'workflowGenerator' && (
             <div className="space-y-3 pt-6 border-t border-gray-700/30">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
                 <Cpu className="w-3.5 h-3.5" /> 基础模板 (调用系统预设)
@@ -548,8 +595,71 @@ const NodePropertiesModal = ({
             </div>
           )}
 
-          {node.data.typeKey === 'aiChat' && (
+          {(node.data.typeKey === 'aiChat' || node.data.typeKey === 'workflowGenerator') && (
             <div className="space-y-4 pt-6 border-t border-gray-700/30">
+              {node.data.typeKey === 'workflowGenerator' && (
+                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs">
+                      <Wand2 className="w-4 h-4" /> 架构师模式说明
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          const configToSave = {
+                            instruction: localInstruction,
+                            autoFillContent: node.data.autoFillContent,
+                            overrideAiConfig: node.data.overrideAiConfig,
+                            promptItems: node.data.promptItems,
+                            model: node.data.model,
+                            temperature: node.data.temperature,
+                            topP: node.data.topP,
+                            topK: node.data.topK,
+                            maxTokens: node.data.maxTokens,
+                            apiKey: node.data.apiKey,
+                            baseUrl: node.data.baseUrl,
+                          };
+                          localStorage.setItem('workflow_generator_default_config', JSON.stringify(configToSave));
+                          alert('配置已保存。下次创建架构师节点将自动应用。');
+                        }}
+                        className="text-[10px] px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded transition-colors font-bold flex items-center gap-1"
+                        title="保存当前所有配置（包括 Prompt）为默认值"
+                      >
+                        <Save className="w-3 h-3" /> 保存配置
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm('确定要恢复出厂设置吗？这将删除已保存的默认架构师配置。')) {
+                            localStorage.removeItem('workflow_generator_default_config');
+                            alert('已恢复出厂设置。重新创建节点将看到初始默认内容。');
+                          }
+                        }}
+                        className="text-[10px] px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors font-bold"
+                      >
+                        重置默认
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    此节点运行后将<b>根据需求重新生成整个画布</b>。
+                    完成后此节点会消失，替换为完整的工作流。
+                  </p>
+                  <div className="mt-3 pt-3 border-t border-indigo-500/10">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                      <div className={`w-8 h-4 rounded-full relative transition-colors ${node.data.autoFillContent ? 'bg-indigo-600' : 'bg-gray-700'}`}>
+                        <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${node.data.autoFillContent ? 'left-4.5' : 'left-0.5'}`} />
+                      </div>
+                      <input
+                        type="checkbox"
+                        className="hidden"
+                        checked={node.data.autoFillContent}
+                        onChange={(e) => updateNodeData(node.id, { autoFillContent: e.target.checked })}
+                      />
+                      <span className="text-xs text-gray-300 font-medium group-hover:text-white transition-colors">AI 自动填写节点内容 (指令/配置)</span>
+                    </label>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
                   <Wand2 className="w-3.5 h-3.5 text-amber-400" /> 强制自定义 (覆盖所有设置)
@@ -575,23 +685,66 @@ const NodePropertiesModal = ({
                 </button>
               </div>
 
+              {node.data.typeKey === 'workflowGenerator' && (
+                <div className="p-3 bg-gray-900/50 border border-gray-700 rounded-lg">
+                  <div className="text-[10px] text-gray-500 font-bold uppercase mb-2 flex items-center gap-1.5">
+                    <FileText className="w-3 h-3" /> AI 返回协议示例 (Expected JSON)
+                  </div>
+                  <pre className="text-[9px] text-emerald-400 font-mono overflow-x-auto leading-relaxed">
+{`{
+  "nodes": [
+    { "id": "n1", "typeKey": "outline", "label": "大纲", "instruction": "要求..." },
+    { "id": "n2", "typeKey": "chapter", "label": "正文" }
+  ],
+  "edges": [ { "id": "e1", "source": "n1", "target": "n2" } ]
+}`}
+                  </pre>
+                </div>
+              )}
+
               {node.data.overrideAiConfig && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2 col-span-2">
-                      <label className="text-[10px] text-gray-400 uppercase">模型 (Model)</label>
-                      <div className="relative">
-                        <select
+                      <label className="text-[10px] text-indigo-400 font-bold uppercase">API Key</label>
+                      <input
+                        type="password"
+                        value={node.data.apiKey as string || ''}
+                        onChange={(e) => updateNodeData(node.id, { apiKey: e.target.value })}
+                        placeholder="不填则使用全局设置..."
+                        className="w-full bg-[#161922] border border-indigo-900/30 rounded-lg px-3 py-2 text-xs text-gray-100 outline-none focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2 col-span-2">
+                      <label className="text-[10px] text-indigo-400 font-bold uppercase">API Base URL</label>
+                      <input
+                        type="text"
+                        value={node.data.baseUrl as string || ''}
+                        onChange={(e) => updateNodeData(node.id, { baseUrl: e.target.value })}
+                        placeholder="例如: https://api.openai.com/v1"
+                        className="w-full bg-[#161922] border border-indigo-900/30 rounded-lg px-3 py-2 text-xs text-gray-100 outline-none focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2 col-span-2">
+                      <label className="text-[10px] text-indigo-400 font-bold uppercase">执行模型 (Model ID)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
                           value={node.data.model as string || ''}
                           onChange={(e) => updateNodeData(node.id, { model: e.target.value })}
-                          className="w-full bg-[#161922] border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-100 focus:border-indigo-500 outline-none appearance-none"
+                          placeholder="手动输入模型名称 (如 gpt-4o)..."
+                          className="flex-1 bg-[#161922] border border-indigo-900/30 rounded-lg px-3 py-2 text-xs text-gray-100 outline-none focus:border-indigo-500 transition-all font-mono"
+                        />
+                        <select
+                          className="w-32 bg-[#161922] border border-gray-700 rounded-lg px-2 text-[10px] text-gray-400 outline-none cursor-pointer"
+                          onChange={(e) => updateNodeData(node.id, { model: e.target.value })}
+                          value=""
                         >
-                          <option value="">跟随系统默认 (或模板设置)</option>
+                          <option value="" disabled>从预设列表选择...</option>
                           {globalConfig?.modelList?.map((m: string) => (
                             <option key={m} value={m}>{m}</option>
                           ))}
                         </select>
-                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500 pointer-events-none" />
                       </div>
                     </div>
                     
@@ -877,14 +1030,19 @@ const NodePropertiesModal = ({
           )}
 
           <div className="space-y-3 pt-6 border-t border-gray-700/30">
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">额外指令 (USER PROMPT)</label>
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+              {node.data.typeKey === 'workflowGenerator' ? '工作流需求描述 (Architecture Requirements)' : '额外指令 (USER PROMPT)'}
+            </label>
             <textarea
               value={localInstruction}
               onChange={(e) => {
                 setLocalInstruction(e.target.value);
                 debouncedUpdate({ instruction: e.target.value });
               }}
-              placeholder="输入该步骤的特定要求或引导词..."
+              placeholder={node.data.typeKey === 'workflowGenerator'
+                ? "描述你想要的工作流结构，例如：先写灵感，再写世界观和角色，最后生成大纲和正文..."
+                : "输入该步骤的特定要求或引导词..."
+              }
               className="w-full h-32 bg-[#161922] border border-gray-700/80 rounded-lg p-4 text-sm text-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none font-mono leading-relaxed transition-all"
             />
           </div>
@@ -1160,12 +1318,13 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     completion: [],
     optimize: [],
     analysis: [],
+    generator: [],
   });
 
   // 加载预设
   useEffect(() => {
     if (!isOpen) return;
-    const types = ['outline', 'character', 'worldview', 'inspiration', 'plotOutline', 'completion', 'optimize', 'analysis', 'chat'];
+    const types = ['outline', 'character', 'worldview', 'inspiration', 'plotOutline', 'completion', 'optimize', 'analysis', 'chat', 'generator'];
     const loaded: Record<string, GeneratorPreset[]> = {};
     types.forEach(t => {
       try {
@@ -1290,8 +1449,12 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   useEffect(() => {
     // 重要：如果正在加载中，绝对禁止触发保存，防止空状态覆盖数据库
     if (isLoadingWorkflows) return;
-    // 即使界面关闭，如果正在后台运行，也需要持续保存进度
-    if ((!isOpen && !isRunning) || workflows.length === 0) return;
+    
+    // 核心修复：防止多实例竞争导致的任务终止。
+    // 如果 UI 已经关闭（isOpen=false），则禁止由 React 组件实例触发自动保存。
+    // 后台运行的任务状态持久化应仅由 runWorkflow 内部的 syncNodeStatus 负责。
+    // 这样避免了用户重新打开 UI 时，新实例持有过时状态并通过此 Effect 覆盖了正在跑的后台任务进度。
+    if (!isOpen || workflows.length === 0) return;
     
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -1455,6 +1618,16 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const addNewNode = useCallback((typeKey: NodeTypeKey) => {
     const config = NODE_CONFIGS[typeKey];
     
+    // 互斥检查
+    if (typeKey === 'workflowGenerator' && nodes.length > 0) {
+      alert('“智能生成工作流”节点只能在空画布上创建。请先清空当前画布。');
+      return;
+    }
+    if (nodes.some(n => n.data.typeKey === 'workflowGenerator')) {
+      alert('画布中已存在生成节点。请先运行该节点或将其删除后再添加其他模块。');
+      return;
+    }
+
     // 自动发现当前工作流中定义的计划文件夹
     const currentPendingFolders = nodes
       .filter(n => n.data.typeKey === 'createFolder' && n.data.folderName)
@@ -1489,6 +1662,73 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         outputEntries: [],
         targetVolumeId: typeKey === 'chapter' ? '' : (activeNovel?.volumes[0]?.id || ''),
         targetVolumeName: '',
+        // 为生成节点初始化示例提示词
+        ...(typeKey === 'workflowGenerator' ? (() => {
+          try {
+            const savedConfig = localStorage.getItem('workflow_generator_default_config');
+            if (savedConfig) {
+              const parsed = JSON.parse(savedConfig);
+              return {
+                overrideAiConfig: parsed.overrideAiConfig ?? true,
+                autoFillContent: parsed.autoFillContent ?? true,
+                instruction: parsed.instruction ?? '',
+                promptItems: parsed.promptItems ?? [],
+                model: parsed.model,
+                temperature: parsed.temperature,
+                topP: parsed.topP,
+                topK: parsed.topK,
+                maxTokens: parsed.maxTokens,
+                apiKey: parsed.apiKey,
+                baseUrl: parsed.baseUrl,
+              };
+            }
+          } catch (e) {
+            console.error('Failed to load workflow architect config:', e);
+          }
+          
+          // 兜底默认配置
+          return {
+            overrideAiConfig: true,
+            autoFillContent: true,
+            promptItems: [
+              {
+                id: 'sys-1',
+                role: 'system',
+                content: `你是一个顶级的 AI 小说工作流架构师。你的职责是将用户的创作需求拆解为一套标准化的自动化流程。你必须以 JSON 格式输出。
+
+### 1. 节点类型百科 (typeKey 指南)
+你必须根据创作逻辑合理安排以下节点的先后顺序：
+- createFolder: 【必需起点】初始化项目。参数: folderName (小说书名)。
+- worldview: 构建世界观。参数: instruction (设定要求)。
+- characters: 塑造角色。参数: instruction (人设要求)。
+- inspiration: 灵感生成。参数: instruction (脑洞要求)。
+- plotOutline: 剧情粗纲。参数: instruction (宏观逻辑规划)。
+- outline: 章节大纲。参数: instruction (细化到每章的要求)。
+- chapter: 【正文生成】通常接在 outline 节点之后。
+- userInput: 用户干预。参数: instruction (提示词)。
+- aiChat: AI 顾问。参数: instruction (审核要求)。
+- reuseDirectory: 关联目录。参数: folderName (目录名)。
+
+### 2. 顶级指令编写规范 (Instruction)
+如果你开启"自动填写"，你为 nodes 生成的 instruction 必须在 300-600 字之间，包含身份背景、任务目标、创作禁忌和风格规范。
+
+### 3. JSON 协议格式
+你必须返回纯净的 JSON，严禁 Markdown 代码块标记。结构如下：
+{
+  "nodes": [ { "id": "n0", "typeKey": "createFolder", "label": "初始化", "folderName": "书名" } ],
+  "edges": [ { "id": "e1", "source": "n0", "target": "n1" } ]
+}`,
+                enabled: true
+              },
+              {
+                id: 'user-1',
+                role: 'user',
+                content: '我想写一本小说，我的需求是：{{input}}\n\n请以此为基础，为我生成一套完整的工作流。如果我开启了自动填写，请在每个节点的 instruction 字段中为我写好专业的引导提示词。',
+                enabled: true
+              }
+            ]
+          };
+        })() : {})
       },
       position: {
         x: position.x - 140, // 减去节点宽度的一半 (280/2)
@@ -2002,6 +2242,125 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           continue;
         }
 
+        // --- 智能工作流生成逻辑拦截 ---
+        if (node.data.typeKey === 'workflowGenerator') {
+          if (nodesRef.current.length > 1) {
+            throw new Error('“智能生成工作流”节点必须在空画布上运行。请移除其他节点。');
+          }
+
+          // 寻找对应预设
+          const genPresets = (allPresets as any).generator || [];
+          let genPreset = genPresets.find((p: any) => p.id === node.data.presetId) || genPresets[0];
+
+          const openai = new OpenAI({
+            apiKey: (node.data.overrideAiConfig && node.data.apiKey) ? node.data.apiKey : (genPreset?.apiConfig?.apiKey || globalConfig.apiKey),
+            baseURL: (node.data.overrideAiConfig && node.data.baseUrl) ? node.data.baseUrl : (genPreset?.apiConfig?.baseUrl || globalConfig.baseUrl),
+            dangerouslyAllowBrowser: true
+          });
+
+          // 构建生成专用消息
+          let generatorMessages: any[] = [];
+          
+          if (node.data.overrideAiConfig && node.data.promptItems && node.data.promptItems.length > 0) {
+            // 使用自定义提示词
+            generatorMessages = node.data.promptItems
+              .filter(p => p.enabled !== false)
+              .map(p => ({
+                role: p.role,
+                content: p.content
+                  .replace('{{context}}', WORKFLOW_DSL_PROMPT)
+                  .replace('{{input}}', node.data.instruction || '请生成一个标准的小说创作流程')
+              }));
+          } else if (genPreset && genPreset.prompts) {
+            // 使用预设提示词
+            generatorMessages = genPreset.prompts
+              .filter((p: any) => p.enabled)
+              .map((p: any) => ({
+                role: p.role,
+                content: p.content
+                  .replace('{{context}}', WORKFLOW_DSL_PROMPT)
+                  .replace('{{input}}', node.data.instruction || '请生成一个标准的小说创作流程')
+              }));
+          } else {
+            // 默认兜底消息
+            generatorMessages = [
+              { role: 'system', content: WORKFLOW_DSL_PROMPT },
+              { role: 'user', content: `用户需求：${node.data.instruction || '请生成一个标准的长篇小说创作工作流'}\n\n是否自动填写内容：${node.data.autoFillContent ? '是' : '否'}` }
+            ];
+          }
+
+          const completion = await openai.chat.completions.create({
+            model: (node.data.overrideAiConfig && node.data.model) ? node.data.model : (genPreset?.apiConfig?.model || globalConfig.model),
+            messages: generatorMessages,
+            temperature: (node.data.overrideAiConfig && node.data.temperature !== undefined) ? node.data.temperature : (genPreset?.temperature ?? 0.7),
+          });
+
+          const aiResponse = completion.choices[0]?.message?.content || '';
+          
+          try {
+            // 解析 JSON
+            let dslData: { nodes: any[], edges: any[] };
+            const cleanJson = aiResponse.replace(/```json\s*([\s\S]*?)```/gi, '$1').trim();
+            dslData = JSON.parse(cleanJson);
+
+            if (!dslData.nodes || !Array.isArray(dslData.nodes)) throw new Error('AI 返回的节点数据格式不正确');
+
+            // 转换节点
+            const newNodes: WorkflowNode[] = dslData.nodes.map((n, idx) => {
+              const config = NODE_CONFIGS[n.typeKey as NodeTypeKey] || NODE_CONFIGS.aiChat;
+              const { icon, ...serializableConfig } = config;
+              
+              return {
+                id: n.id || `node_${Date.now()}_${idx}`,
+                type: 'custom',
+                data: {
+                  ...serializableConfig,
+                  typeKey: n.typeKey,
+                  label: n.label || config.defaultLabel,
+                  presetId: '',
+                  presetName: '',
+                  instruction: n.instruction || '',
+                  folderName: n.folderName || '',
+                  selectedWorldviewSets: [],
+                  selectedCharacterSets: [],
+                  selectedOutlineSets: [],
+                  selectedInspirationSets: [],
+                  selectedReferenceFolders: [],
+                  outputEntries: [],
+                  targetVolumeId: n.typeKey === 'chapter' ? '' : (activeNovel?.volumes[0]?.id || ''),
+                  targetVolumeName: '',
+                },
+                position: { x: idx * 320 + 100, y: 250 } // 水平自动布局
+              };
+            });
+
+            // 转换边
+            const newEdges: Edge[] = (dslData.edges || []).map((e, idx) => ({
+              id: e.id || `edge_${Date.now()}_${idx}`,
+              source: e.source,
+              target: e.target,
+              type: 'custom',
+              animated: false
+            }));
+
+            // 核心操作：替换画布
+            setNodes(newNodes);
+            nodesRef.current = newNodes;
+            setEdges(newEdges);
+            
+            terminal.log(`[WORKFLOW] 智能生成完成，已部署 ${newNodes.length} 个节点。`);
+            
+            // 立即停止当前工作流执行，因为生成节点已经消失，工作流结构已彻底改变
+            workflowManager.stop();
+            keepAliveManager.disable();
+            return;
+
+          } catch (parseErr: any) {
+            console.error('DSL Parse Error:', parseErr, aiResponse);
+            throw new Error(`无法解析 AI 返回的工作流协议: ${parseErr.message}\nAI回复内容：${aiResponse.substring(0, 100)}...`);
+          }
+        }
+
         // 1. 获取对应类型的预设
         let typePresets = allPresets[node.data.presetType as string] || [];
         
@@ -2011,7 +2370,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         }
 
         let preset = typePresets.find(p => p.id === node.data.presetId);
-        if (!preset && node.data.typeKey !== 'aiChat') {
+        if (!preset && node.data.typeKey !== 'aiChat' && node.data.presetType !== null) {
           preset = typePresets[0];
           if (!preset) continue;
         }
@@ -2814,7 +3173,13 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   };
 
   const resetWorkflowStatus = () => {
-    if (confirm('确定要重置当前工作流的所有节点执行进度吗？已生成的产出条目将被清理。')) {
+    if (confirm('确定要重置当前工作流吗？\n\n1. 所有节点进度将归零\n2. 已生成的章节正文将保留（如需重新生成请手动删除正文）\n3. 正在运行的任务将被强制中止')) {
+      // 1. 立即物理中断正在运行的异步循环和 AI 请求
+      stopRequestedRef.current = true;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
       const updatedNodes = nodes.map(n => {
         const updates: Partial<WorkflowNodeData> = {
           status: 'pending' as const,
@@ -2823,7 +3188,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         
         // 彻底清理执行期产生的动态关联
         if (n.data.typeKey === 'chapter') {
-          updates.targetVolumeId = '';
+          // 不再重置 targetVolumeId，保留用户手动配置的结果
           updates.targetVolumeName = '';
           // 重置正文生成节点的显示名称为默认值
           updates.label = NODE_CONFIGS.chapter.defaultLabel;
@@ -2837,13 +3202,19 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           }
         };
       });
+
+      // 2. 同步重置所有本地 UI 状态，确保不从旧索引处“继续”
       setNodes(updatedNodes);
       nodesRef.current = updatedNodes; // 同步 Ref
-      setEdges(eds => eds.map(e => ({ ...e, animated: false })));
-      workflowManager.stop();
+      setCurrentNodeIndex(-1);
+      setIsPaused(false);
       setError(null);
+      setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+
+      // 3. 通知全局状态管理器停止
+      workflowManager.stop();
       
-      // 同步更新持久化状态
+      // 4. 同步更新持久化状态
       const updatedWorkflows = workflows.map(w => {
         if (w.id === activeWorkflowId) {
           return {
@@ -2980,21 +3351,44 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              const targetIndex = (wf.id === activeWorkflowId) ? -1 : 0;
+                              if (!confirm(`确定要重置工作流 "${wf.name}" 的进度吗？`)) return;
+
+                              // 如果重置的是当前正在运行的工作流，必须先物理中断
+                              if (wf.id === activeWorkflowId) {
+                                stopRequestedRef.current = true;
+                                if (abortControllerRef.current) {
+                                  abortControllerRef.current.abort();
+                                }
+                              }
+
+                              const targetIndex = -1;
                               const updatedNodes = wf.nodes.map(n => ({
                                 ...n,
                                 data: {
                                   ...n.data,
                                   status: 'pending' as const,
-                                  targetVolumeId: n.data.typeKey === 'chapter' ? '' : n.data.targetVolumeId
+                                  // 重置正文生成节点的动态关联，保留用户配置
+                                  targetVolumeName: n.data.typeKey === 'chapter' ? '' : n.data.targetVolumeName,
+                                  label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label,
                                 }
                               }));
-                              setWorkflows(prev => prev.map(w => w.id === wf.id ? { ...w, nodes: updatedNodes, currentNodeIndex: targetIndex } : w));
+
+                              setWorkflows(prev => prev.map(w => w.id === wf.id ? { ...w, nodes: updatedNodes, currentNodeIndex: targetIndex, lastModified: Date.now() } : w));
+                              
                               if (wf.id === activeWorkflowId) {
                                 setNodes(updatedNodes);
+                                nodesRef.current = updatedNodes;
                                 setCurrentNodeIndex(-1);
                                 setIsPaused(false);
+                                setError(null);
+                                workflowManager.stop();
                               }
+                              
+                              // 显式保存至存储
+                              storage.getWorkflows().then(allWfs => {
+                                const nextWfs = allWfs.map((w: any) => w.id === wf.id ? { ...w, nodes: updatedNodes, currentNodeIndex: -1, lastModified: Date.now() } : w);
+                                storage.saveWorkflows(nextWfs);
+                              });
                             }}
                             className="p-1 hover:text-indigo-400 transition-colors"
                             title="重置进度"
@@ -3148,16 +3542,23 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                   <div className="absolute top-full left-0 mt-2 w-52 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl py-2 z-[110] animate-in slide-in-from-top-2 duration-200">
                     {(Object.keys(NODE_CONFIGS) as Array<NodeTypeKey>).map((type) => {
                       const config = NODE_CONFIGS[type];
+                      const isGenerator = type === 'workflowGenerator';
+                      const isDisabled = (isGenerator && nodes.length > 0) || (!isGenerator && nodes.some(n => n.data.typeKey === 'workflowGenerator'));
+
                       return (
                         <button
                           key={type}
+                          disabled={isDisabled}
                           onClick={() => addNewNode(type)}
-                          className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors group"
+                          className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors group ${isDisabled ? 'opacity-40 cursor-not-allowed grayscale' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
                         >
-                          <div className="p-1.5 rounded bg-gray-900 group-hover:bg-gray-800">
+                          <div className={`p-1.5 rounded bg-gray-900 group-hover:bg-gray-800 ${isGenerator ? 'ring-1 ring-red-500/30 shadow-[0_0_8px_rgba(248,113,113,0.2)]' : ''}`}>
                               <config.icon className="w-4 h-4" style={{ color: config.color }} />
                           </div>
-                          {config.typeLabel}
+                          <div className="flex flex-col">
+                            <span className="font-medium">{config.typeLabel}</span>
+                            {isGenerator && <span className="text-[9px] text-gray-500 leading-none mt-0.5">运行后替换整个画布</span>}
+                          </div>
                         </button>
                       );
                     })}
