@@ -107,17 +107,18 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar */}
-      <div className="h-12 md:h-16 px-1.5 md:px-10 border-b border-white/5 flex flex-row items-center justify-between bg-[#0f172a] shrink-0 gap-1 md:gap-0">
-        <div className="flex items-center gap-1 md:gap-8">
-          <div className="flex items-center bg-slate-800 rounded-lg md:rounded-xl border border-white/5 overflow-hidden p-0.5 scale-[0.82] md:scale-100 origin-left">
+      <div className="h-14 md:h-16 px-2 md:px-10 border-b border-white/5 flex flex-row items-center justify-between bg-[#0f172a] shrink-0 gap-2 md:gap-0">
+        <div className="flex items-center gap-2 md:gap-8 flex-1">
+          {/* 版本切换 */}
+          <div className="flex items-center bg-slate-800/50 rounded-lg border border-white/5 overflow-hidden p-0.5 h-9 md:h-10">
             <button
               onClick={onPrevVersion}
               disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
-              className="p-1.5 text-slate-500 hover:text-white transition-colors disabled:opacity-20"
+              className="px-1.5 h-full text-slate-500 hover:text-white transition-colors disabled:opacity-20"
             >
-              <ChevronLeft className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+              <ChevronLeft className="w-4 h-4" />
             </button>
-            <div className="px-2 md:px-4 text-[10px] md:text-[11px] font-medium text-slate-300 flex items-center gap-1 md:gap-2 whitespace-nowrap">
+            <div className="px-1.5 text-[10px] md:text-[11px] font-medium text-slate-300 flex items-center gap-1 whitespace-nowrap">
               <span>
                 {(() => {
                   const v = activeChapter.versions?.find(v => v.id === activeChapter.activeVersionId);
@@ -131,7 +132,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
                   return '编辑';
                 })()}
               </span>
-              <span className="text-slate-600 font-mono text-[9px] md:text-[11px]">
+              <span className="text-slate-600 font-mono text-[9px]">
                 ({(() => {
                   const versions = activeChapter.versions || [];
                   const idx = versions.findIndex(v => v.id === activeChapter.activeVersionId);
@@ -142,65 +143,68 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
             <button
               onClick={onNextVersion}
               disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
-              className="p-1.5 text-slate-500 hover:text-white transition-colors disabled:opacity-20"
+              className="px-1.5 h-full text-slate-500 hover:text-white transition-colors disabled:opacity-20"
             >
-              <ChevronRight className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="flex items-center gap-1 px-2 md:px-2.5 py-1 md:py-1 bg-white/5 rounded-full border border-white/5 scale-[0.82] md:scale-100 origin-left">
+          {/* Auto开关 */}
+          <div className="flex items-center gap-1.5 px-2 h-9 md:h-10 bg-white/5 rounded-lg border border-white/5">
             <div
               onClick={() => setAutoOptimize(!autoOptimize)}
-              className={`w-5 md:w-6 h-2.5 md:h-3 rounded-full relative cursor-pointer transition-colors ${autoOptimize ? 'bg-primary/40' : 'bg-slate-700'}`}
+              className={`w-6 h-3 rounded-full relative cursor-pointer transition-colors ${autoOptimize ? 'bg-primary/40' : 'bg-slate-700'}`}
             >
-              <div className={`absolute top-0.5 w-1.5 md:w-2 h-1.5 md:h-2 bg-white rounded-full transition-all ${autoOptimize ? 'right-0.5' : 'left-0.5'}`}></div>
+              <div className={`absolute top-0.5 w-2 h-2 bg-white rounded-full transition-all ${autoOptimize ? 'right-0.5' : 'left-0.5'}`}></div>
             </div>
-            <span className="text-[7px] md:text-[8px] text-slate-500 font-bold uppercase tracking-wider">Auto</span>
+            <span className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Auto</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 md:gap-4">
-          <div className="flex items-center scale-[0.88] md:scale-100 origin-right">
+        <div className="flex items-center gap-1.5 md:gap-4">
+          {/* 润色按钮组 */}
+          <div className="flex items-center h-9 md:h-10 overflow-hidden">
             {activeChapter && optimizingChapterIds.has(activeChapter.id) ? (
               <button
                 onClick={() => onStopOptimize(activeChapter.id)}
-                className="bg-red-600 hover:bg-red-500 text-white transition-all flex items-center justify-center px-3 md:px-8 py-1.5 md:py-2 rounded-l-lg text-[11px] md:text-[12px] font-bold gap-1 md:gap-2 shadow-lg shadow-red-900/20"
+                className="bg-red-600 hover:bg-red-500 h-full text-white transition-all flex items-center justify-center px-3 rounded-l-lg text-[11px] font-bold gap-1.5 shadow-lg shadow-red-900/10"
               >
-                <StopCircle className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+                <StopCircle className="w-4 h-4" />
                 <span>停止</span>
               </button>
             ) : (
               <button
                 onClick={() => onOptimize(activeChapter.id, localContent)}
-                className="bg-[#8b5cf6] hover:bg-violet-500 text-white transition-all flex items-center justify-center px-3 md:px-8 py-1.5 md:py-2 rounded-l-lg text-[11px] md:text-[12px] font-bold gap-1 md:gap-2 shadow-lg shadow-primary/10"
+                className="bg-[#8b5cf6] hover:bg-violet-500 h-full text-white transition-all flex items-center justify-center px-3 rounded-l-lg text-[11px] font-bold gap-1.5 shadow-lg shadow-primary/10"
               >
-                <Wand2 className="w-4 h-4 md:w-[18px] md:h-[18px]" />
-                <span>润色</span>
+                <Wand2 className="w-4 h-4" />
+                <span className="whitespace-nowrap">润色</span>
               </button>
             )}
             <button
               onClick={onShowOptimizeSettings}
-              className="bg-primary/90 hover:bg-primary p-1.5 md:p-2 rounded-r-lg md:rounded-r-xl border-l border-white/10 text-white"
+              className="bg-primary/90 hover:bg-primary h-full w-9 flex items-center justify-center rounded-r-lg border-l border-white/10 text-white"
               title="润色设置"
             >
-              <Settings className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+              <Settings className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="flex items-center gap-1 md:gap-2 scale-[0.9] md:scale-100 origin-right">
+          {/* 右侧工具 */}
+          <div className="flex items-center gap-1 h-9 md:h-10">
             <button
               onClick={onShowAnalysisResult}
-              className="p-1.5 md:p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-lg transition-all"
-              title="查看本章分析"
+              className="w-9 h-full flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+              title="查看分析"
             >
-              <BarChart2 className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+              <BarChart2 className="w-4.5 h-4.5" />
             </button>
             <button
               onClick={handleToggleEditWithSync}
-              className={`p-1.5 md:p-2 hover:bg-white/5 rounded-lg transition-all ${isEditingChapter ? 'text-primary' : 'text-slate-500 hover:text-white'}`}
-              title={isEditingChapter ? "保存/退出编辑" : "编辑模式"}
+              className={`w-9 h-full flex items-center justify-center hover:bg-white/5 rounded-lg transition-all ${isEditingChapter ? 'text-primary bg-primary/10' : 'text-slate-500 hover:text-white'}`}
+              title={isEditingChapter ? "保存" : "编辑"}
             >
-              {isEditingChapter ? <Save className="w-4.5 h-4.5 md:w-[18px] md:h-[18px]" /> : <Edit className="w-4.5 h-4.5 md:w-[18px] md:h-[18px]" />}
+              {isEditingChapter ? <Save className="w-4.5 h-4.5" /> : <Edit className="w-4.5 h-4.5" />}
             </button>
           </div>
         </div>
