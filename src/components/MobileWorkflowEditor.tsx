@@ -907,6 +907,65 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   const [error, setError] = useState<string | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OutputEntry | null>(null);
 
+  // --- 拓扑排序 (性能优化：使用 useMemo 避免渲染阻塞) ---
+  const orderedNodes = React.useMemo(() => {
+    const startTime = Date.now();
+    const adjacencyList = new Map<string, string[]>();
+    const inDegree = new Map<string, number>();
+    
+    const validNodes = nodes.filter(n => n && n.id);
+    const validEdges = edges.filter(e => e && e.source && e.target);
+
+    validNodes.forEach(node => {
+      adjacencyList.set(node.id, []);
+      inDegree.set(node.id, 0);
+    });
+    
+    validEdges.forEach(edge => {
+      if (adjacencyList.has(edge.source) && adjacencyList.has(edge.target)) {
+        adjacencyList.get(edge.source)?.push(edge.target);
+        inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
+      }
+    });
+    
+    const queue: string[] = [];
+    const startNodes = validNodes.filter(n => (inDegree.get(n.id) || 0) === 0)
+                           .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
+    
+    startNodes.forEach(n => queue.push(n.id));
+    
+    const resultIds: string[] = [];
+    const currentInDegree = new Map(inDegree);
+
+    while (queue.length > 0) {
+      const uId = queue.shift()!;
+      resultIds.push(uId);
+      
+      const neighbors = adjacencyList.get(uId) || [];
+      const sortedNeighbors = neighbors
+        .map(id => validNodes.find(n => n.id === id)!)
+        .filter(Boolean)
+        .sort((a: any, b: any) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
+
+      sortedNeighbors.forEach((v: any) => {
+        const newDegree = (currentInDegree.get(v.id) || 0) - 1;
+        currentInDegree.set(v.id, newDegree);
+        if (newDegree === 0) queue.push(v.id);
+      });
+    }
+    
+    const ordered = resultIds.map(id => validNodes.find(n => n.id === id)!).filter(Boolean);
+    const remaining = validNodes.filter(n => !resultIds.includes(n.id))
+                          .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
+    
+    const finalNodes = [...ordered, ...remaining];
+    const duration = Date.now() - startTime;
+    if (duration > 15) {
+      terminal.log(`[PERF] MobileWorkflowEditor.orderedNodes recalculated: ${duration}ms`);
+    }
+    return finalNodes;
+  }, [nodes, edges]);
+
   // 性能优化：显式使用 useMemo 锁定 nodeTypes 和 edgeTypes，消除 React Flow 的重绘警告
   const nodeTypes = useMemo(() => ({
     custom: CustomNode,
@@ -1410,64 +1469,6 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     e.target.value = '';
   };
 
-  // --- 拓扑排序 (性能优化：使用 useMemo 避免渲染阻塞) ---
-  const orderedNodes = React.useMemo(() => {
-    const startTime = Date.now();
-    const adjacencyList = new Map<string, string[]>();
-    const inDegree = new Map<string, number>();
-    
-    const validNodes = nodes.filter(n => n && n.id);
-    const validEdges = edges.filter(e => e && e.source && e.target);
-
-    validNodes.forEach(node => {
-      adjacencyList.set(node.id, []);
-      inDegree.set(node.id, 0);
-    });
-    
-    validEdges.forEach(edge => {
-      if (adjacencyList.has(edge.source) && adjacencyList.has(edge.target)) {
-        adjacencyList.get(edge.source)?.push(edge.target);
-        inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
-      }
-    });
-    
-    const queue: string[] = [];
-    const startNodes = validNodes.filter(n => (inDegree.get(n.id) || 0) === 0)
-                           .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
-    
-    startNodes.forEach(n => queue.push(n.id));
-    
-    const resultIds: string[] = [];
-    const currentInDegree = new Map(inDegree);
-
-    while (queue.length > 0) {
-      const uId = queue.shift()!;
-      resultIds.push(uId);
-      
-      const neighbors = adjacencyList.get(uId) || [];
-      const sortedNeighbors = neighbors
-        .map(id => validNodes.find(n => n.id === id)!)
-        .filter(Boolean)
-        .sort((a: any, b: any) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
-
-      sortedNeighbors.forEach((v: any) => {
-        const newDegree = (currentInDegree.get(v.id) || 0) - 1;
-        currentInDegree.set(v.id, newDegree);
-        if (newDegree === 0) queue.push(v.id);
-      });
-    }
-    
-    const ordered = resultIds.map(id => validNodes.find(n => n.id === id)!).filter(Boolean);
-    const remaining = validNodes.filter(n => !resultIds.includes(n.id))
-                          .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
-    
-    const finalNodes = [...ordered, ...remaining];
-    const duration = Date.now() - startTime;
-    if (duration > 15) {
-      terminal.log(`[PERF] MobileWorkflowEditor.orderedNodes recalculated: ${duration}ms`);
-    }
-    return finalNodes;
-  }, [nodes, edges]);
 
   // 辅助函数：同步节点状态并强制持久化到磁盘
   const syncNodeStatus = async (nodeId: string, updates: Partial<WorkflowNodeData>, currentIndex: number) => {
