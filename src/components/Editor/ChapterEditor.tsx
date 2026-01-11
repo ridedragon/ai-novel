@@ -107,9 +107,9 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar */}
-      <div className="h-auto md:h-16 px-4 md:px-10 border-b border-[#1e2433]/60 flex flex-col md:flex-row items-center justify-between bg-[#0a0c12] shrink-0 py-3 md:py-0 gap-4 md:gap-0">
-        <div className="flex items-center justify-between w-full md:w-auto gap-4 md:gap-8">
-          <div className="flex items-center bg-[#12151e] rounded-lg border border-[#1e2433] overflow-hidden p-0.5 scale-90 md:scale-100 origin-left">
+      <div className="h-auto md:h-16 px-3 md:px-10 border-b border-white/5 flex flex-col md:flex-row items-center justify-between bg-[#0f172a] shrink-0 py-2 md:py-0 gap-2 md:gap-0">
+        <div className="flex items-center justify-between w-full md:w-auto gap-2 md:gap-8">
+          <div className="flex items-center bg-slate-800 rounded-xl border border-white/5 overflow-hidden p-0.5 scale-[0.85] md:scale-100 origin-left">
             <button 
               onClick={onPrevVersion}
               disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
@@ -148,19 +148,19 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
             </button>
           </div>
 
-          <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-1 md:py-1.5 bg-[#12151e]/40 rounded-full border border-[#1e2433]/60">
+          <div className="flex items-center gap-2 px-2.5 py-1 bg-white/5 rounded-full border border-white/5 scale-[0.85] md:scale-100 origin-right">
             <div
               onClick={() => setAutoOptimize(!autoOptimize)}
-              className={`w-6 h-3 md:w-7 md:h-3.5 rounded-full relative cursor-pointer transition-colors ${autoOptimize ? 'bg-[#8b5cf6]/40' : 'bg-slate-700'}`}
+              className={`w-6 h-3 rounded-full relative cursor-pointer transition-colors ${autoOptimize ? 'bg-primary/40' : 'bg-slate-700'}`}
             >
-              <div className={`absolute top-0.5 w-2 h-2 md:w-2.5 md:h-2.5 bg-white rounded-full transition-all ${autoOptimize ? 'right-0.5' : 'left-0.5'}`}></div>
+              <div className={`absolute top-0.5 w-2 h-2 bg-white rounded-full transition-all ${autoOptimize ? 'right-0.5' : 'left-0.5'}`}></div>
             </div>
-            <span className="text-[8px] md:text-[10px] text-slate-400 font-bold uppercase tracking-wider">Auto Polish</span>
+            <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Auto</span>
           </div>
         </div>
 
-        <div className="flex items-center justify-between w-full md:w-auto gap-4 md:gap-8">
-          <div className="flex items-center flex-1 md:flex-none">
+        <div className="flex items-center justify-between w-full md:w-auto gap-2 md:gap-8">
+          <div className="flex items-center flex-1 md:flex-none scale-95 md:scale-100 origin-left">
             {activeChapter && optimizingChapterIds.has(activeChapter.id) ? (
               <button 
                 onClick={() => onStopOptimize(activeChapter.id)}
@@ -180,24 +180,24 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
             )}
             <button
               onClick={onShowOptimizeSettings}
-              className="bg-[#8b5cf6]/90 hover:bg-[#8b5cf6] p-1.5 md:p-2 rounded-r-lg border-l border-white/10 text-white"
+              className="bg-primary/90 hover:bg-primary p-1.5 md:p-2 rounded-r-xl border-l border-white/10 text-white"
               title="润色设置"
             >
-              <Settings className="w-[18px] h-[18px]" />
+              <Settings className="w-4 h-4 md:w-[18px] md:h-[18px]" />
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button 
+          <div className="flex items-center gap-1 md:gap-2">
+            <button
               onClick={onShowAnalysisResult}
-              className="p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-md transition-all" 
+              className="p-1.5 md:p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-lg transition-all"
               title="查看本章分析"
             >
-              <BarChart2 className="w-[18px] h-[18px]" />
+              <BarChart2 className="w-4 h-4 md:w-[18px] md:h-[18px]" />
             </button>
-            <button 
+            <button
               onClick={handleToggleEditWithSync}
-              className={`p-2 hover:bg-white/5 rounded-md transition-all ${isEditingChapter ? 'text-[#8b5cf6]' : 'text-slate-500 hover:text-white'}`}
+              className={`p-1.5 md:p-2 hover:bg-white/5 rounded-lg transition-all ${isEditingChapter ? 'text-primary' : 'text-slate-500 hover:text-white'}`}
               title={isEditingChapter ? "保存/退出编辑" : "编辑模式"}
             >
               {isEditingChapter ? <Save className="w-[18px] h-[18px]" /> : <Edit className="w-[18px] h-[18px]" />}

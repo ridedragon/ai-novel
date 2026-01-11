@@ -7195,17 +7195,17 @@ function App() {
             <BookOpen className="w-[18px] h-[18px]" />
           </button>
           <div className="h-4 w-[1px] bg-[#1e2433] mx-2"></div>
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-[#12151e] border border-[#1e2433] hover:border-slate-600 rounded-md transition-all text-[11px] text-slate-300" onClick={() => setShowAdvancedSettings(true)}>
+          <button className="flex items-center gap-2 px-3 py-1.5 bg-surface-dark border border-white/5 hover:border-slate-600 rounded-lg transition-all text-[11px] text-slate-300" onClick={() => setShowAdvancedSettings(true)}>
             <Network className="w-4 h-4 text-[#8b5cf6]" />
-            <span>对话补全源</span>
+            <span className="hidden md:inline">对话补全源</span>
           </button>
         </>
       }
       headerRight={
-        <div className="flex items-center gap-1 bg-[#12151e]/50 px-2 py-1 rounded-lg border border-[#1e2433]/60">
-          <span className="text-[9px] text-slate-600 font-bold px-2 tracking-widest uppercase">Toolbox</span>
+        <div className="flex items-center gap-1 bg-surface-dark/40 px-1 md:px-2 py-1 rounded-xl border border-white/5">
+          <span className="hidden lg:inline text-[9px] text-slate-600 font-bold px-2 tracking-widest uppercase">Toolbox</span>
           <button
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-white/10 ${keepAliveMode ? 'text-green-500' : 'text-slate-400'}`}
+            className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-white/10 ${keepAliveMode ? 'text-green-500' : 'text-slate-400'}`}
             onClick={async () => {
               if (keepAliveMode) {
                   keepAliveManager.disable()
@@ -7222,14 +7222,14 @@ function App() {
             }}
           >
             <Zap className="w-4 h-4" />
-            <span>防断连</span>
+            <span className="hidden md:inline">防断连</span>
           </button>
           <div
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs font-medium cursor-pointer transition-colors ${longTextMode ? 'bg-[#3b82f6]/10 text-[#3b82f6] border-[#3b82f6]/30' : 'text-slate-400 border-transparent hover:bg-white/5'}`}
+            className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${longTextMode ? 'bg-[#3b82f6]/10 text-[#3b82f6] border-[#3b82f6]/30' : 'text-slate-400 border-transparent hover:bg-white/5'}`}
             onClick={() => setLongTextMode(!longTextMode)}
           >
             <BookMarked className="w-4 h-4" />
-            <span>长文模式</span>
+            <span className="hidden md:inline">长文模式</span>
             {longTextMode && (
               <select
                 value={contextScope}
@@ -7246,18 +7246,18 @@ function App() {
           <div className="h-4 w-[1px] bg-[#1e2433] mx-1"></div>
           <button className="flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-white/10 text-slate-400" onClick={() => setShowRegexModal(true)}>
             <Code className="w-4 h-4" />
-            <span>正则</span>
+            <span className="hidden md:inline">正则</span>
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-white/10 text-slate-400" onClick={() => setShowSettings(true)}>
+          <button className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-white/10 text-slate-400" onClick={() => setShowSettings(true)}>
             <Settings className="w-4 h-4" />
-            <span>设置</span>
+            <span className="hidden md:inline">设置</span>
           </button>
           <button
-            className="flex items-center gap-2 bg-[#8b5cf6]/20 text-[#8b5cf6] px-4 py-1.5 rounded border border-[#8b5cf6]/40 text-xs font-semibold hover:bg-[#8b5cf6]/30 transition-all ml-1"
+            className="flex items-center gap-2 bg-primary/10 text-primary px-2 md:px-4 py-1.5 rounded-lg border border-primary/20 text-xs font-semibold hover:bg-primary/20 transition-all ml-1"
             onClick={() => setShowWorkflowEditor(true)}
           >
             <GitBranch className="w-4 h-4" />
-            <span>可视化工作流</span>
+            <span className="hidden md:inline">可视化工作流</span>
           </button>
         </div>
       }
