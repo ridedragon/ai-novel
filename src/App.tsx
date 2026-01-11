@@ -7188,21 +7188,21 @@ function App() {
           <button className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400" title="返回主界面" onClick={() => setActiveNovelId(null)}>
             <Home className="w-[18px] h-[18px]" />
           </button>
-          <button className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400" title="下载整本书" onClick={(e) => activeNovel && handleExportNovel(activeNovel, e)}>
+          <button className="hidden md:block p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400" title="下载整本书" onClick={(e) => activeNovel && handleExportNovel(activeNovel, e)}>
             <Download className="w-[18px] h-[18px]" />
           </button>
-          <button className={`p-2 hover:bg-white/10 rounded-full transition-colors ${showOutline ? 'text-[var(--theme-color)]' : 'text-slate-400'}`} title="自动化中心" onClick={() => { if (!showOutline) setCreationModule('menu'); setShowOutline(!showOutline); }}>
+          <button className={`p-2 hover:bg-white/10 rounded-full transition-colors ${showOutline ? 'text-primary' : 'text-slate-400'}`} title="自动化中心" onClick={() => { if (!showOutline) setCreationModule('menu'); setShowOutline(!showOutline); }}>
             <BookOpen className="w-[18px] h-[18px]" />
           </button>
-          <div className="h-4 w-[1px] bg-[#1e2433] mx-2"></div>
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-surface-dark border border-white/5 hover:border-slate-600 rounded-lg transition-all text-[11px] text-slate-300" onClick={() => setShowAdvancedSettings(true)}>
-            <Network className="w-4 h-4 text-[#8b5cf6]" />
+          <div className="hidden md:block h-4 w-[1px] bg-white/10 mx-2"></div>
+          <button className="flex items-center gap-2 px-2 md:px-3 py-1.5 bg-slate-800 border border-white/5 hover:border-slate-600 rounded-lg transition-all text-[11px] text-slate-300" onClick={() => setShowAdvancedSettings(true)}>
+            <Network className="w-4 h-4 text-primary" />
             <span className="hidden md:inline">对话补全源</span>
           </button>
         </>
       }
       headerRight={
-        <div className="flex items-center gap-1 bg-surface-dark/40 px-1 md:px-2 py-1 rounded-xl border border-white/5">
+        <div className="flex items-center gap-1 bg-slate-800/40 px-1 md:px-2 py-1 rounded-xl border border-white/5">
           <span className="hidden lg:inline text-[9px] text-slate-600 font-bold px-2 tracking-widest uppercase">Toolbox</span>
           <button
             className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-white/10 ${keepAliveMode ? 'text-green-500' : 'text-slate-400'}`}
@@ -7225,7 +7225,7 @@ function App() {
             <span className="hidden md:inline">防断连</span>
           </button>
           <div
-            className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${longTextMode ? 'bg-[#3b82f6]/10 text-[#3b82f6] border-[#3b82f6]/30' : 'text-slate-400 border-transparent hover:bg-white/5'}`}
+            className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${longTextMode ? 'bg-primary/10 text-primary border-primary/30' : 'text-slate-400 border-transparent hover:bg-white/5'}`}
             onClick={() => setLongTextMode(!longTextMode)}
           >
             <BookMarked className="w-4 h-4" />
