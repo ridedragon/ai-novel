@@ -1,9 +1,17 @@
 import {
+  BookOpen,
+  CheckCircle,
+  Clock,
   Filter,
+  FolderHeart,
+  Grid,
+  Layers,
   Plus,
   Search,
   Trash2,
-  X
+  TrendingUp,
+  X,
+  Zap
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { Novel } from '../types';
@@ -45,7 +53,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
     const matchesStatus = selectedStatus === '全部' || n.status === selectedStatus;
     return matchesSearch && matchesCategory && matchesStatus;
   }).sort((a, b) => {
-    if (sortBy === 'updated') return b.createdAt - a.createdAt;
+    if (sortBy === 'updated') return b.createdAt - a.createdAt; 
     if (sortBy === 'created') return b.createdAt - a.createdAt;
     if (sortBy === 'words') {
       const aWords = a.chapters?.reduce((acc, c) => acc + (c.content?.length || 0), 0) || 0;
@@ -70,47 +78,26 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#0F172A] text-slate-100 flex flex-col font-sans selection:bg-blue-500/30 relative">
-      <style>{`
-        .glass-sheet {
-            background: rgba(30, 41, 59, 0.85);
-            backdrop-filter: blur(24px);
-            border-top: 1px solid rgba(255, 255, 255, 0.12);
-            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
-        }
-        .chip-active {
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
-            border-color: rgba(59, 130, 246, 0.6);
-            color: #60A5FA;
-            box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
-        }
-        .hide-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .hide-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-      `}</style>
+    <div className="min-h-screen bg-[#0f172a] text-slate-100 flex flex-col font-sans selection:bg-primary/30 relative">
       
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-40 bg-[#0F172A]/80 backdrop-blur-md border-b border-white/5 px-4 h-16 flex items-center justify-between">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-[#0f172a]/80 backdrop-blur-md border-b border-white/5 px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
-            <span className="material-icons-round">auto_stories</span>
+            <BookOpen className="w-6 h-6" />
           </div>
           <h1 className="text-lg font-bold tracking-tight">我的小说库</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <button 
             onClick={() => setShowSearchInput(!showSearchInput)}
             className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
           >
             <Search className="w-5 h-5" />
           </button>
-          <button
+          <button 
             onClick={() => setShowFilterPanel(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E293B] border border-white/10 rounded-lg text-sm font-medium"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 border border-white/10 rounded-lg text-sm font-medium"
           >
             <Filter className="w-4 h-4" />
             <span>筛选</span>
@@ -118,7 +105,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
         </div>
 
         {showSearchInput && (
-          <div className="absolute top-16 left-0 right-0 p-4 bg-[#0F172A] border-b border-white/5 animate-in slide-in-from-top duration-200 z-50">
+          <div className="absolute top-16 left-0 right-0 p-4 bg-[#0f172a] border-b border-white/5 animate-in slide-in-from-top duration-200 z-50">
             <div className="relative">
               <input
                 autoFocus
@@ -128,7 +115,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-              <button
+              <button 
                 onClick={() => setShowSearchInput(false)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
               >
@@ -147,21 +134,21 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
 
         <div className="grid grid-cols-2 gap-4">
           {filteredNovels.map(novel => (
-            <div
+            <div 
               key={novel.id}
               onClick={() => onSelectNovel(novel.id)}
-              className="group relative aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer shadow-lg active:scale-95 transition-transform bg-[#1E293B]"
+              className="group relative aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer shadow-lg active:scale-95 transition-transform bg-slate-800 border border-white/5"
             >
-              <img
-                alt={novel.title}
-                className="absolute inset-0 w-full h-full object-cover"
-                src={novel.coverUrl || '/src/默认封面/默认封面.jpg'}
+              <img 
+                alt={novel.title} 
+                className="absolute inset-0 w-full h-full object-cover" 
+                src={novel.coverUrl || '/src/默认封面/默认封面.jpg'} 
                 onError={(e) => (e.currentTarget.src = '/src/默认封面/默认封面.jpg')}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/30 to-transparent"></div>
               <div className="absolute bottom-0 left-0 right-0 p-3">
                 {novel.category && (
-                  <span className="inline-block px-1.5 py-0.5 bg-blue-500/80 text-[8px] font-bold text-white rounded uppercase mb-1.5">
+                  <span className="inline-block px-1.5 py-0.5 bg-blue-600/80 text-[8px] font-bold text-white rounded uppercase mb-1.5">
                     {novel.category}
                   </span>
                 )}
@@ -173,7 +160,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
               </div>
               
               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
+                <button 
                   onClick={(e) => { e.stopPropagation(); onDeleteNovel(novel.id); }}
                   className="p-1.5 bg-red-500/20 backdrop-blur-md rounded-lg text-red-200 border border-red-500/20"
                 >
@@ -183,7 +170,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
             </div>
           ))}
 
-          <div
+          <div 
             onClick={onCreateNovel}
             className="border-2 border-dashed border-white/10 rounded-2xl aspect-[3/4.2] flex flex-col items-center justify-center p-4 text-center hover:bg-white/5 active:scale-95 transition-all"
           >
@@ -204,14 +191,14 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
             <div className="text-[8px] uppercase tracking-wider font-medium">生成章节</div>
           </div>
           <div>
-            <div className="text-lg font-bold">24</div>
+            <div className="text-lg font-bold">{novels.length}</div>
             <div className="text-[8px] uppercase tracking-wider font-medium">模型连接</div>
           </div>
         </div>
       </main>
 
       {/* Floating Action Button */}
-      <button
+      <button 
         onClick={onCreateNovel}
         className="fixed bottom-24 right-6 w-14 h-14 bg-gradient-to-tr from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white shadow-2xl shadow-blue-500/40 active:scale-90 transition-transform z-30"
       >
@@ -219,28 +206,24 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
       </button>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-[#0F172A]/95 backdrop-blur-lg border-t border-white/5 flex items-center justify-around px-6 z-40 pb-safe">
-        <button onClick={() => onNavigate?.('dashboard')} className="text-blue-500">
-          <span className="material-icons-round">grid_view</span>
+      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-[#0f172a]/95 backdrop-blur-lg border-t border-white/5 flex items-center justify-around px-6 z-40 pb-safe">
+        <button onClick={() => onNavigate?.('dashboard')} className="text-blue-500"><Grid className="w-6 h-6" /></button>
+        <button onClick={() => onNavigate?.('automation')} className="text-slate-500"><Zap className="w-6 h-6" /></button>
+        <button onClick={() => onNavigate?.('library')} className="text-slate-500"><FolderHeart className="w-6 h-6" /></button>
+        <button onClick={onOpenSettings} className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 ring-1 ring-white/20 flex items-center justify-center">
+          <span className="text-[8px] font-bold">AI</span>
         </button>
-        <button onClick={() => onNavigate?.('automation')} className="text-slate-500">
-          <span className="material-icons-round">bolt</span>
-        </button>
-        <button onClick={() => onNavigate?.('library')} className="text-slate-500">
-          <span className="material-icons-round">folder_special</span>
-        </button>
-        <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 ring-1 ring-white/20"></div>
       </nav>
 
       {/* Filter Sheet */}
       {showFilterPanel && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] transition-opacity flex flex-col justify-end">
           <div className="absolute inset-0" onClick={() => setShowFilterPanel(false)}></div>
-          <div className="glass-sheet w-full rounded-t-3xl p-6 pb-safe animate-in slide-in-from-bottom duration-300">
+          <div className="relative w-full bg-[#1e293b]/85 backdrop-blur-3xl rounded-t-3xl p-6 border-t border-white/10 animate-in slide-in-from-bottom duration-300 shadow-2xl">
             <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6"></div>
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-xl font-bold">筛选与排序</h2>
-              <button
+              <button 
                 onClick={() => {
                   setSelectedCategory('全部');
                   setSelectedStatus('全部');
@@ -255,15 +238,15 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
             <div className="space-y-8 max-h-[60vh] overflow-y-auto hide-scrollbar">
               <section>
                 <div className="flex items-center gap-2 mb-4 text-slate-400">
-                  <span className="material-symbols-outlined text-[20px]">category</span>
+                  <Layers className="w-5 h-5" />
                   <span className="text-xs font-bold uppercase tracking-wider">作品题材</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {['全部', '科幻', '悬疑', '奇幻', '言情', '都市'].map(cat => (
-                    <button
+                    <button 
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`px-4 py-2 text-sm font-medium rounded-xl border transition-all ${selectedCategory === cat ? 'chip-active' : 'border-white/10 bg-white/5 text-slate-400'}`}
+                      className={`px-4 py-2 text-sm font-medium rounded-xl border transition-all ${selectedCategory === cat ? 'bg-blue-500/20 border-blue-500/50 text-blue-400 shadow-lg shadow-blue-500/10' : 'border-white/10 bg-white/5 text-slate-400'}`}
                     >
                       {cat}
                     </button>
@@ -273,20 +256,20 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
 
               <section>
                 <div className="flex items-center gap-2 mb-4 text-slate-400">
-                  <span className="material-symbols-outlined text-[20px]">motion_photos_on</span>
+                  <TrendingUp className="w-5 h-5" />
                   <span className="text-xs font-bold uppercase tracking-wider">创作状态</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <button
+                  <button 
                     onClick={() => setSelectedStatus('连载中')}
-                    className={`flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-xl border transition-all ${selectedStatus === '连载中' ? 'chip-active' : 'border-white/10 bg-white/5 text-slate-400'}`}
+                    className={`flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-xl border transition-all ${selectedStatus === '连载中' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400 shadow-lg shadow-blue-500/10' : 'border-white/10 bg-white/5 text-slate-400'}`}
                   >
                     <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
                     连载中
                   </button>
-                  <button
+                  <button 
                     onClick={() => setSelectedStatus('已完结')}
-                    className={`flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-xl border transition-all ${selectedStatus === '已完结' ? 'chip-active' : 'border-white/10 bg-white/5 text-slate-400'}`}
+                    className={`flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-xl border transition-all ${selectedStatus === '已完结' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400 shadow-lg shadow-blue-500/10' : 'border-white/10 bg-white/5 text-slate-400'}`}
                   >
                     <span className="w-2 h-2 rounded-full bg-slate-500"></span>
                     已完结
@@ -296,7 +279,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
 
               <section>
                 <div className="flex items-center gap-2 mb-4 text-slate-400">
-                  <span className="material-symbols-outlined text-[20px]">sort</span>
+                  <Clock className="w-5 h-5" />
                   <span className="text-xs font-bold uppercase tracking-wider">排序方式</span>
                 </div>
                 <div className="space-y-2">
@@ -305,21 +288,21 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                     { id: 'words', label: '字数总计' },
                     { id: 'created', label: '创建日期' }
                   ].map(option => (
-                    <button
+                    <button 
                       key={option.id}
                       onClick={() => setSortBy(option.id as any)}
                       className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm transition-colors border ${sortBy === option.id ? 'bg-white/10 border-white/10 text-white' : 'bg-transparent border-transparent text-slate-400'}`}
                     >
                       <span className="font-medium">{option.label}</span>
-                      {sortBy === option.id && <span className="material-symbols-outlined text-blue-500">check_circle</span>}
+                      {sortBy === option.id && <CheckCircle className="w-4 h-4 text-blue-500" />}
                     </button>
                   ))}
                 </div>
               </section>
             </div>
             
-            <div className="mt-8">
-              <button
+            <div className="mt-8 pb-safe">
+              <button 
                 onClick={() => setShowFilterPanel(false)}
                 className="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all"
               >

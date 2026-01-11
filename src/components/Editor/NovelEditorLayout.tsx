@@ -21,18 +21,16 @@ export const NovelEditorLayout: React.FC<NovelEditorLayoutProps> = ({
   const { isMobileSidebarOpen, setIsMobileSidebarOpen } = useLayout();
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col bg-[#0a0c12] text-slate-300 antialiased font-sans">
+    <div className="h-screen overflow-hidden flex flex-col bg-[#0f172a] text-slate-300 antialiased font-sans">
       {/* Header */}
-      <header className="shrink-0 z-50 bg-[#0a0c12] border-b border-[#1e2433]">
-        <div className="h-12 md:h-16 flex items-center justify-between px-3 md:px-6 border-b border-white/5 bg-[#0a0c12]/80 backdrop-blur-md">
-          <div className="flex items-center gap-2 md:gap-3">
-            {headerLeft}
-          </div>
-          <div className="flex items-center gap-2 md:gap-3">
-            {headerRight}
-            <div className="hidden md:flex w-10 h-10 rounded-xl bg-primary/10 items-center justify-center text-primary shadow-lg border border-white/5 ml-2 uppercase font-bold text-xs">
-              AI
-            </div>
+      <header className="h-16 border-b border-white/5 bg-[#0f172a]/80 backdrop-blur-md flex items-center justify-between px-3 md:px-6 shrink-0 z-40">
+        <div className="flex items-center gap-2">
+          {headerLeft}
+        </div>
+        <div className="flex items-center gap-2 md:gap-3">
+          {headerRight}
+          <div className="hidden md:flex w-10 h-10 rounded-xl bg-primary/10 items-center justify-center text-primary shadow-lg border border-white/5 ml-2 uppercase font-bold text-xs">
+            AI
           </div>
         </div>
       </header>
