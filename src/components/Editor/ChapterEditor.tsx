@@ -107,18 +107,19 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar */}
-      <div className="h-auto md:h-16 px-3 md:px-10 border-b border-white/5 flex flex-col md:flex-row items-center justify-between bg-[#0f172a] shrink-0 py-1.5 md:py-0 gap-1.5 md:gap-0">
-        <div className="flex items-center justify-between w-full md:w-auto gap-2 md:gap-8">
-          <div className="flex items-center bg-slate-800 rounded-lg border border-white/5 overflow-hidden p-0.5 scale-[0.8] md:scale-100 origin-left">
-            <button 
+      <div className="h-auto md:h-16 px-2 md:px-10 border-b border-white/5 flex flex-col bg-[#0f172a] shrink-0">
+        {/* Row 1: Versions & Auto Switch */}
+        <div className="flex items-center justify-between w-full h-10 md:h-full md:w-auto gap-1 border-b border-white/5 md:border-b-0">
+          <div className="flex items-center bg-slate-800 rounded-lg border border-white/5 overflow-hidden p-0.5 scale-[0.75] md:scale-100 origin-left">
+            <button
               onClick={onPrevVersion}
               disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
-              className="p-1.5 text-slate-500 hover:text-white transition-colors disabled:opacity-20"
+              className="p-1 text-slate-500 hover:text-white transition-colors disabled:opacity-20"
             >
-              <ChevronLeft className="w-[18px] h-[18px]" />
+              <ChevronLeft className="w-4 h-4 md:w-[18px] md:h-[18px]" />
             </button>
-            <div className="px-2 md:px-4 text-[10px] md:text-[11px] font-medium text-slate-300 flex items-center gap-1 md:gap-2">
-              <span>
+            <div className="px-1 md:px-4 text-[10px] md:text-[11px] font-medium text-slate-300 flex items-center gap-1 md:gap-2">
+              <span className="truncate max-w-[60px] md:max-w-none">
                 {(() => {
                   const v = activeChapter.versions?.find(v => v.id === activeChapter.activeVersionId);
                   if (!v) return '当前版本';
@@ -126,12 +127,12 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
                   if (v.type === 'optimized') {
                     const optimizedVersions = activeChapter.versions?.filter(ver => ver.type === 'optimized') || [];
                     const optIdx = optimizedVersions.findIndex(ver => ver.id === v.id);
-                    return `优化版本 ${optIdx !== -1 ? optIdx + 1 : ''}`;
+                    return `优化V${optIdx !== -1 ? optIdx + 1 : ''}`;
                   }
                   return '编辑版';
                 })()}
               </span>
-              <span className="text-slate-600 font-mono">
+              <span className="text-slate-600 font-mono text-[9px] md:text-[11px]">
                 ({(() => {
                   const versions = activeChapter.versions || [];
                   const idx = versions.findIndex(v => v.id === activeChapter.activeVersionId);
@@ -139,28 +140,29 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
                 })()})
               </span>
             </div>
-            <button 
+            <button
               onClick={onNextVersion}
               disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
-              className="p-1.5 text-slate-500 hover:text-white transition-colors disabled:opacity-20"
+              className="p-1 text-slate-500 hover:text-white transition-colors disabled:opacity-20"
             >
-              <ChevronRight className="w-[18px] h-[18px]" />
+              <ChevronRight className="w-4 h-4 md:w-[18px] md:h-[18px]" />
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 px-2 py-0.5 md:px-2.5 md:py-1 bg-white/5 rounded-full border border-white/5 scale-[0.8] md:scale-100 origin-right">
+          <div className="flex items-center gap-1 px-1.5 py-0.5 md:px-2.5 md:py-1 bg-white/5 rounded-full border border-white/5 scale-[0.75] md:scale-100 origin-right">
             <div
               onClick={() => setAutoOptimize(!autoOptimize)}
-              className={`w-6 h-3 rounded-full relative cursor-pointer transition-colors ${autoOptimize ? 'bg-primary/40' : 'bg-slate-700'}`}
+              className={`w-5 h-2.5 md:w-6 md:h-3 rounded-full relative cursor-pointer transition-colors ${autoOptimize ? 'bg-primary/40' : 'bg-slate-700'}`}
             >
-              <div className={`absolute top-0.5 w-2 h-2 bg-white rounded-full transition-all ${autoOptimize ? 'right-0.5' : 'left-0.5'}`}></div>
+              <div className={`absolute top-0.5 w-1.5 h-1.5 md:w-2 md:h-2 bg-white rounded-full transition-all ${autoOptimize ? 'right-0.5' : 'left-0.5'}`}></div>
             </div>
-            <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Auto</span>
+            <span className="text-[7px] md:text-[8px] text-slate-500 font-bold uppercase tracking-wider">Auto</span>
           </div>
         </div>
 
-        <div className="flex items-center justify-between w-full md:w-auto gap-2 md:gap-8">
-          <div className="flex items-center flex-none scale-90 md:scale-100 origin-left">
+        {/* Row 2: Actions */}
+        <div className="flex items-center justify-between w-full h-10 md:h-full md:w-auto gap-2 py-1 md:py-0">
+          <div className="flex items-center flex-none scale-[0.85] md:scale-100 origin-left">
             {activeChapter && optimizingChapterIds.has(activeChapter.id) ? (
               <button
                 onClick={() => onStopOptimize(activeChapter.id)}
@@ -187,13 +189,13 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
             </button>
           </div>
 
-          <div className="flex items-center gap-0.5 md:gap-2">
+          <div className="flex items-center gap-0.5 md:gap-2 scale-[0.85] md:scale-100 origin-right">
             <button
               onClick={onShowAnalysisResult}
               className="p-1 md:p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-lg transition-all"
               title="查看本章分析"
             >
-              <BarChart2 className="w-3.5 h-3.5 md:w-[18px] md:h-[18px]" />
+              <BarChart2 className="w-4 h-4 md:w-[18px] md:h-[18px]" />
             </button>
             <button
               onClick={handleToggleEditWithSync}
