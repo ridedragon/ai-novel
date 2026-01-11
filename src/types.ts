@@ -151,6 +151,10 @@ export interface Novel {
   volumes: NovelVolume[]; // 分卷列表
   systemPrompt: string;
   createdAt: number;
+  coverUrl?: string;
+  description?: string;
+  category?: string; // 作品类型/分类
+  status?: '连载中' | '已完结'; // 创作状态
   outline?: OutlineItem[]; // Deprecated, use outlineSets
   outlineSets?: OutlineSet[];
   characters?: CharacterItem[]; // Deprecated, use characterSets

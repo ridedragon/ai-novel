@@ -48,6 +48,7 @@ import terminal from 'virtual:terminal'
 
 // 核心编辑器组件保持同步加载以保证首屏响应
 import { ChapterEditor } from './components/Editor/ChapterEditor'
+import { NovelDashboard } from './components/NovelDashboard'
 
 // 懒加载重型组件，减小主包体积
 const CharacterManager = lazy(() => import('./components/CharacterManager').then(m => ({ default: m.CharacterManager })))
@@ -2354,8 +2355,8 @@ function App() {
      setShowCreateNovelModal(false)
   }
 
-  const handleDeleteNovel = (id: string, e: React.MouseEvent) => {
-      e.stopPropagation()
+  const handleDeleteNovel = (id: string, e?: React.MouseEvent) => {
+      e?.stopPropagation()
       setDialog({
         isOpen: true,
         type: 'confirm',
@@ -2385,6 +2386,10 @@ function App() {
            }
         }
       })
+  }
+
+  const handleUpdateNovel = (id: string, updates: Partial<Novel>) => {
+    setNovels(prev => prev.map(n => n.id === id ? { ...n, ...updates } : n))
   }
 
   // Chapter Actions - 使用 useCallback 锁定，防止触发侧边栏无意义重绘
@@ -6842,87 +6847,257 @@ function App() {
 
   if (!activeNovelId) {
     return (
-      <div className="min-h-screen bg-gray-900 text-gray-100 p-4 md:p-8 font-sans overflow-y-auto">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
-              <Book className="w-7 h-7 md:w-8 md:h-8 text-[var(--theme-color)]" />
-              我的小说库
-            </h1>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowSettings(true)}
-                className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-300 transition-colors border border-gray-700"
-                title="设置"
-              >
-                <Settings className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={handleCreateNovel}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] rounded-lg text-white transition-colors text-sm font-medium shadow-lg shadow-blue-900/20"
-              >
-                <Plus className="w-4 h-4" />
-                创建新小说
-              </button>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            {novels.map(novel => (
-              <div 
-                key={novel.id}
-                onClick={() => {
-                  setActiveNovelId(novel.id);
-                  // 核心修复：由于实施了书籍隔离加载，stripped novel 此时没有 chapters。
-                  // 我们先重置 activeChapterId，等待 loadNovelContent 完成后再自动选中。
-                  setActiveChapterId(null);
+      <>
+        <NovelDashboard
+          novels={novels}
+          onSelectNovel={(id) => {
+             setActiveNovelId(id);
+             setActiveChapterId(null);
+          }}
+          onCreateNovel={handleCreateNovel}
+          onDeleteNovel={(id) => handleDeleteNovel(id)}
+          onUpdateNovel={handleUpdateNovel}
+          onExportNovel={handleExportNovel}
+          onOpenSettings={() => setShowSettings(true)}
+          onNavigate={(target) => {
+            if (target === 'automation') {
+              if (novels.length > 0) {
+                setActiveNovelId(novels[0].id);
+                setShowOutline(true);
+                setCreationModule('menu');
+              }
+            } else if (target === 'workflow') {
+              setShowWorkflowEditor(true);
+            } else if (target === 'library') {
+              if (novels.length > 0) {
+                setActiveNovelId(novels[0].id);
+                setShowOutline(true);
+                setCreationModule('reference');
+              }
+            }
+          }}
+        />
+
+        {/* Workflow Editor (Globally accessible from Dashboard) */}
+        {showWorkflowEditor && (
+          isMobile ? (
+            <Suspense fallback={null}>
+              <MobileWorkflowEditor
+                isOpen={showWorkflowEditor}
+                onClose={() => setShowWorkflowEditor(false)}
+                activeNovel={activeNovel}
+                onSelectChapter={(id: number) => {
+                  setActiveChapterId(id)
+                  setShowWorkflowEditor(false)
                 }}
-                className="bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-[var(--theme-color)] cursor-pointer transition-all hover:shadow-lg group relative flex flex-col h-44"
-              >
-                <h3 className="text-lg font-bold mb-2 text-gray-100 truncate pr-16">{novel.title}</h3>
-                <p className="text-xs text-gray-400 mb-4 line-clamp-3 flex-1 leading-relaxed">{novel.systemPrompt}</p>
-                <div className="flex justify-between items-center text-xs text-gray-500 mt-auto border-t border-gray-700/50 pt-3">
-                  <span className="bg-gray-900/50 px-2 py-0.5 rounded text-gray-400">{novel.chapters?.length || 0} 章节</span>
-                  <span>{new Date(novel.createdAt).toLocaleDateString()}</span>
-                </div>
-                
-                <div className="absolute top-4 right-4 flex gap-2">
-                   <button 
-                    onClick={(e) => handleRenameNovel(novel.id, novel.title, e)}
-                    className="p-1.5 bg-gray-700/50 hover:bg-[var(--theme-color)] rounded-lg transition-all text-gray-300 hover:text-white"
-                    title="重命名小说"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                   <button 
-                    onClick={(e) => handleExportNovel(novel, e)}
-                    className="p-1.5 bg-gray-700/50 hover:bg-[var(--theme-color)] rounded-lg transition-all text-gray-300 hover:text-white"
-                    title="导出全书"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                  </button>
-                  <button 
-                    onClick={(e) => handleDeleteNovel(novel.id, e)}
-                    className="p-1.5 bg-gray-700/50 hover:bg-red-600/80 rounded-lg transition-all text-gray-300 hover:text-white"
-                    title="删除小说"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-            
-            {novels.length === 0 && (
-              <div className="col-span-full flex flex-col items-center justify-center py-12 text-gray-500 border-2 border-dashed border-gray-800 rounded-xl bg-gray-800/20">
-                 <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                    <Book className="w-8 h-8 opacity-40" />
-                 </div>
-                 <p className="text-base font-medium text-gray-400">暂无小说</p>
-                 <p className="text-sm mt-1">点击右上角开始创作你的第一个故事吧！</p>
-              </div>
-            )}
-          </div>
-        </div>
+                onStartAutoWrite={startAutoWriting}
+                globalConfig={{
+                  apiKey,
+                  baseUrl,
+                  model,
+                  modelList,
+                  outlineModel,
+                  characterModel,
+                  worldviewModel,
+                  inspirationModel,
+                  plotOutlineModel,
+                  optimizeModel,
+                  analysisModel,
+                  contextLength,
+                  maxReplyLength,
+                  temperature,
+                  topP,
+                  topK,
+                  stream,
+                  maxRetries,
+                  globalCreationPrompt,
+                  longTextMode,
+                  autoOptimize,
+                  twoStepOptimization,
+                  consecutiveChapterCount: Number(consecutiveChapterCount),
+                  contextChapterCount: Number(contextChapterCount) || 1,
+                  maxConcurrentOptimizations: Number(concurrentOptimizationLimit) || 3,
+                  smallSummaryInterval: Number(smallSummaryInterval),
+                  bigSummaryInterval: Number(bigSummaryInterval),
+                  smallSummaryPrompt,
+                  bigSummaryPrompt,
+                  prompts,
+                  getActiveScripts,
+                  optimizePresets,
+                  activeOptimizePresetId,
+                  analysisPresets,
+                  activeAnalysisPresetId,
+                  onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel, forceFinal?: boolean) => {
+                    if (longTextModeRef.current) {
+                      return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel, undefined, forceFinal);
+                    }
+                  },
+                  updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
+                  updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
+                } as any}
+                onUpdateNovel={(updatedNovel: Novel) => {
+                  setNovels(prevNovels => {
+                    const localNovelIndex = prevNovels.findIndex(n => n.id === updatedNovel.id);
+                    if (localNovelIndex === -1) return prevNovels;
+                    const localNovelsCopy = [...prevNovels];
+                    const localNovel = { ...localNovelsCopy[localNovelIndex] };
+                    const allLocalChaptersMap = new Map((localNovel.chapters || []).map(c => [c.id, c]));
+                    for (const remoteChapter of (updatedNovel.chapters || [])) {
+                      const localChapter = allLocalChaptersMap.get(remoteChapter.id);
+                      if (localChapter) {
+                        if ((localChapter.subtype === 'small_summary' || localChapter.subtype === 'big_summary') && localChapter.content?.trim() && !remoteChapter.content?.trim()) {
+                            continue;
+                        }
+                        const combinedVersions = [...(localChapter.versions || []), ...(remoteChapter.versions || [])];
+                        let uniqueVersions = Array.from(new Map((combinedVersions || []).map(v => [v.id, v])).values());
+                        const originalVersions = uniqueVersions.filter(v => v.type === 'original');
+                        if (originalVersions.length > 1) {
+                            originalVersions.sort((a, b) => a.timestamp - b.timestamp);
+                            const oldestOriginal = originalVersions[0];
+                            uniqueVersions = uniqueVersions.filter(v => v.type !== 'original' || v.id === oldestOriginal.id);
+                        }
+                        uniqueVersions.sort((a, b) => a.timestamp - b.timestamp);
+                        const finalActiveVersionId = localChapter.activeVersionId && uniqueVersions.some(v => v.id === localChapter.activeVersionId)
+                            ? localChapter.activeVersionId
+                            : remoteChapter.activeVersionId;
+                        const finalContent = uniqueVersions.find(v => v.id === finalActiveVersionId)?.content || remoteChapter.content;
+                        allLocalChaptersMap.set(localChapter.id, {
+                          ...localChapter,
+                          ...remoteChapter,
+                          content: finalContent,
+                          versions: uniqueVersions,
+                          activeVersionId: finalActiveVersionId,
+                        });
+                      } else {
+                        allLocalChaptersMap.set(remoteChapter.id, ensureChapterVersions(remoteChapter));
+                      }
+                    }
+                    const mergedChapters = sortChapters(Array.from(allLocalChaptersMap.values()));
+                    const mergedVolumes = (updatedNovel.volumes || localNovel.volumes || []).map(v => {
+                      const existingVol = localNovel.volumes?.find(ev => ev.id === v.id);
+                      return existingVol ? { ...v, collapsed: existingVol.collapsed } : v;
+                    });
+                    localNovelsCopy[localNovelIndex] = {
+                      ...localNovel,
+                      ...updatedNovel,
+                      chapters: mergedChapters,
+                      volumes: mergedVolumes,
+                    };
+                    return localNovelsCopy;
+                  });
+                }}
+              />
+            </Suspense>
+          ) : (
+            <Suspense fallback={null}>
+              <WorkflowEditor
+                isOpen={showWorkflowEditor}
+                onClose={() => setShowWorkflowEditor(false)}
+                activeNovel={activeNovel}
+                onSelectChapter={(id) => {
+                  setActiveChapterId(id)
+                  setShowOutline(false)
+                }}
+                onStartAutoWrite={startAutoWriting}
+                globalConfig={{
+                  apiKey,
+                  baseUrl,
+                  model,
+                  modelList,
+                  outlineModel,
+                  characterModel,
+                  worldviewModel,
+                  inspirationModel,
+                  plotOutlineModel,
+                  optimizeModel,
+                  analysisModel,
+                  contextLength,
+                  maxReplyLength,
+                  temperature,
+                  topP,
+                  topK,
+                  stream,
+                  maxRetries,
+                  globalCreationPrompt,
+                  longTextMode,
+                  autoOptimize,
+                  twoStepOptimization,
+                  consecutiveChapterCount: Number(consecutiveChapterCount),
+                  contextChapterCount: Number(contextChapterCount) || 1,
+                  maxConcurrentOptimizations: Number(concurrentOptimizationLimit) || 3,
+                  smallSummaryInterval: Number(smallSummaryInterval),
+                  bigSummaryInterval: Number(bigSummaryInterval),
+                  smallSummaryPrompt,
+                  bigSummaryPrompt,
+                  prompts,
+                  getActiveScripts,
+                  optimizePresets,
+                  activeOptimizePresetId,
+                  analysisPresets,
+                  activeAnalysisPresetId,
+                  onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel, forceFinal?: boolean) => {
+                    if (longTextModeRef.current) {
+                      return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel, undefined, forceFinal);
+                    }
+                  },
+                  updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
+                  updateTwoStepOptimization: (val: boolean) => setTwoStepOptimization(val),
+                } as any}
+                onUpdateNovel={(updatedNovel: Novel) => {
+                  setNovels(prevNovels => {
+                    const localNovelIndex = prevNovels.findIndex(n => n.id === updatedNovel.id);
+                    if (localNovelIndex === -1) return prevNovels;
+                    const localNovelsCopy = [...prevNovels];
+                    const localNovel = { ...localNovelsCopy[localNovelIndex] };
+                    const allLocalChaptersMap = new Map((localNovel.chapters || []).map(c => [c.id, c]));
+                    for (const remoteChapter of (updatedNovel.chapters || [])) {
+                      const localChapter = allLocalChaptersMap.get(remoteChapter.id);
+                      if (localChapter) {
+                        if ((localChapter.subtype === 'small_summary' || localChapter.subtype === 'big_summary') && localChapter.content?.trim()) {
+                            continue;
+                        }
+                        const combinedVersions = [...(localChapter.versions || []), ...(remoteChapter.versions || [])];
+                        let uniqueVersions = Array.from(new Map((combinedVersions || []).map(v => [v.id, v])).values());
+                        const originalVersions = uniqueVersions.filter(v => v.type === 'original');
+                        if (originalVersions.length > 1) {
+                            originalVersions.sort((a, b) => a.timestamp - b.timestamp);
+                            const oldestOriginal = originalVersions[0];
+                            uniqueVersions = uniqueVersions.filter(v => v.type !== 'original' || v.id === oldestOriginal.id);
+                        }
+                        uniqueVersions.sort((a, b) => a.timestamp - b.timestamp);
+                        const finalActiveVersionId = localChapter.activeVersionId && uniqueVersions.some(v => v.id === localChapter.activeVersionId)
+                            ? localChapter.activeVersionId
+                            : remoteChapter.activeVersionId;
+                        const finalContent = uniqueVersions.find(v => v.id === finalActiveVersionId)?.content || remoteChapter.content;
+                        allLocalChaptersMap.set(localChapter.id, {
+                          ...localChapter,
+                          ...remoteChapter,
+                          content: finalContent,
+                          versions: uniqueVersions,
+                          activeVersionId: finalActiveVersionId,
+                        });
+                      } else {
+                        allLocalChaptersMap.set(remoteChapter.id, ensureChapterVersions(remoteChapter));
+                      }
+                    }
+                    const mergedChapters = sortChapters(Array.from(allLocalChaptersMap.values()));
+                    const mergedVolumes = (updatedNovel.volumes || localNovel.volumes || []).map(v => {
+                      const existingVol = localNovel.volumes?.find(ev => ev.id === v.id);
+                      return existingVol ? { ...v, collapsed: existingVol.collapsed } : v;
+                    });
+                    localNovelsCopy[localNovelIndex] = {
+                      ...localNovel,
+                      ...updatedNovel,
+                      chapters: mergedChapters,
+                      volumes: mergedVolumes,
+                    };
+                    return localNovelsCopy;
+                  });
+                }}
+              />
+            </Suspense>
+          )
+        )}
 
         {/* Global Settings Modal in List View */}
         <Suspense fallback={null}>
@@ -7085,14 +7260,14 @@ function App() {
                  <button 
                    onClick={() => dialog.onConfirm(dialog.inputValue)} 
                    className="px-6 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-sm rounded transition-colors shadow"
-                 >
+                   >
                    确定
                  </button>
               </div>
             </div>
           </div>
         )}
-      </div>
+      </>
     )
   }
 
