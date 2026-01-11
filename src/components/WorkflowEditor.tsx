@@ -1489,15 +1489,23 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning, isLoadingWorkflows]);
+  }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning, isLoadingWorkflows, workflows]);
 
-  const switchWorkflow = (id: string) => {
+  const switchWorkflow = (id: string, targetList?: WorkflowData[]) => {
+    if (isRunning) {
+      alert('请先停止当前工作流再切换');
+      return;
+    }
     setActiveWorkflowId(id);
-    loadWorkflow(id, workflows);
+    loadWorkflow(id, targetList || workflows);
     setShowWorkflowMenu(false);
   };
 
-  const createNewWorkflow = () => {
+  const createNewWorkflow = async () => {
+    if (isRunning) {
+      alert('请先停止当前工作流');
+      return;
+    }
     const newId = `wf_${Date.now()}`;
     const newWf: WorkflowData = {
       id: newId,
@@ -1508,27 +1516,35 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     };
     const updated = [...workflows, newWf];
     setWorkflows(updated);
-    switchWorkflow(newId);
+    await storage.saveWorkflows(updated);
+    switchWorkflow(newId, updated);
   };
 
-  const deleteWorkflow = (id: string, e: React.MouseEvent) => {
+  const deleteWorkflow = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (workflows.length <= 1) {
       setError('无法删除最后一个工作流');
       return;
     }
+    if (isRunning && id === activeWorkflowId) {
+      setError('无法删除正在运行的工作流');
+      return;
+    }
     if (confirm('确定要删除这个工作流吗？')) {
       const updated = workflows.filter(w => w.id !== id);
       setWorkflows(updated);
+      await storage.saveWorkflows(updated);
       if (activeWorkflowId === id) {
-        switchWorkflow(updated[0].id);
+        switchWorkflow(updated[0].id, updated);
       }
     }
   };
 
-  const renameWorkflow = (id: string, newName: string) => {
+  const renameWorkflow = async (id: string, newName: string) => {
     if (!newName.trim()) return;
-    setWorkflows(prev => prev.map(w => w.id === id ? { ...w, name: newName } : w));
+    const updated = workflows.map(w => w.id === id ? { ...w, name: newName } : w);
+    setWorkflows(updated);
+    await storage.saveWorkflows(updated);
     setIsEditingWorkflowName(false);
   };
 
@@ -1565,8 +1581,14 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (isRunning) {
+      alert('请先停止当前工作流再导入');
+      e.target.value = '';
+      return;
+    }
+
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const imported = JSON.parse(event.target?.result as string) as WorkflowData;
         if (!imported.nodes || !imported.edges) {
@@ -1581,8 +1603,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           lastModified: Date.now()
         };
         
-        setWorkflows(prev => [...prev, newWf]);
-        switchWorkflow(newId);
+        const updated = [...workflows, newWf];
+        setWorkflows(updated);
+        await storage.saveWorkflows(updated);
+        switchWorkflow(newId, updated);
         setError(null);
       } catch (err: any) {
         setError(`导入失败: ${err.message}`);
