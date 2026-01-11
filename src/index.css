@@ -10,6 +10,23 @@
 }
 @tailwind utilities;
 
+/* 彻底隐藏全局滚动条，保持页面整洁 */
+::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* 针对 Firefox */
+* {
+  scrollbar-width: none;
+}
+
+/* 移除滑动动效导致的视觉干扰 */
+* {
+  scroll-behavior: auto !important;
+}
+
 /* 优化：将工作流连线动画移出 React 渲染循环，减少 GPU 负担与样式节点爆炸 */
 @keyframes workflow-dash {
   from {

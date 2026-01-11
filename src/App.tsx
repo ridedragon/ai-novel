@@ -3,21 +3,22 @@ import {
   ArrowLeft,
   ArrowUp,
   Book,
+  BookMarked,
   BookOpen,
   Bot,
   Check,
   ChevronDown,
   ChevronRight,
-  Code2,
+  Code,
   Copy,
   Download,
   Edit2,
   Edit3,
+  ExternalLink,
   Eye,
   FilePlus,
   FileText,
   Folder,
-  FolderInput,
   FolderPlus,
   GitBranch,
   Globe,
@@ -26,13 +27,12 @@ import {
   LayoutList,
   Lightbulb,
   List,
-  Menu,
+  Network,
   PlayCircle,
   Plus,
   RotateCcw,
   Save,
   Settings,
-  SlidersHorizontal,
   ToggleLeft, ToggleRight,
   Trash2,
   Unlink,
@@ -48,6 +48,7 @@ import terminal from 'virtual:terminal'
 
 // 核心编辑器组件保持同步加载以保证首屏响应
 import { ChapterEditor } from './components/Editor/ChapterEditor'
+import { NovelEditorLayout } from './components/Editor/NovelEditorLayout'
 import { NovelDashboard } from './components/NovelDashboard'
 
 // 懒加载重型组件，减小主包体积
@@ -643,7 +644,6 @@ const sanitizeAndParseJson = (content: string): any[] | null => {
             let openBrackets = 0;
             let inString = false;
             let isEscaped = false;
-            let lastValidEnd = -1;
 
             for (let i = 0; i < result.length; i++) {
                 const char = result[i];
@@ -654,9 +654,9 @@ const sanitizeAndParseJson = (content: string): any[] | null => {
                 } else {
                     if (char === '"') inString = true;
                     else if (char === '{') openBraces++;
-                    else if (char === '}') { openBraces--; lastValidEnd = i; }
+                    else if (char === '}') { openBraces--; }
                     else if (char === '[') openBrackets++;
-                    else if (char === ']') { openBrackets--; lastValidEnd = i; }
+                    else if (char === ']') { openBrackets--; }
                 }
             }
 
@@ -856,91 +856,6 @@ const normalizeGeneratorResult = (data: any[], type: 'outline' | 'character' | '
     }).filter(item => item !== null)
 }
 
-// 性能优化组件：侧边栏章节项。使用 memo 锁定，防止 985 个节点在打字时被无效 Diff 阻塞
-const ChapterSidebarItem = React.memo(({
-  chapter,
-  isActive,
-  onSelect,
-  onMove,
-  onRename,
-  onExport,
-  onDelete
-}: {
-  chapter: Chapter,
-  isActive: boolean,
-  onSelect: (id: number) => void,
-  onMove: (id: number) => void,
-  onRename: (id: number) => void,
-  onExport: (id: number) => void,
-  onDelete: (id: number) => void
-}) => {
-  return (
-    <div
-      className={`group flex items-center w-full rounded transition-colors pr-2 ${
-        isActive
-          ? 'bg-[var(--theme-color)] text-white'
-          : 'text-gray-300 hover:bg-gray-700'
-      }`}
-    >
-      <button
-        onClick={() => onSelect(chapter.id)}
-        className={`bg-transparent flex-1 text-left px-3 py-2 flex items-center gap-2 text-sm truncate ${chapter.subtype === 'small_summary' || chapter.subtype === 'big_summary' ? 'italic text-[var(--theme-color-light)]' : ''}`}
-      >
-        {chapter.subtype === 'small_summary' ? (
-          <LayoutList className="w-4 h-4 shrink-0 text-blue-400" />
-        ) : chapter.subtype === 'big_summary' ? (
-          <BookOpen className="w-4 h-4 shrink-0 text-amber-400" />
-        ) : (
-          <FileText className={`w-4 h-4 shrink-0 ${chapter.logicScore !== undefined ? (chapter.logicScore > 80 ? 'text-green-400' : chapter.logicScore > 60 ? 'text-yellow-400' : 'text-red-400') : 'opacity-70'}`} />
-        )}
-        <span className="truncate">{chapter.title}</span>
-        {chapter.logicScore !== undefined && (
-          <span className={`ml-1 text-[10px] px-1 rounded ${chapter.logicScore > 80 ? 'bg-green-900/30 text-green-500' : chapter.logicScore > 60 ? 'bg-yellow-900/30 text-yellow-500' : 'bg-red-900/30 text-red-500'}`}>
-            {chapter.logicScore}
-          </span>
-        )}
-      </button>
-      
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-         <button
-            onClick={(e) => { e.stopPropagation(); onMove(chapter.id); }}
-            className="bg-transparent p-1 hover:bg-white/20 rounded"
-            title="移动到..."
-         >
-           <FolderInput className="w-3 h-3" />
-         </button>
-         <button
-            onClick={(e) => { e.stopPropagation(); onRename(chapter.id); }}
-            className="bg-transparent p-1 hover:bg-white/20 rounded"
-            title="重命名"
-         >
-           <Edit3 className="w-3 h-3" />
-         </button>
-         <button
-            onClick={(e) => { e.stopPropagation(); onExport(chapter.id); }}
-            className="bg-transparent p-1 hover:bg-white/20 rounded"
-            title="导出本章"
-         >
-           <Download className="w-3 h-3" />
-         </button>
-         <button
-            onClick={(e) => { e.stopPropagation(); onDelete(chapter.id); }}
-            className="bg-transparent p-1 hover:bg-red-500/80 rounded hover:text-white"
-            title="删除"
-         >
-           <Trash2 className="w-3 h-3" />
-         </button>
-      </div>
-    </div>
-  );
-}, (prev, next) => {
-  // 核心比对逻辑：只有 ID、标题、活跃状态或分数变化时才重绘。
-  // content 等正文变化被完全屏蔽，不再导致侧边栏 Diff！
-  return prev.chapter.id === next.chapter.id &&
-         prev.chapter.title === next.chapter.title &&
-         prev.chapter.logicScore === next.chapter.logicScore &&
-         prev.isActive === next.isActive;
-});
 
 function App() {
   // --- UI & AI Task States (Moved to top to ensure initialization) ---
@@ -1263,16 +1178,10 @@ function App() {
   const activeOutlineSetIdRef = useRef(activeOutlineSetId)
   useEffect(() => { activeOutlineSetIdRef.current = activeOutlineSetId }, [activeOutlineSetId])
   const [newOutlineSetName, setNewOutlineSetName] = useState('')
-  const [selectedCharacterSetIdForOutlineGen, setSelectedCharacterSetIdForOutlineGen] = useState<string | null>(null)
-  const [showCharacterSetSelector, setShowCharacterSetSelector] = useState(false)
-  const [selectedWorldviewSetIdForOutlineGen, setSelectedWorldviewSetIdForOutlineGen] = useState<string | null>(null)
-  const [selectedInspirationEntries, setSelectedInspirationEntries] = useState<{setId: string, index: number}[]>([])
-  const [showWorldviewSelectorForOutline, setShowWorldviewSelectorForOutline] = useState(false)
   const [editingOutlineItemIndex, setEditingOutlineItemIndex] = useState<number | null>(null)
   
   // Drag and Drop State for Outline
   const [draggedOutlineIndex, setDraggedOutlineIndex] = useState<number | null>(null)
-  const [isOutlineDragEnabled, setIsOutlineDragEnabled] = useState(false)
 
   // Outline Presets State
   const [outlinePresets, setOutlinePresets] = useState<GeneratorPreset[]>(() => {
@@ -1607,7 +1516,7 @@ function App() {
   const [userPrompt, setUserPrompt] = useState('')
   const [showWorkflowEditor, setShowWorkflowEditor] = useState(false)
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null)
-  const { isMobileSidebarOpen, setIsMobileSidebarOpen } = useLayout()
+  const { setIsMobileSidebarOpen } = useLayout()
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
 
   useEffect(() => {
@@ -1822,32 +1731,25 @@ function App() {
   const inspirationAbortControllerRef = useRef<AbortController | null>(null)
   const optimizeAbortControllersRef = useRef<Map<number, AbortController>>(new Map())
   const generateAbortControllerRef = useRef<AbortController | null>(null)
-  const [autoWriteOutlineSetId, setAutoWriteOutlineSetId] = useState<string | null>(null)
+  const [, setAutoWriteOutlineSetId] = useState<string | null>(null)
   const [includeFullOutlineInAutoWrite, setIncludeFullOutlineInAutoWrite] = useState(false)
   const [activeCharacterSetId, setActiveCharacterSetId] = useState<string | null>(null)
   const activeCharacterSetIdRef = useRef(activeCharacterSetId)
   useEffect(() => { activeCharacterSetIdRef.current = activeCharacterSetId }, [activeCharacterSetId])
   const [newCharacterSetName, setNewCharacterSetName] = useState('')
-  const [selectedCharacter, setSelectedCharacter] = useState<{setId: string, index: number} | null>(null)
 
   const [activeWorldviewSetId, setActiveWorldviewSetId] = useState<string | null>(null)
   const activeWorldviewSetIdRef = useRef(activeWorldviewSetId)
   useEffect(() => { activeWorldviewSetIdRef.current = activeWorldviewSetId }, [activeWorldviewSetId])
   const [newWorldviewSetName, setNewWorldviewSetName] = useState('')
-  const [selectedWorldviewEntry, setSelectedWorldviewEntry] = useState<{setId: string, index: number} | null>(null)
 
   const [activeInspirationSetId, setActiveInspirationSetId] = useState<string | null>(null)
   const activeInspirationSetIdRef = useRef(activeInspirationSetId)
   useEffect(() => { activeInspirationSetIdRef.current = activeInspirationSetId }, [activeInspirationSetId])
-  const [newInspirationSetName, setNewInspirationSetName] = useState('')
 
   const [activePlotOutlineSetId, setActivePlotOutlineSetId] = useState<string | null>(null)
   const activePlotOutlineSetIdRef = useRef(activePlotOutlineSetId)
   useEffect(() => { activePlotOutlineSetIdRef.current = activePlotOutlineSetId }, [activePlotOutlineSetId])
-
-  // Character Generation Settings
-  const [selectedWorldviewSetIdForCharGen, setSelectedWorldviewSetIdForCharGen] = useState<string | null>(null)
-  const [showWorldviewSelector, setShowWorldviewSelector] = useState(false)
 
   // Auto Write State
   const [showOutline, setShowOutline] = useState(false)
@@ -2045,7 +1947,6 @@ function App() {
   
   const handleOutlineDragEnd = () => {
     setDraggedOutlineIndex(null)
-    setIsOutlineDragEnabled(false)
   }
 
   // Character Set Helpers
@@ -6779,10 +6680,16 @@ function App() {
           const set = activeNovel.outlineSets?.find(s => s.id === id)
           if (set) {
               const matchChar = activeNovel.characterSets?.find(s => s.name === set.name)
-              if (matchChar) setSelectedCharacterSetIdForOutlineGen(matchChar.id)
+              if (matchChar) {
+                  setSelectedCharacterSetIdForModules(matchChar.id)
+                  setSelectedCharacterIndicesForModules([])
+              }
               
               const matchWorld = activeNovel.worldviewSets?.find(s => s.name === set.name)
-              if (matchWorld) setSelectedWorldviewSetIdForOutlineGen(matchWorld.id)
+              if (matchWorld) {
+                  setSelectedWorldviewSetIdForModules(matchWorld.id)
+                  setSelectedWorldviewIndicesForModules([])
+              }
           }
       }
   }, [activeNovel]);
@@ -6793,7 +6700,10 @@ function App() {
           const set = activeNovel.characterSets?.find(s => s.id === id)
           if (set) {
               const matchWorld = activeNovel.worldviewSets?.find(s => s.name === set.name)
-              if (matchWorld) setSelectedWorldviewSetIdForCharGen(matchWorld.id)
+              if (matchWorld) {
+                  setSelectedWorldviewSetIdForModules(matchWorld.id)
+                  setSelectedWorldviewIndicesForModules([])
+              }
           }
       }
   }, [activeNovel]);
@@ -7272,285 +7182,233 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen h-[100dvh] bg-gray-900 text-gray-100 font-sans overflow-hidden">
-      
-      {/* Mobile Sidebar Overlay */}
-      {isMobileSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setIsMobileSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar - Left */}
-      <div className={`
-        fixed md:static inset-y-0 left-0 z-50 w-64 bg-gray-800 border-r border-gray-700 flex flex-col shrink-0 transition-transform duration-200 ease-in-out will-change-transform
-        ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-      `}>
-        <div className="p-3 border-b border-gray-700 flex gap-2">
-          <button 
-             onClick={() => setActiveNovelId(null)}
-             className="p-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors"
-             title="返回小说库"
-           >
-             <Home className="w-4 h-4" />
-           </button>
-          <button 
-             onClick={(e) => activeNovel && handleExportNovel(activeNovel, e)}
-             className="p-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors"
-             title="导出全书"
-           >
-             <Download className="w-4 h-4" />
-           </button>
-          <button 
-            onClick={() => {
-               if (!showOutline) setCreationModule('menu')
-               setShowOutline(!showOutline)
-            }}
-            className={`p-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors ${showOutline ? 'bg-[var(--theme-color)] text-white' : ''}`}
-            title="大纲与自动化"
-          >
-            <List className="w-4 h-4" />
+    <NovelEditorLayout
+      headerLeft={
+        <>
+          <button className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400" title="返回主界面" onClick={() => setActiveNovelId(null)}>
+            <Home className="w-[18px] h-[18px]" />
           </button>
-          <button 
-            onClick={() => setShowAdvancedSettings(true)}
-            className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 py-2 rounded transition-colors flex items-center justify-center gap-2"
-            title="对话补全源"
+          <button className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400" title="下载整本书" onClick={(e) => activeNovel && handleExportNovel(activeNovel, e)}>
+            <Download className="w-[18px] h-[18px]" />
+          </button>
+          <button className={`p-2 hover:bg-white/10 rounded-full transition-colors ${showOutline ? 'text-[var(--theme-color)]' : 'text-slate-400'}`} title="自动化中心" onClick={() => { if (!showOutline) setCreationModule('menu'); setShowOutline(!showOutline); }}>
+            <BookOpen className="w-[18px] h-[18px]" />
+          </button>
+          <div className="h-4 w-[1px] bg-[#1e2433] mx-2"></div>
+          <button className="flex items-center gap-2 px-3 py-1.5 bg-[#12151e] border border-[#1e2433] hover:border-slate-600 rounded-md transition-all text-[11px] text-slate-300" onClick={() => setShowAdvancedSettings(true)}>
+            <Network className="w-4 h-4 text-[#8b5cf6]" />
+            <span>对话补全源</span>
+          </button>
+        </>
+      }
+      headerRight={
+        <div className="flex items-center gap-1 bg-[#12151e]/50 px-2 py-1 rounded-lg border border-[#1e2433]/60">
+          <span className="text-[9px] text-slate-600 font-bold px-2 tracking-widest uppercase">Toolbox</span>
+          <button
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-white/10 ${keepAliveMode ? 'text-green-500' : 'text-slate-400'}`}
+            onClick={async () => {
+              if (keepAliveMode) {
+                  keepAliveManager.disable()
+                  setKeepAliveMode(false)
+              } else {
+                  try {
+                      await keepAliveManager.enable()
+                      setKeepAliveMode(true)
+                  } catch (e) {
+                      console.error(e)
+                      setError('无法开启后台保活：请确保您已与页面交互（点击）')
+                  }
+              }
+            }}
           >
-            <SlidersHorizontal className="w-4 h-4" />
-            <span className="text-xs">对话补全源</span>
+            <Zap className="w-4 h-4" />
+            <span>防断连</span>
+          </button>
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs font-medium cursor-pointer transition-colors ${longTextMode ? 'bg-[#3b82f6]/10 text-[#3b82f6] border-[#3b82f6]/30' : 'text-slate-400 border-transparent hover:bg-white/5'}`}
+            onClick={() => setLongTextMode(!longTextMode)}
+          >
+            <BookMarked className="w-4 h-4" />
+            <span>长文模式</span>
+            {longTextMode && (
+              <select
+                value={contextScope}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => { e.stopPropagation(); setContextScope(e.target.value); }}
+                className="bg-transparent border-none outline-none text-[10px] ml-1 font-bold text-slate-500"
+              >
+                <option value="all">全书</option>
+                <option value="current">本卷</option>
+                {volumes.map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
+              </select>
+            )}
+          </div>
+          <div className="h-4 w-[1px] bg-[#1e2433] mx-1"></div>
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-white/10 text-slate-400" onClick={() => setShowRegexModal(true)}>
+            <Code className="w-4 h-4" />
+            <span>正则</span>
+          </button>
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-white/10 text-slate-400" onClick={() => setShowSettings(true)}>
+            <Settings className="w-4 h-4" />
+            <span>设置</span>
+          </button>
+          <button
+            className="flex items-center gap-2 bg-[#8b5cf6]/20 text-[#8b5cf6] px-4 py-1.5 rounded border border-[#8b5cf6]/40 text-xs font-semibold hover:bg-[#8b5cf6]/30 transition-all ml-1"
+            onClick={() => setShowWorkflowEditor(true)}
+          >
+            <GitBranch className="w-4 h-4" />
+            <span>可视化工作流</span>
           </button>
         </div>
-
-        <div className="flex-1 overflow-y-auto py-2">
-          <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider flex justify-between items-center">
-            <span>章节 ({chapters.length})</span>
-            <button 
-              onClick={handleAddVolume}
-              className="bg-transparent p-1 hover:bg-gray-700 rounded text-[var(--theme-color)] transition-colors"
-              title="添加分卷"
-            >
-              <FolderPlus className="w-4 h-4" />
+      }
+      sidebarLeft={
+        <>
+          <div className="p-5 flex items-center justify-between shrink-0">
+            <span className="text-[10px] font-bold text-slate-500 tracking-[0.2em] uppercase">Chapters ({chapters.length})</span>
+            <button className="text-[#3b82f6] hover:text-white transition-colors" onClick={handleAddVolume}>
+              <FolderPlus className="w-[18px] h-[18px]" />
             </button>
           </div>
-          
-          <div className="space-y-1 px-2">
-            {/* 核心修复：使用 memoized 的排序结果，确保排序稳定且渲染高效 */}
-            <>
-              {/* Render Volumes */}
-              {volumes.map(volume => (
-                    <div key={volume.id} className="mb-2">
+          <div className="flex-1 overflow-y-auto px-2 space-y-0.5 custom-scrollbar">
+            {volumes.map(volume => (
+              <div key={volume.id} className="mb-1">
+                <div
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-slate-500 cursor-pointer hover:text-slate-300 group"
+                  onClick={() => handleToggleVolumeCollapse(volume.id)}
+                >
+                  {volume.collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  <Folder className="w-3.5 h-3.5 text-yellow-600/70" />
+                  <span className="font-medium truncate flex-1">{volume.title}</span>
+                  <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => { e.stopPropagation(); addNewChapter(volume.id); }} className="p-1 hover:text-white"><Plus className="w-3 h-3" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleRenameVolume(volume.id, volume.title); }} className="p-1 hover:text-white"><Edit3 className="w-3 h-3" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteVolume(volume.id); }} className="p-1 hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
+                  </div>
+                </div>
+                {!volume.collapsed && (
+                  <div className="ml-4 space-y-0.5 border-l border-[#1e2433]">
+                    {(chaptersByVolume[String(volume.id)] || []).map(chapter => (
                       <div
-                        className="flex items-center gap-2 px-2 py-1.5 text-gray-400 hover:bg-gray-700/50 rounded cursor-pointer group"
-                        onClick={() => handleToggleVolumeCollapse(volume.id)}
-                      >
-                        {volume.collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                        <Folder className="w-3.5 h-3.5 text-[var(--theme-color)]" />
-                        <span className="text-sm font-medium flex-1 truncate text-gray-300">{volume.title}</span>
-                        
-                        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); addNewChapter(volume.id); }}
-                              className="bg-transparent p-1 hover:text-white"
-                              title="在此卷添加章节"
-                            >
-                              <Plus className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleRenameVolume(volume.id, volume.title); }}
-                              className="bg-transparent p-1 hover:text-white"
-                              title="重命名分卷"
-                            >
-                              <Edit3 className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleExportVolume(volume.id); }}
-                              className="bg-transparent p-1 hover:text-white"
-                              title="导出本卷"
-                            >
-                              <Download className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteVolume(volume.id); }}
-                              className="bg-transparent p-1 hover:text-red-400"
-                              title="删除分卷"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                        </div>
-                      </div>
-                      
-                      {!volume.collapsed && (
-                        <div className="ml-2 pl-2 border-l border-gray-700/50 mt-1 space-y-1">
-                          {(chaptersByVolume[String(volume.id)] || []).map(chapter => (
-                            <ChapterSidebarItem
-                              key={chapter.id}
-                              chapter={chapter}
-                              isActive={activeChapterId === chapter.id}
-                              onSelect={(id) => {
-                                setActiveChapterId(id);
-                                setShowOutline(false);
-                                // 自动切换到该章节的最新版本逻辑已移至 ChapterEditor 内部处理，此处仅触发 ID 切换
-                              }}
-                              onMove={handleMoveChapter}
-                              onRename={handleRenameChapter}
-                              onExport={handleExportChapter}
-                              onDelete={handleDeleteChapter}
-                            />
-                          ))}
-                       {chapters.filter(c => c.volumeId === volume.id).length === 0 && (
-                          <div className="text-xs text-gray-600 px-4 py-1 italic">空卷</div>
-                       )}
-                    </div>
-                 )}
-                    </div>
-                  ))}
-
-                  {/* Uncategorized Chapters */}
-                  <div className="mt-2">
-                    {volumes.length > 0 && <div className="px-2 py-1 text-xs text-gray-500 font-semibold">未分卷章节</div>}
-                    {(chaptersByVolume['uncategorized'] || []).map(chapter => (
-                      <ChapterSidebarItem
                         key={chapter.id}
-                        chapter={chapter}
-                        isActive={activeChapterId === chapter.id}
-                        onSelect={(id) => {
-                          setActiveChapterId(id);
-                          setShowOutline(false);
-                        }}
-                        onMove={handleMoveChapter}
-                        onRename={handleRenameChapter}
-                        onExport={handleExportChapter}
-                        onDelete={handleDeleteChapter}
-                      />
+                        onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
+                        className={`px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-[#3b82f6]/15 text-[#60a5fa] border-l-2 border-[#3b82f6]' : 'text-slate-400 hover:bg-white/5'}`}
+                      >
+                        <FileText className={`w-[14px] h-[14px] ${chapter.subtype === 'small_summary' ? 'text-blue-400' : chapter.subtype === 'big_summary' ? 'text-amber-400' : ''}`} />
+                        <span className="truncate">{chapter.title}</span>
+                      </div>
                     ))}
                   </div>
-                </>
-          </div>
-        </div>
-
-        <div className="p-4 border-t border-gray-700">
-          <button 
-            onClick={() => addNewChapter()}
-            className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-gray-200 py-2 rounded transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            <span>添加章节</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content - Right */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
-        <div className="min-h-[3.5rem] bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 py-2 shrink-0 transition-all relative z-30">
-          <div className="flex flex-wrap items-center gap-2 md:gap-4 w-full">
-             <button 
-               onClick={() => setIsMobileSidebarOpen(true)}
-               className="md:hidden text-gray-400 hover:text-white shrink-0"
-             >
-               <Menu className="w-5 h-5" />
-             </button>
-             <span className="text-sm font-semibold text-gray-400 whitespace-nowrap hidden md:block">自定义添加栏</span>
-             <div className="flex flex-wrap items-center gap-2 shrink-0">
-               <div className="flex bg-gray-700 rounded-lg p-0.5 items-center gap-0.5 shrink-0">
-                   <button 
-                     onClick={async () => {
-                        if (keepAliveMode) {
-                            keepAliveManager.disable()
-                            setKeepAliveMode(false)
-                        } else {
-                            try {
-                                await keepAliveManager.enable()
-                                setKeepAliveMode(true)
-                            } catch (e) {
-                                console.error(e)
-                                setError('无法开启后台保活：请确保您已与页面交互（点击）')
-                            }
-                        }
-                     }}
-                     className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-md text-xs transition-colors whitespace-nowrap ${keepAliveMode ? 'bg-green-600 text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
-                     title="后台防中断模式 (静音音频保活)"
-                   >
-                     <Zap className={`w-3.5 h-3.5 ${keepAliveMode ? 'fill-current' : ''}`} />
-                     <span className="hidden sm:inline">防断连</span>
-                   </button>
-
-                   <div className="w-px h-3 bg-gray-600 mx-0.5"></div>
-
-                   <button 
-                     onClick={() => setLongTextMode(!longTextMode)}
-                     className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-md text-xs transition-colors whitespace-nowrap ${longTextMode ? 'bg-[var(--theme-color)] text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
-                     title="长文模式"
-                   >
-                     <Book className="w-3.5 h-3.5" />
-                     <span className="hidden sm:inline">长文模式</span>
-                   </button>
-                   
-                   {longTextMode && (
-                     <div className="relative group border-l border-gray-600 pl-0.5 shrink-0">
-                        <select
-                            value={contextScope}
-                            onChange={(e) => setContextScope(e.target.value)}
-                            className="bg-transparent hover:bg-gray-600 text-gray-200 text-xs rounded px-2 py-1.5 border-none outline-none appearance-none cursor-pointer pr-6 transition-colors min-w-[60px] md:min-w-[80px] max-w-[100px] md:max-w-[120px]"
-                            title="上下文发送范围"
-                        >
-                            <option value="all" className="bg-gray-800 text-gray-200">全书范围</option>
-                            <option value="current" className="bg-gray-800 text-gray-200">仅当前卷</option>
-                            {volumes.length > 0 && (
-                                <optgroup label="指定分卷" className="bg-gray-800 text-gray-200">
-                                    {volumes.map(v => (
-                                        <option key={v.id} value={v.id} className="bg-gray-800 text-gray-200">{v.title}</option>
-                                    ))}
-                                </optgroup>
-                            )}
-                        </select>
-                        <ChevronDown className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                     </div>
-                   )}
-               </div>
-
-               <button
-                 onClick={() => setShowRegexModal(true)}
-                 className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors whitespace-nowrap shrink-0"
-                 title="正则"
-               >
-                 <Code2 className="w-3.5 h-3.5" />
-                 <span className="hidden sm:inline">正则</span>
-               </button>
-               <button
-                 onClick={() => setShowSettings(true)}
-                 className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200 transition-colors whitespace-nowrap shrink-0"
-                 title="设置"
-               >
-                 <Settings className="w-3.5 h-3.5" />
-                 <span className="hidden sm:inline">设置</span>
-               </button>
-             </div>
-             <button
-               onClick={() => setShowWorkflowEditor(true)}
-               className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-xs text-white transition-colors whitespace-nowrap shrink-0 shadow-lg shadow-indigo-900/20 ring-2 ring-indigo-500/30 animate-pulse hover:animate-none"
-               title="打开工作流编辑器"
-             >
-               <GitBranch className="w-3.5 h-3.5" />
-               <span className="font-bold">可视化工作流</span>
-             </button>
-          </div>
-        </div>
-
-        {error && (
-          <div className="bg-red-900/20 border-b border-red-900/50 px-4 py-2 text-xs text-red-400 flex items-center justify-between shrink-0 animate-in slide-in-from-top duration-200">
-            <div className="flex items-center gap-2 truncate">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-              <span className="truncate">{error}</span>
+                )}
+              </div>
+            ))}
+            <div className="mt-2">
+              {volumes.length > 0 && <div className="px-3 py-1 text-[10px] text-slate-600 font-bold uppercase tracking-wider">未分卷章节</div>}
+              {(chaptersByVolume['uncategorized'] || []).map(chapter => (
+                <div
+                  key={chapter.id}
+                  onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
+                  className={`px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-[#3b82f6]/15 text-[#60a5fa] border-l-2 border-[#3b82f6]' : 'text-slate-400 hover:bg-white/5'}`}
+                >
+                  <FileText className="w-[14px] h-[14px]" />
+                  <span className="truncate">{chapter.title}</span>
+                </div>
+              ))}
             </div>
-            <button onClick={() => setError('')} className="p-1 hover:bg-red-900/30 rounded transition-colors">
-              <X className="w-3 h-3" />
+          </div>
+          <div className="p-4 border-t border-[#1e2433] bg-[#12151e]/40 shrink-0">
+            <button
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-slate-400 text-xs transition-all font-medium"
+              onClick={() => addNewChapter()}
+            >
+              <Plus className="w-[18px] h-[18px]" />
+              <span>添加新章节</span>
             </button>
           </div>
-        )}
-
+        </>
+      }
+      sidebarRight={
+        <div className="flex flex-col h-full overflow-hidden">
+          <div className="flex border-b border-[#1e2433] bg-[#12151e]/30 p-1 shrink-0">
+            <button onClick={() => { setShowOutline(true); handleSwitchModule('worldview'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'worldview' ? 'text-[#8b5cf6] bg-[#8b5cf6]/5' : 'text-slate-500 hover:text-slate-300'}`}>世界观</button>
+            <button onClick={() => { setShowOutline(true); handleSwitchModule('characters'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'characters' ? 'text-[#8b5cf6] bg-[#8b5cf6]/5' : 'text-slate-500 hover:text-slate-300'}`}>角色集</button>
+            <button onClick={() => { setShowOutline(true); handleSwitchModule('outline'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'outline' ? 'text-[#8b5cf6] bg-[#8b5cf6]/5' : 'text-slate-500 hover:text-slate-300'}`}>大纲</button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-5 space-y-8 custom-scrollbar">
+            {/* Module Preview Area */}
+            {creationModule === 'worldview' && activeNovel?.worldviewSets?.[0]?.entries.slice(0, 3).map((entry, i) => (
+              <div key={i} className="p-4 bg-[#12151e]/40 rounded-xl border border-[#1e2433] hover:border-[#8b5cf6]/40 transition-all cursor-pointer group relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 h-full bg-[#3b82f6]/30"></div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="w-4 h-4 text-blue-400" />
+                  <span className="text-xs font-bold text-slate-200">{entry.item}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{entry.setting}</p>
+              </div>
+            ))}
+            {creationModule === 'characters' && activeNovel?.characterSets?.[0]?.characters.slice(0, 3).map((char, i) => (
+              <div key={i} className="p-4 bg-[#12151e]/40 rounded-xl border border-[#1e2433] hover:border-[#8b5cf6]/40 transition-all cursor-pointer group relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 h-full bg-[#8b5cf6]/30"></div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="w-4 h-4 text-[#8b5cf6]" />
+                  <span className="text-xs font-bold text-slate-200">{char.name}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{char.bio}</p>
+              </div>
+            ))}
+            {creationModule === 'outline' && activeNovel?.outlineSets?.[0]?.items.slice(0, 3).map((item, i) => (
+              <div key={i} className="p-4 bg-[#12151e]/40 rounded-xl border border-[#1e2433] hover:border-[#8b5cf6]/40 transition-all cursor-pointer group relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 h-full bg-pink-500/30"></div>
+                <div className="flex items-center gap-2 mb-2">
+                  <BookOpen className="w-4 h-4 text-pink-400" />
+                  <span className="text-xs font-bold text-slate-200">{item.title}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{item.summary}</p>
+              </div>
+            ))}
+            
+            <div className="p-5 bg-[#8b5cf6]/5 rounded-xl border border-[#8b5cf6]/20 space-y-4">
+              <div className="flex items-center gap-2 text-[#8b5cf6]">
+                <Lightbulb className="w-5 h-5 fill-[#8b5cf6]/20" />
+                <span className="text-[10px] font-bold uppercase tracking-widest">AI Suggestion</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed italic">"建议点击上方按钮进入详情页进行深度策划。"</p>
+              <button
+                className="w-full py-2.5 bg-[#8b5cf6]/10 hover:bg-[#8b5cf6]/20 text-[#8b5cf6] text-[11px] font-bold rounded-lg transition-all border border-[#8b5cf6]/20"
+                onClick={() => setShowOutline(true)}
+              >
+                查看全部详情
+              </button>
+            </div>
+          </div>
+          <div className="p-5 border-t border-[#1e2433] bg-[#12151e]/20 shrink-0">
+            <button
+              className="w-full flex items-center justify-between px-4 py-3 bg-[#12151e] rounded-lg border border-[#1e2433] text-[11px] font-bold text-slate-400 hover:text-white hover:border-slate-500 transition-all group"
+              onClick={() => { setShowOutline(true); setCreationModule('menu'); }}
+            >
+              <span>进入自动化中心</span>
+              <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          </div>
+        </div>
+      }
+      footer={
+        <>
+          <div className="flex items-center gap-6">
+            <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Sync Active</span>
+            <span>UTF-8</span>
+            <span>Chinese (Simplified)</span>
+          </div>
+          <div className="flex items-center gap-6">
+            <span>{activeChapter?.content ? `字数: ${activeChapter.content.length}` : '无正文'}</span>
+            <span>Spellcheck: On</span>
+            <button className="text-[#8b5cf6]/80 hover:text-[#8b5cf6] transition-colors font-bold" onClick={() => setShowOutline(!showOutline)}>Focus Mode</button>
+          </div>
+        </>
+      }
+    >
+      <div className="flex-1 flex flex-col min-h-0">
         {showOutline ? (
-           <div className={`flex-1 bg-gray-900 flex flex-col ${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration' || creationModule === 'plotOutline' || creationModule === 'reference') ? 'p-0 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
+           <div className={`flex-1 bg-[#0a0c12] flex flex-col ${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration' || creationModule === 'plotOutline' || creationModule === 'reference') ? 'p-0 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
               <div className={`${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration' || creationModule === 'plotOutline' || creationModule === 'reference') ? 'w-full h-full' : 'max-w-4xl mx-auto w-full space-y-6'}`}>
                  {/* Dashboard Menu */}
                  {creationModule === 'menu' && (
@@ -8321,7 +8179,7 @@ function App() {
              </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-900 flex flex-col">
+          <div className="flex-1 flex flex-col min-h-0">
             <ChapterEditor
               activeChapter={activeChapter}
               activeChapterId={activeChapterId}
@@ -10192,7 +10050,7 @@ function App() {
       </Suspense>
       )}
 
-    </div>
+    </NovelEditorLayout>
   )
 }
 

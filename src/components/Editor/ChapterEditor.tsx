@@ -1,8 +1,8 @@
 import {
+  BarChart2,
   ChevronLeft,
   ChevronRight,
-  Edit2,
-  Eye,
+  Edit,
   FileText,
   Save,
   Settings,
@@ -96,7 +96,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
 
   if (!activeChapter) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
+      <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
         <FileText className="w-16 h-16 mb-4 opacity-10" />
         <p>暂无章节</p>
         <p className="text-sm mt-2">请点击左侧"添加章节"开始创作</p>
@@ -105,179 +105,157 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
   }
 
   return (
-    <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col">
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold text-gray-100 break-words">{activeChapter.title}</h1>
-          <span className="text-xs text-gray-500">
-            字数: {activeChapter.content ? activeChapter.content.length : 0}
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Version Switcher */}
-          {activeChapter.versions && activeChapter.versions.length > 1 && (
-            <div className="bg-gray-800 border border-gray-600 rounded-lg flex items-center p-0.5 gap-1 mr-2">
-              <button
-                onClick={onPrevVersion}
-                disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
-                className="p-1.5 text-gray-400 hover:text-[var(--theme-color)] disabled:opacity-30 transition-colors"
-                title="上一版本"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              <div className="relative group">
-                <button className="text-xs font-medium text-gray-300 px-2 py-1 hover:bg-gray-700 rounded transition-colors flex items-center gap-1">
-                  <span className="max-w-[100px] truncate">
-                    {(() => {
-                      const v = activeChapter.versions?.find(v => v.id === activeChapter.activeVersionId);
-                      if (!v) return '当前版本';
-                      if (v.type === 'original') return '原文';
-                      if (v.type === 'optimized') {
-                        const optimizedVersions = activeChapter.versions?.filter(ver => ver.type === 'optimized') || [];
-                        const optIdx = optimizedVersions.findIndex(ver => ver.id === v.id);
-                        return `优化版 ${optIdx !== -1 ? optIdx + 1 : ''}`;
-                      }
-                      return '编辑版';
-                    })()}
-                  </span>
-                  <span className="text-gray-500">
-                    ({(() => {
-                      const versions = activeChapter.versions || [];
-                      const idx = versions.findIndex(v => v.id === activeChapter.activeVersionId);
-                      return `${idx !== -1 ? idx + 1 : 1}/${Math.max(1, versions.length)}`;
-                    })()})
-                  </span>
-                </button>
-
-                {/* Dropdown on Hover */}
-                <div className="absolute top-full right-0 mt-1 w-56 bg-gray-800 border border-gray-600 rounded-lg shadow-xl overflow-hidden hidden group-hover:block z-30">
-                  <div className="max-h-64 overflow-y-auto custom-scrollbar">
-                    {activeChapter.versions?.map((v, idx) => (
-                      <button
-                        key={v.id}
-                        onClick={() => onSwitchVersion(v)}
-                        className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-gray-700 transition-colors border-b border-gray-700/50 last:border-0 ${activeChapter.activeVersionId === v.id ? 'text-[var(--theme-color)] bg-gray-700/30' : 'text-gray-300'}`}
-                      >
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-medium">
-                            {(() => {
-                              if (v.type === 'original') return '原文';
-                              if (v.type === 'optimized') {
-                                const optimizedVersions = activeChapter.versions?.filter(ver => ver.type === 'optimized') || [];
-                                const optIdx = optimizedVersions.findIndex(ver => ver.id === v.id);
-                                return `优化版 ${optIdx !== -1 ? optIdx + 1 : ''}`;
-                              }
-                              return '用户编辑';
-                            })()}
-                          </span>
-                          <span className="text-gray-500 text-[10px]">{new Date(v.timestamp).toLocaleTimeString()} · {v.content.length}字</span>
-                        </div>
-                        {activeChapter.activeVersionId === v.id && <div className="w-1.5 h-1.5 rounded-full bg-[var(--theme-color)]"></div>}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={onNextVersion}
-                disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
-                className="p-1.5 text-gray-400 hover:text-[var(--theme-color)] disabled:opacity-30 transition-colors"
-                title="下一版本"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Toolbar */}
+      <div className="h-auto md:h-16 px-4 md:px-10 border-b border-[#1e2433]/60 flex flex-col md:flex-row items-center justify-between bg-[#0a0c12] shrink-0 py-3 md:py-0 gap-4 md:gap-0">
+        <div className="flex items-center justify-between w-full md:w-auto gap-4 md:gap-8">
+          <div className="flex items-center bg-[#12151e] rounded-lg border border-[#1e2433] overflow-hidden p-0.5 scale-90 md:scale-100 origin-left">
+            <button 
+              onClick={onPrevVersion}
+              disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
+              className="p-1.5 text-slate-500 hover:text-white transition-colors disabled:opacity-20"
+            >
+              <ChevronLeft className="w-[18px] h-[18px]" />
+            </button>
+            <div className="px-4 text-[11px] font-medium text-slate-300 flex items-center gap-2">
+              <span>
+                {(() => {
+                  const v = activeChapter.versions?.find(v => v.id === activeChapter.activeVersionId);
+                  if (!v) return '当前版本';
+                  if (v.type === 'original') return '原文';
+                  if (v.type === 'optimized') {
+                    const optimizedVersions = activeChapter.versions?.filter(ver => ver.type === 'optimized') || [];
+                    const optIdx = optimizedVersions.findIndex(ver => ver.id === v.id);
+                    return `优化版本 ${optIdx !== -1 ? optIdx + 1 : ''}`;
+                  }
+                  return '编辑版';
+                })()}
+              </span>
+              <span className="text-slate-600 font-mono">
+                ({(() => {
+                  const versions = activeChapter.versions || [];
+                  const idx = versions.findIndex(v => v.id === activeChapter.activeVersionId);
+                  return `${idx !== -1 ? idx + 1 : 1}/${Math.max(1, versions.length)}`;
+                })()})
+              </span>
             </div>
-          )}
-
-          <div
-            onClick={() => setAutoOptimize(!autoOptimize)}
-            className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors select-none mr-2 ${autoOptimize ? 'bg-purple-500/10' : 'hover:bg-gray-800'
-              }`}
-            title="写作完成后自动进行优化"
-          >
-            <div className={`w-7 h-4 rounded-full relative transition-colors duration-200 ${autoOptimize ? 'bg-purple-500' : 'bg-gray-600'}`}>
-              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-all duration-200 ${autoOptimize ? 'left-3.5' : 'left-0.5'}`} />
-            </div>
-            <span className={`text-xs font-medium ${autoOptimize ? 'text-purple-300' : 'text-gray-500'}`}>自动</span>
+            <button 
+              onClick={onNextVersion}
+              disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
+              className="p-1.5 text-slate-500 hover:text-white transition-colors disabled:opacity-20"
+            >
+              <ChevronRight className="w-[18px] h-[18px]" />
+            </button>
           </div>
 
-          {activeChapter && optimizingChapterIds.has(activeChapter.id) ? (
-            <button
-              onClick={() => onStopOptimize(activeChapter.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm border border-transparent bg-red-600 hover:bg-red-500 text-white shadow-red-500/20 border-red-500"
-              title="停止优化"
+          <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-1 md:py-1.5 bg-[#12151e]/40 rounded-full border border-[#1e2433]/60">
+            <div
+              onClick={() => setAutoOptimize(!autoOptimize)}
+              className={`w-6 h-3 md:w-7 md:h-3.5 rounded-full relative cursor-pointer transition-colors ${autoOptimize ? 'bg-[#8b5cf6]/40' : 'bg-slate-700'}`}
             >
-              <StopCircle className="w-3.5 h-3.5" />
-              <span>停止</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => onOptimize(activeChapter.id, localContent)}
-              // 修正：点击润色时，显式传入 localContent 以确保未防抖同步的内容也被捕捉
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm border border-transparent bg-purple-600 hover:bg-purple-500 text-white shadow-purple-500/20 border-purple-500 hover:shadow-purple-500/30 hover:-translate-y-0.5 active:translate-y-0"
-              title="优化当前章节 (基于原文)"
-            >
-              <Wand2 className="w-3.5 h-3.5" />
-              <span>润色</span>
-            </button>
-          )}
+              <div className={`absolute top-0.5 w-2 h-2 md:w-2.5 md:h-2.5 bg-white rounded-full transition-all ${autoOptimize ? 'right-0.5' : 'left-0.5'}`}></div>
+            </div>
+            <span className="text-[8px] md:text-[10px] text-slate-400 font-bold uppercase tracking-wider">Auto Polish</span>
+          </div>
+        </div>
 
-          <button
-            onClick={onShowOptimizeSettings}
-            className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
-            title="优化提示词设置"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
-          <button
-            onClick={onShowAnalysisResult}
-            className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
-            title="查看本章分析"
-          >
-            <Eye className="w-5 h-5" />
-          </button>
-          <div className="w-px h-4 bg-gray-700 mx-1"></div>
-          <button
-            onClick={handleToggleEditWithSync}
-            className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
-            title={isEditingChapter ? "保存/退出编辑" : "编辑章节内容"}
-          >
-            {isEditingChapter ? <Save className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
-          </button>
+        <div className="flex items-center justify-between w-full md:w-auto gap-4 md:gap-8">
+          <div className="flex items-center flex-1 md:flex-none">
+            {activeChapter && optimizingChapterIds.has(activeChapter.id) ? (
+              <button 
+                onClick={() => onStopOptimize(activeChapter.id)}
+                className="bg-red-600 hover:bg-red-500 text-white transition-all flex items-center justify-center px-4 md:px-8 py-1.5 md:py-2 rounded-l-lg text-[11px] md:text-[12px] font-bold gap-2 shadow-lg shadow-red-900/20 flex-1 md:flex-none"
+              >
+                <StopCircle className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+                <span>停止</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => onOptimize(activeChapter.id, localContent)}
+                className="bg-[#8b5cf6] hover:bg-violet-500 text-white transition-all flex items-center justify-center px-4 md:px-8 py-1.5 md:py-2 rounded-l-lg text-[11px] md:text-[12px] font-bold gap-2 shadow-lg shadow-primary/10 flex-1 md:flex-none"
+              >
+                <Wand2 className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+                <span>润色</span>
+              </button>
+            )}
+            <button
+              onClick={onShowOptimizeSettings}
+              className="bg-[#8b5cf6]/90 hover:bg-[#8b5cf6] p-1.5 md:p-2 rounded-r-lg border-l border-white/10 text-white"
+              title="润色设置"
+            >
+              <Settings className="w-[18px] h-[18px]" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={onShowAnalysisResult}
+              className="p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-md transition-all" 
+              title="查看本章分析"
+            >
+              <BarChart2 className="w-[18px] h-[18px]" />
+            </button>
+            <button 
+              onClick={handleToggleEditWithSync}
+              className={`p-2 hover:bg-white/5 rounded-md transition-all ${isEditingChapter ? 'text-[#8b5cf6]' : 'text-slate-500 hover:text-white'}`}
+              title={isEditingChapter ? "保存/退出编辑" : "编辑模式"}
+            >
+              {isEditingChapter ? <Save className="w-[18px] h-[18px]" /> : <Edit className="w-[18px] h-[18px]" />}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="relative flex-1 flex flex-col min-h-0">
-        {isEditingChapter ? (
-          <textarea
-            ref={textareaRef}
-            value={localContent}
-            onChange={handleLocalChange}
-            className="w-full h-full bg-gray-900 p-4 text-base leading-relaxed text-gray-200 outline-none resize-none font-mono"
-            placeholder="在此处输入章节正文..."
-          />
-        ) : (
-          <div ref={contentScrollRef} className="prose prose-invert prose-lg max-w-none overflow-y-auto custom-scrollbar pr-4 md:pr-24 [&_p]:my-0 [&_p]:min-h-[1rem] text-justify">
-            {activeChapter.content ? (
-              <ReactMarkdown>
-                {activeChapter.content
-                  .replace(/<[^>]+>/g, '')
-                  .split('\n')
-                  .map(line => line.trim())
-                  .filter(line => line)
-                  .join('\n\n')}
-              </ReactMarkdown>
-            ) : (
-              <div className="text-gray-500 italic">
-                {activeChapter && optimizingChapterIds.has(activeChapter.id)
-                  ? "AI 正在分析并准备润色，请稍候..."
-                  : "暂无内容，请在下方输入要求开始创作..."}
-              </div>
-            )}
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto px-4 md:px-10 pt-10 md:pt-20 pb-40 custom-scrollbar bg-[#0a0c12]">
+        <div className="max-w-4xl mx-auto">
+          <div className="mb-8 md:mb-16 text-center">
+            <h1 className="text-2xl md:text-5xl font-serif font-bold text-slate-100 tracking-wide mb-4 md:mb-6 px-4">
+              {activeChapter.title}
+            </h1>
+            <div className="flex items-center justify-center gap-2 md:gap-4 text-slate-500/60">
+              <div className="h-[1px] w-8 md:w-16 bg-[#1e2433]"></div>
+              <span className="text-[9px] md:text-[11px] font-mono uppercase tracking-[0.2em] md:tracking-[0.3em]">
+                {activeChapter.content ? activeChapter.content.length : 0} Words
+              </span>
+              <div className="h-[1px] w-8 md:w-16 bg-[#1e2433]"></div>
+            </div>
           </div>
-        )}
+
+          {isEditingChapter ? (
+            <textarea
+              ref={textareaRef}
+              value={localContent}
+              onChange={handleLocalChange}
+              className="w-full h-[500px] md:h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-200/90 leading-[1.8] outline-none resize-none font-serif selection:bg-[#8b5cf6]/30 px-2 md:px-0"
+              placeholder="在此处输入章节正文..."
+            />
+          ) : (
+            <article
+              ref={contentScrollRef}
+              className="writing-area text-[18px] md:text-[21px] text-slate-200/90 selection:bg-[#8b5cf6]/30 font-serif leading-[1.8] px-2 md:px-0"
+            >
+              {activeChapter.content ? (
+                <div className="prose prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
+                  <ReactMarkdown>
+                    {activeChapter.content
+                      .replace(/<[^>]+>/g, '')
+                      .split('\n')
+                      .map(line => line.trim())
+                      .filter(line => line)
+                      .join('\n\n')}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <div className="text-slate-500 italic text-center py-20">
+                  {activeChapter && optimizingChapterIds.has(activeChapter.id)
+                    ? "AI 正在分析并准备润色，请稍候..."
+                    : "暂无内容，请开始创作..."}
+                </div>
+              )}
+            </article>
+          )}
+        </div>
       </div>
     </div>
   );

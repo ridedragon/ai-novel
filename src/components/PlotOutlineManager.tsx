@@ -715,7 +715,9 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = React.memo(
                                        ? 'bg-[var(--theme-color)] text-white rounded-tr-none'
                                        : 'bg-gray-800 text-gray-200 rounded-tl-none border border-gray-700'
                                  }`}>
-                                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                                    <div className="whitespace-pre-wrap">
+                                        {typeof msg.content === 'string' ? msg.content : (Array.isArray(msg.content) ? msg.content.map(c => ('text' in c ? c.text : '')).join('') : '')}
+                                    </div>
                                  </div>
                               </div>
                            ))}
