@@ -755,7 +755,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
                         {activeSet.chatHistory?.map((msg, i) => (
                            <div key={i} className={`flex flex-col group/msg ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                               <div className={`flex items-center gap-2 mb-1 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
+                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-[var(--theme-color)] text-white'}`}>
                                     {msg.role === 'user' ? 'U' : 'AI'}
                                  </div>
                                  <span className="text-xs text-gray-500">
@@ -1039,7 +1039,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
                   {/* Left: Options */}
                   <div className="flex flex-col md:block md:flex-1 space-y-0 md:space-y-2">
                      <h3 className="hidden md:flex font-bold items-center gap-2 text-gray-200">
-                        <Bot className="w-5 h-5 text-purple-500" />
+                        <Bot className="w-5 h-5 text-[var(--theme-color)]" />
                         自动化写作
                      </h3>
                      
@@ -1060,10 +1060,10 @@ export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
                   {/* Right: Action */}
                   <div className="flex-1 md:flex-none md:w-auto flex justify-end min-w-0">
                      {isAutoWriting ? (
-                        <div className="flex items-center gap-2 md:gap-3 bg-gray-900 border border-purple-500/30 rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 w-full md:w-auto min-w-0">
-                           <Loader2 className="w-4 h-4 md:w-5 md:h-5 text-purple-500 animate-spin shrink-0" />
+                        <div className="flex items-center gap-2 md:gap-3 bg-gray-900 border border-[var(--theme-color)]/30 rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 w-full md:w-auto min-w-0">
+                           <Loader2 className="w-4 h-4 md:w-5 md:h-5 text-[var(--theme-color)] animate-spin shrink-0" />
                            <div className="flex-1 min-w-0 overflow-hidden">
-                              <div className="hidden md:block text-xs text-purple-400 font-medium mb-0.5">正在创作</div>
+                              <div className="hidden md:block text-xs text-[var(--theme-color)] font-medium mb-0.5">正在创作</div>
                               <div className="text-xs md:text-sm text-gray-200 truncate">{autoWriteStatus}</div>
                            </div>
                            <button 
@@ -1078,7 +1078,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
                         <button 
                            onClick={onStartAutoWrite}
                            disabled={(activeSet.items || []).length === 0}
-                           className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 md:px-8 md:py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold rounded-lg md:rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-purple-500/20 text-xs md:text-base whitespace-nowrap"
+                           className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 md:px-8 md:py-3 bg-gradient-to-r from-[var(--theme-color)] to-blue-600 hover:from-[var(--theme-color-hover)] hover:to-blue-500 text-white font-bold rounded-lg md:rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-[var(--theme-color)]/20 text-xs md:text-base whitespace-nowrap"
                         >
                            <PlayCircle className="w-4 h-4 md:w-5 md:h-5" />
                            <span>开始自动创作</span>

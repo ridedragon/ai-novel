@@ -610,7 +610,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
                            {activeSet.chatHistory?.map((msg, i) => (
                               <div key={i} className={`flex flex-col group/msg ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                                  <div className={`flex items-center gap-2 mb-1 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-[var(--theme-color)] text-white'}`}>
                                        {msg.role === 'user' ? 'U' : 'AI'}
                                     </div>
                                     <span className="text-xs text-gray-500">
@@ -905,7 +905,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
                                                       }}
                                                       className="flex items-center gap-3 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white text-left transition-colors border-t border-slate-100 dark:border-slate-700"
                                                    >
-                                                      <Book className="w-4 h-4 text-purple-400" />
+                                                      <Book className="w-4 h-4 text-[var(--theme-color)]" />
                                                       <span>发送给大纲 AI</span>
                                                    </button>
                                                 </div>

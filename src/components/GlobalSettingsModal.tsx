@@ -8,6 +8,36 @@ import {
   X
 } from 'lucide-react'
 import React from 'react'
+
+// Helper functions for real-time preview
+const adjustColor = (hex: string, lum: number) => {
+  hex = String(hex).replace(/[^0-9a-f]/gi, '')
+  if (hex.length < 6) {
+    hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2]
+  }
+  lum = lum || 0
+  let rgb = "#", c, i
+  for (i = 0; i < 3; i++) {
+    c = parseInt(hex.substr(i*2,2), 16)
+    c = Math.round(Math.min(Math.max(0, c + (c * lum)), 255)).toString(16)
+    rgb += ("00"+c).substr(c.length)
+  }
+  return rgb
+}
+
+const hexToRgb = (hex: string) => {
+    let c: any;
+    if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+        c= hex.substring(1).split('');
+        if(c.length== 3){
+            c= [c[0], c[0], c[1], c[1], c[2], c[2]];
+        }
+        c= '0x'+c.join('');
+        return [(c>>16)&255, (c>>8)&255, c&255].join(' ');
+    }
+    return '37 99 235';
+}
+
 interface GlobalSettingsModalProps {
   isOpen: boolean
   onClose: () => void
@@ -109,6 +139,39 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   contextChapterCount,
   setContextChapterCount
 }) => {
+  const [localThemeColor, setLocalThemeColor] = React.useState(themeColor)
+  const [localWorkflowEdgeColor, setLocalWorkflowEdgeColor] = React.useState(workflowEdgeColor)
+
+  React.useEffect(() => {
+    setLocalThemeColor(themeColor)
+  }, [themeColor])
+
+  React.useEffect(() => {
+    setLocalWorkflowEdgeColor(workflowEdgeColor)
+  }, [workflowEdgeColor])
+
+  // Direct DOM manipulation for instant preview without React re-renders
+  const updateThemePreview = (color: string) => {
+    const root = document.documentElement
+    root.style.setProperty('--theme-color', color)
+    root.style.setProperty('--theme-color-rgb', hexToRgb(color))
+    root.style.setProperty('--theme-color-hover', adjustColor(color, -0.2))
+    root.style.setProperty('--theme-color-light', adjustColor(color, 0.2))
+  }
+
+  const updateEdgePreview = (color: string) => {
+    const root = document.documentElement
+    if (color) {
+      root.style.setProperty('--workflow-edge-color', color)
+      root.style.setProperty('--workflow-edge-color-dark', adjustColor(color, -0.2))
+      root.style.setProperty('--workflow-edge-color-light', adjustColor(color, 0.2))
+    } else {
+      root.style.removeProperty('--workflow-edge-color')
+      root.style.removeProperty('--workflow-edge-color-dark')
+      root.style.removeProperty('--workflow-edge-color-light')
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -126,13 +189,30 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
             <div className="flex items-center gap-3">
               <input
                 type="color"
-                value={themeColor}
-                onChange={(e) => setThemeColor(e.target.value)}
+                value={localThemeColor}
+                onInput={(e) => {
+                  // Instant preview on drag
+                  const val = (e.target as HTMLInputElement).value
+                  setLocalThemeColor(val)
+                  updateThemePreview(val)
+                }}
+                onChange={(e) => {
+                  // Commit change on release
+                  const val = e.target.value
+                  setLocalThemeColor(val)
+                  updateThemePreview(val) // Ensure preview is sync
+                  setThemeColor(val)
+                }}
                 className="h-10 w-20 bg-transparent border border-gray-700 rounded cursor-pointer"
               />
-              <span className="text-sm text-gray-400">{themeColor}</span>
+              <span className="text-sm text-gray-400">{localThemeColor}</span>
               <button
-                onClick={() => setThemeColor('#2563eb')}
+                onClick={() => {
+                    const defaultColor = '#2563eb'
+                    setLocalThemeColor(defaultColor)
+                    updateThemePreview(defaultColor)
+                    setThemeColor(defaultColor)
+                }}
                 className="text-xs text-[var(--theme-color-light)] hover:text-[var(--theme-color)] underline"
               >
                 Reset
@@ -144,13 +224,27 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
             <div className="flex items-center gap-3">
               <input
                 type="color"
-                value={workflowEdgeColor}
-                onChange={(e) => setWorkflowEdgeColor(e.target.value)}
+                value={localWorkflowEdgeColor}
+                onInput={(e) => {
+                  const val = (e.target as HTMLInputElement).value
+                  setLocalWorkflowEdgeColor(val)
+                  updateEdgePreview(val)
+                }}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setLocalWorkflowEdgeColor(val)
+                  updateEdgePreview(val)
+                  setWorkflowEdgeColor(val)
+                }}
                 className="h-10 w-20 bg-transparent border border-gray-700 rounded cursor-pointer"
               />
-              <span className="text-sm text-gray-400">{workflowEdgeColor || '未设置 (跟随主题)'}</span>
+              <span className="text-sm text-gray-400">{localWorkflowEdgeColor || '未设置 (跟随主题)'}</span>
               <button
-                onClick={() => setWorkflowEdgeColor('')}
+                onClick={() => {
+                    setLocalWorkflowEdgeColor('')
+                    updateEdgePreview('')
+                    setWorkflowEdgeColor('')
+                }}
                 className="text-xs text-[var(--theme-color-light)] hover:text-[var(--theme-color)] underline"
               >
                 Reset

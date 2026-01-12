@@ -670,7 +670,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = React.memo(({
                            {activeSet.chatHistory?.map((msg, i) => (
                               <div key={i} className={`flex flex-col group/msg ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                                  <div className={`flex items-center gap-2 mb-1 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white'}`}>
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-[var(--theme-color)] text-white'}`}>
                                        {msg.role === 'user' ? 'U' : 'AI'}
                                     </div>
                                     <span className="text-xs text-gray-500">

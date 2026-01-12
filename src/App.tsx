@@ -309,6 +309,19 @@ const adjustColor = (hex: string, lum: number) => {
   return rgb
 }
 
+const hexToRgb = (hex: string) => {
+    let c: any;
+    if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+        c= hex.substring(1).split('');
+        if(c.length== 3){
+            c= [c[0], c[0], c[1], c[1], c[2], c[2]];
+        }
+        c= '0x'+c.join('');
+        return [(c>>16)&255, (c>>8)&255, c&255].join(' ');
+    }
+    return '37 99 235';
+}
+
 const getStoryChapters = (chapters: Chapter[]) => chapters.filter(c => !c.subtype || c.subtype === 'story')
 
 const buildWorldInfoMessages = (novel: Novel | undefined, activeOutlineSetId: string | null = null): ChatMessage[] => {
@@ -882,6 +895,7 @@ function App() {
     localStorage.setItem('themeColor', themeColor)
     const root = document.documentElement
     root.style.setProperty('--theme-color', themeColor)
+    root.style.setProperty('--theme-color-rgb', hexToRgb(themeColor))
     root.style.setProperty('--theme-color-hover', adjustColor(themeColor, -0.2)) // Darker
     root.style.setProperty('--theme-color-light', adjustColor(themeColor, 0.2)) // Lighter
   }, [themeColor])
@@ -7265,9 +7279,9 @@ function App() {
         <>
           <div className="p-5 flex items-center justify-between shrink-0">
             <span className="text-[10px] font-bold text-slate-500 tracking-[0.2em] uppercase">Chapters ({chapters.length})</span>
-            <button className="text-[#3b82f6] hover:text-white transition-colors" onClick={handleAddVolume}>
-              <FolderPlus className="w-[18px] h-[18px]" />
-            </button>
+          <button className="text-primary hover:text-white transition-colors" onClick={handleAddVolume}>
+            <FolderPlus className="w-[18px] h-[18px]" />
+          </button>
           </div>
           <div className="flex-1 overflow-y-auto px-2 space-y-0.5 custom-scrollbar">
             {volumes.map(volume => (
@@ -7291,9 +7305,9 @@ function App() {
                       <div
                         key={chapter.id}
                         onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
-                        className={`px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-[#3b82f6]/15 text-[#60a5fa] border-l-2 border-[#3b82f6]' : 'text-slate-400 hover:bg-white/5'}`}
+                        className={`px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-primary/15 text-primary border-l-2 border-primary' : 'text-slate-400 hover:bg-white/5'}`}
                       >
-                        <FileText className={`w-[14px] h-[14px] ${chapter.subtype === 'small_summary' ? 'text-blue-400' : chapter.subtype === 'big_summary' ? 'text-amber-400' : ''}`} />
+                        <FileText className={`w-[14px] h-[14px] ${chapter.subtype === 'small_summary' ? 'text-primary' : chapter.subtype === 'big_summary' ? 'text-amber-400' : ''}`} />
                         <span className="truncate">{chapter.title}</span>
                       </div>
                     ))}
@@ -7307,7 +7321,7 @@ function App() {
                 <div
                   key={chapter.id}
                   onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
-                  className={`px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-[#3b82f6]/15 text-[#60a5fa] border-l-2 border-[#3b82f6]' : 'text-slate-400 hover:bg-white/5'}`}
+                  className={`px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-primary/15 text-primary border-l-2 border-primary' : 'text-slate-400 hover:bg-white/5'}`}
                 >
                   <FileText className="w-[14px] h-[14px]" />
                   <span className="truncate">{chapter.title}</span>
@@ -7329,34 +7343,34 @@ function App() {
       sidebarRight={
         <div className="flex flex-col h-full overflow-hidden">
           <div className="flex border-b border-[#1e2433] bg-[#12151e]/30 p-1 shrink-0">
-            <button onClick={() => { setShowOutline(true); handleSwitchModule('worldview'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'worldview' ? 'text-[#8b5cf6] bg-[#8b5cf6]/5' : 'text-slate-500 hover:text-slate-300'}`}>世界观</button>
-            <button onClick={() => { setShowOutline(true); handleSwitchModule('characters'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'characters' ? 'text-[#8b5cf6] bg-[#8b5cf6]/5' : 'text-slate-500 hover:text-slate-300'}`}>角色集</button>
-            <button onClick={() => { setShowOutline(true); handleSwitchModule('outline'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'outline' ? 'text-[#8b5cf6] bg-[#8b5cf6]/5' : 'text-slate-500 hover:text-slate-300'}`}>大纲</button>
+            <button onClick={() => { setShowOutline(true); handleSwitchModule('worldview'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'worldview' ? 'text-[var(--theme-color)] bg-[var(--theme-color)]/5' : 'text-slate-500 hover:text-slate-300'}`}>世界观</button>
+            <button onClick={() => { setShowOutline(true); handleSwitchModule('characters'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'characters' ? 'text-[var(--theme-color)] bg-[var(--theme-color)]/5' : 'text-slate-500 hover:text-slate-300'}`}>角色集</button>
+            <button onClick={() => { setShowOutline(true); handleSwitchModule('outline'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'outline' ? 'text-[var(--theme-color)] bg-[var(--theme-color)]/5' : 'text-slate-500 hover:text-slate-300'}`}>大纲</button>
           </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-8 custom-scrollbar">
             {/* Module Preview Area */}
             {creationModule === 'worldview' && activeNovel?.worldviewSets?.[0]?.entries.slice(0, 3).map((entry, i) => (
-              <div key={i} className="p-4 bg-[#12151e]/40 rounded-xl border border-[#1e2433] hover:border-[#8b5cf6]/40 transition-all cursor-pointer group relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-[#3b82f6]/30"></div>
+              <div key={i} className="p-4 bg-[#12151e]/40 rounded-xl border border-[#1e2433] hover:border-[var(--theme-color)]/40 transition-all cursor-pointer group relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 h-full bg-primary/30"></div>
                 <div className="flex items-center gap-2 mb-2">
-                  <Zap className="w-4 h-4 text-blue-400" />
+                  <Zap className="w-4 h-4 text-primary" />
                   <span className="text-xs font-bold text-slate-200">{entry.item}</span>
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{entry.setting}</p>
               </div>
             ))}
             {creationModule === 'characters' && activeNovel?.characterSets?.[0]?.characters.slice(0, 3).map((char, i) => (
-              <div key={i} className="p-4 bg-[#12151e]/40 rounded-xl border border-[#1e2433] hover:border-[#8b5cf6]/40 transition-all cursor-pointer group relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-[#8b5cf6]/30"></div>
+              <div key={i} className="p-4 bg-[#12151e]/40 rounded-xl border border-[#1e2433] hover:border-[var(--theme-color)]/40 transition-all cursor-pointer group relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 h-full bg-[var(--theme-color)]/30"></div>
                 <div className="flex items-center gap-2 mb-2">
-                  <Users className="w-4 h-4 text-[#8b5cf6]" />
+                  <Users className="w-4 h-4 text-[var(--theme-color)]" />
                   <span className="text-xs font-bold text-slate-200">{char.name}</span>
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{char.bio}</p>
               </div>
             ))}
             {creationModule === 'outline' && activeNovel?.outlineSets?.[0]?.items.slice(0, 3).map((item, i) => (
-              <div key={i} className="p-4 bg-[#12151e]/40 rounded-xl border border-[#1e2433] hover:border-[#8b5cf6]/40 transition-all cursor-pointer group relative overflow-hidden">
+              <div key={i} className="p-4 bg-[#12151e]/40 rounded-xl border border-[#1e2433] hover:border-[var(--theme-color)]/40 transition-all cursor-pointer group relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1 h-full bg-pink-500/30"></div>
                 <div className="flex items-center gap-2 mb-2">
                   <BookOpen className="w-4 h-4 text-pink-400" />
@@ -7366,14 +7380,14 @@ function App() {
               </div>
             ))}
             
-            <div className="p-5 bg-[#8b5cf6]/5 rounded-xl border border-[#8b5cf6]/20 space-y-4">
-              <div className="flex items-center gap-2 text-[#8b5cf6]">
-                <Lightbulb className="w-5 h-5 fill-[#8b5cf6]/20" />
+            <div className="p-5 bg-[var(--theme-color)]/5 rounded-xl border border-[var(--theme-color)]/20 space-y-4">
+              <div className="flex items-center gap-2 text-[var(--theme-color)]">
+                <Lightbulb className="w-5 h-5 fill-[var(--theme-color)]/20" />
                 <span className="text-[10px] font-bold uppercase tracking-widest">AI Suggestion</span>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed italic">"建议点击上方按钮进入详情页进行深度策划。"</p>
               <button
-                className="w-full py-2.5 bg-[#8b5cf6]/10 hover:bg-[#8b5cf6]/20 text-[#8b5cf6] text-[11px] font-bold rounded-lg transition-all border border-[#8b5cf6]/20"
+                className="w-full py-2.5 bg-[var(--theme-color)]/10 hover:bg-[var(--theme-color)]/20 text-[var(--theme-color)] text-[11px] font-bold rounded-lg transition-all border border-[var(--theme-color)]/20"
                 onClick={() => setShowOutline(true)}
               >
                 查看全部详情
@@ -7401,7 +7415,7 @@ function App() {
           <div className="flex items-center gap-6">
             <span>{activeChapter?.content ? `字数: ${activeChapter.content.length}` : '无正文'}</span>
             <span>Spellcheck: On</span>
-            <button className="text-[#8b5cf6]/80 hover:text-[#8b5cf6] transition-colors font-bold" onClick={() => setShowOutline(!showOutline)}>Focus Mode</button>
+            <button className="text-[var(--theme-color)]/80 hover:text-[var(--theme-color)] transition-colors font-bold" onClick={() => setShowOutline(!showOutline)}>Focus Mode</button>
           </div>
         </>
       }
@@ -7414,7 +7428,7 @@ function App() {
                  {creationModule === 'menu' && (
                     <div className="space-y-8 animate-in fade-in zoom-in-95 duration-200">
                        <h2 className="text-3xl font-bold flex items-center gap-3 justify-center mb-8">
-                          <Wand2 className="w-8 h-8 text-purple-500" />
+                          <Wand2 className="w-8 h-8 text-[var(--theme-color)]" />
                           自动化创作中心
                        </h2>
                        
@@ -7423,7 +7437,7 @@ function App() {
                              onClick={() => handleSwitchModule('reference')}
                              className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
                           >
-                             <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-blue-400">
+                             <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-primary">
                                 <Book className="w-10 h-10" />
                              </div>
                              <div>
@@ -8118,14 +8132,14 @@ function App() {
                           sidebarHeader={
                              <div className="flex items-center justify-between">
                                 <div className="font-bold flex items-center gap-2">
-                                   <Book className="w-5 h-5 text-blue-400" />
+                                   <Book className="w-5 h-5 text-primary" />
                                    <span>资料库</span>
                                 </div>
 
                                 <div className="flex bg-gray-900/50 rounded-lg p-0.5 border border-gray-700 gap-0.5">
                                    <button
                                        onClick={() => handleSwitchModule('reference')}
-                                       className="p-1.5 rounded transition-all bg-blue-600 text-white shadow-sm"
+                                       className="p-1.5 rounded transition-all bg-primary text-white shadow-sm"
                                        title="切换到资料库"
                                    >
                                        <Book className="w-4 h-4" />
@@ -8452,7 +8466,7 @@ function App() {
                          </div>
                          
                          {/* Icon */}
-                         <span className="text-purple-400 text-sm">{p.icon}</span>
+                         <span className="text-[var(--theme-color)] text-sm">{p.icon}</span>
                          
                          {/* Name */}
                          <span className={`text-sm flex-1 truncate ${!p.active ? 'text-gray-500 line-through' : 'text-gray-200'}`}>
@@ -8528,7 +8542,7 @@ function App() {
                     className="w-full flex items-center justify-between bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm hover:border-gray-500 transition-colors"
                   >
                     <div className="flex items-center gap-2 overflow-hidden">
-                      <span className="text-purple-400 shrink-0">{selectedPrompt.icon}</span>
+                      <span className="text-[var(--theme-color)] shrink-0">{selectedPrompt.icon}</span>
                       <span className="truncate">{selectedPrompt.name}</span>
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-500 shrink-0 transition-transform ${viewMode === 'list' ? 'rotate-180' : ''}`} />
@@ -9149,7 +9163,7 @@ function App() {
                               {twoStepOptimization && (
                                   <button 
                                     onClick={() => setGeneratorSettingsType('analysis')}
-                                    className="w-full py-1.5 text-xs bg-purple-900/30 hover:bg-purple-900/50 text-purple-200 border border-purple-800 rounded transition-colors flex items-center justify-center gap-1"
+                                    className="w-full py-1.5 text-xs bg-[var(--theme-color)]/10 hover:bg-[var(--theme-color)]/20 text-[var(--theme-color)] border border-[var(--theme-color)]/30 rounded transition-colors flex items-center justify-center gap-1"
                                   >
                                     <Settings className="w-3 h-3" /> 配置分析预设
                                   </button>
@@ -9453,7 +9467,7 @@ function App() {
                                                   </td>
                                                   <td className="px-4 py-3">
                                                       <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium border ${
-                                                          prompt.role === 'system' ? 'bg-purple-900/30 border-purple-700 text-purple-300' :
+                                                          prompt.role === 'system' ? 'bg-[var(--theme-color)]/10 border-[var(--theme-color)]/30 text-[var(--theme-color)]' :
                                                           prompt.role === 'user' ? 'bg-blue-900/30 border-blue-700 text-blue-300' :
                                                           'bg-green-900/30 border-green-700 text-green-300'
                                                       }`}>
@@ -9513,7 +9527,7 @@ function App() {
                                               <div className="flex items-center gap-2 overflow-hidden">
                                                   <span className="text-gray-500 font-mono text-xs shrink-0">#{idx + 1}</span>
                                                   <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium border shrink-0 ${
-                                                      prompt.role === 'system' ? 'bg-purple-900/30 border-purple-700 text-purple-300' :
+                                                      prompt.role === 'system' ? 'bg-[var(--theme-color)]/10 border-[var(--theme-color)]/30 text-[var(--theme-color)]' :
                                                       prompt.role === 'user' ? 'bg-blue-900/30 border-blue-700 text-blue-300' :
                                                       'bg-green-900/30 border-green-700 text-green-300'
                                                   }`}>

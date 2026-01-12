@@ -670,7 +670,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = React.memo(({
                            {activeSet.chatHistory?.map((msg, i) => (
                               <div key={i} className={`flex flex-col group/msg ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                                  <div className={`flex items-center gap-2 mb-1 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-[var(--theme-color)] text-white'}`}>
                                        {msg.role === 'user' ? 'U' : 'AI'}
                                     </div>
                                     <span className="text-xs text-gray-500">
@@ -928,7 +928,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = React.memo(({
                >
                   {/* Sidebar (Visuals) */}
                   <div className="w-full md:w-64 bg-gray-900 border-b md:border-b-0 md:border-r border-gray-700 flex flex-row md:flex-col items-center p-4 md:p-8 shrink-0 gap-4 md:gap-0">
-                     <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl md:text-4xl shadow-2xl md:mb-6 shrink-0">
+                     <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-[var(--theme-color)] to-blue-600 flex items-center justify-center text-white font-bold text-xl md:text-4xl shadow-2xl md:mb-6 shrink-0">
                         {editCharName.slice(0, 1) || '?'}
                      </div>
                      <div className="flex-1 md:w-full flex flex-col items-start md:items-center min-w-0">

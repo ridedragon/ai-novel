@@ -172,10 +172,10 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
                 <span>停止</span>
               </button>
             ) : (
-              <button
-                onClick={() => onOptimize(activeChapter.id, localContent)}
-                className="bg-[#8b5cf6] hover:bg-violet-500 h-full text-white transition-all flex items-center justify-center px-2 rounded-l-lg text-[10px] font-bold gap-1 shadow-lg shadow-primary/10"
-              >
+            <button
+              onClick={() => onOptimize(activeChapter.id, localContent)}
+              className="bg-primary hover:bg-primary-hover h-full text-white transition-all flex items-center justify-center px-2 rounded-l-lg text-[10px] font-bold gap-1 shadow-lg shadow-primary/10"
+            >
                 <Wand2 className="w-3.5 h-3.5" />
                 <span className="whitespace-nowrap">润色</span>
               </button>
@@ -230,13 +230,13 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
               ref={textareaRef}
               value={localContent}
               onChange={handleLocalChange}
-              className="w-full h-[500px] md:h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-200/90 leading-[1.8] outline-none resize-none font-serif selection:bg-[#8b5cf6]/30 px-2 md:px-0"
+              className="w-full h-[500px] md:h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-200/90 leading-[1.8] outline-none resize-none font-serif selection:bg-primary/30 px-2 md:px-0"
               placeholder="在此处输入章节正文..."
             />
           ) : (
             <article
               ref={contentScrollRef}
-              className="writing-area text-[18px] md:text-[21px] text-slate-200/90 selection:bg-[#8b5cf6]/30 font-serif leading-[1.8] px-2 md:px-0"
+              className="writing-area text-[18px] md:text-[21px] text-slate-200/90 selection:bg-primary/30 font-serif leading-[1.8] px-2 md:px-0"
             >
               {activeChapter.content ? (
                 <div className="prose prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">

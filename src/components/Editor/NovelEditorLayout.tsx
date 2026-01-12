@@ -21,15 +21,15 @@ export const NovelEditorLayout: React.FC<NovelEditorLayoutProps> = ({
   const { isMobileSidebarOpen, setIsMobileSidebarOpen } = useLayout();
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col bg-[#0f172a] text-slate-300 antialiased font-sans">
+    <div className="h-screen overflow-hidden flex flex-col bg-[#0f172a] text-slate-300 antialiased font-sans" style={{ backgroundColor: 'var(--theme-color-dark, #0f172a)' }}>
       {/* Header */}
-      <header className="h-16 border-b border-white/5 bg-[#0f172a]/80 backdrop-blur-md flex items-center justify-between px-3 md:px-6 shrink-0 z-40">
+      <header className="h-16 border-b border-white/5 bg-[#0f172a]/80 backdrop-blur-md flex items-center justify-between px-3 md:px-6 shrink-0 z-40" style={{ backgroundColor: 'var(--theme-color-dark, rgba(15, 23, 42, 0.8))' }}>
         <div className="flex items-center gap-2">
           {headerLeft}
         </div>
         <div className="flex items-center gap-2 md:gap-3">
           {headerRight}
-          <div className="hidden md:flex w-10 h-10 rounded-xl bg-primary/10 items-center justify-center text-primary shadow-lg border border-white/5 ml-2 uppercase font-bold text-xs">
+          <div className="hidden md:flex w-10 h-10 rounded-xl bg-[var(--theme-color)]/10 items-center justify-center text-[var(--theme-color)] shadow-lg border border-white/5 ml-2 uppercase font-bold text-xs">
             AI
           </div>
         </div>
@@ -54,12 +54,12 @@ export const NovelEditorLayout: React.FC<NovelEditorLayoutProps> = ({
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 bg-[#0f172a] flex flex-col relative overflow-hidden w-full">
+        <main className="flex-1 bg-[#0f172a] flex flex-col relative overflow-hidden w-full" style={{ backgroundColor: 'var(--theme-color-dark, #0f172a)' }}>
           {children}
           
           {/* Footer */}
           {footer && (
-            <div className="hidden md:flex h-8 border-t border-white/5 bg-[#0f172a] px-6 items-center justify-between text-[10px] text-slate-500 uppercase tracking-widest font-medium shrink-0">
+            <div className="hidden md:flex h-8 border-t border-white/5 bg-[#0f172a] px-6 items-center justify-between text-[10px] text-slate-500 uppercase tracking-widest font-medium shrink-0" style={{ backgroundColor: 'var(--theme-color-dark, #0f172a)' }}>
               {footer}
             </div>
           )}

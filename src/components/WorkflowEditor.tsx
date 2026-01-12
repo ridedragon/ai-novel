@@ -1,5 +1,6 @@
 import {
   addEdge,
+  applyNodeChanges,
   Background,
   BackgroundVariant,
   BaseEdge,
@@ -16,7 +17,6 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
-  useNodesState,
   useReactFlow
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -39,6 +39,7 @@ import {
   MessageSquare,
   Play,
   Plus,
+  Repeat,
   Save,
   Settings2,
   Square,
@@ -53,7 +54,7 @@ import {
 import OpenAI from 'openai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
-import { GeneratorPreset, GeneratorPrompt, Novel, PromptItem, RegexScript } from '../types';
+import { GeneratorPreset, GeneratorPrompt, LoopConfig, LoopInstruction, Novel, PromptItem, RegexScript, VariableBinding } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
 import { keepAliveManager } from '../utils/KeepAliveManager';
 import { storage } from '../utils/storage';
@@ -95,6 +96,15 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   status?: 'pending' | 'executing' | 'completed' | 'failed';
   targetVolumeId?: string;
   targetVolumeName?: string;
+  
+  // Workflow V2 Logic
+  loopInstructions?: LoopInstruction[];
+  isContainer?: boolean;
+  parentId?: string;
+  loopConfig?: LoopConfig;
+  variableBinding?: VariableBinding[];
+  targetVolumeMode?: 'static' | 'dynamic_anchor'; // static: use targetVolumeId, dynamic_anchor: use context.activeVolumeAnchor
+
   // AI 节点特定设置
   overrideAiConfig?: boolean;
   model?: string;
@@ -124,6 +134,60 @@ export interface WorkflowData {
   lastModified: number;
 }
 
+// --- Workflow V2 Execution Types ---
+
+interface ExecutionNode {
+  type: 'node' | 'container';
+  node: WorkflowNode;
+  index: number; // Index in the flattened topological sort (for progress tracking)
+  children?: ExecutionNode[]; // For containers
+}
+
+const buildExecutionPlan = (nodes: WorkflowNode[], sortedNodes: WorkflowNode[]): ExecutionNode[] => {
+  // 1. Map all nodes for quick lookup
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  
+  // 2. Group by parentId
+  const childrenMap = new Map<string, WorkflowNode[]>();
+  const topLevelNodes: WorkflowNode[] = [];
+
+  // Use sortedNodes to determine order
+  sortedNodes.forEach(node => {
+    if (node.data.parentId && nodeMap.has(node.data.parentId)) {
+      const parentId = node.data.parentId;
+      if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
+      childrenMap.get(parentId)!.push(node);
+    } else {
+      topLevelNodes.push(node);
+    }
+  });
+
+  // 3. Recursive build
+  const buildTree = (currentLevelNodes: WorkflowNode[]): ExecutionNode[] => {
+    return currentLevelNodes.map(node => {
+      const flatIndex = sortedNodes.findIndex(n => n.id === node.id);
+      
+      if (node.data.isContainer) {
+        const children = childrenMap.get(node.id) || [];
+        return {
+          type: 'container',
+          node,
+          index: flatIndex,
+          children: buildTree(children)
+        };
+      }
+      
+      return {
+        type: 'node',
+        node,
+        index: flatIndex
+      };
+    });
+  };
+
+  return buildTree(topLevelNodes);
+};
+
 // --- 自定义节点组件 ---
 
 const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
@@ -146,8 +210,14 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
   };
 
   return (
-    <div className={`px-4 py-3 shadow-xl rounded-lg border-2 bg-gray-800 transition-all ${getStatusColor()}`} style={{ width: '280px' }}>
-      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-gray-600 border-2 border-gray-800" />
+    <div className={`relative px-4 py-3 shadow-xl rounded-lg border-2 bg-gray-800 transition-all ${getStatusColor()}`} style={{ width: '280px' }}>
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="w-4 h-4 bg-gray-600 border-2 border-gray-800 z-50 absolute top-1/2 -translate-y-1/2 hover:scale-110 transition-transform"
+        style={{ left: '-10px' }}
+        isConnectable={true}
+      />
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-md shrink-0" style={{ backgroundColor: `${color}20`, color: color }}>
           {Icon && <Icon className="w-5 h-5" />}
@@ -166,7 +236,7 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
       
       <div className="mt-2 pt-2 border-t border-gray-700/50 space-y-1.5">
         {data.folderName && (
-          <div className="flex items-center gap-1.5 text-[10px] text-indigo-400 font-medium bg-indigo-500/10 px-1.5 py-0.5 rounded">
+          <div className="flex items-center gap-1.5 text-[10px] text-primary font-medium bg-primary/10 px-1.5 py-0.5 rounded">
             <FolderPlus className="w-3 h-3" />
             <span className="truncate">目录: {data.folderName}</span>
           </div>
@@ -180,7 +250,24 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
       </div>
 
 
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-gray-600 border-2 border-gray-800" />
+      {/*
+        CRITICAL FIX for Cyclic Connections:
+        For loop workflows (as requested by user), nodes need to be able to accept input
+        AND send output simultaneously to form a cycle.
+        However, React Flow's default Handles can be restrictive.
+        We explicitly enable handles on both sides with connectable={true}.
+        
+        Also, for the Loop Node specifically, it often needs to connect BACK to a previous node.
+        We ensure the target handle (left) is also robust.
+      */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="w-4 h-4 bg-gray-600 border-2 border-gray-800 z-50 absolute top-1/2 -translate-y-1/2 hover:scale-110 transition-transform"
+        style={{ right: '-10px' }}
+        isConnectable={true}
+        id="source"
+      />
     </div>
   );
 };
@@ -262,9 +349,16 @@ const CoolEdge = ({
 
 // --- 配置定义 ---
 
-type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter' | 'workflowGenerator';
+type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter' | 'workflowGenerator' | 'loopNode';
 
 const NODE_CONFIGS: Record<NodeTypeKey, any> = {
+  loopNode: {
+    typeLabel: '循环执行器',
+    icon: Repeat,
+    color: '#0ea5e9', // Sky blue
+    defaultLabel: '循环控制',
+    presetType: null,
+  },
   workflowGenerator: {
     typeLabel: '智能生成工作流',
     icon: Wand2,
@@ -484,7 +578,7 @@ const NodePropertiesModal = ({
       <div className="absolute inset-0" onClick={onClose} />
       <div className="relative w-full max-w-[650px] bg-[#1e2230] rounded-xl shadow-2xl border border-gray-700/50 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="p-5 border-b border-gray-700/50 flex items-center justify-between bg-[#1a1d29]">
-          <div className="flex items-center gap-4 text-indigo-400">
+          <div className="flex items-center gap-4 text-primary">
             <div className="flex items-center gap-2.5">
               {(() => {
                 const Icon = NODE_CONFIGS[node.data.typeKey as NodeTypeKey]?.icon;
@@ -494,7 +588,7 @@ const NodePropertiesModal = ({
             </div>
             <button
               onClick={() => updateNodeData(node.id, { skipped: !node.data.skipped })}
-              className={`text-[10px] px-2 py-1 rounded transition-all font-bold uppercase tracking-wider flex items-center gap-1 ${node.data.skipped ? 'bg-gray-600 text-gray-300' : 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'}`}
+              className={`text-[10px] px-2 py-1 rounded transition-all font-bold uppercase tracking-wider flex items-center gap-1 ${node.data.skipped ? 'bg-gray-600 text-gray-300' : 'bg-primary/20 text-primary border border-primary/30'}`}
             >
               {node.data.skipped ? <Square className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
               {node.data.skipped ? '已跳过' : '执行此节点'}
@@ -516,11 +610,11 @@ const NodePropertiesModal = ({
                   setLocalLabel(e.target.value);
                   debouncedUpdate({ label: e.target.value });
                 }}
-                className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all"
+                className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all"
               />
             </div>
             <div className={`space-y-2.5 ${(node.data.typeKey === 'createFolder' || node.data.typeKey === 'reuseDirectory') ? 'col-span-2' : ''}`}>
-              <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+              <label className="text-[10px] font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
                 {node.data.typeKey === 'createFolder' ? <FolderPlus className="w-3 h-3" /> : <Folder className="w-3 h-3" />}
                 {node.data.typeKey === 'createFolder' ? '创建并关联目录名' : node.data.typeKey === 'reuseDirectory' ? '选择或输入要复用的目录名' : '独立目录关联 (可选)'}
               </label>
@@ -532,7 +626,7 @@ const NodePropertiesModal = ({
                     setLocalFolderName(e.target.value);
                     debouncedUpdate({ folderName: e.target.value });
                   }}
-                  className="flex-1 bg-[#161922] border border-indigo-900/30 rounded-lg px-4 py-2.5 text-sm text-indigo-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all"
+                  className="flex-1 bg-[#161922] border border-primary/30 rounded-lg px-4 py-2.5 text-sm text-primary-light focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all"
                   placeholder={node.data.typeKey === 'createFolder' ? "输入要创建的项目文件夹名称..." : "输入或选择目录名..."}
                 />
                 {node.data.typeKey === 'reuseDirectory' && activeNovel && (
@@ -1047,6 +1141,95 @@ const NodePropertiesModal = ({
             />
           </div>
 
+          {/* 循环指令配置 (所有节点通用) */}
+          <div className="space-y-4 pt-6 border-t border-gray-700/30">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                <Repeat className="w-3.5 h-3.5" /> 循环特定指令 (Loop Instructions)
+              </label>
+              <button
+                onClick={() => {
+                  const currentInstructions = (node.data.loopInstructions as LoopInstruction[]) || [];
+                  const nextIndex = currentInstructions.length > 0 ? Math.max(...currentInstructions.map(i => i.index)) + 1 : 1;
+                  const newInstructions = [...currentInstructions, { index: nextIndex, content: '' }];
+                  updateNodeData(node.id, { loopInstructions: newInstructions });
+                }}
+                className="p-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-md transition-colors flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
+              >
+                <Plus className="w-3 h-3" /> 添加轮次
+              </button>
+            </div>
+            
+            {((node.data.loopInstructions as LoopInstruction[]) || []).map((inst, idx) => (
+              <div key={idx} className="bg-[#161922] border border-gray-700/50 rounded-lg overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between bg-gray-800/50 px-3 py-1.5 border-b border-gray-700/30">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase">第 {inst.index} 次循环时发送</span>
+                  <button
+                    onClick={() => {
+                      const newInstructions = ((node.data.loopInstructions as LoopInstruction[]) || []).filter((_, i) => i !== idx);
+                      updateNodeData(node.id, { loopInstructions: newInstructions });
+                    }}
+                    className="text-gray-500 hover:text-red-400"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+                <textarea
+                  value={inst.content}
+                  onChange={(e) => {
+                    const newInstructions = [...((node.data.loopInstructions as LoopInstruction[]) || [])];
+                    newInstructions[idx] = { ...inst, content: e.target.value };
+                    updateNodeData(node.id, { loopInstructions: newInstructions });
+                  }}
+                  placeholder="输入该轮次特定的额外指令..."
+                  className="w-full h-20 bg-transparent p-3 text-xs text-gray-300 focus:text-white outline-none resize-none"
+                />
+              </div>
+            ))}
+            {(!node.data.loopInstructions || node.data.loopInstructions.length === 0) && (
+              <div className="text-center py-4 text-[10px] text-gray-600 italic border border-dashed border-gray-700/50 rounded-lg">
+                未配置循环特定指令，每次循环将使用通用指令。
+              </div>
+            )}
+          </div>
+
+          {node.data.typeKey === 'loopNode' && (
+            <div className="space-y-4 pt-6 border-t border-gray-700/30">
+              <label className="text-[10px] font-bold text-sky-500 uppercase tracking-widest flex items-center gap-2">
+                <Repeat className="w-3.5 h-3.5" /> 循环控制器配置
+              </label>
+              <div className="space-y-3 bg-sky-500/10 border border-sky-500/20 rounded-lg p-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-sky-300 font-bold uppercase">循环次数</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={node.data.loopConfig?.count || 1}
+                    onChange={(e) => {
+                      const count = parseInt(e.target.value) || 1;
+                      updateNodeData(node.id, {
+                        loopConfig: {
+                          ...(node.data.loopConfig || { enabled: true }),
+                          count,
+                          enabled: true
+                        }
+                      });
+                    }}
+                    className="w-full bg-[#161922] border border-sky-500/30 rounded px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+                  />
+                </div>
+                <div className="text-[10px] text-sky-400/70 leading-relaxed">
+                  * 此节点将作为循环的起点/终点连接器。
+                  <br/>
+                  * 当流程执行到此节点时，如果未达到指定次数，将跳转回循环起始位置（通过连线闭环）。
+                  <br/>
+                  * 系统变量 <code>{'{{loop_index}}'}</code> 可在循环内的任何节点中使用。
+                </div>
+              </div>
+            </div>
+          )}
+
           {node.data.typeKey === 'chapter' ? (
             <div className="space-y-4 pt-6 border-t border-gray-700/30">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
@@ -1234,16 +1417,26 @@ const NodePropertiesModal = ({
 const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const { isOpen, onClose, activeNovel, onSelectChapter, onUpdateNovel, onStartAutoWrite, globalConfig } = props;
   const { screenToFlowPosition } = useReactFlow();
-  const [nodes, setNodes, onNodesChangeInternal] = useNodesState<WorkflowNode>([]);
+  const [nodes, setNodes] = useState<WorkflowNode[]>([]);
 
-  // 核心修复：包装 onNodesChange 以确保拖拽等操作也能同步 Ref 快照
   const onNodesChange = useCallback((changes: any) => {
-    onNodesChangeInternal(changes);
-    // 注意：React Flow 的 onNodesChange 是异步更新 state 的，
-    // 这里我们直接从最新的变更计算出下个状态并同步 Ref，或者等待渲染同步。
-    // 为了极致安全，我们在所有手动调用 setNodes 的地方都加了同步。
-    // 对于拖拽，我们依赖 setNodes 的回调来捕捉最新状态。
-  }, [onNodesChangeInternal]);
+    setNodes((nds) => {
+      const nextNodes = applyNodeChanges(changes, nds) as WorkflowNode[];
+      
+      // 核心修复：防止拖拽/选中操作会导致旧状态覆盖 Ref 中的最新执行状态
+      // 我们信任 applyNodeChanges 返回的 position/selected/dragging，但数据必须以 Ref 为准
+      const mergedNodes = nextNodes.map(n => {
+        const refNode = nodesRef.current.find(r => r.id === n.id);
+        if (refNode) {
+          return { ...n, data: refNode.data };
+        }
+        return n;
+      });
+
+      nodesRef.current = mergedNodes;
+      return mergedNodes;
+    });
+  }, []);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [workflows, setWorkflows] = useState<WorkflowData[]>([]);
   const [activeWorkflowId, setActiveWorkflowId] = useState<string>('default');
@@ -1635,7 +1828,21 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   }, [isRunning]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({ ...params, type: 'custom', animated: false }, eds)),
+    (params: Connection) => {
+      // 允许任意节点之间的连接，包括回环（Loop）
+      // ReactFlow 默认可能会限制一些连接，我们显式放开
+      // 特别是 Loop Node，用户意图是将其输出连回前面的某个节点（Back-edge）
+      const newEdge = {
+        ...params,
+        type: 'custom',
+        animated: false,
+        // 增加交互区域，使连接线更容易被选中和删除
+        interactionWidth: 20,
+        // 关键：对于回环连接，使用 step 类型的路径可能更好看，或者保持贝塞尔曲线
+        // 这里保持 custom 类型（CoolEdge），它使用 getBezierPath
+      };
+      setEdges((eds) => addEdge(newEdge, eds));
+    },
     [setEdges]
   );
 
@@ -1789,25 +1996,45 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       const isRenameFolder = (targetNode?.data.typeKey === 'createFolder' || targetNode?.data.typeKey === 'reuseDirectory') && updates.folderName !== undefined && updates.folderName !== targetNode?.data.folderName;
 
       const nextNodes = nds.map((node) => {
+        // 1. 获取 Ref 中最新的执行状态 (Execution Truth)
+        const refNode = nodesRef.current.find(n => n.id === node.id);
+        
+        // 2. 构造基础数据 (Smart Merge)
+        let baseData = node.data;
+        if (refNode) {
+            // 如果 Ref 的状态与 State 不一致，且 Ref 更有可能是“新”的状态，则优先使用 Ref 防止回滚
+            if (refNode.data.status !== node.data.status) {
+                baseData = { ...baseData, status: refNode.data.status };
+            }
+            if ((refNode.data.outputEntries?.length || 0) > (node.data.outputEntries?.length || 0)) {
+                baseData = { ...baseData, outputEntries: refNode.data.outputEntries };
+            }
+            if (refNode.data.loopConfig) {
+                 baseData = { ...baseData, loopConfig: refNode.data.loopConfig };
+            }
+             if (refNode.data.label && refNode.data.label !== node.data.label) {
+                 baseData = { ...baseData, label: refNode.data.label };
+             }
+        }
+
+        // 3. 应用本次显式更新
         if (node.id === nodeId) {
-          return { ...node, data: { ...node.data, ...updates } };
+          return { ...node, data: { ...baseData, ...updates } };
         }
         
-        // 如果是“创建目录”模块重命名，仅负责清空其他节点的产物（因为环境变了），不再维护冗余引用
         if (isRenameFolder) {
           return {
             ...node,
             data: {
-              ...node.data,
+              ...baseData,
               outputEntries: [],
             }
           };
         }
-        return node;
+        
+        return { ...node, data: baseData };
       });
 
-      // 核心修复：在更新 React 状态的同时，手动强制更新 Ref 快照
-      // 解决用户输入到工作流引擎读取之间的同步缝隙
       nodesRef.current = nextNodes;
       return nextNodes;
     });
@@ -1816,30 +2043,24 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const toggleSetReference = useCallback((type: 'worldview' | 'character' | 'outline' | 'inspiration' | 'folder', setId: string) => {
     if (!editingNodeId) return;
     
-    setNodes((nds) => nds.map(node => {
-      if (node.id === editingNodeId) {
-        const key = type === 'worldview' ? 'selectedWorldviewSets' :
-                    type === 'character' ? 'selectedCharacterSets' :
-                    type === 'outline' ? 'selectedOutlineSets' :
-                    type === 'inspiration' ? 'selectedInspirationSets' : 'selectedReferenceFolders';
-        
-        const currentList = [...(node.data[key] as string[])];
-        // 这里的 setId 可能是真实的 ID，也可能是 'pending:FolderName'
-        const newList = currentList.includes(setId)
-          ? currentList.filter(id => id !== setId)
-          : [...currentList, setId];
-          
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            [key]: newList
-          }
-        };
-      }
-      return node;
-    }));
-  }, [editingNodeId, setNodes]);
+    // 核心修复：改用 updateNodeData 以享受其内置的 Smart Merge 保护
+    // 必须先获取当前的列表（注意：这里仍可能读取到 stale state，但 updateNodeData 会保护其他字段）
+    // 对于当前字段，由于用户交互时该节点通常不在运行，风险较低
+    const targetNode = nodesRef.current.find(n => n.id === editingNodeId);
+    if (!targetNode) return;
+
+    const key = type === 'worldview' ? 'selectedWorldviewSets' :
+                type === 'character' ? 'selectedCharacterSets' :
+                type === 'outline' ? 'selectedOutlineSets' :
+                type === 'inspiration' ? 'selectedInspirationSets' : 'selectedReferenceFolders';
+    
+    const currentList = [...(targetNode.data[key] as string[])];
+    const newList = currentList.includes(setId)
+      ? currentList.filter(id => id !== setId)
+      : [...currentList, setId];
+      
+    updateNodeData(editingNodeId, { [key]: newList });
+  }, [editingNodeId, updateNodeData]);
 
   const updateEntryContent = (entryId: string, content: string) => {
     if (!editingNodeId || !editingNode) return;
@@ -1885,6 +2106,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     const validNodes = nodes.filter(n => n && n.id);
     const validEdges = edges.filter(e => e && e.source && e.target);
 
+    // 1. 构建图结构
     validNodes.forEach(node => {
       adjacencyList.set(node.id, []);
       inDegree.set(node.id, 0);
@@ -1898,36 +2120,85 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     });
     
     const queue: string[] = [];
+    const resultIds: string[] = [];
+    const visited = new Set<string>();
+
+    // 2. 初始化队列：将所有入度为 0 的节点加入队列（通常是起点）
     const startNodes = validNodes.filter(n => (inDegree.get(n.id) || 0) === 0)
                            .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
     
-    startNodes.forEach(n => queue.push(n.id));
-    
-    const resultIds: string[] = [];
+    startNodes.forEach(n => {
+      queue.push(n.id);
+      visited.add(n.id);
+    });
+
     const currentInDegree = new Map(inDegree);
 
-    while (queue.length > 0) {
+    // 3. 循环处理
+    while (resultIds.length < validNodes.length) {
+      // 如果队列空了，但还有节点没处理完 -> 说明遇到了环路 (Cycle)
+      if (queue.length === 0) {
+        const remainingNodes = validNodes.filter(n => !visited.has(n.id));
+        if (remainingNodes.length === 0) break;
+
+        // --- 核心修复逻辑 START ---
+        
+        // 策略 A：寻找“入口节点” (Entry Point)
+        // 定义：如果一个未处理节点的父节点中，包含“已处理”的节点，说明它是从外部进入循环的入口。
+        // 我们应该优先执行它，而不是随机挑一个。
+        let candidates = remainingNodes.filter(node => {
+           // 检查该节点是否有任何入边来自 resultIds (已处理节点)
+           return validEdges.some(e => e.target === node.id && visited.has(e.source));
+        });
+
+        // 策略 B：如果找不到入口（比如完全独立的闭环），或者有多个入口
+        // 则退化为按屏幕位置排序 (Top-Left 优先)，这符合用户的视觉直觉
+        if (candidates.length === 0) {
+          candidates = remainingNodes;
+        }
+
+        // 按位置排序候选者
+        candidates.sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
+        
+        // 强制选取第一个节点破局
+        const breaker = candidates[0];
+        queue.push(breaker.id);
+        visited.add(breaker.id);
+        
+        // --- 核心修复逻辑 END ---
+      }
+
+      // 标准 Kahn 算法处理
       const uId = queue.shift()!;
-      resultIds.push(uId);
+      // 防止重复添加（虽然 visited 应该能防住，但加一层保险）
+      if (!resultIds.includes(uId)) {
+        resultIds.push(uId);
+      }
       
       const neighbors = adjacencyList.get(uId) || [];
+      // 对邻居进行排序，确保同一层级的节点执行顺序稳定
       const sortedNeighbors = neighbors
         .map(id => validNodes.find(n => n.id === id)!)
         .filter(Boolean)
         .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
 
       sortedNeighbors.forEach(v => {
+        // 如果邻居已经被强行访问过了（破局点），则跳过
+        if (visited.has(v.id)) return;
+
         const newDegree = (currentInDegree.get(v.id) || 0) - 1;
         currentInDegree.set(v.id, newDegree);
-        if (newDegree === 0) queue.push(v.id);
+        // 如果依赖都满足了，加入队列
+        if (newDegree === 0) {
+          queue.push(v.id);
+          visited.add(v.id);
+        }
       });
     }
     
-    const ordered = resultIds.map(id => validNodes.find(n => n.id === id)!);
-    const remaining = validNodes.filter(n => !resultIds.includes(n.id))
-                               .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
+    // 4. 构建最终结果
+    const finalNodes = resultIds.map(id => validNodes.find(n => n.id === id)!);
     
-    const finalNodes = [...ordered, ...remaining];
     const duration = Date.now() - startTime;
     if (duration > 15) {
       terminal.log(`[PERF] WorkflowEditor.orderedNodes recalculate: ${duration}ms (Nodes: ${nodes.length})`);
@@ -1947,7 +2218,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     const startX = 100;
     const startY = 250;
 
-    const nextNodes = nodes.map(node => {
+    // 核心修复：布局整理时必须基于 nodesRef (最新数据) 进行，而非 React State (可能滞后)
+    // 否则会造成点击整理布局时，节点状态回滚
+    const currentNodes = nodesRef.current.length > 0 ? nodesRef.current : nodes;
+
+    const nextNodes = currentNodes.map(node => {
       const idx = ordered.findIndex(n => n.id === node.id);
       if (idx !== -1) {
         return {
@@ -2142,8 +2417,114 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           break;
         }
 
-        const node = sortedNodes[i];
+        // 核心修复：使用 nodesRef 获取最新的节点状态，防止闭包导致的状态陈旧
+        // sortedNodes 是静态的快照，但节点内部的 data (如 status) 需要是实时的
+        // 如果不这样做，当 loop 回跳重置了前面节点的状态为 'pending' 后，
+        // 这里 sortedNodes[i] 拿到的可能还是之前 'completed' 的旧状态，
+        // 导致下面的 if (node.data.status === 'completed') 误判跳过
+        const staticNode = sortedNodes[i];
+        const node = nodesRef.current.find(n => n.id === staticNode.id) || staticNode;
         workflowManager.updateProgress(i);
+
+        // --- Loop Node Logic ---
+        if (node.data.typeKey === 'loopNode') {
+          // 初始化 loopConfig
+          const loopConfig = node.data.loopConfig || { enabled: true, count: 1, currentIndex: 0 };
+          const currentLoopIndex = (loopConfig.currentIndex || 0) + 1;
+          
+          // 更新全局 loop_index 变量
+          workflowManager.setContextVar('loop_index', currentLoopIndex);
+          
+          terminal.log(`[LoopNode] Executing loop ${currentLoopIndex} / ${loopConfig.count}`);
+
+          // 更新状态为执行中
+          await syncNodeStatus(node.id, {
+            status: 'executing',
+            loopConfig: { ...loopConfig, currentIndex: currentLoopIndex - 1 }
+          }, i);
+          
+          // 视觉反馈
+          setEdges(eds => eds.map(e => ({ ...e, animated: e.target === node.id })));
+          await new Promise(resolve => setTimeout(resolve, 600)); // 动画展示时间
+
+          // 核心修复：循环次数判断逻辑修正
+          // currentLoopIndex 是当前正要执行（或刚执行完）的轮次
+          // 如果 currentLoopIndex < loopConfig.count，说明还需要继续下一轮
+          // 例如 count=2，当前是第1次（currentLoopIndex=1），1 < 2，需要回跳继续跑第2次
+          // 第2次跑完后回来（currentLoopIndex=2），2 < 2 不成立，结束
+          if (currentLoopIndex < loopConfig.count) {
+             // 核心修复：更鲁棒的回跳目标查找
+             // 只要是从 LoopNode 连出去的线，我们都认为是跳转目标
+             const outEdges = edges.filter(e => e.source === node.id);
+             
+             if (outEdges.length > 0) {
+                // 1. 优先寻找显式的“回跳”（即目标在当前节点之前）
+                let targetEdge = outEdges.find(e => {
+                   const idx = sortedNodes.findIndex(n => n.id === e.target);
+                   return idx !== -1 && idx <= i;
+                });
+
+                // 2. 如果没找到严格的回跳（比如排序算法导致目标在后，或者这就是个单纯的跳转），
+                // 则直接使用第一条出边作为目标
+                if (!targetEdge) {
+                   targetEdge = outEdges[0];
+                }
+
+                const targetNodeId = targetEdge.target;
+                const targetIndex = sortedNodes.findIndex(n => n.id === targetNodeId);
+                
+                if (targetIndex !== -1) {
+                   terminal.log(`[LoopNode] Looping back to node index ${targetIndex} (${sortedNodes[targetIndex].data.label})`);
+                   
+                   // 1. 重置循环体内节点的状态
+                   const nodesToReset = sortedNodes.slice(targetIndex, i + 1);
+                   const resetNodeIds = new Set(nodesToReset.map(n => n.id));
+                   
+                   const nextNodes = nodesRef.current.map(n => {
+                      if (resetNodeIds.has(n.id)) {
+                         // 保留 loopNode 的状态
+                         if (n.id === node.id) return { ...n, data: { ...n.data, status: 'pending' as const, loopConfig: { ...loopConfig, currentIndex: currentLoopIndex } } };
+                         
+                         // 核心修复：清空 outputEntries 以确保 UI 更新并强制 AI 重新生成
+                         // 同时保留 folderName 等配置项
+                         return {
+                           ...n,
+                           data: {
+                             ...n.data,
+                             status: 'pending' as const,
+                             outputEntries: [], // 强制清空产物列表
+                             label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label // 重置正文生成节点的显示状态
+                           }
+                         };
+                      }
+                      return n;
+                   });
+                   
+                   nodesRef.current = nextNodes;
+                   setNodes(nextNodes);
+                   
+                   // 2. 将执行指针 i 设为 targetIndex - 1 (因为循环末尾会 i++)
+                   i = targetIndex - 1;
+                   
+                   // 3. 更新 LoopNode 自身的计数状态
+                   await syncNodeStatus(node.id, {
+                      status: 'pending',
+                      loopConfig: { ...loopConfig, currentIndex: currentLoopIndex }
+                   }, i);
+                   
+                   continue;
+                }
+             }
+          } else {
+             // 循环结束
+             terminal.log(`[LoopNode] Loop completed.`);
+             await syncNodeStatus(node.id, { status: 'completed' }, i);
+          }
+          
+          setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
+          // 如果循环结束，继续执行后续节点（如果有）
+          continue;
+        }
 
         if (node.data.skipped) {
           // 核心修复：必须同时更新 Ref，否则会被后续步骤的 syncNodeStatus 回滚状态
@@ -2170,6 +2551,15 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         // 视觉反馈增强：为非 AI 调用节点增加最小执行感，确保用户能看到脉冲发光提示
         if (node.data.typeKey === 'userInput' || node.data.typeKey === 'createFolder' || node.data.typeKey === 'reuseDirectory') {
           await new Promise(resolve => setTimeout(resolve, 600));
+        }
+
+        // 注入当前循环轮次的特定指令
+        const currentLoopIndex = workflowManager.getContextVar('loop_index') || 1;
+        const loopInstructions = node.data.loopInstructions as LoopInstruction[] || [];
+        const specificInstruction = loopInstructions.find(inst => inst.index === currentLoopIndex)?.content || '';
+        
+        if (specificInstruction) {
+           accumContext += `\n【第 ${currentLoopIndex} 轮循环特定指令】：\n${specificInstruction}\n`;
         }
 
         // 处理创建文件夹节点
@@ -2205,6 +2595,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             if (volumeResult.isNew) {
               updatedNovel.volumes = [...(updatedNovel.volumes || []), volumeResult.set];
               changed = true;
+            }
+            // V2: Set Active Anchor automatically
+            if (volumeResult.set && volumeResult.set.id) {
+               workflowManager.setActiveVolumeAnchor(volumeResult.set.id);
             }
 
             const worldviewResult = createSetIfNotExist(updatedNovel.worldviewSets, currentWorkflowFolder, () => ({
@@ -2284,7 +2678,15 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         }
 
         if (node.data.typeKey === 'userInput') {
-          accumContext += `【全局输入】：\n${node.data.instruction}\n\n`;
+          // V2: Interpolate instruction (allow dynamic prompts in user input node)
+          const interpolatedInput = workflowManager.interpolate(node.data.instruction);
+          accumContext += `【全局输入】：\n${interpolatedInput}\n\n`;
+
+          // V2: Variable Binding (Capture input to variables)
+          if (node.data.variableBinding && node.data.variableBinding.length > 0) {
+             workflowManager.processVariableBindings(node.data.variableBinding, interpolatedInput);
+          }
+
           // 更新节点状态为已完成
           await syncNodeStatus(node.id, { status: 'completed' }, i);
           // 停止入线动画
@@ -2621,8 +3023,19 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           // 获取最新的分卷列表（从执行中的内存状态获取）
           const latestVolumes = localNovel.volumes || [];
 
+          // 优先级 0: V2 Dynamic Anchor
+          if (node.data.targetVolumeMode === 'dynamic_anchor') {
+             const anchor = workflowManager.getActiveVolumeAnchor();
+             if (anchor) {
+                // Verify existence
+                if (latestVolumes.some(v => v.id === anchor)) {
+                   finalVolumeId = anchor;
+                }
+             }
+          }
+
           // 优先级 1: 如果节点已经显式关联了某个真实分卷 ID，且该分卷依然存在
-          if (finalVolumeId && finalVolumeId !== 'NEW_VOLUME') {
+          if (finalVolumeId && finalVolumeId !== 'NEW_VOLUME' && (!node.data.targetVolumeMode || node.data.targetVolumeMode === 'static')) {
             const exists = latestVolumes.some(v => v.id === finalVolumeId);
             if (!exists) finalVolumeId = ''; // 如果关联的分卷被删了，重置它
           }
@@ -2793,6 +3206,25 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         }
 
         // 5. 调用 AI (针对设定生成、AI 聊天等节点)
+
+        // V2: Global Interpolation for all messages before sending
+        messages = messages.map(m => {
+          if (typeof m.content === 'string') {
+            return { ...m, content: workflowManager.interpolate(m.content) };
+          }
+          // Handle array content (multimodal) if needed
+          if (Array.isArray(m.content)) {
+             return {
+                ...m,
+                content: m.content.map((c: any) => {
+                   if (c.type === 'text') return { ...c, text: workflowManager.interpolate(c.text) };
+                   return c;
+                })
+             };
+          }
+          return m;
+        });
+
         const nodeApiConfig = preset?.apiConfig || {};
         
         // 确定该功能模块对应的全局模型设置
@@ -3031,6 +3463,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           title: e.title,
           content: e.content
         }));
+
+        // V2: Capture Variables from output
+        if (node.data.variableBinding && node.data.variableBinding.length > 0) {
+           workflowManager.processVariableBindings(node.data.variableBinding, result);
+        }
 
         updateNodeData(node.id, { outputEntries: [...newEntries, ...(node.data.outputEntries || [])] });
 
@@ -3301,17 +3738,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
   if (!isOpen) return null;
 
-  if (isLoadingWorkflows) {
-    return (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-0 md:p-4">
-        <div className="bg-gray-900 w-full h-full md:w-[98%] md:h-[95vh] md:rounded-xl shadow-2xl border border-gray-700 flex flex-col items-center justify-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-          <div className="text-indigo-400 font-bold animate-pulse">正在从数据库恢复工作流状态...</div>
-          <p className="text-xs text-gray-500">大型工作流可能需要几秒钟时间进行初始化</p>
-        </div>
-      </div>
-    );
-  }
+  // 恢复旧版体验：移除全屏 Loading 遮罩，改为静默加载或局部状态
+  // if (isLoadingWorkflows) { ... }
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
@@ -3350,11 +3778,17 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 border-r border-gray-700 pr-4">
               <div className="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-900/20">
-                <Workflow className="w-5 h-5 text-white" />
+                {isLoadingWorkflows ? (
+                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                   <Workflow className="w-5 h-5 text-white" />
+                )}
               </div>
               <div>
                 <h3 className="font-bold text-lg text-gray-100 leading-tight">工作流编辑器</h3>
-                <p className="text-xs text-gray-500">串联多步骤自动化任务</p>
+                <p className="text-xs text-gray-500">
+                  {isLoadingWorkflows ? '正在同步数据...' : '串联多步骤自动化任务'}
+                </p>
               </div>
             </div>
 
@@ -3583,6 +4017,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           <ReactFlow
             nodes={nodes}
             edges={edges}
+            isValidConnection={() => true}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}

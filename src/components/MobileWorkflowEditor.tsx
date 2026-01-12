@@ -344,7 +344,7 @@ const ConfigPanel = React.memo(({
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleUpdate({ skipped: !editingNode.data.skipped })}
-              className={`text-[10px] px-3 py-1.5 rounded-full transition-all font-bold uppercase tracking-wider flex items-center gap-1 ${editingNode.data.skipped ? 'bg-gray-600 text-gray-300' : 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'}`}
+              className={`text-[10px] px-3 py-1.5 rounded-full transition-all font-bold uppercase tracking-wider flex items-center gap-1 ${editingNode.data.skipped ? 'bg-gray-600 text-gray-300' : 'bg-primary/20 text-primary border border-primary/30'}`}
             >
               {editingNode.data.skipped ? <Square className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
               {editingNode.data.skipped ? '已跳过' : '执行'}
@@ -363,20 +363,20 @@ const ConfigPanel = React.memo(({
           <OptimizedInput
             value={editingNode.data.label}
             onChange={(val: string) => handleUpdate({ label: val })}
-            className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500 shadow-inner"
+            className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-primary shadow-inner"
           />
         </div>
 
         {(editingNode.data.typeKey === 'createFolder' || editingNode.data.typeKey === 'reuseDirectory') && (
           <div className="space-y-3">
-            <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+            <label className="text-[10px] font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
               <Folder className="w-3.5 h-3.5" /> 关联目录名
             </label>
             <div className="flex gap-2">
               <OptimizedInput
                 value={editingNode.data.folderName}
                 onChange={(val: string) => handleUpdate({ folderName: val })}
-                className="flex-1 bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-indigo-500"
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-primary"
                 placeholder="输入文件夹名称..."
               />
               {editingNode.data.typeKey === 'reuseDirectory' && activeNovel && (
@@ -432,9 +432,9 @@ const ConfigPanel = React.memo(({
         {(editingNode.data.typeKey === 'aiChat' || editingNode.data.typeKey === 'workflowGenerator') && (
           <div className="space-y-4 pt-4 border-t border-gray-800">
             {editingNode.data.typeKey === 'workflowGenerator' && (
-              <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-4 mb-4">
+              <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs">
+                  <div className="flex items-center gap-2 text-primary font-bold text-xs">
                     <Wand2 className="w-4 h-4" /> 架构师模式
                   </div>
                   <button

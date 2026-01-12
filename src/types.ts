@@ -237,3 +237,30 @@ export interface CompletionPreset {
   regexScripts?: RegexScript[];
   apiConfig?: PresetApiConfig;
 }
+
+// --- Workflow V2 Types ---
+
+export interface LoopConfig {
+  enabled: boolean;
+  count: number; // Default iteration count
+  variableName?: string; // If set, overrides count (dynamic from context)
+  waitPerIteration?: boolean; // If true, pauses after each loop for user interaction
+  currentIndex?: number; // Runtime state
+}
+
+export interface LoopInstruction {
+  index: number;
+  content: string;
+}
+
+export interface VariableBinding {
+  targetVar: string; // The variable name to set in global context (e.g. "batch_range")
+  source: 'userInput' | 'aiOutput';
+  extractRegex?: string; // Optional: Extract specific part from content
+}
+
+export interface WorkflowGlobalContext {
+  variables: Record<string, any>;
+  activeVolumeAnchor?: string; // ID of the volume currently being targeted
+  executionStack: any[]; // For nested loops (future use)
+}
