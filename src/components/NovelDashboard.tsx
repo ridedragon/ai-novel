@@ -550,14 +550,14 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
       {editingNovel && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#18181b] w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white">编辑作品信息</h3>
+            <div className="p-4 md:p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+              <h3 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white">编辑作品信息</h3>
               <button onClick={() => setEditingNovel(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                 <X className="w-6 h-6" />
               </button>
             </div>
             
-            <div className="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
+            <div className="p-4 md:p-6 space-y-4 overflow-y-auto max-h-[70vh]">
               {/* Title */}
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700 dark:text-slate-300">作品名称</label>
@@ -571,22 +571,22 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
 
               {/* Cover URL */}
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700 dark:text-slate-300">封面图片 URL</label>
-                <div className="flex gap-4">
+                <label className="text-sm font-bold text-slate-700 dark:text-slate-300">封面图片</label>
+                <div className="flex flex-col md:flex-row gap-4">
                     <img
                       src={editingNovel.coverUrl || '/src/默认封面/默认封面.jpg'}
                       alt="Cover"
-                      className="w-16 h-20 object-cover rounded-lg bg-slate-200"
+                      className="w-24 h-32 md:w-16 md:h-20 object-cover rounded-lg bg-slate-200 flex-shrink-0 self-center md:self-auto shadow-sm"
                       onError={(e) => (e.currentTarget.src = '/src/默认封面/默认封面.jpg')}
                     />
-                    <div className="flex-1 space-y-2">
-                        <div className="flex gap-2">
+                    <div className="flex-1 space-y-2 w-full min-w-0">
+                        <div className="flex gap-2 w-full">
                             <input
                               type="text"
                               value={editingNovel.coverUrl || ''}
                               onChange={(e) => setEditingNovel({...editingNovel, coverUrl: e.target.value})}
-                              className="flex-1 px-4 py-2 bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all text-sm"
-                              placeholder="https://..."
+                              className="flex-1 px-4 py-2 bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all text-sm min-w-0"
+                              placeholder="输入图片链接或上传..."
                             />
                             <input
                                 type="file"
@@ -645,7 +645,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
               </div>
             </div>
 
-            <div className="p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-[#09090b]/50 flex justify-end gap-3">
+            <div className="p-4 md:p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-[#09090b]/50 flex justify-end gap-3">
               <button
                 onClick={() => setEditingNovel(null)}
                 className="px-5 py-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors font-medium"
