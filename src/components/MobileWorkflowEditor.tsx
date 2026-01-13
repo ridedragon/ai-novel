@@ -36,6 +36,7 @@ import {
   MessageSquare,
   Play,
   Plus,
+  Repeat,
   Save,
   Settings2,
   Square,
@@ -50,7 +51,7 @@ import {
 import OpenAI from 'openai';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
-import { GeneratorPreset, GeneratorPrompt, Novel } from '../types';
+import { GeneratorPreset, GeneratorPrompt, LoopInstruction, Novel } from '../types';
 import { AutoWriteEngine } from '../utils/auto-write';
 import { keepAliveManager } from '../utils/KeepAliveManager';
 import { storage } from '../utils/storage';
@@ -185,9 +186,10 @@ const CoolEdge = ({
 
 
 // --- 配置定义 ---
-type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter' | 'workflowGenerator';
+type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter' | 'workflowGenerator' | 'loopNode';
 
 const NODE_CONFIGS: Record<NodeTypeKey, any> = {
+  loopNode: { typeLabel: '循环', icon: Repeat, color: '#0ea5e9', defaultLabel: '循环控制', presetType: null },
   workflowGenerator: { typeLabel: '架构', icon: Wand2, color: '#f87171', defaultLabel: '工作流架构师', presetType: 'generator' },
   createFolder: { typeLabel: '目录', icon: FolderPlus, color: '#818cf8', defaultLabel: '初始化目录', presetType: null },
   reuseDirectory: { typeLabel: '复用', icon: Folder, color: '#fbbf24', defaultLabel: '切换目录节点', presetType: null },
@@ -638,6 +640,84 @@ const ConfigPanel = React.memo(({
           />
         </div>
 
+        {/* 循环指令配置 */}
+        <div className="space-y-4 pt-4 border-t border-gray-800">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+              <Repeat className="w-3.5 h-3.5" /> 循环特定指令
+            </label>
+            <button
+              onClick={() => {
+                const currentInstructions = (editingNode.data.loopInstructions as LoopInstruction[]) || [];
+                const nextIndex = currentInstructions.length > 0 ? Math.max(...currentInstructions.map(i => i.index)) + 1 : 1;
+                const newInstructions = [...currentInstructions, { index: nextIndex, content: '' }];
+                handleUpdate({ loopInstructions: newInstructions });
+              }}
+              className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" /> 添加轮次
+            </button>
+          </div>
+          {((editingNode.data.loopInstructions as LoopInstruction[]) || []).map((inst, idx) => (
+            <div key={idx} className="bg-gray-800/50 border border-gray-700 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 bg-gray-700/30 border-b border-gray-700/50">
+                <span className="text-[10px] font-bold text-gray-400">第 {inst.index} 次循环</span>
+                <button
+                  onClick={() => {
+                    const newInstructions = ((editingNode.data.loopInstructions as LoopInstruction[]) || []).filter((_, i) => i !== idx);
+                    handleUpdate({ loopInstructions: newInstructions });
+                  }}
+                  className="text-gray-500 hover:text-red-400"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+              <OptimizedTextarea
+                value={inst.content}
+                onChange={(val: string) => {
+                  const newInstructions = [...((editingNode.data.loopInstructions as LoopInstruction[]) || [])];
+                  newInstructions[idx] = { ...inst, content: val };
+                  handleUpdate({ loopInstructions: newInstructions });
+                }}
+                className="w-full h-20 bg-transparent p-3 text-xs text-gray-300 focus:text-white outline-none resize-none"
+                placeholder="输入该轮次特定指令..."
+              />
+            </div>
+          ))}
+        </div>
+
+        {editingNode.data.typeKey === 'loopNode' && (
+          <div className="space-y-4 pt-4 border-t border-gray-800">
+            <label className="text-[10px] font-bold text-sky-500 uppercase tracking-widest flex items-center gap-2">
+              <Repeat className="w-3.5 h-3.5" /> 循环控制器配置
+            </label>
+            <div className="bg-sky-500/10 border border-sky-500/20 rounded-2xl p-4 space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] text-sky-300 font-bold uppercase">循环次数</label>
+                <OptimizedInput
+                  type="number"
+                  value={editingNode.data.loopConfig?.count || 1}
+                  onChange={(val: string) => {
+                    const count = parseInt(val) || 1;
+                    handleUpdate({
+                      loopConfig: {
+                        ...(editingNode.data.loopConfig || { enabled: true }),
+                        count,
+                        enabled: true
+                      }
+                    });
+                  }}
+                  className="w-full bg-gray-800 border border-sky-500/30 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-sky-500"
+                />
+              </div>
+              <p className="text-[10px] text-sky-400/70 leading-relaxed">
+                此节点作为循环控制器。当执行到此节点时，如果未达到指定次数，将跳转回循环起始位置（通过连线闭环）。
+                可以使用 <code>{'{{loop_index}}'}</code> 变量。
+              </p>
+            </div>
+          </div>
+        )}
+
         {editingNode.data.typeKey !== 'userInput' && activeNovel && (
           <div className="space-y-6 pt-6 border-t border-gray-800">
             <label className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-2">
@@ -726,32 +806,45 @@ const ConfigPanel = React.memo(({
           <div className="space-y-4 pt-6 border-t border-gray-800">
             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">产出 ({(editingNode.data.outputEntries as OutputEntry[]).length})</label>
             <div className="space-y-3">
-              {(editingNode.data.outputEntries as OutputEntry[]).map(entry => (
-                <div key={entry.id} className="p-4 bg-gray-800 border border-gray-700 rounded-2xl flex items-center justify-between active:bg-gray-700" onClick={() => onPreviewEntry(entry)}>
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0">
-                      <FileText className="w-5 h-5 text-indigo-400" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-gray-200 truncate">{entry.title}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm('确定要删除这条产出吗？')) {
-                          onDeleteOutputEntry(editingNode.id, entry.id);
-                        }
-                      }}
-                      className="p-2 text-gray-500 hover:text-red-400"
+              {(() => {
+                const entries = (editingNode.data.outputEntries || []) as OutputEntry[];
+                return entries.map((entry, idx) => {
+                  const isFirst = idx === 0;
+                  // 移动端使用简化的折叠逻辑，非首项折叠
+                  // 由于移动端 onPreviewEntry 是弹窗，我们这里直接展示列表项，点击弹窗预览
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`p-4 bg-gray-800 border border-gray-700 rounded-2xl flex items-center justify-between active:bg-gray-700 transition-all ${!isFirst ? 'opacity-80 scale-95' : ''}`}
+                      onClick={() => onPreviewEntry(entry)}
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                    <ChevronDown className="w-4 h-4 text-gray-600 -rotate-90" />
-                  </div>
-                </div>
-              ))}
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5 text-indigo-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold text-gray-200 truncate">{entry.title}</div>
+                          {!isFirst && <div className="text-[10px] text-gray-500 truncate">历史版本 (点击查看)</div>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('确定要删除这条产出吗？')) {
+                              onDeleteOutputEntry(editingNode.id, entry.id);
+                            }
+                          }}
+                          className="p-2 text-gray-500 hover:text-red-400"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform ${!isFirst ? '-rotate-90' : ''}`} />
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         )}
@@ -1570,6 +1663,9 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           if (n.data.typeKey === 'chapter') {
             updates.label = NODE_CONFIGS.chapter.defaultLabel;
           }
+          if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {
+            updates.loopConfig = { ...n.data.loopConfig, currentIndex: 0 };
+          }
           // 不再重置 targetVolumeId，保留用户配置
           return { ...n, data: { ...n.data, ...updates } };
         }));
@@ -1607,8 +1703,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             accumContext += `【全局输入】：\n${prevNode.data.instruction}\n\n`;
           }
           // 获取上一个执行完的节点的产出作为 lastNodeOutput
+          // 核心修复：移动端同步逻辑 - 如果是循环回跳产生的多条历史记录，应该将所有历史记录（按时间倒序恢复为正序）都拼接到上下文中
           if (prevNode.data.outputEntries && prevNode.data.outputEntries.length > 0) {
-            lastNodeOutput += `【${prevNode.data.typeLabel}输出】：\n${prevNode.data.outputEntries[0].content}\n\n`;
+            const allHistory = [...prevNode.data.outputEntries].reverse().map(e => e.content).join('\n\n---\n\n');
+            lastNodeOutput += `【${prevNode.data.typeLabel}输出历史】：\n${allHistory}\n\n`;
           }
         }
       }
@@ -1629,6 +1727,80 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         
         terminal.log(`[WORKFLOW] Executing Node: ${node.data.label} (${node.data.typeLabel})`);
         logMemory();
+
+        // --- Loop Node Logic ---
+        if (node.data.typeKey === 'loopNode') {
+          const loopConfig = node.data.loopConfig || { enabled: true, count: 1, currentIndex: 0 };
+          const currentLoopIndex = (loopConfig.currentIndex || 0) + 1;
+          
+          workflowManager.setContextVar('loop_index', currentLoopIndex);
+          
+          await syncNodeStatus(node.id, {
+            status: 'executing',
+            loopConfig: { ...loopConfig, currentIndex: currentLoopIndex - 1 }
+          }, i);
+          
+          setEdges(eds => eds.map(e => {
+            if (e.target === node.id) return { ...e, animated: true };
+            if (e.animated) return { ...e, animated: false };
+            return e;
+          }));
+          await new Promise(resolve => setTimeout(resolve, 600));
+
+          if (currentLoopIndex < loopConfig.count) {
+             const outEdges = edges.filter(e => e.source === node.id);
+             
+             if (outEdges.length > 0) {
+                let targetEdge = outEdges.find(e => {
+                   const idx = sortedNodes.findIndex(n => n.id === e.target);
+                   return idx !== -1 && idx <= i;
+                });
+
+                if (!targetEdge) targetEdge = outEdges[0];
+
+                const targetNodeId = targetEdge.target;
+                const targetIndex = sortedNodes.findIndex(n => n.id === targetNodeId);
+                
+                if (targetIndex !== -1) {
+                   terminal.log(`[Mobile LoopNode] Looping back to node index ${targetIndex}`);
+                   
+                   const nodesToReset = sortedNodes.slice(targetIndex, i + 1);
+                   const resetNodeIds = new Set(nodesToReset.map(n => n.id));
+                   
+                   const nextNodes = nodesRef.current.map(n => {
+                      if (resetNodeIds.has(n.id)) {
+                         if (n.id === node.id) return { ...n, data: { ...n.data, status: 'pending' as const, loopConfig: { ...loopConfig, currentIndex: currentLoopIndex } } };
+                         
+                         return {
+                           ...n,
+                           data: {
+                             ...n.data,
+                             status: 'pending' as const,
+                             label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label
+                           }
+                         };
+                      }
+                      return n;
+                   });
+                   
+                   setNodes(nextNodes);
+                   i = targetIndex - 1;
+                   
+                   await syncNodeStatus(node.id, {
+                      status: 'pending',
+                      loopConfig: { ...loopConfig, currentIndex: currentLoopIndex }
+                   }, i);
+                   
+                   continue;
+                }
+             }
+          } else {
+             await syncNodeStatus(node.id, { status: 'completed' }, i);
+          }
+          
+          setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
+          continue;
+        }
 
         if (node.data.skipped) {
           setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n));
@@ -1653,6 +1825,15 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         // 视觉反馈增强
         if (node.data.typeKey === 'userInput' || node.data.typeKey === 'createFolder' || node.data.typeKey === 'reuseDirectory') {
           await new Promise(resolve => setTimeout(resolve, 600));
+        }
+
+        // 注入当前循环轮次的特定指令
+        const currentLoopIndex = workflowManager.getContextVar('loop_index') || 1;
+        const loopInstructions = node.data.loopInstructions as LoopInstruction[] || [];
+        const specificInstruction = loopInstructions.find(inst => inst.index === currentLoopIndex)?.content || '';
+        
+        if (specificInstruction) {
+           accumContext += `\n【第 ${currentLoopIndex} 轮循环特定指令】：\n${specificInstruction}\n`;
         }
 
         // 处理创建文件夹节点
@@ -2601,17 +2782,24 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                       abortControllerRef.current.abort();
                     }
 
-                    const updatedNodes = nodes.map(n => ({
-                      ...n,
-                      data: {
-                        ...n.data,
+                    const updatedNodes = nodes.map(n => {
+                      const updates: any = {
                         status: 'pending' as const,
                         label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label,
                         outputEntries: [],
-                        // 不再重置 targetVolumeId，保留用户配置
                         targetVolumeName: ''
+                      };
+                      if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {
+                        updates.loopConfig = { ...n.data.loopConfig, currentIndex: 0 };
                       }
-                    }));
+                      return {
+                        ...n,
+                        data: {
+                          ...n.data,
+                          ...updates
+                        }
+                      };
+                    });
 
                     // 2. 同步 UI 状态
                     setNodes(updatedNodes);

@@ -83,6 +83,15 @@ body {
   min-height: 100vh;
   /* 移除移动端点击 300ms 延迟，提升响应速度 */
   touch-action: manipulation;
+  /* 适配刘海屏 */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* 针对侧边栏等可点击元素优化 */

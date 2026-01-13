@@ -36,6 +36,60 @@ let lastSavedNovelsJson = '';
 // 引入序列化锁，确保工作流保存操作按顺序执行，防止异步写入竞态导致的旧数据覆盖新数据
 let workflowSaveQueue: Promise<void> = Promise.resolve();
 
+// 后端 API 地址
+const API_BASE_URL = 'http://localhost:3001/api/storage';
+
+// 辅助 API 请求函数
+async function fetchFromApi<T>(key: string): Promise<T | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/${encodeURIComponent(key)}`);
+    if (response.status === 404 || response.status === 204) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+    const json = await response.json();
+
+    // 兼容性处理：如果返回的是包装过的对象，解包
+    if (json && typeof json === 'object' && '__wrapped_value__' in json) {
+      return json.__wrapped_value__ as T;
+    }
+
+    return json as T;
+  } catch (e) {
+    // console.warn(`[STORAGE] Failed to fetch key ${key} from API`, e);
+    return null;
+  }
+}
+
+async function saveToApi(key: string, value: any): Promise<void> {
+  try {
+    // 始终包装数据，避免顶层字符串导致的 body-parser 解析错误
+    const payload = { __wrapped_value__: value };
+
+    await fetch(`${API_BASE_URL}/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    console.error(`[STORAGE] Failed to save key ${key} to API`, e);
+  }
+}
+
+async function deleteFromApi(key: string): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+    });
+  } catch (e) {
+    console.error(`[STORAGE] Failed to delete key ${key} from API`, e);
+  }
+}
+
 export const storage = {
   // 辅助函数：生成单本小说的结构化索引元数据（极简，不含重型设定集）
   _getNovelMetadataJson(novel: Novel): string {
@@ -76,20 +130,71 @@ export const storage = {
 
   async getNovels(): Promise<Novel[]> {
     try {
-      // 1. 先获取主索引数据 (现在仅包含书籍基本信息)
-      const novels = await get<Novel[]>(NOVELS_KEY);
+      // 1. 尝试从 IndexedDB 获取
+      let novels = await get<Novel[]>(NOVELS_KEY);
+
+      // 2. 尝试从 API 获取远程数据状态
+      const remoteNovels = await fetchFromApi<Novel[]>(NOVELS_KEY);
+
+      // 3. 同步逻辑
+      if (!novels || novels.length === 0) {
+        // 场景 A: 本地为空 (如新开的 Chrome)，远程有数据 -> 拉取
+        if (remoteNovels && remoteNovels.length > 0) {
+          novels = remoteNovels;
+          await set(NOVELS_KEY, novels);
+          terminal.log('[STORAGE] 本地为空，已从远程服务器同步书籍列表');
+        }
+      } else {
+        // 场景 B: 本地有数据 (如原本的 Edge)，远程为空 -> 推送 (初始化远程)
+        // 增强版：不仅推送列表，还推送所有书籍的详情元数据 (世界观、大纲等)
+        if (!remoteNovels || remoteNovels.length === 0) {
+          terminal.log('[STORAGE] 远程为空，正在将本地数据(含详情)全量初始化到服务器...');
+
+          // 1. 推送列表
+          const pushPromise = saveToApi(NOVELS_KEY, novels).then(async () => {
+            if (!novels) return;
+            // 2. 遍历所有书籍，推送详情
+            for (const novel of novels) {
+              const nid = novel.id;
+              // 从 IDB 读取各个分块并上传
+              const [meta, wv, char, out, plot, ref, insp] = await Promise.all([
+                get(`${METADATA_PREFIX}${nid}`),
+                get(`${WORLDVIEW_PREFIX}${nid}`),
+                get(`${CHARACTERS_PREFIX}${nid}`),
+                get(`${OUTLINE_PREFIX}${nid}`),
+                get(`${PLOT_OUTLINE_PREFIX}${nid}`),
+                get(`${REFERENCE_PREFIX}${nid}`),
+                get(`${INSPIRATION_PREFIX}${nid}`),
+              ]);
+
+              const tasks = [];
+              if (meta) tasks.push(saveToApi(`${METADATA_PREFIX}${nid}`, meta));
+              if (wv) tasks.push(saveToApi(`${WORLDVIEW_PREFIX}${nid}`, wv));
+              if (char) tasks.push(saveToApi(`${CHARACTERS_PREFIX}${nid}`, char));
+              if (out) tasks.push(saveToApi(`${OUTLINE_PREFIX}${nid}`, out));
+              if (plot) tasks.push(saveToApi(`${PLOT_OUTLINE_PREFIX}${nid}`, plot));
+              if (ref) tasks.push(saveToApi(`${REFERENCE_PREFIX}${nid}`, ref));
+              if (insp) tasks.push(saveToApi(`${INSPIRATION_PREFIX}${nid}`, insp));
+
+              if (tasks.length > 0) {
+                await Promise.all(tasks);
+                terminal.log(`[STORAGE] 已自动上报《${novel.title}》的详情数据`);
+              }
+            }
+            terminal.log('[STORAGE] 全量数据上报完成');
+          });
+
+          pushPromise.catch(e => console.error('[STORAGE] 数据自动上报失败', e));
+        }
+      }
 
       if (novels) {
         // 初始化全局书籍列表缓存
         lastSavedNovelsJson = JSON.stringify(novels);
-
-        // --- 性能飞跃优化 ---
-        // 核心改动：启动时只加载“书籍框架”，不再加载任何章节列表或正文。
-        // 详细数据将由 App.tsx 根据当前选中的书籍按需调用 loadNovelContent 进行加载。
         return novels;
       }
 
-      // If not in IndexedDB, try localStorage (migration path)
+      // If not in IndexedDB or API, try localStorage (migration path)
       const localNovels = localStorage.getItem(NOVELS_KEY);
       if (localNovels) {
         try {
@@ -120,8 +225,8 @@ export const storage = {
     const startTime = Date.now();
     terminal.log(`[STORAGE] 正在按需加载《${novel.title}》的数据 (原子化并行模式)...`);
 
-    // 1. 并行读取所有潜在的存储块
-    const [metadata, wv, char, out, plot, ref, insp] = await Promise.all([
+    // 1. 并行读取所有潜在的存储块 (增加 API 回退)
+    let [metadata, wv, char, out, plot, ref, insp] = await Promise.all([
       get<any>(`${METADATA_PREFIX}${novel.id}`),
       get<any>(`${WORLDVIEW_PREFIX}${novel.id}`),
       get<any>(`${CHARACTERS_PREFIX}${novel.id}`),
@@ -130,6 +235,87 @@ export const storage = {
       get<any>(`${REFERENCE_PREFIX}${novel.id}`),
       get<any>(`${INSPIRATION_PREFIX}${novel.id}`),
     ]);
+
+    // --- 增强版同步逻辑：缺什么补什么 ---
+    // 检查每一项，如果本地缺失，则尝试从远程获取
+    const missingKeys: string[] = [];
+    if (!metadata) missingKeys.push(`${METADATA_PREFIX}${novel.id}`);
+    if (!wv) missingKeys.push(`${WORLDVIEW_PREFIX}${novel.id}`);
+    if (!char) missingKeys.push(`${CHARACTERS_PREFIX}${novel.id}`);
+    if (!out) missingKeys.push(`${OUTLINE_PREFIX}${novel.id}`);
+    if (!plot) missingKeys.push(`${PLOT_OUTLINE_PREFIX}${novel.id}`);
+    if (!ref) missingKeys.push(`${REFERENCE_PREFIX}${novel.id}`);
+    if (!insp) missingKeys.push(`${INSPIRATION_PREFIX}${novel.id}`);
+
+    if (missingKeys.length > 0) {
+      terminal.log(`[STORAGE] 检测到《${novel.title}》缺失 ${missingKeys.length} 项数据，尝试从远程补全...`);
+
+      const remoteResults = await Promise.all([
+        !metadata ? fetchFromApi<any>(`${METADATA_PREFIX}${novel.id}`) : Promise.resolve(null),
+        !wv ? fetchFromApi<any>(`${WORLDVIEW_PREFIX}${novel.id}`) : Promise.resolve(null),
+        !char ? fetchFromApi<any>(`${CHARACTERS_PREFIX}${novel.id}`) : Promise.resolve(null),
+        !out ? fetchFromApi<any>(`${OUTLINE_PREFIX}${novel.id}`) : Promise.resolve(null),
+        !plot ? fetchFromApi<any>(`${PLOT_OUTLINE_PREFIX}${novel.id}`) : Promise.resolve(null),
+        !ref ? fetchFromApi<any>(`${REFERENCE_PREFIX}${novel.id}`) : Promise.resolve(null),
+        !insp ? fetchFromApi<any>(`${INSPIRATION_PREFIX}${novel.id}`) : Promise.resolve(null),
+      ]);
+
+      const [rMeta, rWv, rChar, rOut, rPlot, rRef, rInsp] = remoteResults;
+      const syncTasks = [];
+
+      if (rMeta) {
+        metadata = rMeta;
+        syncTasks.push(set(`${METADATA_PREFIX}${novel.id}`, rMeta));
+      }
+      if (rWv) {
+        wv = rWv;
+        syncTasks.push(set(`${WORLDVIEW_PREFIX}${novel.id}`, rWv));
+      }
+      if (rChar) {
+        char = rChar;
+        syncTasks.push(set(`${CHARACTERS_PREFIX}${novel.id}`, rChar));
+      }
+      if (rOut) {
+        out = rOut;
+        syncTasks.push(set(`${OUTLINE_PREFIX}${novel.id}`, rOut));
+      }
+      if (rPlot) {
+        plot = rPlot;
+        syncTasks.push(set(`${PLOT_OUTLINE_PREFIX}${novel.id}`, rPlot));
+      }
+      if (rRef) {
+        ref = rRef;
+        syncTasks.push(set(`${REFERENCE_PREFIX}${novel.id}`, rRef));
+      }
+      if (rInsp) {
+        insp = rInsp;
+        syncTasks.push(set(`${INSPIRATION_PREFIX}${novel.id}`, rInsp));
+      }
+
+      if (syncTasks.length > 0) {
+        await Promise.all(syncTasks);
+        terminal.log(`[STORAGE] 已从远程补全 ${syncTasks.length} 项数据`);
+      } else {
+        // 如果远程也没有，且本地有部分数据，尝试反向推送 (Edge 场景)
+        // 只有当本地有至少一项数据时才推送
+        if (metadata || wv || char || out || plot || ref || insp) {
+          const pushTasks = [];
+          if (metadata) pushTasks.push(saveToApi(`${METADATA_PREFIX}${novel.id}`, metadata));
+          if (wv) pushTasks.push(saveToApi(`${WORLDVIEW_PREFIX}${novel.id}`, wv));
+          if (char) pushTasks.push(saveToApi(`${CHARACTERS_PREFIX}${novel.id}`, char));
+          if (out) pushTasks.push(saveToApi(`${OUTLINE_PREFIX}${novel.id}`, out));
+          if (plot) pushTasks.push(saveToApi(`${PLOT_OUTLINE_PREFIX}${novel.id}`, plot));
+          if (ref) pushTasks.push(saveToApi(`${REFERENCE_PREFIX}${novel.id}`, ref));
+          if (insp) pushTasks.push(saveToApi(`${INSPIRATION_PREFIX}${novel.id}`, insp));
+
+          // 异步执行
+          if (pushTasks.length > 0) {
+            Promise.all(pushTasks).catch(() => {});
+            terminal.log(`[STORAGE] 远程缺失，已触发后台反向同步`);
+          }
+        }
+      }
+    }
 
     if (metadata) {
       Object.assign(novel, metadata);
@@ -155,10 +341,36 @@ export const storage = {
       lastSavedInspirationCache.set(novel.id, this._getInspirationJson(novel));
     }
 
-    // 2. 加载章节正文 (保持并行)
+    // 2. 加载章节正文 (保持并行，增加远程回退)
     const contentPromises = (novel.chapters || []).map(async chapter => {
       if (chapter.content && lastSavedContentCache.has(chapter.id)) return;
-      const content = await get<string>(`chapter_content_${chapter.id}`);
+
+      let content = await get<string>(`chapter_content_${chapter.id}`);
+
+      // 本地无内容，尝试远程
+      if (content === undefined) {
+        const remoteContent = await fetchFromApi<string>(`chapter_content_${chapter.id}`);
+        if (remoteContent !== null) {
+          content = remoteContent;
+          // 同步回本地
+          await set(`chapter_content_${chapter.id}`, content);
+        }
+      } else {
+        // 本地有内容，异步确保远程也有 (反向同步)
+        // 同样，为了不频繁请求，可以做一个简单的检查或者只在特定时机触发
+        // 这里为了确保一致性，在加载时做一次覆盖写入是比较稳妥的初始化方式
+        // 但对于章节正文，内容较大，我们只在“疑似未同步”时做？
+        // 简化策略：异步推送。
+        saveToApi(`chapter_content_${chapter.id}`, content).catch(() => {});
+
+        // 同时也同步版本历史
+        this.getChapterVersions(chapter.id).then(versions => {
+          if (versions && versions.length > 0) {
+            saveToApi(`${VERSIONS_PREFIX}${chapter.id}`, versions).catch(() => {});
+          }
+        });
+      }
+
       if (content !== undefined) {
         chapter.content = content;
         lastSavedContentCache.set(chapter.id, content);
@@ -225,15 +437,15 @@ export const storage = {
         // 1.1 索引元数据 (Metadata: 章节索引、分卷)
         const currentMetaJson = this._getNovelMetadataJson(novel);
         if (currentMetaJson !== lastSavedMetadataCache.get(novel.id)) {
-          tasks.push(
-            set(`${METADATA_PREFIX}${novel.id}`, {
-              chapters: novel.chapters.map(({ versions, content, analysisResult, ...rest }) => ({
-                ...rest,
-                analysisResult: analysisResult?.substring(0, 100), // 仅保留摘要，防止元数据膨胀
-              })),
-              volumes: novel.volumes || [],
-            }),
-          );
+          const data = {
+            chapters: novel.chapters.map(({ versions, content, analysisResult, ...rest }) => ({
+              ...rest,
+              analysisResult: analysisResult?.substring(0, 100),
+            })),
+            volumes: novel.volumes || [],
+          };
+          tasks.push(set(`${METADATA_PREFIX}${novel.id}`, data));
+          tasks.push(saveToApi(`${METADATA_PREFIX}${novel.id}`, data)); // 同步到服务器
           lastSavedMetadataCache.set(novel.id, currentMetaJson);
           metadataUpdateCount++;
           terminal.log(`[STORAGE] 更新元数据: 《${novel.title}》`);
@@ -244,6 +456,7 @@ export const storage = {
           const currentWvJson = this._getWorldviewJson(novel);
           if (currentWvJson !== lastSavedWorldviewCache.get(novel.id)) {
             tasks.push(set(`${WORLDVIEW_PREFIX}${novel.id}`, novel.worldviewSets));
+            tasks.push(saveToApi(`${WORLDVIEW_PREFIX}${novel.id}`, novel.worldviewSets));
             lastSavedWorldviewCache.set(novel.id, currentWvJson);
             metadataUpdateCount++;
             terminal.log(`[STORAGE] 更新世界观: 《${novel.title}》`);
@@ -255,6 +468,7 @@ export const storage = {
           const currentCharJson = this._getCharactersJson(novel);
           if (currentCharJson !== lastSavedCharactersCache.get(novel.id)) {
             tasks.push(set(`${CHARACTERS_PREFIX}${novel.id}`, novel.characterSets));
+            tasks.push(saveToApi(`${CHARACTERS_PREFIX}${novel.id}`, novel.characterSets));
             lastSavedCharactersCache.set(novel.id, currentCharJson);
             metadataUpdateCount++;
             terminal.log(`[STORAGE] 更新角色集: 《${novel.title}》`);
@@ -266,6 +480,7 @@ export const storage = {
           const currentOutJson = this._getOutlineJson(novel);
           if (currentOutJson !== lastSavedOutlineCache.get(novel.id)) {
             tasks.push(set(`${OUTLINE_PREFIX}${novel.id}`, novel.outlineSets));
+            tasks.push(saveToApi(`${OUTLINE_PREFIX}${novel.id}`, novel.outlineSets));
             lastSavedOutlineCache.set(novel.id, currentOutJson);
             metadataUpdateCount++;
             terminal.log(`[STORAGE] 更新大纲: 《${novel.title}》`);
@@ -277,6 +492,7 @@ export const storage = {
           const currentPlotJson = this._getPlotOutlineJson(novel);
           if (currentPlotJson !== lastSavedPlotOutlineCache.get(novel.id)) {
             tasks.push(set(`${PLOT_OUTLINE_PREFIX}${novel.id}`, novel.plotOutlineSets));
+            tasks.push(saveToApi(`${PLOT_OUTLINE_PREFIX}${novel.id}`, novel.plotOutlineSets));
             lastSavedPlotOutlineCache.set(novel.id, currentPlotJson);
             metadataUpdateCount++;
             terminal.log(`[STORAGE] 更新剧情粗纲: 《${novel.title}》`);
@@ -287,12 +503,12 @@ export const storage = {
         if (novel.referenceFiles || novel.referenceFolders) {
           const currentRefJson = this._getReferenceJson(novel);
           if (currentRefJson !== lastSavedReferenceCache.get(novel.id)) {
-            tasks.push(
-              set(`${REFERENCE_PREFIX}${novel.id}`, {
-                f: novel.referenceFiles || [],
-                d: novel.referenceFolders || [],
-              }),
-            );
+            const data = {
+              f: novel.referenceFiles || [],
+              d: novel.referenceFolders || [],
+            };
+            tasks.push(set(`${REFERENCE_PREFIX}${novel.id}`, data));
+            tasks.push(saveToApi(`${REFERENCE_PREFIX}${novel.id}`, data));
             lastSavedReferenceCache.set(novel.id, currentRefJson);
             metadataUpdateCount++;
             terminal.log(`[STORAGE] 更新资料库: 《${novel.title}》`);
@@ -304,6 +520,7 @@ export const storage = {
           const currentInspJson = this._getInspirationJson(novel);
           if (currentInspJson !== lastSavedInspirationCache.get(novel.id)) {
             tasks.push(set(`${INSPIRATION_PREFIX}${novel.id}`, novel.inspirationSets));
+            tasks.push(saveToApi(`${INSPIRATION_PREFIX}${novel.id}`, novel.inspirationSets));
             lastSavedInspirationCache.set(novel.id, currentInspJson);
             metadataUpdateCount++;
             terminal.log(`[STORAGE] 更新灵感集: 《${novel.title}》`);
@@ -327,6 +544,7 @@ export const storage = {
             const currentContent = chapter.content;
             if (currentContent !== lastSavedContentCache.get(chapter.id)) {
               tasks.push(set(`chapter_content_${chapter.id}`, currentContent));
+              tasks.push(saveToApi(`chapter_content_${chapter.id}`, currentContent));
               lastSavedContentCache.set(chapter.id, currentContent);
               contentWriteCount++;
               terminal.log(`[STORAGE] 更新章节正文: ChapterID=${chapter.id}, 长度=${currentContent.length}`);
@@ -358,6 +576,7 @@ export const storage = {
 
       if (currentNovelsJson !== lastSavedNovelsJson) {
         tasks.push(set(NOVELS_KEY, strippedNovels));
+        tasks.push(saveToApi(NOVELS_KEY, strippedNovels));
         lastSavedNovelsJson = currentNovelsJson;
         novelsWriteCount = 1;
       }
@@ -387,7 +606,14 @@ export const storage = {
 
   async getChapterVersions(chapterId: number): Promise<ChapterVersion[]> {
     try {
-      const versions = await get<ChapterVersion[]>(`${VERSIONS_PREFIX}${chapterId}`);
+      let versions = await get<ChapterVersion[]>(`${VERSIONS_PREFIX}${chapterId}`);
+      if (!versions) {
+        const remoteVersions = await fetchFromApi<ChapterVersion[]>(`${VERSIONS_PREFIX}${chapterId}`);
+        if (remoteVersions) {
+          versions = remoteVersions;
+          await set(`${VERSIONS_PREFIX}${chapterId}`, versions);
+        }
+      }
       return versions || [];
     } catch (e) {
       console.error('Failed to get chapter versions', e);
@@ -398,6 +624,7 @@ export const storage = {
   async saveChapterVersions(chapterId: number, versions: ChapterVersion[]): Promise<void> {
     try {
       await set(`${VERSIONS_PREFIX}${chapterId}`, versions);
+      await saveToApi(`${VERSIONS_PREFIX}${chapterId}`, versions);
     } catch (e) {
       console.error('Failed to save chapter versions', e);
     }
@@ -406,6 +633,7 @@ export const storage = {
   async deleteChapterVersions(chapterId: number): Promise<void> {
     try {
       await del(`${VERSIONS_PREFIX}${chapterId}`);
+      await deleteFromApi(`${VERSIONS_PREFIX}${chapterId}`);
     } catch (e) {
       console.error('Failed to delete chapter versions', e);
     }
@@ -414,6 +642,7 @@ export const storage = {
   async deleteChapterContent(chapterId: number): Promise<void> {
     try {
       await del(`chapter_content_${chapterId}`);
+      await deleteFromApi(`chapter_content_${chapterId}`);
       lastSavedContentCache.delete(chapterId);
     } catch (e) {
       console.error('Failed to delete chapter content', e);
@@ -425,6 +654,31 @@ export const storage = {
     try {
       // 1. 优先从 IndexedDB 获取
       let workflows = await get<any[]>(WORKFLOWS_KEY);
+
+      if (!workflows) {
+        // 尝试从远程获取
+        const remoteWorkflows = await fetchFromApi<any[]>(WORKFLOWS_KEY);
+        if (remoteWorkflows) {
+          workflows = remoteWorkflows;
+          await set(WORKFLOWS_KEY, workflows);
+        }
+      } else {
+        // 本地有，远程无 (或远程为空数组但本地有内容) -> 自动上报
+        const remoteWorkflows = await fetchFromApi<any[]>(WORKFLOWS_KEY);
+
+        // 核心修复：如果远程为空，或者远程是空数组但本地有数据，则强制上报
+        const shouldPush =
+          !remoteWorkflows || (Array.isArray(remoteWorkflows) && remoteWorkflows.length === 0 && workflows.length > 0);
+
+        if (shouldPush) {
+          terminal.log(
+            `[STORAGE] 检测到服务器工作流缺失 (本地: ${workflows.length}, 远程: ${
+              remoteWorkflows?.length || 0
+            })，正在同步...`,
+          );
+          saveToApi(WORKFLOWS_KEY, workflows).catch(e => console.error('[STORAGE] 工作流同步失败', e));
+        }
+      }
 
       if (workflows) {
         return workflows;
@@ -481,6 +735,7 @@ export const storage = {
 
         // 核心修复：使用 IndexedDB 存储，彻底解决 5MB 限制
         await set(WORKFLOWS_KEY, serializableWorkflows);
+        await saveToApi(WORKFLOWS_KEY, serializableWorkflows);
       } catch (e) {
         terminal.error(`[STORAGE] 工作流保存至 IndexedDB 失败 (队列执行): ${e}`);
         // 这里不抛出异常，防止某个任务失败导致后续队列永久中断，仅记录错误
@@ -492,7 +747,17 @@ export const storage = {
 
   async getActiveWorkflowId(): Promise<string | null> {
     try {
-      return (await get<string>(ACTIVE_WF_ID_KEY)) || localStorage.getItem('active_workflow_id');
+      // 本地优先
+      let id = await get<string>(ACTIVE_WF_ID_KEY);
+      if (!id) {
+        const remoteId = await fetchFromApi<string>(ACTIVE_WF_ID_KEY);
+        // @ts-ignore
+        id = remoteId || localStorage.getItem('active_workflow_id');
+        if (id && typeof id === 'string') {
+          await set(ACTIVE_WF_ID_KEY, id);
+        }
+      }
+      return id || localStorage.getItem('active_workflow_id');
     } catch (e) {
       return localStorage.getItem('active_workflow_id');
     }
@@ -501,6 +766,7 @@ export const storage = {
   async setActiveWorkflowId(id: string): Promise<void> {
     try {
       await set(ACTIVE_WF_ID_KEY, id);
+      await saveToApi(ACTIVE_WF_ID_KEY, id);
       localStorage.setItem('active_workflow_id', id); // 保持同步以兼容
     } catch (e) {}
   },

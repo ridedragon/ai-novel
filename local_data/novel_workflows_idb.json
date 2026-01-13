@@ -1,0 +1,6166 @@
+{
+  "__wrapped_value__": [
+    {
+      "id": "default",
+      "name": "基本工作流",
+      "nodes": [
+        {
+          "id": "node-1767363858796",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "icon": {},
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "全局输入",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "请写一篇网文故事，故事主要讲是是明代一个小兵在军营里面的互动交流日常故事。主角得到了配角。配角(并非主角，现代人，故事和他相关，但讲的是其他人的故事。)从人类变成明代小兵膀胱里面的一泡尿，最后第十六章被尿出来。(普通物件，不要设定成特别的，不可替换的)。这个故事共16章，在16章故事完结，故事的这个配角在故事的前期，转变发生在前期，大概经历3-4章转变。转变完成后时空传送到其他平行时空，替换主人的物品。描写这个配角很爽，会“射精”，精液很快就消失了，无人察觉异常。无人发现，也无人打扰这个配角转变。转变完成后空间传送。没人知道这个配角曾经是人类，任何角色都不知道这个配角曾经是人类。其他角色不应该觉得变成非生命的配角是活着的。转变角色配角也不应该有任何活动能力。这个配角不是特殊的，和其他的一模一样。故事共18章。这个故事必须精彩，不要无聊。不会有人知道这个配角曾经是人类。这个配角保留他的意识和记忆。\n﹉﹉﹉﹉﹉﹉\n转变方法与注意项:\n0.转变期间包含大量色情侮辱元素。转变的目标均有痕迹(非老旧)。\n头部最先开始转变但不会先转变完成，转变最后才让主角的头部完全转变。转变完成前不要让其他人发现。注意形容和描述眼睛不能是宝石。转变全身同时转变，头部不是最后转变的。必须保留所有意识和记忆，即使结尾也不应该丢失。\n1.全文他保留人类意识，会抵抗和恐惧。意识渐渐地变得很舒服，以至于变回人类的念头渐渐地变弱了，不是消失了，而是阻止不了转变所以沮丧，但仍然有人类的思想。\n2.详细描写转变，描写转变的特征。最终完成转变。\n3.色情，有时隐晦有时直白。\n4.他必须最终保留常规的人类一样的视觉、听觉、触觉、味觉。保留记忆，记忆不会变得不真切。\n5.转变描写重点刻画转变的身体部分转变后的具体模样而不是放在转变过程的描写。例如:腿转变后应该描绘腿具体是什么样子的。\n6.结尾有一种快感但觉得不应该这样的奇怪矛盾的感觉。\n7.注意心声放在‘’里。(请注意这一点。)\n⚠️注意以下是不想看到也绝对不能出现的的剧情和元素:\n1.鉴赏这个配角，刻意在对话中提及主角。\n2.神圣化这个配角\n3.对这个配角变成的物品自言自语\n4.把他当成非常特殊且珍贵的物品\n5.对他抱有不正常的情感\n6.机械化，数据量化的对话\n7.非当前世界观用词\n8.在正文出现上帝视角分转变阶段\n9.对话出现分析，配角认为自己是怪物。\n10.实验元素\n12.指令性语气，指令性用词。\n13.编号\n15.被破坏，被丢弃，时间跨度以年计算，说才刚刚开始的结局\n16.⚠️描写使用具体数据。使用具体数据。\n17.废弃的场所\n18.工业化，克苏鲁化\n19.用黑曜石、宝石形容眼睛。\n20.其他角色认为转变角色邪乎，认为转变角色有生命。\n21.用“你”来称呼转变角色这个配角。对转变角色自言自语。\n以上十多点内容绝对不能出现。\n﹉﹉﹉﹉\n要求读者在阅读完全篇故事后，读者应该知道这个配角变成的东西的组成部分，整体外观，颜色，其他细节等。\n﹉﹉﹉﹉\n注意情节连贯性。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "autoOptimize": false,
+            "twoStepOptimization": false,
+            "status": "pending",
+            "selectedReferenceFolders": []
+          },
+          "position": {
+            "x": 330.3800420118286,
+            "y": 47.94186275745767
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          },
+          "selected": false,
+          "dragging": false
+        },
+        {
+          "id": "node-1767363856273",
+          "type": "custom",
+          "data": {
+            "typeLabel": "创建项目目录",
+            "icon": {},
+            "color": "#818cf8",
+            "defaultLabel": "初始化目录",
+            "presetType": null,
+            "typeKey": "createFolder",
+            "label": "",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "明代小兵尿了啊",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "autoOptimize": false,
+            "twoStepOptimization": false,
+            "status": "pending",
+            "selectedReferenceFolders": []
+          },
+          "position": {
+            "x": 316.9308098616737,
+            "y": 194.01521217005083
+          },
+          "measured": {
+            "width": 280,
+            "height": 100
+          },
+          "selected": false,
+          "dragging": false
+        },
+        {
+          "id": "node-1767420998828",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "icon": {},
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "塑造人物",
+            "presetId": "default",
+            "presetName": "默认角色设计",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "autoOptimize": false,
+            "twoStepOptimization": false,
+            "status": "pending",
+            "loopInstructions": [
+              {
+                "index": 1,
+                "content": "生成不少于4个人物，不要出现女角色"
+              },
+              {
+                "index": 2,
+                "content": "生成不少于4个新人物，不要出现女角色"
+              }
+            ]
+          },
+          "position": {
+            "x": 1109.860637441283,
+            "y": 23.05208816407444
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          },
+          "selected": false,
+          "dragging": false
+        },
+        {
+          "id": "node-1767421019801",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "icon": {},
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "规划结构",
+            "presetId": "default",
+            "presetName": "知乎短文创作",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "autoOptimize": false,
+            "twoStepOptimization": false,
+            "status": "pending",
+            "loopInstructions": [
+              {
+                "index": 1,
+                "content": "构建1-8粗纲，主角转变完成空间传送。 没人知道主角曾经是人类。"
+              },
+              {
+                "index": 2,
+                "content": "构建9-16粗纲，主角转变完成空间传送。 没人知道主角曾经是人类。"
+              }
+            ],
+            "skipped": false
+          },
+          "position": {
+            "x": 747.444829566911,
+            "y": 20.341748573094996
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          },
+          "selected": false,
+          "dragging": false
+        },
+        {
+          "id": "node-1767421037975",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "icon": {},
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "细化章节",
+            "presetId": "default",
+            "presetName": "默认大纲助手",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "autoOptimize": false,
+            "twoStepOptimization": false,
+            "status": "pending",
+            "loopInstructions": [
+              {
+                "index": 1,
+                "content": "根据用户输入生成1-8章的故事的大纲。不要丢失粗纲的细节。保持粗纲的完整性。 转变时无人发现，不被人打扰。 没人知道主角曾经是人类"
+              },
+              {
+                "index": 2,
+                "content": "根据用户输入生成9-16章的故事的大纲。不要丢失粗纲的细节。保持粗纲的完整性。 "
+              }
+            ],
+            "skipped": false
+          },
+          "position": {
+            "x": 1436.377570080674,
+            "y": 33.640708518611305
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          },
+          "selected": false,
+          "dragging": false
+        },
+        {
+          "id": "node-1767626775792",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "icon": {},
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "imported_1765552455973",
+            "presetName": "☄️3.1",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1768271534424_t8elx",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1786.0256392745755,
+            "y": 80.26662173701826
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          },
+          "selected": true,
+          "dragging": false
+        },
+        {
+          "id": "node-1768223277887",
+          "type": "custom",
+          "data": {
+            "typeLabel": "循环执行器",
+            "color": "#0ea5e9",
+            "defaultLabel": "循环控制",
+            "presetType": null,
+            "typeKey": "loopNode",
+            "label": "循环控制",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending",
+            "loopConfig": {
+              "enabled": true,
+              "count": 3,
+              "currentIndex": 0
+            }
+          },
+          "position": {
+            "x": 1046.5604666678087,
+            "y": 297.46648718607224
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          },
+          "selected": false,
+          "dragging": false
+        }
+      ],
+      "edges": [
+        {
+          "source": "node-1767363858796",
+          "target": "node-1767363856273",
+          "id": "xy-edge__node-1767363858796-node-1767363856273",
+          "selected": false,
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "source": "node-1767363856273",
+          "target": "node-1767364534921",
+          "id": "xy-edge__node-1767363856273-node-1767364534921",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "source": "node-1767363856273",
+          "target": "node-1767366093181",
+          "id": "xy-edge__node-1767363856273-node-1767366093181",
+          "selected": false,
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "source": "node-1767366093181",
+          "target": "node-1767366224786",
+          "id": "xy-edge__node-1767366093181-node-1767366224786",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "source": "node-1767366224786",
+          "target": "node-1767366177809",
+          "id": "xy-edge__node-1767366224786-node-1767366177809",
+          "selected": false,
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "source": "node-1767366177809",
+          "target": "node-1767366290699",
+          "id": "xy-edge__node-1767366177809-node-1767366290699",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "source": "node-1767366290699",
+          "target": "node-1767366319526",
+          "id": "xy-edge__node-1767366290699-node-1767366319526",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "source": "node-1767366224786",
+          "target": "node-1767420998828",
+          "id": "xy-edge__node-1767366224786-node-1767420998828",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "source": "node-1767420998828",
+          "target": "node-1767366290699",
+          "id": "xy-edge__node-1767420998828-node-1767366290699",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "source": "node-1767421019801",
+          "target": "node-1767420998828",
+          "id": "xy-edge__node-1767421019801-node-1767420998828",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "source": "node-1767420998828",
+          "target": "node-1767421037975",
+          "id": "xy-edge__node-1767420998828-node-1767421037975",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "source": "node-1767421037975",
+          "target": "node-1767366319526",
+          "id": "xy-edge__node-1767421037975-node-1767366319526",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "source": "node-1767421037975",
+          "target": "node-1767626775792",
+          "type": "custom",
+          "animated": false,
+          "id": "xy-edge__node-1767421037975-node-1767626775792"
+        },
+        {
+          "source": "node-1767626775792",
+          "target": "node-1767953920966",
+          "type": "custom",
+          "animated": false,
+          "id": "xy-edge__node-1767626775792-node-1767953920966"
+        },
+        {
+          "source": "node-1767953920966",
+          "target": "node-1767953946967",
+          "type": "custom",
+          "animated": false,
+          "id": "xy-edge__node-1767953920966-node-1767953946967"
+        },
+        {
+          "source": "node-1767953946967",
+          "target": "node-1768219406881",
+          "type": "custom",
+          "animated": false,
+          "interactionWidth": 20,
+          "id": "xy-edge__node-1767953946967-node-1768219406881"
+        },
+        {
+          "source": "node-1768219406881",
+          "target": "node-1767421019801",
+          "type": "custom",
+          "animated": false,
+          "interactionWidth": 20,
+          "id": "xy-edge__node-1768219406881-node-1767421019801"
+        },
+        {
+          "source": "node-1767953946967",
+          "target": "node-1768220082522",
+          "type": "custom",
+          "animated": false,
+          "id": "xy-edge__node-1767953946967-node-1768220082522"
+        },
+        {
+          "source": "node-1767363856273",
+          "sourceHandle": "source",
+          "target": "node-1768220119789",
+          "type": "custom",
+          "animated": false,
+          "interactionWidth": 20,
+          "id": "xy-edge__node-1767363856273source-node-1768220119789"
+        },
+        {
+          "source": "node-1767363856273",
+          "sourceHandle": "source",
+          "target": "node-1767421019801",
+          "type": "custom",
+          "animated": false,
+          "interactionWidth": 20,
+          "id": "xy-edge__node-1767363856273source-node-1767421019801"
+        },
+        {
+          "source": "node-1767953946967",
+          "sourceHandle": "source",
+          "target": "node-1768223277887",
+          "type": "custom",
+          "animated": false,
+          "interactionWidth": 20,
+          "id": "xy-edge__node-1767953946967source-node-1768223277887"
+        },
+        {
+          "source": "node-1768223277887",
+          "sourceHandle": "source",
+          "target": "node-1767421019801",
+          "type": "custom",
+          "animated": false,
+          "interactionWidth": 20,
+          "id": "xy-edge__node-1768223277887source-node-1767421019801"
+        },
+        {
+          "source": "node-1767626775792",
+          "sourceHandle": "source",
+          "target": "node-1768223277887",
+          "type": "custom",
+          "animated": false,
+          "interactionWidth": 20,
+          "id": "xy-edge__node-1767626775792source-node-1768223277887"
+        }
+      ],
+      "lastModified": 1768278821211,
+      "currentNodeIndex": -1
+    },
+    {
+      "id": "wf_1767422921496",
+      "name": "复杂工作流",
+      "nodes": [],
+      "edges": [],
+      "lastModified": 1767950764720,
+      "currentNodeIndex": -1
+    },
+    {
+      "id": "wf_1768041328616",
+      "name": "新工作流 3",
+      "nodes": [
+        {
+          "id": "n0",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "全局创意输入",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "请在此输入小说的主题、核心创意点、期望的字数规模以及对整体风格的初步构想。你作为整个创作流程的发起者，需要提供尽可能清晰的背景。任务目标是为AI顾问提供充足的原始素材，以便其进行深度头脑风暴。创作禁忌：避免空洞的口号，尽量包含具体的视觉意象或冲突点。风格规范：客观描述，分点陈述。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 100,
+            "y": 250
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n1",
+          "type": "custom",
+          "data": {
+            "typeLabel": "AI 聊天",
+            "color": "#a855f7",
+            "defaultLabel": "自由对话",
+            "presetType": "chat",
+            "typeKey": "aiChat",
+            "label": "创意总监审阅",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "你是一位拥有20年网文编辑经验的顶尖创意总监。你的任务是分析用户的原始输入，评估其市场潜力、逻辑自洽性以及情节的可扩展性。你需要：1. 挖掘核心卖点（Golden Seed）；2. 识别潜在的逻辑漏洞并提出修改建议；3. 给出3-5个创新的风格化建议。创作禁忌：严禁全盘否定，需在尊重原意的基础上进行升华。风格规范：专业、毒辣且富有启发性，字数控制在500字左右，涵盖从宏观架构到微观叙事的深度洞察。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 420,
+            "y": 250
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n2",
+          "type": "custom",
+          "data": {
+            "typeLabel": "创建项目目录",
+            "color": "#818cf8",
+            "defaultLabel": "初始化目录",
+            "presetType": null,
+            "typeKey": "createFolder",
+            "label": "项目空间初始化",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "256章史诗长篇项目",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 740,
+            "y": 250
+          },
+          "measured": {
+            "width": 280,
+            "height": 100
+          }
+        },
+        {
+          "id": "n3",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "底层世界观构建",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "你是一位享誉全球的奇幻世界构建大师。任务目标是基于前期沟通，构建一个逻辑缜密、宏大且富有细节的世界观。包含：1. 力量体系：能量来源（如灵气、魔法、科技）、等级划分（至少10个阶层）、晋升规则、不可逾越的禁忌；2. 地理版图：核心大洲、神秘禁地、各国势力范围及其资源分布；3. 历史断代：上古传说、文明遗迹、导致现状的重大转折事件；4. 社会伦理：宗教信仰、种族阶级、经济运行规律。创作禁忌：严禁直接套用现有的模板（如传统修仙），必须有独特的微创新。风格规范：笔触雄浑，用词考究，呈现出一种厚重的史诗感，字数需达到450字以上，确保每一条规则都能直接服务于剧情冲突。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 1060,
+            "y": 250
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n4",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "256章宏观剧情粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "你是一位精通‘英雄之旅’与‘救猫咪’理论的顶尖编剧。任务目标是将整个256章的故事划分为四个主要阶段：起、承、转、合。每个阶段约64章。你需要详细规划：1. 核心矛盾：贯穿全书的终极对抗；2. 关键节点：每50章左右的一个大高潮（Grand Climax）；3. 伏笔埋设：早期种下的因，如何在后期结出惊人的果；4. 节奏控制：处理好打怪升级与情感文戏的比例。创作禁忌：拒绝流水账，拒绝为了字数而灌水。风格规范：逻辑极其严密，每一章的逻辑链条必须紧紧相扣，字数在500字左右，确保大纲具有强烈的代入感和爽点分布。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 100,
+            "y": 430
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n5",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "核心角色矩阵设计",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "你是一位深谙心理学的角色设计师。任务目标是创造一组具有深度和张力的角色。1. 主角：核心驱动力（他想要什么）、内在恐惧（他害怕什么）、独特的性格缺陷、成长弧线；2. 反派：并非纯粹的邪恶，而是拥有与主角对立的崇高理想或无法自拔的欲望；3. 配角团：每个配角都应具备独立的功能性而非工具人，拥有独特的语癖和标志性动作。创作禁忌：严禁脸谱化，拒绝‘无脑反派’和‘圣母主角’。风格规范：描写细腻，能够通过简短的动作或语言勾勒出人物灵魂，字数要求在400-600字，形成一个完整的人格动态网络。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 420,
+            "y": 430
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n6",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "设定及角色反馈",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "请审阅上述世界观、粗纲及角色设定。如果有需要微调的地方（例如力量体系的平衡性、某个角色的性格走向），请在此反馈。你的意见将决定后续16章具体大纲的生成方向。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 740,
+            "y": 430
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n7",
+          "type": "custom",
+          "data": {
+            "typeLabel": "AI 聊天",
+            "color": "#a855f7",
+            "defaultLabel": "自由对话",
+            "presetType": "chat",
+            "typeKey": "aiChat",
+            "label": "细节优化顾问A",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "作为文案润色专家，针对用户提出的反馈，重新审视角色关系网，特别是情感纠葛和潜在的背叛点。你需要将反馈内容无缝融入现有的架构中，并给出具体的桥段建议。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 1060,
+            "y": 430
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n8",
+          "type": "custom",
+          "data": {
+            "typeLabel": "AI 聊天",
+            "color": "#a855f7",
+            "defaultLabel": "自由对话",
+            "presetType": "chat",
+            "typeKey": "aiChat",
+            "label": "逻辑校准顾问B",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "作为逻辑严密性审核员，你的任务是确保世界观的每一项更新都不会导致后续剧情崩坏。重点检查战力通胀问题和反派降智现象。你需要输出一份详尽的‘避雷指南’给后续的大纲节点。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 100,
+            "y": 610
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n9",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第1-16章细化大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "任务目标：将宏观粗纲的第一阶段拆解为前16章的具体大纲。每章要求包含：1. 场景地点；2. 登场人物；3. 核心冲突；4. 钩子（Hook）设置。创作要求：开篇三章必须具备极强的抓人力，通过一个微型冲突展现世界观冰山一角。字数控制在500字以上，确保每一章都有明确的推进作用。风格规范：紧凑、悬念迭起。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 420,
+            "y": 610
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n10",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "第1-16章正文生成",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "作为金牌网络文学作家，请根据前16章大纲进行正文创作。风格规范：画面感强，多用动作和对话推动剧情，少用大段心理描写；语言通俗易懂但不失质感；每章末尾必须留有悬念。创作禁忌：严禁灌水，严禁脱离大纲设定。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 740,
+            "y": 610
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n11",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第二阶段（17-32章）引导输入",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "基于前16章的表现，你是否需要调整后续的节奏？请给出第二阶段的核心冲突方向。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 1060,
+            "y": 610
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n12",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联项目目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "256章史诗长篇项目",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 100,
+            "y": 790
+          },
+          "measured": {
+            "width": 280,
+            "height": 100
+          }
+        },
+        {
+          "id": "n13",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "世界观扩展与更新",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "随着主角步入新的地域，请扩展世界观，加入该地域的特有规则、隐藏势力及古老传说。确保新设定与旧设定不冲突，且能为剧情推向高潮提供支撑。字数400字左右。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 420,
+            "y": 790
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n14",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "中期剧情走向修正",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "针对当前的剧情进展，优化第二阶段（17-64章）的粗纲。增加支线任务以丰富角色形象，同时确保主线目标依然清晰。字数400字左右。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 740,
+            "y": 790
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n15",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "新角色及成长同步",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "引入1-2位关键新角色（如新的导师或竞争对手），同时记录主角在前16章后的心理转变。确保角色弧线的连续性。字数400字左右。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 1060,
+            "y": 790
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n16",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第17-32章细化大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "将接下来的16章进行拆解。重点关注主角进入新环境后的适应过程以及第一个重要负面反馈（挫折）的发生。每章需明确爽点和压抑点的转换。字数500字左右。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 100,
+            "y": 970
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n17",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "第17-32章正文生成",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "延续前文风格，进行正文创作。注重描写新环境带来的视觉冲击，以及主角在困境中的选择。确保叙事流畅，节奏稳定。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 420,
+            "y": 970
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n18",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第三阶段（33-48章）引导输入",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "确认后续16章的创作重心，是否需要加强感情线或战斗描写？",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 740,
+            "y": 970
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n19",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联项目目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "256章史诗长篇项目",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 1060,
+            "y": 970
+          },
+          "measured": {
+            "width": 280,
+            "height": 100
+          }
+        },
+        {
+          "id": "n20",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "世界观深度挖掘",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "揭秘世界观中的一个重大秘密，为中后期的剧情翻转做准备。字数400字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 100,
+            "y": 1150
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n21",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "剧情推进与伏笔点亮",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "规划33-48章的剧情，回收前10章埋下的某个小伏笔，并产生意想不到的影响。字数400字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 420,
+            "y": 1150
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n22",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "角色阵营变化",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "描述核心配角的心态变化，可能出现的背叛、牺牲或关系升温。字数400字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 740,
+            "y": 1150
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n23",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第33-48章细化大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "拆解本阶段16章。重点在于强化反派的压迫感，使主角陷入必须突破的局面。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 1060,
+            "y": 1150
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n24",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "第33-48章正文生成",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "执行正文创作。此阶段应加强气氛渲染，提升冲突的烈度。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 100,
+            "y": 1330
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n_last_input",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "终章及收尾引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "请输入对最后16章（241-256章）的大结局要求。需要回收哪些核心伏笔？是悲剧还是喜剧？",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 420,
+            "y": 1330
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n_last_world",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "终极世界真相",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "全面揭开世界本源的真相，与开篇的设定形成完美闭环。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 740,
+            "y": 1330
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n_last_plot",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "全书大结局规划",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "规划最终的决战流程。包含：1. 最后的牺牲；2. 主角的终极觉醒；3. 战后世界的重塑。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 1060,
+            "y": 1330
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n_last_chars",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "角色命运终章",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "为所有核心角色安排最终归宿。确保每个人的命运都符合其性格逻辑和成长轨迹。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 100,
+            "y": 1510
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n_last_outline",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第241-256章细化大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "极致的节奏压缩。每一章都必须是高潮，每一章都要解决一个悬念。直到最后一章的华丽谢幕。字数600字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 420,
+            "y": 1510
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        },
+        {
+          "id": "n_last_chapter",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "第241-256章正文生成",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "以最饱满的情绪完成最后的正文创作。文字要具有感染力，让读者在结束时感到震撼与不舍。字数500字以上每章。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 740,
+            "y": 1510
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "n0",
+          "target": "n1",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e1",
+          "source": "n1",
+          "target": "n2",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e2",
+          "source": "n2",
+          "target": "n3",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e3",
+          "source": "n3",
+          "target": "n4",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e4",
+          "source": "n4",
+          "target": "n5",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e5",
+          "source": "n5",
+          "target": "n6",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e6",
+          "source": "n6",
+          "target": "n7",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e7",
+          "source": "n7",
+          "target": "n8",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e8",
+          "source": "n8",
+          "target": "n9",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e9",
+          "source": "n9",
+          "target": "n10",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e10",
+          "source": "n10",
+          "target": "n11",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e11",
+          "source": "n11",
+          "target": "n12",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e12",
+          "source": "n12",
+          "target": "n13",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e13",
+          "source": "n13",
+          "target": "n14",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e14",
+          "source": "n14",
+          "target": "n15",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e15",
+          "source": "n15",
+          "target": "n16",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e16",
+          "source": "n16",
+          "target": "n17",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e17",
+          "source": "n17",
+          "target": "n18",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e18",
+          "source": "n18",
+          "target": "n19",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e19",
+          "source": "n19",
+          "target": "n20",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e20",
+          "source": "n20",
+          "target": "n21",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e21",
+          "source": "n21",
+          "target": "n22",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e22",
+          "source": "n22",
+          "target": "n23",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e23",
+          "source": "n23",
+          "target": "n24",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e_last_1",
+          "source": "n24",
+          "target": "n_last_input",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e_last_2",
+          "source": "n_last_input",
+          "target": "n_last_world",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e_last_3",
+          "source": "n_last_world",
+          "target": "n_last_plot",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e_last_4",
+          "source": "n_last_plot",
+          "target": "n_last_chars",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e_last_5",
+          "source": "n_last_chars",
+          "target": "n_last_outline",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e_last_6",
+          "source": "n_last_outline",
+          "target": "n_last_chapter",
+          "type": "custom",
+          "animated": false
+        }
+      ],
+      "lastModified": 1768044480619,
+      "currentNodeIndex": -1
+    },
+    {
+      "id": "wf_1768044561344",
+      "name": "新工作流 4",
+      "nodes": [
+        {
+          "id": "n0",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "全局需求输入",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "作为整个256章宏大叙事的起点，请在此输入小说核心概念。你是一名资深的网文策划专家，负责为这部长篇巨作设定基调。输入需包含：1. 核心流派（如玄幻、悬疑、科幻）；2. 核心金手指或独特性设定；3. 最终结局的愿景；4. 目标受众特征。要求字数在400字左右，涵盖作品的调性规范、语言风格（是幽默风趣还是沉郁肃杀）、更新频率逻辑以及整体的商业定位。严禁出现逻辑模糊的表述，必须明确主角的终极动机，为后续256章的漫长征程提供源源不断的冲突动力。此输入将作为全书的灵魂，指导后续所有节点的生成逻辑，确保作品在高速更迭中保持神韵不散。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 250
+          }
+        },
+        {
+          "id": "n1",
+          "type": "custom",
+          "data": {
+            "typeLabel": "AI 聊天",
+            "color": "#a855f7",
+            "defaultLabel": "自由对话",
+            "presetType": "chat",
+            "typeKey": "aiChat",
+            "label": "初期创意审核",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "你现在担任顶级文学出版社的总编辑。请根据前置的全局输入，进行深度的可行性与逻辑审核。你的目标是挖掘该灵感的商业潜力并识别潜在的创作风险。你需要从市场趋势、人物弧光的完整性、世界观的可扩展性三个维度进行评估。字数要求在500字左右。你必须指出设定中可能导致后期崩盘的逻辑漏洞，并提供至少三个具有爆发力的创新建议。创作禁忌包括：禁止使用过时的网文套路，禁止人物行为脱离动机。你的风格应当专业、犀利且富有建设性，确保在正式动笔前，故事的骨架已经足够强韧，能够承载256章的复杂结构。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 250
+          }
+        },
+        {
+          "id": "n2",
+          "type": "custom",
+          "data": {
+            "typeLabel": "创建项目目录",
+            "color": "#818cf8",
+            "defaultLabel": "初始化目录",
+            "presetType": null,
+            "typeKey": "createFolder",
+            "label": "初始化项目空间",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 250
+          }
+        },
+        {
+          "id": "n3",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "宏观世界观构建",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "你是一名顶级的幻想世界架构师。基于前面的审核建议，请构建一个足以支撑256章篇幅的庞大世界观。你需要详细描述：1. 地理疆域（包含至少六个各具特色的区域）；2. 力量等级或社会规则（逻辑必须自洽且具备升级空间）；3. 核心社会矛盾（种族、阶级或信仰冲突）。字数要求在500-600字之间。请注意，世界观不仅是背景，更是剧情的引擎，每一个设定都必须能转化为具体的冲突场景。严禁设定与剧情脱节，必须制定一套严密的底层逻辑，确保无论主角走到哪里，世界的运行法则都是一致且连贯的。风格需具备厚重感和代入感。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 250
+          }
+        },
+        {
+          "id": "n4",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "256章全书粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "你是一名精通长篇叙事节奏的编剧。请将256章的故事拆解为十六个主要阶段，每个阶段约16章。你需要规划出全书的起承转合，明确每个阶段的核心冲突和转折点。字数要求约600字。你需要设计一个贯穿始终的终极悬念，并确保每个阶段都有小目标的达成。严禁出现注水情节，每个阶段的结束必须紧扣下一个阶段的开始。你的任务是确保整部小说逻辑严密，伏笔深埋，确保读者在阅读过程中始终保持高度的期待感。请详细描述主角从微末到巅峰的每一个关键成长节点。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 430
+          }
+        },
+        {
+          "id": "n5",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "核心角色集",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "你是一名深度心理分析专家兼人物设计师。请为这部256章的作品创建一组丰满的角色。包含主角、三名核心配角、两名贯穿全书的宿命反派。你需要描述每个人的性格缺陷、核心动力、外貌特征以及在256章中的命运曲线。字数要求500字左右。严禁塑造扁平化的脸谱角色，所有人的行动必须符合其性格逻辑。你必须设定角色之间的复杂人际关系网，包括恩怨情仇的交织，确保角色能够自发地推动剧情发展。风格要求细腻且具张力，让读者能够产生强烈的共情感或厌恶感。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 430
+          }
+        },
+        {
+          "id": "n6",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第一卷（1-16章）微调",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "请根据当前的创作状态，为前16章的开篇注入细节。你需要明确前三章的黄金钩子，确定第16章的第一个小高潮。请以资深读者的视角审视当前的设定，输入具体的桥段要求，确保开篇即巅峰。字数要求300字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 430
+          }
+        },
+        {
+          "id": "n7",
+          "type": "custom",
+          "data": {
+            "typeLabel": "AI 聊天",
+            "color": "#a855f7",
+            "defaultLabel": "自由对话",
+            "presetType": "chat",
+            "typeKey": "aiChat",
+            "label": "开篇节奏审核A",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "作为节奏控制专家，请审核前16章的切入点是否足够吸引人。你需要检查黄金三章的冲突爆发力，确保主角的第一步走得既合理又令人期待。字数500字。严禁慢热开局，必须在千字内立住主角形象。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 430
+          }
+        },
+        {
+          "id": "n8",
+          "type": "custom",
+          "data": {
+            "typeLabel": "AI 聊天",
+            "color": "#a855f7",
+            "defaultLabel": "自由对话",
+            "presetType": "chat",
+            "typeKey": "aiChat",
+            "label": "细节逻辑校对B",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "你负责对前16章的逻辑细节进行二次校对，重点在于力量体系的初次展现是否合理，以及角色对白的风格化处理。字数500字。确保所有台词都能体现角色的性格，严禁废话。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 610
+          }
+        },
+        {
+          "id": "n9",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第1-16章详细大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "你是一名分章大纲专家。请根据之前的粗纲和人物设定，细化生成第1至16章的每一章大纲。每章大纲需包含：本章目标、核心冲突、环境描写、关键对白提示。字数在600字以上。你需要确保每一章都具备明确的钩子，引导读者进入下一章。严禁剧情拖沓，确保这16章完成第一个完整的小闭环，立住主角的人设并开启第一个长期目标。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 610
+          }
+        },
+        {
+          "id": "n10",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "你是一名顶级网文大神。请根据1-16章的大纲，以极具代入感的笔触撰写正文。要求：1. 环境描写要具备画面感；2. 战斗或冲突描写要热血张力十足；3. 心理描写要深刻细腻。字数要求极高，需确保每章内容的饱满。严禁水文，禁止出现大段重复的废话。风格需统一，语言精炼且富有感染力。你需要通过文字构建一个让读者流连忘返的世界，确保第一卷完结时读者有强烈的追读意愿。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 610
+          }
+        },
+        {
+          "id": "n11",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第二卷（17-32章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "请输入关于第17至32章的特殊要求，包含新登场的重要角色或地图。字数300字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 610
+          }
+        },
+        {
+          "id": "n12",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联项目空间",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 790
+          }
+        },
+        {
+          "id": "n13",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "区域世界观扩展",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "根据剧情推进，扩展本卷涉及的新区域、新势力及其背后的历史秘辛。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 790
+          }
+        },
+        {
+          "id": "n14",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第二卷阶段性粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "规划17-32章的冲突升级路径。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 790
+          }
+        },
+        {
+          "id": "n15",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "新角色/角色成长",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "定义新出现的配角及主角在经历第一卷后的心理转变。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 790
+          }
+        },
+        {
+          "id": "n16",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第17-32章详细大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "细化生成17至32章的分章大纲，确保持续的张力。字数600字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 970
+          }
+        },
+        {
+          "id": "n17",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "撰写17-32章正文，保持风格统一，深化剧情冲突。字数600字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 970
+          }
+        },
+        {
+          "id": "n18",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第三卷（33-48章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "规划后续16章的独特挑战与伏笔回收。字数300-600字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 970
+          }
+        },
+        {
+          "id": "n19",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联项目空间",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 970
+          }
+        },
+        {
+          "id": "n20",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "世界观深度挖掘",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "揭露更深层的世界运行真相。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 1150
+          }
+        },
+        {
+          "id": "n21",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第三卷阶段性粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "设计33-48章的中期高潮。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 1150
+          }
+        },
+        {
+          "id": "n22",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "人物关系演变",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "处理阵营转换或角色牺牲。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 1150
+          }
+        },
+        {
+          "id": "n23",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第33-48章详细大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "分章细化33-48章。字数600字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 1150
+          }
+        },
+        {
+          "id": "n24",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "高质量撰写正文，增强代入感。字数600字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 1330
+          }
+        },
+        {
+          "id": "n25",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第四卷（49-64章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "循环逻辑：开启新副本，引入核心冲突升级。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 1330
+          }
+        },
+        {
+          "id": "n26",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 1330
+          }
+        },
+        {
+          "id": "n27",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "世界观扩展",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "描述新势力及其力量体系分支。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 1330
+          }
+        },
+        {
+          "id": "n28",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第四卷粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "规划49-64章的发展。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 1510
+          }
+        },
+        {
+          "id": "n29",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "角色进阶",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "主角及其团队的能力与心态进阶。字数500字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 1510
+          }
+        },
+        {
+          "id": "n30",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第49-64章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "细化每一章。字数600字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 1510
+          }
+        },
+        {
+          "id": "n31",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "正文创作。字数600字。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 1510
+          }
+        },
+        {
+          "id": "n32",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第五卷（65-80章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "推进中局关键情节。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 1690
+          }
+        },
+        {
+          "id": "n33",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 1690
+          }
+        },
+        {
+          "id": "n34",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "深度设定",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "社会规则的崩溃与重塑。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 1690
+          }
+        },
+        {
+          "id": "n35",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第五卷粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "65-80章剧情脉络。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 1690
+          }
+        },
+        {
+          "id": "n36",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "宿敌现身",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "反派计划的初步显现。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 1870
+          }
+        },
+        {
+          "id": "n37",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第65-80章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "分章细化。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 1870
+          }
+        },
+        {
+          "id": "n38",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "正文生成。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 1870
+          }
+        },
+        {
+          "id": "n39",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第六卷（81-96章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "推进至全书前半程高潮。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 1870
+          }
+        },
+        {
+          "id": "n40",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 2050
+          }
+        },
+        {
+          "id": "n41",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "规则揭秘",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "世界底层逻辑的揭露。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 2050
+          }
+        },
+        {
+          "id": "n42",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第六卷粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "81-96章剧情规划。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 2050
+          }
+        },
+        {
+          "id": "n43",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "配角弧光",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "核心配角的重大转折。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 2050
+          }
+        },
+        {
+          "id": "n44",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第81-96章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "分章大纲。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 2230
+          }
+        },
+        {
+          "id": "n45",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "正文撰写。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 2230
+          }
+        },
+        {
+          "id": "n46",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第七卷（97-112章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "进入全书转折点。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 2230
+          }
+        },
+        {
+          "id": "n47",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 2230
+          }
+        },
+        {
+          "id": "n48",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "世界动荡",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "全面战争或灾难的爆发。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 2410
+          }
+        },
+        {
+          "id": "n49",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第七卷粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "97-112章。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 2410
+          }
+        },
+        {
+          "id": "n50",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "英雄觉醒",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "主角面临绝境的选择。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 2410
+          }
+        },
+        {
+          "id": "n51",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第97-112章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "细化大纲。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 2410
+          }
+        },
+        {
+          "id": "n52",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "正文生成。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 2590
+          }
+        },
+        {
+          "id": "n53",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第八卷（113-128章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "上半部分完结篇。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 2590
+          }
+        },
+        {
+          "id": "n54",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 2590
+          }
+        },
+        {
+          "id": "n55",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "格局巨变",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "旧秩序的彻底终结。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 2590
+          }
+        },
+        {
+          "id": "n56",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第八卷粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "113-128章。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 2770
+          }
+        },
+        {
+          "id": "n57",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "生死考验",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "核心角色的重大牺牲或突破。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 2770
+          }
+        },
+        {
+          "id": "n58",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第113-128章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "阶段大纲。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 2770
+          }
+        },
+        {
+          "id": "n59",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "正文创作。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 2770
+          }
+        },
+        {
+          "id": "n60",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第九卷（129-144章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "下半部开启：新大陆/新高度。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 2950
+          }
+        },
+        {
+          "id": "n61",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 2950
+          }
+        },
+        {
+          "id": "n62",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "宏大设定2.0",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "位面或跨国界的设定。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 2950
+          }
+        },
+        {
+          "id": "n63",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第九卷粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "129-144章。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 2950
+          }
+        },
+        {
+          "id": "n64",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "巅峰对手",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "新等级对手的压迫感。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 3130
+          }
+        },
+        {
+          "id": "n65",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第129-144章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "细化分章。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 3130
+          }
+        },
+        {
+          "id": "n66",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "正文生成。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 3130
+          }
+        },
+        {
+          "id": "n67",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第十卷（145-160章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "势力争霸升级。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 3130
+          }
+        },
+        {
+          "id": "n68",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 3310
+          }
+        },
+        {
+          "id": "n69",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "战争美学",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "大规模战争逻辑设定。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 3310
+          }
+        },
+        {
+          "id": "n70",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第十卷粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "145-160章。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 3310
+          }
+        },
+        {
+          "id": "n71",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "领袖成长",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "主角从战士到领袖的转变。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 3310
+          }
+        },
+        {
+          "id": "n72",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第145-160章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "分章细化。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 3490
+          }
+        },
+        {
+          "id": "n73",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "正文创作。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 3490
+          }
+        },
+        {
+          "id": "n74",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第十一卷（161-176章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "推进至全书深水区。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 3490
+          }
+        },
+        {
+          "id": "n75",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 3490
+          }
+        },
+        {
+          "id": "n76",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "远古秘辛",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "揭示世界最终BOSS的根源。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 3670
+          }
+        },
+        {
+          "id": "n77",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第十一卷粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "161-176章。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 3670
+          }
+        },
+        {
+          "id": "n78",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "意志磨炼",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "精神层面的终极对抗。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 3670
+          }
+        },
+        {
+          "id": "n79",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第161-176章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "分章细化。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 3670
+          }
+        },
+        {
+          "id": "n80",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "正文撰写。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 3850
+          }
+        },
+        {
+          "id": "n81",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第十二卷（177-192章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "进入终局前的宁静或大爆发。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 3850
+          }
+        },
+        {
+          "id": "n82",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 3850
+          }
+        },
+        {
+          "id": "n83",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "末世氛围",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "决战前的压抑与绝望感。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 3850
+          }
+        },
+        {
+          "id": "n84",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第十二卷粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "177-192章。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 4030
+          }
+        },
+        {
+          "id": "n85",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "宿命交汇",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "所有支线人物的汇聚。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 4030
+          }
+        },
+        {
+          "id": "n86",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第177-192章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "分章细化。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 4030
+          }
+        },
+        {
+          "id": "n87",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "正文生成。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 4030
+          }
+        },
+        {
+          "id": "n88",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第十三卷（193-208章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "决战第一阶段。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 4210
+          }
+        },
+        {
+          "id": "n89",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 4210
+          }
+        },
+        {
+          "id": "n90",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "决战领域",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "核心战场规则。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 4210
+          }
+        },
+        {
+          "id": "n91",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第十三卷粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "193-208章。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 4210
+          }
+        },
+        {
+          "id": "n92",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "最后告别",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "角色弧光的收束。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 4390
+          }
+        },
+        {
+          "id": "n93",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第193-208章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "分章细化。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 4390
+          }
+        },
+        {
+          "id": "n94",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "正文撰写。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 4390
+          }
+        },
+        {
+          "id": "n95",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第十四卷（209-224章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "剧情反转与深层对抗。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 4390
+          }
+        },
+        {
+          "id": "n96",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 4570
+          }
+        },
+        {
+          "id": "n97",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "时空揭秘",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "最高层级的力量逻辑。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 4570
+          }
+        },
+        {
+          "id": "n98",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第十四卷粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "209-224章。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 4570
+          }
+        },
+        {
+          "id": "n99",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "神性与人性",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "主角的最终蜕变。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 4570
+          }
+        },
+        {
+          "id": "n100",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第209-224章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "分章细化。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 4750
+          }
+        },
+        {
+          "id": "n101",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "正文生成。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 4750
+          }
+        },
+        {
+          "id": "n102",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第十五卷（225-240章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "终极冲突的白热化。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 4750
+          }
+        },
+        {
+          "id": "n103",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 4750
+          }
+        },
+        {
+          "id": "n104",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "虚无与存在",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "关乎世界存亡的法则。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 4930
+          }
+        },
+        {
+          "id": "n105",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第十五卷粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "225-240章。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 4930
+          }
+        },
+        {
+          "id": "n106",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "反派落幕",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "宿命的对决与告别。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 4930
+          }
+        },
+        {
+          "id": "n107",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第225-240章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "分章细化。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 4930
+          }
+        },
+        {
+          "id": "n108",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "正文撰写。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 5110
+          }
+        },
+        {
+          "id": "n109",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "第十六卷（241-256章）引导",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "全书大结局与后记。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 5110
+          }
+        },
+        {
+          "id": "n110",
+          "type": "custom",
+          "data": {
+            "typeLabel": "复用已有目录",
+            "color": "#fbbf24",
+            "defaultLabel": "切换目录节点",
+            "presetType": null,
+            "typeKey": "reuseDirectory",
+            "label": "关联目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "大主宰之域_256章全卷",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 5110
+          }
+        },
+        {
+          "id": "n111",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "新秩序",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "尘埃落定后的世界走向。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 5110
+          }
+        },
+        {
+          "id": "n112",
+          "type": "custom",
+          "data": {
+            "typeLabel": "粗纲",
+            "color": "#ec4899",
+            "defaultLabel": "规划结构",
+            "presetType": "plotOutline",
+            "typeKey": "plotOutline",
+            "label": "第十六卷终章粗纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "241-256章，包含最终BOSS战和结局。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 100,
+            "y": 5290
+          }
+        },
+        {
+          "id": "n113",
+          "type": "custom",
+          "data": {
+            "typeLabel": "角色集",
+            "color": "#f97316",
+            "defaultLabel": "塑造人物",
+            "presetType": "character",
+            "typeKey": "characters",
+            "label": "角色归宿",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "所有人选的最终结局定位。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 420,
+            "y": 5290
+          }
+        },
+        {
+          "id": "n114",
+          "type": "custom",
+          "data": {
+            "typeLabel": "大纲",
+            "color": "#6366f1",
+            "defaultLabel": "细化章节",
+            "presetType": "outline",
+            "typeKey": "outline",
+            "label": "第241-256章大纲",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "终局分章，确保每一章都令人泪目或震撼。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 740,
+            "y": 5290
+          }
+        },
+        {
+          "id": "n115",
+          "type": "custom",
+          "data": {
+            "typeLabel": "正文生成",
+            "color": "#8b5cf6",
+            "defaultLabel": "生成章节正文",
+            "presetType": "completion",
+            "typeKey": "chapter",
+            "label": "生成章节正文",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "全书正文完结，注重史诗感。",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "",
+            "targetVolumeName": "",
+            "status": "pending"
+          },
+          "position": {
+            "x": 1060,
+            "y": 5290
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "n0",
+          "target": "n1",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e1",
+          "source": "n1",
+          "target": "n2",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e2",
+          "source": "n2",
+          "target": "n3",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e3",
+          "source": "n3",
+          "target": "n4",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e4",
+          "source": "n4",
+          "target": "n5",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e5",
+          "source": "n5",
+          "target": "n6",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e6",
+          "source": "n6",
+          "target": "n7",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e7",
+          "source": "n7",
+          "target": "n8",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e8",
+          "source": "n8",
+          "target": "n9",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e9",
+          "source": "n9",
+          "target": "n10",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e10",
+          "source": "n10",
+          "target": "n11",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e11",
+          "source": "n11",
+          "target": "n12",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e12",
+          "source": "n12",
+          "target": "n13",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e13",
+          "source": "n13",
+          "target": "n14",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e14",
+          "source": "n14",
+          "target": "n15",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e15",
+          "source": "n15",
+          "target": "n16",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e16",
+          "source": "n16",
+          "target": "n17",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e17",
+          "source": "n17",
+          "target": "n18",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e18",
+          "source": "n18",
+          "target": "n19",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e19",
+          "source": "n19",
+          "target": "n20",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e20",
+          "source": "n20",
+          "target": "n21",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e21",
+          "source": "n21",
+          "target": "n22",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e22",
+          "source": "n22",
+          "target": "n23",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e23",
+          "source": "n23",
+          "target": "n24",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e24",
+          "source": "n24",
+          "target": "n25",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e25",
+          "source": "n25",
+          "target": "n26",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e26",
+          "source": "n26",
+          "target": "n27",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e27",
+          "source": "n27",
+          "target": "n28",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e28",
+          "source": "n28",
+          "target": "n29",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e29",
+          "source": "n29",
+          "target": "n30",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e30",
+          "source": "n30",
+          "target": "n31",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e31",
+          "source": "n31",
+          "target": "n32",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e32",
+          "source": "n32",
+          "target": "n33",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e33",
+          "source": "n33",
+          "target": "n34",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e34",
+          "source": "n34",
+          "target": "n35",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e35",
+          "source": "n35",
+          "target": "n36",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e36",
+          "source": "n36",
+          "target": "n37",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e37",
+          "source": "n37",
+          "target": "n38",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e38",
+          "source": "n38",
+          "target": "n39",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e39",
+          "source": "n39",
+          "target": "n40",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e40",
+          "source": "n40",
+          "target": "n41",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e41",
+          "source": "n41",
+          "target": "n42",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e42",
+          "source": "n42",
+          "target": "n43",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e43",
+          "source": "n43",
+          "target": "n44",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e44",
+          "source": "n44",
+          "target": "n45",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e45",
+          "source": "n45",
+          "target": "n46",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e46",
+          "source": "n46",
+          "target": "n47",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e47",
+          "source": "n47",
+          "target": "n48",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e48",
+          "source": "n48",
+          "target": "n49",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e49",
+          "source": "n49",
+          "target": "n50",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e50",
+          "source": "n50",
+          "target": "n51",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e51",
+          "source": "n51",
+          "target": "n52",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e52",
+          "source": "n52",
+          "target": "n53",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e53",
+          "source": "n53",
+          "target": "n54",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e54",
+          "source": "n54",
+          "target": "n55",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e55",
+          "source": "n55",
+          "target": "n56",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e56",
+          "source": "n56",
+          "target": "n57",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e57",
+          "source": "n57",
+          "target": "n58",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e58",
+          "source": "n58",
+          "target": "n59",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e59",
+          "source": "n59",
+          "target": "n60",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e60",
+          "source": "n60",
+          "target": "n61",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e61",
+          "source": "n61",
+          "target": "n62",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e62",
+          "source": "n62",
+          "target": "n63",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e63",
+          "source": "n63",
+          "target": "n64",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e64",
+          "source": "n64",
+          "target": "n65",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e65",
+          "source": "n65",
+          "target": "n66",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e66",
+          "source": "n66",
+          "target": "n67",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e67",
+          "source": "n67",
+          "target": "n68",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e68",
+          "source": "n68",
+          "target": "n69",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e69",
+          "source": "n69",
+          "target": "n70",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e70",
+          "source": "n70",
+          "target": "n71",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e71",
+          "source": "n71",
+          "target": "n72",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e72",
+          "source": "n72",
+          "target": "n73",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e73",
+          "source": "n73",
+          "target": "n74",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e74",
+          "source": "n74",
+          "target": "n75",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e75",
+          "source": "n75",
+          "target": "n76",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e76",
+          "source": "n76",
+          "target": "n77",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e77",
+          "source": "n77",
+          "target": "n78",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e78",
+          "source": "n78",
+          "target": "n79",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e79",
+          "source": "n79",
+          "target": "n80",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e80",
+          "source": "n80",
+          "target": "n81",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e81",
+          "source": "n81",
+          "target": "n82",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e82",
+          "source": "n82",
+          "target": "n83",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e83",
+          "source": "n83",
+          "target": "n84",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e84",
+          "source": "n84",
+          "target": "n85",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e85",
+          "source": "n85",
+          "target": "n86",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e86",
+          "source": "n86",
+          "target": "n87",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e87",
+          "source": "n87",
+          "target": "n88",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e88",
+          "source": "n88",
+          "target": "n89",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e89",
+          "source": "n89",
+          "target": "n90",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e90",
+          "source": "n90",
+          "target": "n91",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e91",
+          "source": "n91",
+          "target": "n92",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e92",
+          "source": "n92",
+          "target": "n93",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e93",
+          "source": "n93",
+          "target": "n94",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e94",
+          "source": "n94",
+          "target": "n95",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e95",
+          "source": "n95",
+          "target": "n96",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e96",
+          "source": "n96",
+          "target": "n97",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e97",
+          "source": "n97",
+          "target": "n98",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e98",
+          "source": "n98",
+          "target": "n99",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e99",
+          "source": "n99",
+          "target": "n100",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e100",
+          "source": "n100",
+          "target": "n101",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e101",
+          "source": "n101",
+          "target": "n102",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e102",
+          "source": "n102",
+          "target": "n103",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e103",
+          "source": "n103",
+          "target": "n104",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e104",
+          "source": "n104",
+          "target": "n105",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e105",
+          "source": "n105",
+          "target": "n106",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e106",
+          "source": "n106",
+          "target": "n107",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e107",
+          "source": "n107",
+          "target": "n108",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e108",
+          "source": "n108",
+          "target": "n109",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e109",
+          "source": "n109",
+          "target": "n110",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e110",
+          "source": "n110",
+          "target": "n111",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e111",
+          "source": "n111",
+          "target": "n112",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e112",
+          "source": "n112",
+          "target": "n113",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e113",
+          "source": "n113",
+          "target": "n114",
+          "type": "custom",
+          "animated": false
+        },
+        {
+          "id": "e114",
+          "source": "n114",
+          "target": "n115",
+          "type": "custom",
+          "animated": false
+        }
+      ],
+      "lastModified": 1768118830687,
+      "currentNodeIndex": -1
+    },
+    {
+      "id": "wf_1768118831530",
+      "name": "新工作流 5",
+      "nodes": [
+        {
+          "id": "node-1768200395662",
+          "type": "custom",
+          "data": {
+            "typeLabel": "创建项目目录",
+            "color": "#818cf8",
+            "defaultLabel": "初始化目录",
+            "presetType": null,
+            "typeKey": "createFolder",
+            "label": "初始化目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": -148,
+            "y": -30
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          },
+          "selected": true,
+          "dragging": false
+        },
+        {
+          "id": "node-1768202347713",
+          "type": "custom",
+          "data": {
+            "typeLabel": "AI 聊天",
+            "color": "#a855f7",
+            "defaultLabel": "自由对话",
+            "presetType": "chat",
+            "typeKey": "aiChat",
+            "label": "自由对话",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 484.9914015733216,
+            "y": 378.0438455610729
+          }
+        }
+      ],
+      "edges": [],
+      "lastModified": 1768219385331,
+      "currentNodeIndex": -1
+    },
+    {
+      "id": "wf_1768221325581",
+      "name": "新工作流 6",
+      "nodes": [
+        {
+          "id": "node-1768221328528",
+          "type": "custom",
+          "data": {
+            "typeLabel": "用户输入",
+            "color": "#3b82f6",
+            "defaultLabel": "全局输入",
+            "presetType": null,
+            "typeKey": "userInput",
+            "label": "全局输入",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 36.57429786552518,
+            "y": 182.95121525010524
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          },
+          "selected": false,
+          "dragging": false
+        },
+        {
+          "id": "node-1768221331210",
+          "type": "custom",
+          "data": {
+            "typeLabel": "AI 聊天",
+            "color": "#a855f7",
+            "defaultLabel": "自由对话",
+            "presetType": "chat",
+            "typeKey": "aiChat",
+            "label": "自由对话",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 418.6934845953093,
+            "y": 193.24464452086778
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          },
+          "selected": false,
+          "dragging": false
+        },
+        {
+          "id": "node-1768221793035",
+          "type": "custom",
+          "data": {
+            "typeLabel": "创建项目目录",
+            "color": "#818cf8",
+            "defaultLabel": "初始化目录",
+            "presetType": null,
+            "typeKey": "createFolder",
+            "label": "初始化目录",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 800.2093237362327,
+            "y": 193.96896434962517
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          },
+          "selected": false,
+          "dragging": false
+        },
+        {
+          "id": "node-1768221805626",
+          "type": "custom",
+          "data": {
+            "typeLabel": "世界观",
+            "color": "#10b981",
+            "defaultLabel": "构建设定",
+            "presetType": "worldview",
+            "typeKey": "worldview",
+            "label": "构建设定",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 1272.3243476400141,
+            "y": 192.8202659946281
+          },
+          "measured": {
+            "width": 280,
+            "height": 81
+          },
+          "selected": true,
+          "dragging": false
+        },
+        {
+          "id": "node-1768221821907",
+          "type": "custom",
+          "data": {
+            "typeLabel": "循环执行器",
+            "color": "#0ea5e9",
+            "defaultLabel": "循环控制",
+            "presetType": null,
+            "typeKey": "loopNode",
+            "label": "循环控制",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 892.8813520483991,
+            "y": 201.9959980895228
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "node-1768221328528",
+          "sourceHandle": "source",
+          "target": "node-1768221331210",
+          "type": "custom",
+          "animated": false,
+          "interactionWidth": 20,
+          "id": "xy-edge__node-1768221328528source-node-1768221331210"
+        },
+        {
+          "source": "node-1768221331210",
+          "sourceHandle": "source",
+          "target": "node-1768221793035",
+          "type": "custom",
+          "animated": false,
+          "interactionWidth": 20,
+          "id": "xy-edge__node-1768221331210source-node-1768221793035"
+        },
+        {
+          "source": "node-1768221793035",
+          "sourceHandle": "source",
+          "target": "node-1768221805626",
+          "type": "custom",
+          "animated": false,
+          "interactionWidth": 20,
+          "id": "xy-edge__node-1768221793035source-node-1768221805626"
+        },
+        {
+          "source": "node-1768221793035",
+          "sourceHandle": "source",
+          "target": "node-1768221821907",
+          "type": "custom",
+          "animated": false,
+          "interactionWidth": 20,
+          "id": "xy-edge__node-1768221793035source-node-1768221821907"
+        }
+      ],
+      "lastModified": 1768222378242,
+      "currentNodeIndex": -1
+    }
+  ]
+}

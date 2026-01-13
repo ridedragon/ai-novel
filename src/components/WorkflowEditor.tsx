@@ -1255,27 +1255,56 @@ const NodePropertiesModal = ({
               </div>
               
               <div className="space-y-4">
-                {((node.data.outputEntries || []) as OutputEntry[]).map((entry) => (
-                  <div key={entry.id} className="bg-[#161922] border border-gray-700/50 rounded-xl overflow-hidden shadow-lg group/entry">
-                    <div className="bg-[#1a1d29] px-4 py-2 border-b border-gray-700/50 flex items-center justify-between">
-                      <input
-                        value={entry.title}
-                        onChange={(e) => updateEntryTitle(entry.id, e.target.value)}
-                        className="bg-transparent border-none outline-none text-xs font-bold text-indigo-300 focus:text-white transition-colors flex-1"
-                        placeholder="条目标题..."
-                      />
-                      <button onClick={() => removeEntry(entry.id)} className="p-1 text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover/entry:opacity-100">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <textarea
-                      value={entry.content}
-                      onChange={(e) => updateEntryContent(entry.id, e.target.value)}
-                      placeholder="输入内容..."
-                      className="w-full h-32 bg-transparent p-4 text-sm text-gray-300 focus:text-emerald-50 outline-none resize-none font-mono leading-relaxed"
-                    />
-                  </div>
-                ))}
+                {(() => {
+                  const entries = (node.data.outputEntries || []) as OutputEntry[];
+                  return entries.map((entry, idx) => {
+                    const isFirst = idx === 0;
+                    return (
+                      <div key={entry.id} className="bg-[#161922] border border-gray-700/50 rounded-xl overflow-hidden shadow-lg group/entry transition-all">
+                        <div
+                          className="bg-[#1a1d29] px-4 py-2 border-b border-gray-700/50 flex items-center justify-between cursor-pointer hover:bg-[#202436]"
+                          onClick={(e) => {
+                            // 简单的手风琴效果：通过 details/summary 或者手动状态管理。
+                            // 这里利用 DOM 操作简化实现，或者如果想要 React 状态控制，需要重构为子组件。
+                            // 为了保持单文件简洁，我们给它加上 details/summary 语义的变体。
+                            const contentEl = e.currentTarget.nextElementSibling as HTMLElement;
+                            if (contentEl) {
+                              contentEl.style.display = contentEl.style.display === 'none' ? 'block' : 'none';
+                              // 旋转图标
+                              const icon = e.currentTarget.querySelector('.chevron-icon');
+                              if (icon) icon.classList.toggle('rotate-180');
+                            }
+                          }}
+                        >
+                          <div className="flex items-center gap-2 flex-1">
+                            <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform chevron-icon ${!isFirst ? '-rotate-90' : ''}`} />
+                            <input
+                              value={entry.title}
+                              onClick={(e) => e.stopPropagation()} // 防止触发折叠
+                              onChange={(e) => updateEntryTitle(entry.id, e.target.value)}
+                              className="bg-transparent border-none outline-none text-xs font-bold text-indigo-300 focus:text-white transition-colors flex-1"
+                              placeholder="条目标题..."
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] text-gray-600 font-mono">{entry.content.length}字</span>
+                            <button onClick={(e) => { e.stopPropagation(); removeEntry(entry.id); }} className="p-1 text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover/entry:opacity-100">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        <div style={{ display: isFirst ? 'block' : 'none' }}>
+                          <textarea
+                            value={entry.content}
+                            onChange={(e) => updateEntryContent(entry.id, e.target.value)}
+                            placeholder="输入内容..."
+                            className="w-full h-32 bg-transparent p-4 text-sm text-gray-300 focus:text-emerald-50 outline-none resize-none font-mono leading-relaxed"
+                          />
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
                 {(!node.data.outputEntries || (node.data.outputEntries as OutputEntry[]).length === 0) && (
                   <div className="text-center py-12 bg-[#161922] rounded-xl border border-dashed border-gray-700">
                     <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
@@ -2359,6 +2388,14 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             updates.label = NODE_CONFIGS.chapter.defaultLabel;
           }
 
+          // 核心修复：全量运行时重置循环计数器，防止继承上次运行的索引导致循环次数错误
+          if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {
+            updates.loopConfig = {
+              ...n.data.loopConfig,
+              currentIndex: 0
+            };
+          }
+
           // 不再重置 targetVolumeId，保留用户手动配置或上次运行自动匹配的结果
           // 仅在状态彻底损坏时通过 Data Healing 修复
           
@@ -2405,8 +2442,13 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             accumContext += `【全局输入】：\n${prevNode.data.instruction}\n\n`;
           }
           // 获取上一个执行完的节点的产出作为 lastNodeOutput
+          // 核心修复：如果是循环回跳产生的多条历史记录，应该将所有历史记录（按时间倒序恢复为正序）都拼接到上下文中
           if (prevNode.data.outputEntries && prevNode.data.outputEntries.length > 0) {
-            lastNodeOutput += `【${prevNode.data.typeLabel}输出】：\n${prevNode.data.outputEntries[0].content}\n\n`;
+            // outputEntries[0] 是最新的，outputEntries[length-1] 是最早的。
+            // 为了让 AI 获得符合时间线的发展脉络，我们应该从旧到新拼接。
+            // 因此先复制数组，翻转，然后 join。
+            const allHistory = [...prevNode.data.outputEntries].reverse().map(e => e.content).join('\n\n---\n\n');
+            lastNodeOutput += `【${prevNode.data.typeLabel}输出历史】：\n${allHistory}\n\n`;
           }
         }
       }
@@ -2485,14 +2527,14 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                          // 保留 loopNode 的状态
                          if (n.id === node.id) return { ...n, data: { ...n.data, status: 'pending' as const, loopConfig: { ...loopConfig, currentIndex: currentLoopIndex } } };
                          
-                         // 核心修复：清空 outputEntries 以确保 UI 更新并强制 AI 重新生成
-                         // 同时保留 folderName 等配置项
+                         // 核心修复：不再清空 outputEntries，而是保留作为历史记录。
+                         // UI 层已通过折叠（Accordion）处理了显示问题，context 层已改为读取全量历史。
                          return {
                            ...n,
                            data: {
                              ...n.data,
                              status: 'pending' as const,
-                             outputEntries: [], // 强制清空产物列表
+                             // outputEntries: [], // 已移除清空逻辑，保留历史
                              label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label // 重置正文生成节点的显示状态
                            }
                          };
@@ -3697,6 +3739,14 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           updates.targetVolumeName = '';
           // 重置正文生成节点的显示名称为默认值
           updates.label = NODE_CONFIGS.chapter.defaultLabel;
+        }
+
+        // 核心修复：手动重置时也需要将循环计数归零
+        if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {
+          updates.loopConfig = {
+            ...n.data.loopConfig,
+            currentIndex: 0
+          };
         }
         
         return {

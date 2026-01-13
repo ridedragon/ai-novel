@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "monitor": "node memory-server.js"
+    "monitor": "node memory-server.js",
+    "server": "node server.js"
   },
   "dependencies": {
     "@xyflow/react": "^12.10.0",
@@ -17,6 +18,7 @@
     "lucide-react": "^0.300.0",
     "mammoth": "^1.11.0",
     "memory-monitor-sdk": "^1.0.2",
+    "node-fetch": "^3.3.2",
     "openai": "^4.24.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
