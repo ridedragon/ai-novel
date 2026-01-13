@@ -187,11 +187,12 @@ const CoolEdge = ({
 
 
 // --- 配置定义 ---
-type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter' | 'workflowGenerator' | 'loopNode' | 'pauseNode';
+type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'saveToVolume' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter' | 'workflowGenerator' | 'loopNode' | 'pauseNode';
 
 const NODE_CONFIGS: Record<NodeTypeKey, any> = {
   pauseNode: { typeLabel: '暂停', icon: PauseCircle, color: '#64748b', defaultLabel: '暂停等待', presetType: null },
   loopNode: { typeLabel: '循环', icon: Repeat, color: '#0ea5e9', defaultLabel: '循环控制', presetType: null },
+  saveToVolume: { typeLabel: '分卷', icon: Library, color: '#14b8a6', defaultLabel: '选择目标分卷', presetType: null },
   workflowGenerator: { typeLabel: '架构', icon: Wand2, color: '#f87171', defaultLabel: '工作流架构师', presetType: 'generator' },
   createFolder: { typeLabel: '目录', icon: FolderPlus, color: '#818cf8', defaultLabel: '初始化目录', presetType: null },
   reuseDirectory: { typeLabel: '复用', icon: Folder, color: '#fbbf24', defaultLabel: '切换目录节点', presetType: null },
@@ -601,18 +602,18 @@ const ConfigPanel = React.memo(({
           </div>
         )}
 
-        {editingNode.data.typeKey === 'chapter' && (
+        {editingNode.data.typeKey === 'saveToVolume' && (
           <div className="space-y-6">
             <div className="space-y-3">
-              <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Library className="w-3.5 h-3.5" /> 保存至分卷
+              <label className="text-[10px] font-bold text-teal-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Library className="w-3.5 h-3.5" /> 选择目标分卷
               </label>
               <select
                 value={editingNode.data.targetVolumeId as string}
                 onChange={(e) => onUpdateNodeData(editingNode.id, { targetVolumeId: e.target.value })}
                 className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none"
               >
-                <option value="">-- 自动匹配同名分卷 --</option>
+                <option value="">{pendingFolders.length > 0 ? `-- 自动匹配分卷 (${pendingFolders[0]}) --` : '-- 默认/未分卷 --'}</option>
                 <option value="NEW_VOLUME">+ 新建分卷...</option>
                 {activeNovel?.volumes.map(v => (
                   <option key={v.id} value={v.id}>{v.title}</option>
@@ -623,14 +624,17 @@ const ConfigPanel = React.memo(({
                   value={editingNode.data.targetVolumeName}
                   onChange={(val: string) => handleUpdate({ targetVolumeName: val })}
                   placeholder="输入新分卷名称..."
-                  className="w-full bg-gray-800 border border-indigo-900/40 rounded-2xl px-5 py-3 text-white text-xs outline-none focus:border-indigo-500"
+                  className="w-full bg-gray-800 border border-teal-900/40 rounded-2xl px-5 py-3 text-white text-xs outline-none focus:border-teal-500"
                 />
               )}
+              <p className="text-[10px] text-gray-500 leading-relaxed mt-2 px-1">
+                * 此节点之后生成的正文内容将自动保存到该分卷中，直到遇到下一个分卷节点。
+              </p>
             </div>
           </div>
         )}
 
-        {editingNode.data.typeKey !== 'pauseNode' && (
+        {editingNode.data.typeKey !== 'pauseNode' && editingNode.data.typeKey !== 'saveToVolume' && (
           <>
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
@@ -822,10 +826,10 @@ const ConfigPanel = React.memo(({
             </label>
             <div className="text-center py-10 bg-gray-800/50 rounded-[2.5rem] border border-dashed border-gray-700">
               <p className="text-sm text-gray-400">章节已保存至小说目录</p>
-              <p className="text-[10px] text-gray-500 mt-1 px-10">请通过主界面的侧边栏查看和管理生成的章节内容。</p>
+              <p className="text-[10px] text-gray-500 mt-1 px-10">正文将保存至上一个“保存至分卷”节点指定的分卷中。</p>
             </div>
           </div>
-        ) : editingNode.data.typeKey !== 'pauseNode' && (editingNode.data.outputEntries as OutputEntry[])?.length > 0 && (
+        ) : editingNode.data.typeKey !== 'pauseNode' && editingNode.data.typeKey !== 'saveToVolume' && (editingNode.data.outputEntries as OutputEntry[])?.length > 0 && (
           <div className="space-y-4 pt-6 border-t border-gray-800">
             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">产出 ({(editingNode.data.outputEntries as OutputEntry[]).length})</label>
             <div className="space-y-3">
@@ -1763,6 +1767,41 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           return;
         }
 
+        // --- Save To Volume Node Logic ---
+        if (node.data.typeKey === 'saveToVolume') {
+          terminal.log(`[Mobile SaveToVolume] Executing node ${node.data.label}`);
+          
+          let targetVolumeId = node.data.targetVolumeId as string;
+          
+          if (targetVolumeId === 'NEW_VOLUME' && node.data.targetVolumeName) {
+             const newVolume = {
+               id: `vol_${Date.now()}`,
+               title: node.data.targetVolumeName as string,
+               collapsed: false
+             };
+             const updatedNovel: Novel = {
+               ...localNovel as Novel,
+               volumes: [...(localNovel.volumes || []), newVolume]
+             };
+             await updateLocalAndGlobal(updatedNovel);
+             targetVolumeId = newVolume.id;
+             await syncNodeStatus(node.id, { targetVolumeId, targetVolumeName: '', status: 'completed' }, i);
+          } else if (!targetVolumeId && pendingFolders.length > 0) {
+             const matchedVol = localNovel.volumes.find(v => v.title === pendingFolders[0]);
+             if (matchedVol) targetVolumeId = matchedVol.id;
+          }
+
+          if (targetVolumeId) {
+             workflowManager.setActiveVolumeAnchor(targetVolumeId);
+             terminal.log(`[Mobile SaveToVolume] Active Volume Anchor set to ${targetVolumeId}`);
+          }
+
+          await syncNodeStatus(node.id, { status: 'completed' }, i);
+          setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
+          await new Promise(resolve => setTimeout(resolve, 50));
+          continue;
+        }
+
         // --- Loop Node Logic ---
         if (node.data.typeKey === 'loopNode') {
           const loopConfig = node.data.loopConfig || { enabled: true, count: 1, currentIndex: 0 };
@@ -2178,46 +2217,36 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           }
 
           // 2. 确定最终分卷 ID (此处必须实时从 localNovel 中获取，确保能感知到刚创建的分卷)
-          let finalVolumeId = node.data.targetVolumeId as string;
+          // 优先级 0: 检查上下文中的 Active Volume Anchor (由 SaveToVolume 节点设置)
+          let finalVolumeId = workflowManager.getActiveVolumeAnchor() || '';
           
           // 获取最新的分卷列表（从执行中的内存状态获取）
           const latestVolumes = localNovel.volumes || [];
 
-          // 优先级 1: 如果节点已经显式关联了某个真实分卷 ID，且该分卷依然存在
-          if (finalVolumeId && finalVolumeId !== 'NEW_VOLUME') {
-            const exists = latestVolumes.some(v => v.id === finalVolumeId);
-            if (!exists) finalVolumeId = ''; // 如果关联的分卷被删了，重置它
+          // 验证 Anchor 有效性
+          if (finalVolumeId) {
+             if (!latestVolumes.some(v => v.id === finalVolumeId)) {
+                finalVolumeId = ''; // Anchor 失效
+             }
           }
 
-          // 优先级 2: 自动匹配逻辑 (针对“自动匹配分卷”模式)
+          // 兼容性/兜底逻辑: 自动匹配逻辑 (针对“自动匹配分卷”模式)
           if (!finalVolumeId || finalVolumeId === '') {
             // 尝试匹配与当前工作流文件夹同名的分卷
             const matchedVol = latestVolumes.find(v => v.title === currentWorkflowFolder);
             if (matchedVol) {
               finalVolumeId = matchedVol.id;
-              // 关键：必须立即将匹配到的 ID 写回节点状态，确保 AutoWriteEngine 拿到的是确定值
-              updateNodeData(node.id, { targetVolumeId: finalVolumeId });
+              // 自动将找到的分卷设为 Anchor，以便后续节点复用
+              workflowManager.setActiveVolumeAnchor(finalVolumeId);
             }
           }
 
-          // 优先级 3: 兜底逻辑
+          // 优先级 3: 最终兜底逻辑
           if (!finalVolumeId || finalVolumeId === '') {
             if (latestVolumes.length > 0) {
               finalVolumeId = latestVolumes[0].id;
-              updateNodeData(node.id, { targetVolumeId: finalVolumeId });
+              workflowManager.setActiveVolumeAnchor(finalVolumeId);
             }
-          }
-
-          if (finalVolumeId === 'NEW_VOLUME' && node.data.targetVolumeName) {
-            const newVolume = {
-              id: `vol_${Date.now()}`,
-              title: node.data.targetVolumeName as string,
-              collapsed: false
-            };
-            const updatedNovel = { ...localNovel, volumes: [...(localNovel.volumes || []), newVolume] };
-            finalVolumeId = newVolume.id;
-            updateLocalAndGlobal(updatedNovel);
-            updateNodeData(node.id, { targetVolumeId: finalVolumeId, targetVolumeName: '' });
           }
 
           const nodeApiConfig = (preset as any)?.apiConfig || {};
