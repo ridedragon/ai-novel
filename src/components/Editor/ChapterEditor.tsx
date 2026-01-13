@@ -107,19 +107,19 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar */}
-      <div className="h-14 md:h-16 px-1 md:px-10 border-b border-slate-200 dark:border-white/5 flex flex-row items-center justify-between bg-white dark:bg-[#09090b] shrink-0 gap-0.5 md:gap-0 custom-header-transition">
-        <div className="flex items-center gap-0.5 md:gap-8 min-w-0">
+      <div className="h-14 md:h-16 px-1.5 md:px-10 border-b border-slate-200 dark:border-white/5 flex flex-row items-center justify-between bg-white dark:bg-[#09090b] shrink-0 gap-0.5 md:gap-0 custom-header-transition overflow-hidden">
+        <div className="flex items-center gap-1 md:gap-8 min-w-0 shrink-0">
           {/* 版本切换 */}
           <div className="flex items-center bg-slate-100 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/5 overflow-hidden p-0.5 h-9 md:h-10 shrink-0">
             <button
               onClick={onPrevVersion}
               disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
-              className="px-0.5 md:px-1 h-full text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-20"
+              className="px-1 h-full text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-20"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
-            <div className="px-0.5 md:px-1 text-[9px] md:text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center gap-0.5 whitespace-nowrap">
-              <span className="max-w-[32px] md:max-w-[40px] truncate">
+            <div className="px-1 text-[9px] md:text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center gap-0.5 whitespace-nowrap">
+              <span className="max-w-[40px] truncate">
                 {(() => {
                   const v = activeChapter.versions?.find(v => v.id === activeChapter.activeVersionId);
                   if (!v) return '当前';
@@ -143,14 +143,14 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
             <button
               onClick={onNextVersion}
               disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
-              className="px-0.5 md:px-1 h-full text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-20"
+              className="px-1 h-full text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-20"
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Auto开关 */}
-          <div className="flex items-center px-1 md:px-1.5 h-9 md:h-10 bg-slate-100 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/5 shrink-0">
+          <div className="flex items-center px-1.5 h-9 md:h-10 bg-slate-100 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/5 shrink-0">
             <div
               onClick={() => setAutoOptimize(!autoOptimize)}
               className={`w-5 h-2.5 rounded-full relative cursor-pointer transition-colors ${autoOptimize ? 'bg-primary/40' : 'bg-slate-300 dark:bg-slate-700'}`}
@@ -160,24 +160,24 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
           </div>
         </div>
 
-        <div className="flex items-center gap-0.5 md:gap-4 ml-0.5 md:ml-1">
+        <div className="flex items-center gap-1 md:gap-4 ml-auto">
           {/* 润色按钮组 */}
           <div className="flex items-center h-9 md:h-10 overflow-hidden shrink-0">
             {activeChapter && optimizingChapterIds.has(activeChapter.id) ? (
               <button
                 onClick={() => onStopOptimize(activeChapter.id)}
-                className="bg-red-600 hover:bg-red-500 h-full text-white transition-all flex items-center justify-center px-1.5 md:px-2 rounded-l-lg text-[10px] font-bold gap-0.5 md:gap-1 shadow-lg shadow-red-900/10"
+                className="bg-red-600 hover:bg-red-500 h-full text-white transition-all flex items-center justify-center px-2 rounded-l-lg text-[10px] font-bold gap-1 shadow-lg shadow-red-900/10"
               >
                 <StopCircle className="w-3.5 h-3.5" />
-                <span>停止</span>
+                <span className="hidden md:inline">停止</span>
               </button>
             ) : (
             <button
               onClick={() => onOptimize(activeChapter.id, localContent)}
-              className="bg-primary hover:bg-primary-hover h-full text-white transition-all flex items-center justify-center px-1.5 md:px-2 rounded-l-lg text-[10px] font-bold gap-0.5 md:gap-1 shadow-lg shadow-primary/10"
+              className="bg-primary hover:bg-primary-hover h-full text-white transition-all flex items-center justify-center px-2 rounded-l-lg text-[10px] font-bold gap-1 shadow-lg shadow-primary/10"
             >
                 <Wand2 className="w-3.5 h-3.5" />
-                <span className="whitespace-nowrap">润色</span>
+                <span className="hidden md:inline whitespace-nowrap">润色</span>
               </button>
             )}
             <button
@@ -190,7 +190,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
           </div>
 
           {/* 右侧工具 */}
-          <div className="flex items-center gap-0.5 md:gap-1 h-9 md:h-10 shrink-0">
+          <div className="flex items-center gap-1 h-9 md:h-10 shrink-0">
             <button
               onClick={onShowAnalysisResult}
               className="w-8 h-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-all"

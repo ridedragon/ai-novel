@@ -7200,16 +7200,16 @@ function App() {
     <NovelEditorLayout
       headerLeft={
         <>
-          <button className="md:hidden p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full transition-colors text-slate-500 dark:text-slate-400" title="打开章节列表" onClick={() => setIsMobileSidebarOpen(true)}>
+          <button className="md:hidden p-1.5 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full transition-colors text-slate-500 dark:text-slate-400" title="打开章节列表" onClick={() => setIsMobileSidebarOpen(true)}>
             <Menu className="w-[18px] h-[18px]" />
           </button>
-          <button className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full transition-colors text-slate-500 dark:text-slate-400" title="返回主界面" onClick={() => setActiveNovelId(null)}>
+          <button className="p-1.5 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full transition-colors text-slate-500 dark:text-slate-400" title="返回主界面" onClick={() => setActiveNovelId(null)}>
             <Home className="w-[18px] h-[18px]" />
           </button>
           <button className="hidden md:block p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full transition-colors text-slate-500 dark:text-slate-400" title="下载整本书" onClick={(e) => activeNovel && handleExportNovel(activeNovel, e)}>
             <Download className="w-[18px] h-[18px]" />
           </button>
-          <button className={`p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full transition-colors ${showOutline ? 'text-primary' : 'text-slate-500 dark:text-slate-400'}`} title="自动化中心" onClick={() => { if (!showOutline) setCreationModule('menu'); setShowOutline(!showOutline); }}>
+          <button className={`p-1.5 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full transition-colors ${showOutline ? 'text-primary' : 'text-slate-500 dark:text-slate-400'}`} title="自动化中心" onClick={() => { if (!showOutline) setCreationModule('menu'); setShowOutline(!showOutline); }}>
             <BookOpen className="w-[18px] h-[18px]" />
           </button>
           <div className="hidden md:block h-4 w-[1px] bg-slate-200 dark:bg-white/10 mx-2"></div>
@@ -7220,10 +7220,10 @@ function App() {
         </>
       }
       headerRight={
-        <div className="flex items-center gap-1 bg-white/50 dark:bg-slate-800/40 px-1 md:px-2 py-1 rounded-xl border border-slate-200 dark:border-white/5">
+        <div className="flex items-center gap-0.5 md:gap-1 bg-white/50 dark:bg-slate-800/40 px-0.5 md:px-2 py-1 rounded-xl border border-slate-200 dark:border-white/5">
           <span className="hidden lg:inline text-[9px] text-slate-400 dark:text-slate-600 font-bold px-2 tracking-widest uppercase">Toolbox</span>
           <button
-            className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-slate-200 dark:hover:border-white/10 ${keepAliveMode ? 'text-green-600 dark:text-green-500' : 'text-slate-500 dark:text-slate-400'}`}
+            className={`flex items-center gap-1 px-1.5 md:px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-slate-200 dark:hover:border-white/10 ${keepAliveMode ? 'text-green-600 dark:text-green-500' : 'text-slate-500 dark:text-slate-400'}`}
             onClick={async () => {
               if (keepAliveMode) {
                   keepAliveManager.disable()
@@ -7243,7 +7243,7 @@ function App() {
             <span className="hidden md:inline">防断连</span>
           </button>
           <div
-            className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${longTextMode ? 'bg-primary/10 text-primary border-primary/30' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-white/5'}`}
+            className={`flex items-center gap-1 px-1.5 md:px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${longTextMode ? 'bg-primary/10 text-primary border-primary/30' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-white/5'}`}
             onClick={() => setLongTextMode(!longTextMode)}
           >
             <BookMarked className="w-4 h-4" />
@@ -7262,20 +7262,20 @@ function App() {
             )}
           </div>
           <div className="h-4 w-[1px] bg-slate-200 dark:bg-[#1e2433] mx-1"></div>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-slate-200 dark:hover:border-white/10 text-slate-500 dark:text-slate-400" onClick={() => setShowRegexModal(true)}>
+          <button className="flex items-center gap-1 px-1.5 md:px-3 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-slate-200 dark:hover:border-white/10 text-slate-500 dark:text-slate-400" onClick={() => setShowRegexModal(true)}>
             <Code className="w-4 h-4" />
             <span className="hidden md:inline">正则</span>
           </button>
-          <button className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-slate-200 dark:hover:border-white/10 text-slate-500 dark:text-slate-400" onClick={() => setShowSettings(true)}>
+          <button className="flex items-center gap-1 px-1.5 md:px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-slate-200 dark:hover:border-white/10 text-slate-500 dark:text-slate-400" onClick={() => setShowSettings(true)}>
             <Settings className="w-4 h-4" />
             <span className="hidden md:inline">设置</span>
           </button>
           <button
-            className="flex items-center gap-2 bg-primary/10 text-primary px-2 md:px-4 py-1.5 rounded-lg border border-primary/20 text-xs font-semibold hover:bg-primary/20 transition-all ml-1"
+            className="flex items-center gap-1 md:gap-2 bg-primary/10 text-primary px-1.5 md:px-4 py-1.5 rounded-lg border border-primary/20 text-xs font-semibold hover:bg-primary/20 transition-all ml-0.5 md:ml-1"
             onClick={() => setShowWorkflowEditor(true)}
           >
             <GitBranch className="w-4 h-4" />
-            <span className="hidden md:inline">可视化工作流</span>
+            <span className="hidden lg:inline">可视化工作流</span>
           </button>
         </div>
       }

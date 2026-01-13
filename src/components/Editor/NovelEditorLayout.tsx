@@ -23,11 +23,11 @@ export const NovelEditorLayout: React.FC<NovelEditorLayoutProps> = ({
   return (
     <div className="h-screen overflow-hidden flex flex-col bg-white dark:bg-[#09090b] text-slate-600 dark:text-slate-300 antialiased font-sans custom-bg-transition">
       {/* Header */}
-      <header className="h-16 border-b border-slate-200 dark:border-white/5 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-md flex items-center justify-between px-3 md:px-6 shrink-0 z-40 custom-header-transition">
-        <div className="flex items-center gap-2">
+      <header className="h-16 border-b border-slate-200 dark:border-white/5 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-md flex items-center justify-between px-1.5 md:px-6 shrink-0 z-40 custom-header-transition overflow-hidden">
+        <div className="flex items-center gap-0.5 md:gap-2">
           {headerLeft}
         </div>
-        <div className="flex items-center gap-2 md:gap-3">
+        <div className="flex items-center gap-1 md:gap-3">
           {headerRight}
           <div className="hidden md:flex w-10 h-10 rounded-xl bg-[var(--theme-color)]/10 items-center justify-center text-[var(--theme-color)] shadow-lg border border-white/5 ml-2 uppercase font-bold text-xs">
             AI
