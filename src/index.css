@@ -48,17 +48,38 @@
 }
 
 :root {
-  /* 工作流编辑器连接线颜色自定义 */
-  /* 如果您不想更改系统主题色，可以单独修改这里的变量来改变连接线颜色 */
-  /* --workflow-edge-color: #10b981; */ /* 示例：翡翠绿 */
-  /* --workflow-edge-color-dark: #059669; */
-  /* --workflow-edge-color-light: #34d399; */
+  /* Default to Dark Mode Colors (as existing codebase assumes dark) */
+  /* These will be used for 'dark' mode and default */
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-gray-950: #030712;
+
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
 
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
+  /* Default Dark Mode Styles */
+  color-scheme: dark;
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
 
@@ -66,6 +87,42 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root[class='light'] {
+  /* Inverted Colors for Light Mode */
+  /* Mapping dark palette to light equivalent for existing Tailwind classes */
+
+  /* Backgrounds: Darker becomes Lighter */
+  --color-gray-950: #ffffff; /* Main bg */
+  --color-gray-900: #f9fafb; /* Slightly off-white */
+  --color-gray-800: #f3f4f6; /* Card bg */
+  --color-gray-700: #e5e7eb; /* Border light */
+  --color-gray-600: #d1d5db; /* Border strong */
+  --color-gray-500: #9ca3af; /* Muted text */
+  --color-gray-400: #6b7280; /* Secondary text */
+  --color-gray-300: #4b5563; /* Primary text light */
+  --color-gray-200: #374151; /* Primary text */
+  --color-gray-100: #1f2937; /* Strong text */
+  --color-gray-50: #111827; /* Black text */
+
+  /* Slate Scale (often used for UI elements) */
+  --color-slate-950: #ffffff;
+  --color-slate-900: #f8fafc;
+  --color-slate-800: #f1f5f9; /* Active item bg */
+  --color-slate-700: #e2e8f0;
+  --color-slate-600: #cbd5e1;
+  --color-slate-500: #94a3b8;
+  --color-slate-400: #64748b;
+  --color-slate-300: #475569;
+  --color-slate-200: #334155;
+  --color-slate-100: #1e293b;
+  --color-slate-50: #0f172a;
+
+  /* Global Overrides */
+  color-scheme: light;
+  color: #213547;
+  background-color: #ffffff;
 }
 
 a {
@@ -126,16 +183,3 @@ button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 } */
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    /* background-color: #f9f9f9; */
-  }
-}

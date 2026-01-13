@@ -37,6 +37,7 @@ import {
   Library,
   Lightbulb,
   MessageSquare,
+  PauseCircle,
   Play,
   Plus,
   Repeat,
@@ -210,7 +211,7 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
   };
 
   return (
-    <div className={`relative px-4 py-3 shadow-xl rounded-lg border-2 bg-gray-800 transition-all ${getStatusColor()}`} style={{ width: '280px' }}>
+    <div className={`relative px-4 py-3 shadow-xl rounded-lg border-2 bg-gray-800 dark:bg-gray-800 bg-white transition-all ${getStatusColor()}`} style={{ width: '280px' }}>
       <Handle
         type="target"
         position={Position.Left}
@@ -226,15 +227,15 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
           <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-none mb-1 flex items-center justify-between">
             <span className="flex items-center gap-1">
               {data.typeLabel}
-              {data.skipped && <span className="text-[8px] bg-gray-700 px-1 rounded text-gray-400">已跳过</span>}
+              {data.skipped && <span className="text-[8px] bg-gray-200 dark:bg-gray-700 px-1 rounded text-gray-500 dark:text-gray-400">已跳过</span>}
             </span>
             {data.status === 'executing' && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>}
           </div>
-          <div className="text-sm font-semibold text-gray-100 truncate">{data.label}</div>
+          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{data.label}</div>
         </div>
       </div>
       
-      <div className="mt-2 pt-2 border-t border-gray-700/50 space-y-1.5">
+      <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700/50 space-y-1.5">
         {data.folderName && (
           <div className="flex items-center gap-1.5 text-[10px] text-primary font-medium bg-primary/10 px-1.5 py-0.5 rounded">
             <FolderPlus className="w-3 h-3" />
@@ -349,9 +350,16 @@ const CoolEdge = ({
 
 // --- 配置定义 ---
 
-type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter' | 'workflowGenerator' | 'loopNode';
+type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'userInput' | 'aiChat' | 'inspiration' | 'worldview' | 'characters' | 'plotOutline' | 'outline' | 'chapter' | 'workflowGenerator' | 'loopNode' | 'pauseNode';
 
 const NODE_CONFIGS: Record<NodeTypeKey, any> = {
+  pauseNode: {
+    typeLabel: '暂停节点',
+    icon: PauseCircle,
+    color: '#64748b', // Slate 500
+    defaultLabel: '暂停等待',
+    presetType: null,
+  },
   loopNode: {
     typeLabel: '循环执行器',
     icon: Repeat,
@@ -576,30 +584,30 @@ const NodePropertiesModal = ({
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-[650px] bg-[#1e2230] rounded-xl shadow-2xl border border-gray-700/50 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="p-5 border-b border-gray-700/50 flex items-center justify-between bg-[#1a1d29]">
+      <div className="relative w-full max-w-[650px] bg-white dark:bg-[#1e2230] rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700/50 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-5 border-b border-gray-200 dark:border-gray-700/50 flex items-center justify-between bg-gray-50 dark:bg-[#1a1d29]">
           <div className="flex items-center gap-4 text-primary">
             <div className="flex items-center gap-2.5">
               {(() => {
                 const Icon = NODE_CONFIGS[node.data.typeKey as NodeTypeKey]?.icon;
                 return Icon && <Icon className="w-5 h-5" />;
               })()}
-              <span className="font-bold text-gray-100 text-lg">配置: {localLabel}</span>
+              <span className="font-bold text-gray-900 dark:text-gray-100 text-lg">配置: {localLabel}</span>
             </div>
             <button
               onClick={() => updateNodeData(node.id, { skipped: !node.data.skipped })}
-              className={`text-[10px] px-2 py-1 rounded transition-all font-bold uppercase tracking-wider flex items-center gap-1 ${node.data.skipped ? 'bg-gray-600 text-gray-300' : 'bg-primary/20 text-primary border border-primary/30'}`}
+              className={`text-[10px] px-2 py-1 rounded transition-all font-bold uppercase tracking-wider flex items-center gap-1 ${node.data.skipped ? 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-300' : 'bg-primary/20 text-primary border border-primary/30'}`}
             >
               {node.data.skipped ? <Square className="w-3 h-3" /> : <CheckSquare className="w-3 h-3" />}
               {node.data.skipped ? '已跳过' : '执行此节点'}
             </button>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-gray-700/50 rounded-md text-gray-400 hover:text-white transition-all">
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700/50 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-8 space-y-8 custom-scrollbar max-h-[80vh] overflow-y-auto bg-[#1e2230]">
+        <div className="p-8 space-y-8 custom-scrollbar max-h-[80vh] overflow-y-auto bg-white dark:bg-[#1e2230]">
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2.5">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">模块显示名称</label>
@@ -610,7 +618,7 @@ const NodePropertiesModal = ({
                   setLocalLabel(e.target.value);
                   debouncedUpdate({ label: e.target.value });
                 }}
-                className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all"
+                className="w-full bg-gray-50 dark:bg-[#161922] border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all"
               />
             </div>
             <div className={`space-y-2.5 ${(node.data.typeKey === 'createFolder' || node.data.typeKey === 'reuseDirectory') ? 'col-span-2' : ''}`}>
@@ -951,7 +959,7 @@ const NodePropertiesModal = ({
             </div>
           )}
 
-          {node.data.typeKey !== 'userInput' && activeNovel && (
+          {node.data.typeKey !== 'userInput' && node.data.typeKey !== 'pauseNode' && activeNovel && (
             <div className="space-y-4 pt-6 border-t border-gray-700/30">
               <label className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-2">
                 <CheckSquare className="w-3.5 h-3.5" /> 关联参考资料集 (Context)
@@ -1123,75 +1131,79 @@ const NodePropertiesModal = ({
             </div>
           )}
 
-          <div className="space-y-3 pt-6 border-t border-gray-700/30">
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-              {node.data.typeKey === 'workflowGenerator' ? '工作流需求描述 (Architecture Requirements)' : '额外指令 (USER PROMPT)'}
-            </label>
-            <textarea
-              value={localInstruction}
-              onChange={(e) => {
-                setLocalInstruction(e.target.value);
-                debouncedUpdate({ instruction: e.target.value });
-              }}
-              placeholder={node.data.typeKey === 'workflowGenerator'
-                ? "描述你想要的工作流结构，例如：先写灵感，再写世界观和角色，最后生成大纲和正文..."
-                : "输入该步骤的特定要求或引导词..."
-              }
-              className="w-full h-32 bg-[#161922] border border-gray-700/80 rounded-lg p-4 text-sm text-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none font-mono leading-relaxed transition-all"
-            />
-          </div>
-
-          {/* 循环指令配置 (所有节点通用) */}
-          <div className="space-y-4 pt-6 border-t border-gray-700/30">
-            <div className="flex items-center justify-between">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                <Repeat className="w-3.5 h-3.5" /> 循环特定指令 (Loop Instructions)
-              </label>
-              <button
-                onClick={() => {
-                  const currentInstructions = (node.data.loopInstructions as LoopInstruction[]) || [];
-                  const nextIndex = currentInstructions.length > 0 ? Math.max(...currentInstructions.map(i => i.index)) + 1 : 1;
-                  const newInstructions = [...currentInstructions, { index: nextIndex, content: '' }];
-                  updateNodeData(node.id, { loopInstructions: newInstructions });
-                }}
-                className="p-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-md transition-colors flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
-              >
-                <Plus className="w-3 h-3" /> 添加轮次
-              </button>
-            </div>
-            
-            {((node.data.loopInstructions as LoopInstruction[]) || []).map((inst, idx) => (
-              <div key={idx} className="bg-[#161922] border border-gray-700/50 rounded-lg overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between bg-gray-800/50 px-3 py-1.5 border-b border-gray-700/30">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase">第 {inst.index} 次循环时发送</span>
-                  <button
-                    onClick={() => {
-                      const newInstructions = ((node.data.loopInstructions as LoopInstruction[]) || []).filter((_, i) => i !== idx);
-                      updateNodeData(node.id, { loopInstructions: newInstructions });
-                    }}
-                    className="text-gray-500 hover:text-red-400"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
+          {node.data.typeKey !== 'pauseNode' && (
+            <>
+              <div className="space-y-3 pt-6 border-t border-gray-700/30">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                  {node.data.typeKey === 'workflowGenerator' ? '工作流需求描述 (Architecture Requirements)' : '额外指令 (USER PROMPT)'}
+                </label>
                 <textarea
-                  value={inst.content}
+                  value={localInstruction}
                   onChange={(e) => {
-                    const newInstructions = [...((node.data.loopInstructions as LoopInstruction[]) || [])];
-                    newInstructions[idx] = { ...inst, content: e.target.value };
-                    updateNodeData(node.id, { loopInstructions: newInstructions });
+                    setLocalInstruction(e.target.value);
+                    debouncedUpdate({ instruction: e.target.value });
                   }}
-                  placeholder="输入该轮次特定的额外指令..."
-                  className="w-full h-20 bg-transparent p-3 text-xs text-gray-300 focus:text-white outline-none resize-none"
+                  placeholder={node.data.typeKey === 'workflowGenerator'
+                    ? "描述你想要的工作流结构，例如：先写灵感，再写世界观和角色，最后生成大纲和正文..."
+                    : "输入该步骤的特定要求或引导词..."
+                  }
+                  className="w-full h-32 bg-[#161922] border border-gray-700/80 rounded-lg p-4 text-sm text-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none font-mono leading-relaxed transition-all"
                 />
               </div>
-            ))}
-            {(!node.data.loopInstructions || node.data.loopInstructions.length === 0) && (
-              <div className="text-center py-4 text-[10px] text-gray-600 italic border border-dashed border-gray-700/50 rounded-lg">
-                未配置循环特定指令，每次循环将使用通用指令。
+
+              {/* 循环指令配置 (所有节点通用) */}
+              <div className="space-y-4 pt-6 border-t border-gray-700/30">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                    <Repeat className="w-3.5 h-3.5" /> 循环特定指令 (Loop Instructions)
+                  </label>
+                  <button
+                    onClick={() => {
+                      const currentInstructions = (node.data.loopInstructions as LoopInstruction[]) || [];
+                      const nextIndex = currentInstructions.length > 0 ? Math.max(...currentInstructions.map(i => i.index)) + 1 : 1;
+                      const newInstructions = [...currentInstructions, { index: nextIndex, content: '' }];
+                      updateNodeData(node.id, { loopInstructions: newInstructions });
+                    }}
+                    className="p-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-md transition-colors flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
+                  >
+                    <Plus className="w-3 h-3" /> 添加轮次
+                  </button>
+                </div>
+                
+                {((node.data.loopInstructions as LoopInstruction[]) || []).map((inst, idx) => (
+                  <div key={idx} className="bg-[#161922] border border-gray-700/50 rounded-lg overflow-hidden flex flex-col">
+                    <div className="flex items-center justify-between bg-gray-800/50 px-3 py-1.5 border-b border-gray-700/30">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">第 {inst.index} 次循环时发送</span>
+                      <button
+                        onClick={() => {
+                          const newInstructions = ((node.data.loopInstructions as LoopInstruction[]) || []).filter((_, i) => i !== idx);
+                          updateNodeData(node.id, { loopInstructions: newInstructions });
+                        }}
+                        className="text-gray-500 hover:text-red-400"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <textarea
+                      value={inst.content}
+                      onChange={(e) => {
+                        const newInstructions = [...((node.data.loopInstructions as LoopInstruction[]) || [])];
+                        newInstructions[idx] = { ...inst, content: e.target.value };
+                        updateNodeData(node.id, { loopInstructions: newInstructions });
+                      }}
+                      placeholder="输入该轮次特定的额外指令..."
+                      className="w-full h-20 bg-transparent p-3 text-xs text-gray-300 focus:text-white outline-none resize-none"
+                    />
+                  </div>
+                ))}
+                {(!node.data.loopInstructions || node.data.loopInstructions.length === 0) && (
+                  <div className="text-center py-4 text-[10px] text-gray-600 italic border border-dashed border-gray-700/50 rounded-lg">
+                    未配置循环特定指令，每次循环将使用通用指令。
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
 
           {node.data.typeKey === 'loopNode' && (
             <div className="space-y-4 pt-6 border-t border-gray-700/30">
@@ -1230,6 +1242,23 @@ const NodePropertiesModal = ({
             </div>
           )}
 
+          {node.data.typeKey === 'pauseNode' && (
+            <div className="space-y-4 pt-6 border-t border-gray-700/30">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <PauseCircle className="w-3.5 h-3.5" /> 暂停节点说明
+              </label>
+              <div className="p-4 bg-slate-700/20 border border-slate-600/30 rounded-lg">
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  当工作流执行到此节点时，将自动暂停并进入等待状态。
+                  <br/><br/>
+                  您可以在确认内容或进行人工操作后，点击顶部工具栏的
+                  <span className="inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 bg-blue-600/20 text-blue-400 rounded border border-blue-500/30 text-[10px] font-bold"><Play className="w-2 h-2" /> 从停止处继续</span>
+                  按钮以继续执行后续流程。
+                </p>
+              </div>
+            </div>
+          )}
+
           {node.data.typeKey === 'chapter' ? (
             <div className="space-y-4 pt-6 border-t border-gray-700/30">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
@@ -1243,7 +1272,7 @@ const NodePropertiesModal = ({
                 <p className="text-xs text-gray-500 mt-2 px-10 leading-relaxed">工作流执行过程中生成的正文会直接写入小说对应的分卷中，您可以在主界面左侧的目录树中点击查看、编辑或手动优化这些章节。</p>
               </div>
             </div>
-          ) : (
+          ) : node.data.typeKey !== 'pauseNode' && (
             <div className="space-y-4 pt-6 border-t border-gray-700/30">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
@@ -2467,6 +2496,22 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         const staticNode = sortedNodes[i];
         const node = nodesRef.current.find(n => n.id === staticNode.id) || staticNode;
         workflowManager.updateProgress(i);
+
+        // --- Pause Node Logic ---
+        if (node.data.typeKey === 'pauseNode') {
+          terminal.log(`[PauseNode] Pausing workflow at node index ${i}`);
+          await syncNodeStatus(node.id, { status: 'completed' }, i);
+          
+          // 停止入线动画
+          setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
+          
+          // 在此处暂停，下一次 resume 时从 i + 1 开始
+          workflowManager.pause(i + 1);
+          
+          // 设置标志位以阻止后续的 stopWorkflow() 调用 (因为我们已经进入了 pause 状态)
+          stopRequestedRef.current = true;
+          return;
+        }
 
         // --- Loop Node Logic ---
         if (node.data.typeKey === 'loopNode') {
@@ -3793,7 +3838,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
-      <div className="bg-gray-900 w-full h-full md:w-[98%] md:h-[95vh] md:rounded-xl shadow-2xl border-none md:border border-gray-700 flex flex-col overflow-hidden relative">
+      <div className="bg-white dark:bg-gray-900 w-full h-full md:w-[98%] md:h-[95vh] md:rounded-xl shadow-2xl border-none md:border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden relative">
         {/* 执行中状态提示 */}
         {isRunning && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[130] bg-indigo-600/90 border border-indigo-400 px-4 py-2 rounded-full flex items-center gap-3 shadow-2xl animate-in zoom-in-95 duration-300 backdrop-blur-md">
@@ -3824,9 +3869,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           </div>
         )}
         {/* Header */}
-        <div className="p-4 border-b border-gray-700 bg-gray-800 flex justify-between items-center shrink-0">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 border-r border-gray-700 pr-4">
+            <div className="flex items-center gap-3 border-r border-gray-200 dark:border-gray-700 pr-4">
               <div className="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-900/20">
                 {isLoadingWorkflows ? (
                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -3835,7 +3880,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 )}
               </div>
               <div>
-                <h3 className="font-bold text-lg text-gray-100 leading-tight">工作流编辑器</h3>
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100 leading-tight">工作流编辑器</h3>
                 <p className="text-xs text-gray-500">
                   {isLoadingWorkflows ? '正在同步数据...' : '串联多步骤自动化任务'}
                 </p>
@@ -3856,15 +3901,15 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                         if (e.key === 'Escape') setIsEditingWorkflowName(false);
                       }}
                       onBlur={() => renameWorkflow(activeWorkflowId, newWorkflowName)}
-                      className="bg-gray-700 border border-indigo-500 rounded px-2 py-1 text-sm text-white outline-none"
+                      className="bg-gray-100 dark:bg-gray-700 border border-indigo-500 rounded px-2 py-1 text-sm text-gray-900 dark:text-white outline-none"
                     />
                   </div>
                 ) : (
                   <button
                     onClick={() => setShowWorkflowMenu(!showWorkflowMenu)}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-700/50 hover:bg-gray-700 text-gray-200 rounded-lg text-sm font-medium transition-all border border-gray-600/50"
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium transition-all border border-gray-200 dark:border-gray-600/50"
                   >
-                    <span className="font-bold text-indigo-400">
+                    <span className="font-bold text-indigo-500 dark:text-indigo-400">
                       {workflows.find(w => w.id === activeWorkflowId)?.name || '选择工作流'}
                     </span>
                     <ChevronDown className={`w-4 h-4 transition-transform ${showWorkflowMenu ? 'rotate-180' : ''}`} />
@@ -3876,7 +3921,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                       setNewWorkflowName(workflows.find(w => w.id === activeWorkflowId)?.name || '');
                       setIsEditingWorkflowName(true);
                     }}
-                    className="p-1.5 text-gray-500 hover:text-indigo-400 transition-colors"
+                    className="p-1.5 text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
@@ -3884,7 +3929,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               </div>
 
               {showWorkflowMenu && (
-                <div className="absolute top-full left-0 mt-2 w-64 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl py-2 z-[150] animate-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl py-2 z-[150] animate-in slide-in-from-top-2 duration-200">
                   <div className="px-3 py-1 mb-1 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                     切换工作流
                   </div>
@@ -3893,7 +3938,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                       <div
                         key={wf.id}
                         onClick={() => switchWorkflow(wf.id)}
-                        className={`group px-3 py-2.5 flex items-center justify-between cursor-pointer transition-colors ${wf.id === activeWorkflowId ? 'bg-indigo-600/20 text-indigo-400' : 'text-gray-300 hover:bg-gray-700'}`}
+                        className={`group px-3 py-2.5 flex items-center justify-between cursor-pointer transition-colors ${wf.id === activeWorkflowId ? 'bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                       >
                         <div className="flex flex-col min-w-0">
                           <span className="text-sm font-medium truncate">{wf.name}</span>
@@ -4063,7 +4108,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         </div>
 
         {/* Editor Area */}
-        <div className="flex-1 relative bg-[#1a1a1a]">
+        <div className="flex-1 relative bg-gray-50 dark:bg-[#1a1a1a]">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -4076,9 +4121,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
-            colorMode="dark"
+            colorMode="system"
           >
-            <Background color="#333" gap={20} variant={BackgroundVariant.Dots} />
+            <Background color="#888" gap={20} variant={BackgroundVariant.Dots} className="dark:opacity-50 opacity-20" />
             <Controls />
             <Panel position="top-left" className="flex flex-col gap-2">
               <div className="relative">
@@ -4092,7 +4137,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 </button>
 
                 {showAddMenu && (
-                  <div className="absolute top-full left-0 mt-2 w-52 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl py-2 z-[110] animate-in slide-in-from-top-2 duration-200">
+                  <div className="absolute top-full left-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl py-2 z-[110] animate-in slide-in-from-top-2 duration-200">
                     {(Object.keys(NODE_CONFIGS) as Array<NodeTypeKey>).map((type) => {
                       const config = NODE_CONFIGS[type];
                       const isGenerator = type === 'workflowGenerator';
@@ -4103,9 +4148,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                           key={type}
                           disabled={isDisabled}
                           onClick={() => addNewNode(type)}
-                          className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors group ${isDisabled ? 'opacity-40 cursor-not-allowed grayscale' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
+                          className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors group ${isDisabled ? 'opacity-40 cursor-not-allowed grayscale' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'}`}
                         >
-                          <div className={`p-1.5 rounded bg-gray-900 group-hover:bg-gray-800 ${isGenerator ? 'ring-1 ring-red-500/30 shadow-[0_0_8px_rgba(248,113,113,0.2)]' : ''}`}>
+                          <div className={`p-1.5 rounded bg-gray-100 dark:bg-gray-900 group-hover:bg-gray-200 dark:group-hover:bg-gray-800 ${isGenerator ? 'ring-1 ring-red-500/30 shadow-[0_0_8px_rgba(248,113,113,0.2)]' : ''}`}>
                               <config.icon className="w-4 h-4" style={{ color: config.color }} />
                           </div>
                           <div className="flex flex-col">
@@ -4257,7 +4302,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           </div>
         )}
 
-        <div className="px-4 py-2 border-t border-gray-700 bg-gray-800 flex justify-between items-center text-[10px] text-gray-500 shrink-0">
+        <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-between items-center text-[10px] text-gray-500 shrink-0">
           <div className="flex gap-4">
             <span className="flex items-center gap-1"><Workflow className="w-3 h-3" /> 节点: {nodes.length}</span>
             <span className="flex items-center gap-1"><Plus className="w-3 h-3 rotate-45" /> 连接: {edges.length}</span>

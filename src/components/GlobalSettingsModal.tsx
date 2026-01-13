@@ -1,8 +1,10 @@
 import {
   ChevronDown,
   Loader2,
+  Moon,
   Plus,
   RefreshCw,
+  Sun,
   Trash2,
   Wand2,
   X
@@ -43,6 +45,8 @@ interface GlobalSettingsModalProps {
   onClose: () => void
   themeColor: string
   setThemeColor: (color: string) => void
+  themeMode: 'light' | 'dark'
+  setThemeMode: (mode: 'light' | 'dark') => void
   workflowEdgeColor: string
   setWorkflowEdgeColor: (color: string) => void
   apiKey: string
@@ -94,6 +98,8 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   onClose,
   themeColor,
   setThemeColor,
+  themeMode,
+  setThemeMode,
   workflowEdgeColor,
   setWorkflowEdgeColor,
   apiKey,
@@ -185,8 +191,18 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
         </div>
         <div className="space-y-6">
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-gray-300">Theme Color</label>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-300">外观设置</label>
+              <button
+                onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-700/50 hover:bg-gray-700 rounded-lg text-xs font-medium text-gray-200 transition-colors border border-gray-600"
+              >
+                {themeMode === 'dark' ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5 text-yellow-400" />}
+                {themeMode === 'dark' ? '深色模式' : '浅色模式'}
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-3 mt-2">
               <input
                 type="color"
                 value={localThemeColor}

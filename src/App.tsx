@@ -891,6 +891,14 @@ function App() {
     }
   })
 
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    try {
+      return (localStorage.getItem('themeMode') as 'light' | 'dark') || 'dark'
+    } catch (e) {
+      return 'dark'
+    }
+  })
+
   useEffect(() => {
     localStorage.setItem('themeColor', themeColor)
     const root = document.documentElement
@@ -899,6 +907,18 @@ function App() {
     root.style.setProperty('--theme-color-hover', adjustColor(themeColor, -0.2)) // Darker
     root.style.setProperty('--theme-color-light', adjustColor(themeColor, 0.2)) // Lighter
   }, [themeColor])
+
+  useEffect(() => {
+    localStorage.setItem('themeMode', themeMode)
+    const root = document.documentElement
+    if (themeMode === 'light') {
+      root.classList.add('light')
+      root.classList.remove('dark')
+    } else {
+      root.classList.add('dark')
+      root.classList.remove('light')
+    }
+  }, [themeMode])
 
   // Workflow Edge Color Settings
   const [workflowEdgeColor, setWorkflowEdgeColor] = useState(() => {
@@ -7030,6 +7050,8 @@ function App() {
           onClose={() => setShowSettings(false)}
           themeColor={themeColor}
           setThemeColor={setThemeColor}
+          themeMode={themeMode}
+          setThemeMode={setThemeMode}
           apiKey={apiKey}
           setApiKey={setApiKey}
           baseUrl={baseUrl}
@@ -7208,18 +7230,18 @@ function App() {
           <button className={`p-2 hover:bg-white/10 rounded-full transition-colors ${showOutline ? 'text-primary' : 'text-slate-400'}`} title="自动化中心" onClick={() => { if (!showOutline) setCreationModule('menu'); setShowOutline(!showOutline); }}>
             <BookOpen className="w-[18px] h-[18px]" />
           </button>
-          <div className="hidden md:block h-4 w-[1px] bg-white/10 mx-2"></div>
-          <button className="flex items-center gap-2 px-2 md:px-3 py-1.5 bg-slate-800 border border-white/5 hover:border-slate-600 rounded-lg transition-all text-[11px] text-slate-300" onClick={() => setShowAdvancedSettings(true)}>
+          <div className="hidden md:block h-4 w-[1px] bg-gray-200 dark:bg-white/10 mx-2"></div>
+          <button className="flex items-center gap-2 px-2 md:px-3 py-1.5 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-slate-600 rounded-lg transition-all text-[11px] text-gray-600 dark:text-slate-300" onClick={() => setShowAdvancedSettings(true)}>
             <Network className="w-4 h-4 text-primary" />
             <span className="hidden md:inline">对话补全源</span>
           </button>
         </>
       }
       headerRight={
-        <div className="flex items-center gap-1 bg-slate-800/40 px-1 md:px-2 py-1 rounded-xl border border-white/5">
-          <span className="hidden lg:inline text-[9px] text-slate-600 font-bold px-2 tracking-widest uppercase">Toolbox</span>
+        <div className="flex items-center gap-1 bg-white dark:bg-slate-800/40 px-1 md:px-2 py-1 rounded-xl border border-gray-200 dark:border-white/5">
+          <span className="hidden lg:inline text-[9px] text-gray-400 dark:text-slate-600 font-bold px-2 tracking-widest uppercase">Toolbox</span>
           <button
-            className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-white/10 ${keepAliveMode ? 'text-green-500' : 'text-slate-400'}`}
+            className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-gray-200 dark:hover:border-white/10 ${keepAliveMode ? 'text-green-500' : 'text-gray-500 dark:text-slate-400'}`}
             onClick={async () => {
               if (keepAliveMode) {
                   keepAliveManager.disable()
@@ -7239,7 +7261,7 @@ function App() {
             <span className="hidden md:inline">防断连</span>
           </button>
           <div
-            className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${longTextMode ? 'bg-primary/10 text-primary border-primary/30' : 'text-slate-400 border-transparent hover:bg-white/5'}`}
+            className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${longTextMode ? 'bg-primary/10 text-primary border-primary/30' : 'text-gray-500 dark:text-slate-400 border-transparent hover:bg-gray-100 dark:hover:bg-white/5'}`}
             onClick={() => setLongTextMode(!longTextMode)}
           >
             <BookMarked className="w-4 h-4" />
@@ -7249,7 +7271,7 @@ function App() {
                 value={contextScope}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) => { e.stopPropagation(); setContextScope(e.target.value); }}
-                className="bg-transparent border-none outline-none text-[10px] ml-1 font-bold text-slate-500"
+                className="bg-transparent border-none outline-none text-[10px] ml-1 font-bold text-gray-500 dark:text-slate-500"
               >
                 <option value="all">全书</option>
                 <option value="current">本卷</option>
@@ -7257,12 +7279,12 @@ function App() {
               </select>
             )}
           </div>
-          <div className="h-4 w-[1px] bg-[#1e2433] mx-1"></div>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-white/10 text-slate-400" onClick={() => setShowRegexModal(true)}>
+          <div className="h-4 w-[1px] bg-gray-200 dark:bg-[#1e2433] mx-1"></div>
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-gray-200 dark:hover:border-white/10 text-gray-500 dark:text-slate-400" onClick={() => setShowRegexModal(true)}>
             <Code className="w-4 h-4" />
             <span className="hidden md:inline">正则</span>
           </button>
-          <button className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-white/10 text-slate-400" onClick={() => setShowSettings(true)}>
+          <button className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-gray-200 dark:hover:border-white/10 text-gray-500 dark:text-slate-400" onClick={() => setShowSettings(true)}>
             <Settings className="w-4 h-4" />
             <span className="hidden md:inline">设置</span>
           </button>
@@ -7278,8 +7300,8 @@ function App() {
       sidebarLeft={
         <>
           <div className="p-5 flex items-center justify-between shrink-0">
-            <span className="text-[10px] font-bold text-slate-500 tracking-[0.2em] uppercase">Chapters ({chapters.length})</span>
-          <button className="text-primary hover:text-white transition-colors" onClick={handleAddVolume}>
+            <span className="text-[10px] font-bold text-gray-500 dark:text-slate-500 tracking-[0.2em] uppercase">Chapters ({chapters.length})</span>
+          <button className="text-primary hover:text-primary-dark transition-colors" onClick={handleAddVolume}>
             <FolderPlus className="w-[18px] h-[18px]" />
           </button>
           </div>
@@ -7287,25 +7309,25 @@ function App() {
             {volumes.map(volume => (
               <div key={volume.id} className="mb-1">
                 <div
-                  className="flex items-center gap-2 px-3 py-2 text-xs text-slate-500 cursor-pointer hover:text-slate-300 group"
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-gray-600 dark:text-slate-500 cursor-pointer hover:text-gray-900 dark:hover:text-slate-300 group"
                   onClick={() => handleToggleVolumeCollapse(volume.id)}
                 >
                   {volume.collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   <Folder className="w-3.5 h-3.5 text-yellow-600/70" />
                   <span className="font-medium truncate flex-1">{volume.title}</span>
                   <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); addNewChapter(volume.id); }} className="p-1 hover:text-white"><Plus className="w-3 h-3" /></button>
-                    <button onClick={(e) => { e.stopPropagation(); handleRenameVolume(volume.id, volume.title); }} className="p-1 hover:text-white"><Edit3 className="w-3 h-3" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); addNewChapter(volume.id); }} className="p-1 hover:text-gray-900 dark:hover:text-white"><Plus className="w-3 h-3" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleRenameVolume(volume.id, volume.title); }} className="p-1 hover:text-gray-900 dark:hover:text-white"><Edit3 className="w-3 h-3" /></button>
                     <button onClick={(e) => { e.stopPropagation(); handleDeleteVolume(volume.id); }} className="p-1 hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
                   </div>
                 </div>
                 {!volume.collapsed && (
-                  <div className="ml-4 space-y-0.5 border-l border-[#1e2433]">
+                  <div className="ml-4 space-y-0.5 border-l border-gray-200 dark:border-[#1e2433]">
                     {(chaptersByVolume[String(volume.id)] || []).map(chapter => (
                       <div
                         key={chapter.id}
                         onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
-                        className={`px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-primary/15 text-primary border-l-2 border-primary' : 'text-slate-400 hover:bg-white/5'}`}
+                        className={`px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-primary/15 text-primary border-l-2 border-primary' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/5'}`}
                       >
                         <FileText className={`w-[14px] h-[14px] ${chapter.subtype === 'small_summary' ? 'text-primary' : chapter.subtype === 'big_summary' ? 'text-amber-400' : ''}`} />
                         <span className="truncate">{chapter.title}</span>
@@ -7316,12 +7338,12 @@ function App() {
               </div>
             ))}
             <div className="mt-2">
-              {volumes.length > 0 && <div className="px-3 py-1 text-[10px] text-slate-600 font-bold uppercase tracking-wider">未分卷章节</div>}
+              {volumes.length > 0 && <div className="px-3 py-1 text-[10px] text-gray-500 dark:text-slate-600 font-bold uppercase tracking-wider">未分卷章节</div>}
               {(chaptersByVolume['uncategorized'] || []).map(chapter => (
                 <div
                   key={chapter.id}
                   onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
-                  className={`px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-primary/15 text-primary border-l-2 border-primary' : 'text-slate-400 hover:bg-white/5'}`}
+                  className={`px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-primary/15 text-primary border-l-2 border-primary' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-white/5'}`}
                 >
                   <FileText className="w-[14px] h-[14px]" />
                   <span className="truncate">{chapter.title}</span>
@@ -7329,9 +7351,9 @@ function App() {
               ))}
             </div>
           </div>
-          <div className="p-4 border-t border-[#1e2433] bg-[#12151e]/40 shrink-0">
+          <div className="p-4 border-t border-gray-200 dark:border-[#1e2433] bg-gray-50 dark:bg-[#12151e]/40 shrink-0">
             <button
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-slate-400 text-xs transition-all font-medium"
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-white dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/5 rounded-lg text-gray-500 dark:text-slate-400 text-xs transition-all font-medium"
               onClick={() => addNewChapter()}
             >
               <Plus className="w-[18px] h-[18px]" />
@@ -7342,41 +7364,41 @@ function App() {
       }
       sidebarRight={
         <div className="flex flex-col h-full overflow-hidden">
-          <div className="flex border-b border-[#1e2433] bg-[#12151e]/30 p-1 shrink-0">
-            <button onClick={() => { setShowOutline(true); handleSwitchModule('worldview'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'worldview' ? 'text-[var(--theme-color)] bg-[var(--theme-color)]/5' : 'text-slate-500 hover:text-slate-300'}`}>世界观</button>
-            <button onClick={() => { setShowOutline(true); handleSwitchModule('characters'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'characters' ? 'text-[var(--theme-color)] bg-[var(--theme-color)]/5' : 'text-slate-500 hover:text-slate-300'}`}>角色集</button>
-            <button onClick={() => { setShowOutline(true); handleSwitchModule('outline'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'outline' ? 'text-[var(--theme-color)] bg-[var(--theme-color)]/5' : 'text-slate-500 hover:text-slate-300'}`}>大纲</button>
+          <div className="flex border-b border-gray-200 dark:border-[#1e2433] bg-gray-50 dark:bg-[#12151e]/30 p-1 shrink-0">
+            <button onClick={() => { setShowOutline(true); handleSwitchModule('worldview'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'worldview' ? 'text-[var(--theme-color)] bg-[var(--theme-color)]/5' : 'text-gray-500 dark:text-slate-500 hover:text-gray-900 dark:hover:text-slate-300'}`}>世界观</button>
+            <button onClick={() => { setShowOutline(true); handleSwitchModule('characters'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'characters' ? 'text-[var(--theme-color)] bg-[var(--theme-color)]/5' : 'text-gray-500 dark:text-slate-500 hover:text-gray-900 dark:hover:text-slate-300'}`}>角色集</button>
+            <button onClick={() => { setShowOutline(true); handleSwitchModule('outline'); }} className={`flex-1 py-2 text-[11px] font-bold rounded-md transition-colors ${creationModule === 'outline' ? 'text-[var(--theme-color)] bg-[var(--theme-color)]/5' : 'text-gray-500 dark:text-slate-500 hover:text-gray-900 dark:hover:text-slate-300'}`}>大纲</button>
           </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-8 custom-scrollbar">
             {/* Module Preview Area */}
             {creationModule === 'worldview' && activeNovel?.worldviewSets?.[0]?.entries.slice(0, 3).map((entry, i) => (
-              <div key={i} className="p-4 bg-[#12151e]/40 rounded-xl border border-[#1e2433] hover:border-[var(--theme-color)]/40 transition-all cursor-pointer group relative overflow-hidden">
+              <div key={i} className="p-4 bg-white dark:bg-[#12151e]/40 rounded-xl border border-gray-200 dark:border-[#1e2433] hover:border-[var(--theme-color)]/40 transition-all cursor-pointer group relative overflow-hidden shadow-sm dark:shadow-none">
                 <div className="absolute top-0 left-0 w-1 h-full bg-primary/30"></div>
                 <div className="flex items-center gap-2 mb-2">
                   <Zap className="w-4 h-4 text-primary" />
-                  <span className="text-xs font-bold text-slate-200">{entry.item}</span>
+                  <span className="text-xs font-bold text-gray-700 dark:text-slate-200">{entry.item}</span>
                 </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{entry.setting}</p>
+                <p className="text-[11px] text-gray-500 dark:text-slate-500 leading-relaxed line-clamp-2">{entry.setting}</p>
               </div>
             ))}
             {creationModule === 'characters' && activeNovel?.characterSets?.[0]?.characters.slice(0, 3).map((char, i) => (
-              <div key={i} className="p-4 bg-[#12151e]/40 rounded-xl border border-[#1e2433] hover:border-[var(--theme-color)]/40 transition-all cursor-pointer group relative overflow-hidden">
+              <div key={i} className="p-4 bg-white dark:bg-[#12151e]/40 rounded-xl border border-gray-200 dark:border-[#1e2433] hover:border-[var(--theme-color)]/40 transition-all cursor-pointer group relative overflow-hidden shadow-sm dark:shadow-none">
                 <div className="absolute top-0 left-0 w-1 h-full bg-[var(--theme-color)]/30"></div>
                 <div className="flex items-center gap-2 mb-2">
                   <Users className="w-4 h-4 text-[var(--theme-color)]" />
-                  <span className="text-xs font-bold text-slate-200">{char.name}</span>
+                  <span className="text-xs font-bold text-gray-700 dark:text-slate-200">{char.name}</span>
                 </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{char.bio}</p>
+                <p className="text-[11px] text-gray-500 dark:text-slate-500 leading-relaxed line-clamp-2">{char.bio}</p>
               </div>
             ))}
             {creationModule === 'outline' && activeNovel?.outlineSets?.[0]?.items.slice(0, 3).map((item, i) => (
-              <div key={i} className="p-4 bg-[#12151e]/40 rounded-xl border border-[#1e2433] hover:border-[var(--theme-color)]/40 transition-all cursor-pointer group relative overflow-hidden">
+              <div key={i} className="p-4 bg-white dark:bg-[#12151e]/40 rounded-xl border border-gray-200 dark:border-[#1e2433] hover:border-[var(--theme-color)]/40 transition-all cursor-pointer group relative overflow-hidden shadow-sm dark:shadow-none">
                 <div className="absolute top-0 left-0 w-1 h-full bg-pink-500/30"></div>
                 <div className="flex items-center gap-2 mb-2">
                   <BookOpen className="w-4 h-4 text-pink-400" />
-                  <span className="text-xs font-bold text-slate-200">{item.title}</span>
+                  <span className="text-xs font-bold text-gray-700 dark:text-slate-200">{item.title}</span>
                 </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{item.summary}</p>
+                <p className="text-[11px] text-gray-500 dark:text-slate-500 leading-relaxed line-clamp-2">{item.summary}</p>
               </div>
             ))}
             
@@ -7385,7 +7407,7 @@ function App() {
                 <Lightbulb className="w-5 h-5 fill-[var(--theme-color)]/20" />
                 <span className="text-[10px] font-bold uppercase tracking-widest">AI Suggestion</span>
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed italic">"建议点击上方按钮进入详情页进行深度策划。"</p>
+              <p className="text-[11px] text-gray-500 dark:text-slate-400 leading-relaxed italic">"建议点击上方按钮进入详情页进行深度策划。"</p>
               <button
                 className="w-full py-2.5 bg-[var(--theme-color)]/10 hover:bg-[var(--theme-color)]/20 text-[var(--theme-color)] text-[11px] font-bold rounded-lg transition-all border border-[var(--theme-color)]/20"
                 onClick={() => setShowOutline(true)}
@@ -7394,9 +7416,9 @@ function App() {
               </button>
             </div>
           </div>
-          <div className="p-5 border-t border-[#1e2433] bg-[#12151e]/20 shrink-0">
+          <div className="p-5 border-t border-gray-200 dark:border-[#1e2433] bg-gray-50 dark:bg-[#12151e]/20 shrink-0">
             <button
-              className="w-full flex items-center justify-between px-4 py-3 bg-[#12151e] rounded-lg border border-[#1e2433] text-[11px] font-bold text-slate-400 hover:text-white hover:border-slate-500 transition-all group"
+              className="w-full flex items-center justify-between px-4 py-3 bg-white dark:bg-[#12151e] rounded-lg border border-gray-200 dark:border-[#1e2433] text-[11px] font-bold text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 dark:hover:border-slate-500 transition-all group"
               onClick={() => { setShowOutline(true); setCreationModule('menu'); }}
             >
               <span>进入自动化中心</span>
@@ -7422,12 +7444,12 @@ function App() {
     >
       <div className="flex-1 flex flex-col min-h-0">
         {showOutline ? (
-           <div className={`flex-1 bg-[#0a0c12] flex flex-col ${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration' || creationModule === 'plotOutline' || creationModule === 'reference') ? 'p-0 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
+           <div className={`flex-1 bg-gray-50 dark:bg-[#0a0c12] flex flex-col ${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration' || creationModule === 'plotOutline' || creationModule === 'reference') ? 'p-0 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
               <div className={`${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration' || creationModule === 'plotOutline' || creationModule === 'reference') ? 'w-full h-full' : 'max-w-4xl mx-auto w-full space-y-6'}`}>
                  {/* Dashboard Menu */}
                  {creationModule === 'menu' && (
                     <div className="space-y-8 animate-in fade-in zoom-in-95 duration-200">
-                       <h2 className="text-3xl font-bold flex items-center gap-3 justify-center mb-8">
+                       <h2 className="text-3xl font-bold flex items-center gap-3 justify-center mb-8 text-gray-900 dark:text-white">
                           <Wand2 className="w-8 h-8 text-[var(--theme-color)]" />
                           自动化创作中心
                        </h2>
@@ -7435,111 +7457,111 @@ function App() {
                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                           <button
                              onClick={() => handleSwitchModule('reference')}
-                             className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
+                             className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center shadow-sm"
                           >
-                             <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-primary">
+                             <div className="p-4 bg-gray-100 dark:bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-primary">
                                 <Book className="w-10 h-10" />
                              </div>
                              <div>
-                                <h3 className="text-xl font-bold text-gray-100 mb-2">资料库</h3>
-                                <p className="text-sm text-gray-400">上传参考文档，记录考据笔记，作为 AI 的知识基石</p>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">资料库</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">上传参考文档，记录考据笔记，作为 AI 的知识基石</p>
                              </div>
                           </button>
 
                           <button
                              onClick={() => handleSwitchModule('inspiration')}
-                             className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
+                             className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center shadow-sm"
                           >
-                             <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-yellow-400">
+                             <div className="p-4 bg-gray-100 dark:bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-yellow-400">
                                 <Lightbulb className="w-10 h-10" />
                              </div>
                              <div>
-                                <h3 className="text-xl font-bold text-gray-100 mb-2">灵感</h3>
-                                <p className="text-sm text-gray-400">捕捉稍纵即逝的创意，AI 辅助发散思维</p>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">灵感</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">捕捉稍纵即逝的创意，AI 辅助发散思维</p>
                              </div>
                           </button>
 
                           <button
                              onClick={() => handleSwitchModule('worldview')}
-                             className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
+                             className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center shadow-sm"
                           >
-                             <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-emerald-400">
+                             <div className="p-4 bg-gray-100 dark:bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-emerald-400">
                                 <Globe className="w-10 h-10" />
                              </div>
                              <div>
-                                <h3 className="text-xl font-bold text-gray-100 mb-2">世界观</h3>
-                                <p className="text-sm text-gray-400">构建宏大的世界背景</p>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">世界观</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">构建宏大的世界背景</p>
                              </div>
                           </button>
 
                           <button
                              onClick={() => handleSwitchModule('plotOutline')}
-                             className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
+                             className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center shadow-sm"
                           >
-                             <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-pink-400">
+                             <div className="p-4 bg-gray-100 dark:bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-pink-400">
                                 <LayoutList className="w-10 h-10" />
                              </div>
                              <div>
-                                <h3 className="text-xl font-bold text-gray-100 mb-2">剧情粗纲</h3>
-                                <p className="text-sm text-gray-400">规划故事整体框架，支持多级子项</p>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">剧情粗纲</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">规划故事整体框架，支持多级子项</p>
                              </div>
                           </button>
 
                           <button
                              onClick={() => handleSwitchModule('characters')}
-                             className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
+                             className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center shadow-sm"
                           >
-                             <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-orange-400">
+                             <div className="p-4 bg-gray-100 dark:bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-orange-400">
                                 <Users className="w-10 h-10" />
                              </div>
                              <div>
-                                <h3 className="text-xl font-bold text-gray-100 mb-2">角色集</h3>
-                                <p className="text-sm text-gray-400">创建和管理小说中的角色</p>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">角色集</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">创建和管理小说中的角色</p>
                              </div>
                           </button>
 
                           <button
                              onClick={() => handleSwitchModule('outline')}
-                             className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
+                             className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center shadow-sm"
                           >
-                             <div className="p-4 bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-indigo-400">
+                             <div className="p-4 bg-gray-100 dark:bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors text-indigo-400">
                                 <Book className="w-10 h-10" />
                              </div>
                              <div>
-                                <h3 className="text-xl font-bold text-gray-100 mb-2">章节大纲</h3>
-                                <p className="text-sm text-gray-400">规划详细章节结构</p>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">章节大纲</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">规划详细章节结构</p>
                              </div>
                           </button>
 
                           <button
                              onClick={() => setShowWorkflowEditor(true)}
-                             className="bg-indigo-900/20 border-2 border-indigo-500/50 rounded-xl p-6 hover:border-indigo-400 hover:shadow-indigo-500/20 hover:shadow-xl transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
+                             className="bg-indigo-50 dark:bg-indigo-900/20 border-2 border-indigo-200 dark:border-indigo-500/50 rounded-xl p-6 hover:border-indigo-400 hover:shadow-indigo-500/20 hover:shadow-xl transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center"
                           >
-                             <div className="p-4 bg-indigo-500/20 rounded-full group-hover:bg-indigo-500/30 text-indigo-400">
+                             <div className="p-4 bg-indigo-100 dark:bg-indigo-500/20 rounded-full group-hover:bg-indigo-200 dark:group-hover:bg-indigo-500/30 text-indigo-500 dark:text-indigo-400">
                                 <GitBranch className="w-10 h-10" />
                              </div>
                              <div>
-                                <h3 className="text-xl font-bold text-indigo-100 mb-2">可视化工作流</h3>
-                                <p className="text-sm text-indigo-300/70">串联多步骤自动化任务，实现全自动小说创作</p>
+                                <h3 className="text-xl font-bold text-indigo-900 dark:text-indigo-100 mb-2">可视化工作流</h3>
+                                <p className="text-sm text-indigo-600 dark:text-indigo-300/70">串联多步骤自动化任务，实现全自动小说创作</p>
                              </div>
                           </button>
 
                        </div>
 
                        {/* Global Prompt Input */}
-                       <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+                       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-sm">
                           <div className="flex items-center gap-2 mb-3">
                              <Bot className="w-5 h-5 text-[var(--theme-color)]" />
-                             <h3 className="text-lg font-bold text-gray-200">全局创作提示词</h3>
+                             <h3 className="text-lg font-bold text-gray-900 dark:text-gray-200">全局创作提示词</h3>
                           </div>
-                          <p className="text-sm text-gray-400 mb-3">
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
                              在此设置的提示词将作为系统指令（System Prompt）自动附加到世界观、角色集和故事大纲的生成请求中。
                              <br/>例如："所有生成的内容都必须符合克苏鲁神话风格，充满不可名状的恐怖。"
                           </p>
-                          <textarea 
+                          <textarea
                              value={globalCreationPrompt}
                              onChange={(e) => setGlobalCreationPrompt(e.target.value)}
-                             className="w-full h-24 min-h-[6rem] bg-gray-900 border border-gray-600 rounded-lg p-3 text-sm text-gray-200 focus:border-[var(--theme-color)] outline-none resize-y"
+                             className="w-full h-24 min-h-[6rem] bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg p-3 text-sm text-gray-900 dark:text-gray-200 focus:border-[var(--theme-color)] outline-none resize-y"
                              placeholder="输入全局提示词..."
                           />
                        </div>
@@ -8231,6 +8253,8 @@ function App() {
         onClose={() => setShowSettings(false)}
         themeColor={themeColor}
         setThemeColor={setThemeColor}
+        themeMode={themeMode}
+        setThemeMode={setThemeMode}
         apiKey={apiKey}
         setApiKey={setApiKey}
         baseUrl={baseUrl}

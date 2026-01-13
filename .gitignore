@@ -133,6 +133,9 @@ Thumbs.db
 # Ignore text files that might be exported novels
 *.txt
 
+# Local Data Persistence Server Storage
+local_data/
+
 # Ignore potential user data backups (if user manually saves them here)
 *.bak
 *.backup

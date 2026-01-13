@@ -35,8 +35,8 @@
             "y": 47.94186275745767
           },
           "measured": {
-            "width": 280,
-            "height": 81
+            "width": 180,
+            "height": 48
           },
           "selected": false,
           "dragging": false
@@ -72,8 +72,8 @@
             "y": 194.01521217005083
           },
           "measured": {
-            "width": 280,
-            "height": 100
+            "width": 180,
+            "height": 48
           },
           "selected": false,
           "dragging": false
@@ -120,10 +120,10 @@
             "y": 23.05208816407444
           },
           "measured": {
-            "width": 280,
-            "height": 81
+            "width": 180,
+            "height": 48
           },
-          "selected": false,
+          "selected": true,
           "dragging": false
         },
         {
@@ -169,8 +169,8 @@
             "y": 20.341748573094996
           },
           "measured": {
-            "width": 280,
-            "height": 81
+            "width": 180,
+            "height": 48
           },
           "selected": false,
           "dragging": false
@@ -218,8 +218,8 @@
             "y": 33.640708518611305
           },
           "measured": {
-            "width": 280,
-            "height": 81
+            "width": 180,
+            "height": 48
           },
           "selected": false,
           "dragging": false
@@ -254,10 +254,10 @@
             "y": 80.26662173701826
           },
           "measured": {
-            "width": 280,
-            "height": 81
+            "width": 180,
+            "height": 48
           },
-          "selected": true,
+          "selected": false,
           "dragging": false
         },
         {
@@ -294,11 +294,44 @@
             "y": 297.46648718607224
           },
           "measured": {
-            "width": 280,
-            "height": 81
+            "width": 180,
+            "height": 48
           },
           "selected": false,
           "dragging": false
+        },
+        {
+          "id": "node-1768281600790",
+          "type": "custom",
+          "data": {
+            "typeLabel": "暂停节点",
+            "color": "#64748b",
+            "defaultLabel": "暂停等待",
+            "presetType": null,
+            "typeKey": "pauseNode",
+            "label": "暂停等待",
+            "presetId": "",
+            "presetName": "",
+            "instruction": "",
+            "folderName": "",
+            "selectedWorldviewSets": [],
+            "selectedCharacterSets": [],
+            "selectedOutlineSets": [],
+            "selectedInspirationSets": [],
+            "selectedReferenceFolders": [],
+            "outputEntries": [],
+            "targetVolumeId": "vol_1767833560233_z8q6l",
+            "targetVolumeName": ""
+          },
+          "position": {
+            "x": 1050.092736802109,
+            "y": 135.21330553760882
+          },
+          "measured": {
+            "width": 180,
+            "height": 48
+          },
+          "selected": false
         }
       ],
       "edges": [
@@ -479,7 +512,7 @@
           "id": "xy-edge__node-1767626775792source-node-1768223277887"
         }
       ],
-      "lastModified": 1768278821211,
+      "lastModified": 1768282115214,
       "currentNodeIndex": -1
     },
     {
