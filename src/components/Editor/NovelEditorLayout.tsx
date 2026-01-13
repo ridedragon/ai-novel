@@ -21,9 +21,9 @@ export const NovelEditorLayout: React.FC<NovelEditorLayoutProps> = ({
   const { isMobileSidebarOpen, setIsMobileSidebarOpen } = useLayout();
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300 antialiased font-sans transition-colors">
+    <div className="h-screen overflow-hidden flex flex-col bg-white dark:bg-[#09090b] text-slate-600 dark:text-slate-300 antialiased font-sans custom-bg-transition">
       {/* Header */}
-      <header className="h-16 border-b border-gray-200 dark:border-white/5 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md flex items-center justify-between px-3 md:px-6 shrink-0 z-40 transition-colors">
+      <header className="h-16 border-b border-slate-200 dark:border-white/5 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-md flex items-center justify-between px-3 md:px-6 shrink-0 z-40 custom-header-transition">
         <div className="flex items-center gap-2">
           {headerLeft}
         </div>
@@ -38,7 +38,7 @@ export const NovelEditorLayout: React.FC<NovelEditorLayoutProps> = ({
       <div className="flex flex-1 overflow-hidden relative">
         {/* Left Sidebar - Chapters */}
         <aside className={`
-          fixed inset-y-0 left-0 z-50 w-64 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col shrink-0 transition-transform duration-300
+          fixed inset-y-0 left-0 z-50 w-64 border-r border-slate-200 dark:border-[#1e2433] bg-slate-50 dark:bg-[#09090b] flex flex-col shrink-0 transition-transform duration-300 custom-sidebar-transition
           md:relative md:translate-x-0
           ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
@@ -54,19 +54,19 @@ export const NovelEditorLayout: React.FC<NovelEditorLayoutProps> = ({
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 bg-gray-50 dark:bg-gray-900 flex flex-col relative overflow-hidden w-full transition-colors">
+        <main className="flex-1 bg-white dark:bg-[#09090b] flex flex-col relative overflow-hidden w-full custom-bg-transition">
           {children}
           
           {/* Footer */}
           {footer && (
-            <div className="hidden md:flex h-8 border-t border-gray-200 dark:border-white/5 bg-white dark:bg-gray-900 px-6 items-center justify-between text-[10px] text-gray-500 dark:text-gray-500 uppercase tracking-widest font-medium shrink-0 transition-colors">
+            <div className="hidden md:flex h-8 border-t border-slate-200 dark:border-white/5 bg-white dark:bg-[#09090b] px-6 items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-medium shrink-0 custom-bg-transition">
               {footer}
             </div>
           )}
         </main>
 
         {/* Right Sidebar - Worldview/Characters/Outline */}
-        <aside className="hidden lg:flex w-72 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex-col shrink-0 transition-colors">
+        <aside className="hidden lg:flex w-72 border-l border-slate-200 dark:border-[#1e2433] bg-slate-50 dark:bg-[#09090b] flex-col shrink-0 custom-sidebar-transition">
           {sidebarRight}
         </aside>
       </div>

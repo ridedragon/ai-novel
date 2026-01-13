@@ -91,8 +91,8 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
   };
 
   return (
-    <div className={`px-3 py-2 shadow-xl rounded-lg border-2 bg-white dark:bg-gray-800 transition-all ${getStatusColor()}`} style={{ width: '180px' }}>
-      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-gray-400 dark:bg-gray-600 border-2 border-white dark:border-gray-800" isConnectable={true} />
+    <div className={`px-3 py-2 shadow-xl rounded-lg border-2 bg-gray-800 transition-all ${getStatusColor()}`} style={{ width: '180px' }}>
+      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-gray-600 border-2 border-gray-800" isConnectable={true} />
       <div className="flex items-center gap-2">
         <div className="p-1.5 rounded-md shrink-0" style={{ backgroundColor: `${color}20`, color: color }}>
           {Icon && <Icon className="w-4 h-4" />}
@@ -103,18 +103,18 @@ const CustomNode = ({ data, selected }: NodeProps<WorkflowNode>) => {
             {data.status === 'executing' && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>}
             {data.status === 'completed' && <CheckSquare className="w-2.5 h-2.5 text-green-500" />}
           </div>
-          <div className="text-[11px] font-semibold text-gray-900 dark:text-gray-100 truncate">{data.label}</div>
+          <div className="text-[11px] font-semibold text-gray-100 truncate">{data.label}</div>
         </div>
       </div>
       
       {refCount > 0 && (
-        <div className="mt-1.5 pt-1.5 border-t border-gray-200 dark:border-gray-700/50 flex items-center gap-1 text-[8px] text-emerald-500 dark:text-emerald-400">
+        <div className="mt-1.5 pt-1.5 border-t border-gray-700/50 flex items-center gap-1 text-[8px] text-emerald-400">
           <Library className="w-2.5 h-2.5" />
           <span>引用 {refCount} 个资料集</span>
         </div>
       )}
 
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-gray-400 dark:bg-gray-600 border-2 border-white dark:border-gray-800" id="source" isConnectable={true} />
+      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-gray-600 border-2 border-gray-800" id="source" isConnectable={true} />
     </div>
   );
 };
@@ -2689,19 +2689,19 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
   if (isLoadingWorkflows) {
     return (
-      <div className="fixed inset-0 bg-gray-50 dark:bg-gray-900 z-[100] flex flex-col items-center justify-center gap-4">
+      <div className="fixed inset-0 bg-gray-900 z-[100] flex flex-col items-center justify-center gap-4">
         <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-        <div className="text-indigo-500 dark:text-indigo-400 font-bold animate-pulse text-sm">加载工作流中...</div>
+        <div className="text-indigo-400 font-bold animate-pulse text-sm">加载工作流中...</div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-50 dark:bg-gray-900 z-[100] flex flex-col animate-in fade-in duration-200 overflow-hidden">
+    <div className="fixed inset-0 bg-gray-900 z-[100] flex flex-col animate-in fade-in duration-200 overflow-hidden">
       {/* 顶部工具栏 */}
-      <div className="p-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shrink-0">
+      <div className="p-3 bg-gray-800 border-b border-gray-700 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <Workflow className="w-5 h-5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+          <Workflow className="w-5 h-5 text-indigo-400 shrink-0" />
           <div className="relative min-w-0 flex-1">
             {isEditingWorkflowName ? (
               <input
@@ -2711,15 +2711,15 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                 onChange={(e) => setNewWorkflowName(e.target.value)}
                 onBlur={() => renameWorkflow(activeWorkflowId, newWorkflowName)}
                 onKeyDown={(e) => e.key === 'Enter' && renameWorkflow(activeWorkflowId, newWorkflowName)}
-                className="bg-gray-100 dark:bg-gray-700 border border-indigo-500 rounded px-2 py-1 text-xs text-gray-900 dark:text-white outline-none w-full"
+                className="bg-gray-700 border border-indigo-500 rounded px-2 py-1 text-xs text-white outline-none w-full"
               />
             ) : (
               <div className="flex items-center gap-1 min-w-0">
                 <button onClick={() => setShowWorkflowMenu(!showWorkflowMenu)} className="flex flex-col items-start min-w-0">
-                  <span className="text-[8px] text-indigo-500 dark:text-indigo-400 font-bold uppercase tracking-wider">当前工作流</span>
+                  <span className="text-[8px] text-indigo-400 font-bold uppercase tracking-wider">当前工作流</span>
                   <div className="flex items-center gap-1 min-w-0">
-                    <span className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">{workflows.find(w => w.id === activeWorkflowId)?.name || '选择工作流'}</span>
-                    <ChevronDown className="w-3 h-3 text-gray-500 dark:text-gray-400 shrink-0" />
+                    <span className="font-bold text-sm text-gray-100 truncate">{workflows.find(w => w.id === activeWorkflowId)?.name || '选择工作流'}</span>
+                    <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
                   </div>
                 </button>
                 <button
@@ -2727,23 +2727,23 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                     setNewWorkflowName(workflows.find(w => w.id === activeWorkflowId)?.name || '');
                     setIsEditingWorkflowName(true);
                   }}
-                  className="p-1 text-gray-400 dark:text-gray-500 hover:text-indigo-500"
+                  className="p-1 text-gray-500"
                 >
                   <Edit2 className="w-3 h-3" />
                 </button>
               </div>
             )}
             {showWorkflowMenu && (
-              <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl py-2 z-50 animate-in slide-in-from-top-2 duration-200">
+              <div className="absolute top-full left-0 mt-2 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl py-2 z-50 animate-in slide-in-from-top-2 duration-200">
                 <div className="max-h-60 overflow-y-auto custom-scrollbar">
                   {workflows.map(wf => (
-                    <div key={wf.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700">
-                      <button onClick={() => switchWorkflow(wf.id)} className={`flex-1 text-left text-sm truncate ${activeWorkflowId === wf.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-300'}`}>{wf.name}</button>
-                      <button onClick={(e) => { e.stopPropagation(); deleteWorkflow(wf.id); }} className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <div key={wf.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-700">
+                      <button onClick={() => switchWorkflow(wf.id)} className={`flex-1 text-left text-sm truncate ${activeWorkflowId === wf.id ? 'text-indigo-400' : 'text-gray-300'}`}>{wf.name}</button>
+                      <button onClick={(e) => { e.stopPropagation(); deleteWorkflow(wf.id); }} className="p-1 text-gray-500 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   ))}
                 </div>
-                <div className="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2 px-2 space-y-1">
+                <div className="border-t border-gray-700 mt-2 pt-2 px-2 space-y-1">
                   <button onClick={createNewWorkflow} className="w-full text-left px-3 py-2 text-xs text-indigo-400 font-bold flex items-center gap-2"><Plus className="w-4 h-4" /> 创建新工作流</button>
                   <label className="w-full text-left px-3 py-2 text-xs text-emerald-400 font-bold flex items-center gap-2 cursor-pointer"><Upload className="w-4 h-4" /> 导入工作流<input type="file" accept=".json" onChange={importWorkflow} className="hidden" /></label>
                   <button onClick={() => exportWorkflow(activeWorkflowId)} className="w-full text-left px-3 py-2 text-xs text-amber-400 font-bold flex items-center gap-2"><Download className="w-4 h-4" /> 导出当前工作流</button>
@@ -2892,7 +2892,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       </div>
 
       {/* 画布 */}
-      <div className={`flex-1 relative bg-gray-50 dark:bg-[#1a1a1a] ${editingNodeId ? 'invisible h-0' : 'visible'}`}>
+      <div className={`flex-1 relative bg-[#1a1a1a] ${editingNodeId ? 'invisible h-0' : 'visible'}`}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -2904,10 +2904,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
-          colorMode="system"
+          colorMode="dark"
           defaultEdgeOptions={{ type: 'custom', animated: false }}
         >
-          <Background color="#888" gap={25} variant={BackgroundVariant.Dots} className="dark:opacity-50 opacity-20" />
+          <Background color="#333" gap={25} variant={BackgroundVariant.Dots} />
           <Controls showInteractive={false} position="bottom-right" className="m-4 scale-125" />
           <Panel position="top-left" className="m-3">
             <button onClick={() => setShowAddMenu(true)} className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-xs font-bold text-white rounded-full shadow-2xl active:scale-95 transition-all"><Plus className="w-4 h-4" /> 添加模块</button>
@@ -2917,33 +2917,33 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
       {/* 底部浮动操作栏 */}
       {editingNode && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-gray-200 dark:border-gray-600 rounded-2xl shadow-2xl p-2 flex items-center gap-1 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <button onClick={() => setEditingNodeId(editingNode.id)} className="flex flex-col items-center gap-1 px-4 py-2 text-indigo-500 dark:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"><Settings2 className="w-5 h-5" /><span className="text-[10px] font-bold">配置</span></button>
-          <div className="w-px h-8 bg-gray-200 dark:bg-gray-700 mx-1" />
-          <button onClick={() => cloneNode(editingNode)} className="flex flex-col items-center gap-1 px-4 py-2 text-emerald-500 dark:text-emerald-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"><Copy className="w-5 h-5" /><span className="text-[10px] font-bold">克隆</span></button>
-          <div className="w-px h-8 bg-gray-200 dark:bg-gray-700 mx-1" />
-          <button onClick={() => { setNodes(nds => nds.filter(n => n.id !== editingNode.id)); setEditingNodeId(null); }} className="flex flex-col items-center gap-1 px-4 py-2 text-red-500 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"><Trash2 className="w-5 h-5" /><span className="text-[10px] font-bold">删除</span></button>
-          <div className="w-px h-8 bg-gray-200 dark:bg-gray-700 mx-1" />
-          <button onClick={() => setEditingNodeId(null)} className="flex flex-col items-center gap-1 px-4 py-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"><X className="w-5 h-5" /><span className="text-[10px] font-bold">关闭</span></button>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] bg-gray-800/90 backdrop-blur-xl border border-gray-600 rounded-2xl shadow-2xl p-2 flex items-center gap-1 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <button onClick={() => setEditingNodeId(editingNode.id)} className="flex flex-col items-center gap-1 px-4 py-2 text-indigo-400 hover:bg-gray-700 rounded-xl transition-colors"><Settings2 className="w-5 h-5" /><span className="text-[10px] font-bold">配置</span></button>
+          <div className="w-px h-8 bg-gray-700 mx-1" />
+          <button onClick={() => cloneNode(editingNode)} className="flex flex-col items-center gap-1 px-4 py-2 text-emerald-400 hover:bg-gray-700 rounded-xl transition-colors"><Copy className="w-5 h-5" /><span className="text-[10px] font-bold">克隆</span></button>
+          <div className="w-px h-8 bg-gray-700 mx-1" />
+          <button onClick={() => { setNodes(nds => nds.filter(n => n.id !== editingNode.id)); setEditingNodeId(null); }} className="flex flex-col items-center gap-1 px-4 py-2 text-red-400 hover:bg-gray-700 rounded-xl transition-colors"><Trash2 className="w-5 h-5" /><span className="text-[10px] font-bold">删除</span></button>
+          <div className="w-px h-8 bg-gray-700 mx-1" />
+          <button onClick={() => setEditingNodeId(null)} className="flex flex-col items-center gap-1 px-4 py-2 text-gray-400 hover:bg-gray-700 rounded-xl transition-colors"><X className="w-5 h-5" /><span className="text-[10px] font-bold">关闭</span></button>
         </div>
       )}
 
       {/* 模块添加菜单 */}
       {showAddMenu && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-end justify-center p-0" onClick={() => setShowAddMenu(false)}>
-          <div className="bg-white dark:bg-gray-800 w-full rounded-t-[2.5rem] p-8 animate-in slide-in-from-bottom duration-300 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mb-8" />
+          <div className="bg-gray-800 w-full rounded-t-[2.5rem] p-8 animate-in slide-in-from-bottom duration-300 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-1.5 bg-gray-700 rounded-full mx-auto mb-8" />
             <div className="grid grid-cols-3 gap-6">
               {(Object.keys(NODE_CONFIGS) as Array<NodeTypeKey>).map(type => (
                 <button key={type} onClick={() => addNewNode(type)} className="flex flex-col items-center gap-3 active:scale-90 transition-transform">
                   <div className="p-4 rounded-3xl shadow-xl" style={{ backgroundColor: `${NODE_CONFIGS[type].color}20`, color: NODE_CONFIGS[type].color }}>
                     {(() => { const Icon = NODE_CONFIGS[type].icon; return <Icon className="w-7 h-7" /> })()}
                   </div>
-                  <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{NODE_CONFIGS[type].typeLabel}</span>
+                  <span className="text-xs font-bold text-gray-300">{NODE_CONFIGS[type].typeLabel}</span>
                 </button>
               ))}
             </div>
-            <button onClick={() => setShowAddMenu(false)} className="w-full mt-10 py-4 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-2xl font-bold">取消</button>
+            <button onClick={() => setShowAddMenu(false)} className="w-full mt-10 py-4 bg-gray-700 text-gray-300 rounded-2xl font-bold">取消</button>
           </div>
         </div>
       )}

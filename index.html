@@ -5,6 +5,26 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI 小说写作助手</title>
+    <script>
+      (function () {
+        try {
+          const storageKey = 'vite-ui-theme';
+          const theme = localStorage.getItem(storageKey) || 'dark';
+          const root = document.documentElement;
+          root.classList.remove('light', 'dark');
+
+          if (theme === 'system') {
+            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            root.classList.add(systemTheme);
+          } else {
+            root.classList.add(theme);
+          }
+        } catch (e) {
+          console.error('Theme init failed', e);
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root">
@@ -17,7 +37,7 @@
           justify-content: center;
           height: 100vh;
           width: 100vw;
-          background-color: #111827;
+          background-color: #09090b;
           color: #f3f4f6;
           font-family: system-ui, -apple-system, sans-serif;
         "

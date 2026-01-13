@@ -16,10 +16,11 @@ import {
   Search,
   Settings,
   Trash2,
+  Upload,
   X,
   Zap
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Novel } from '../types';
 
 interface NovelDashboardProps {
@@ -49,6 +50,26 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
   const [sortBy, setSortBy] = useState<'updated' | 'words' | 'created'>('updated');
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [editingNovel, setEditingNovel] = useState<Novel | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && editingNovel) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        alert('图片大小不能超过 5MB');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditingNovel({
+          ...editingNovel,
+          coverUrl: reader.result as string
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
   
   // 派生状态计算
   const availableCategories = React.useMemo(() => {
@@ -91,10 +112,10 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex transition-colors duration-300 font-sans selection:bg-[var(--theme-color)]/30">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#09090b] text-slate-900 dark:text-slate-100 flex transition-colors duration-300 font-sans selection:bg-[var(--theme-color)]/30 custom-bg-transition">
       
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex fixed left-0 top-0 h-full w-20 flex-col items-center py-8 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-50">
+      <aside className="hidden md:flex fixed left-0 top-0 h-full w-20 flex-col items-center py-8 bg-white dark:bg-[#18181b] border-r border-slate-200 dark:border-slate-800 z-50 custom-sidebar-transition">
         <div className="mb-10 text-primary">
           <Library className="w-10 h-10" />
         </div>
@@ -110,7 +131,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
           
           <button
             onClick={() => onNavigate?.('automation')}
-            className="p-3 text-gray-400 hover:text-[var(--theme-color)] hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl transition-all"
+            className="p-3 text-slate-400 hover:text-[var(--theme-color)] hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition-all"
             title="自动化中心"
           >
             <Zap className="w-6 h-6" />
@@ -118,7 +139,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
           
           <button
             onClick={() => onNavigate?.('workflow')}
-            className="p-3 text-gray-400 hover:text-[var(--theme-color)] hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl transition-all"
+            className="p-3 text-slate-400 hover:text-[var(--theme-color)] hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition-all"
             title="工作流"
           >
             <GitBranch className="w-6 h-6" />
@@ -126,7 +147,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
           
           <button
             onClick={() => onNavigate?.('library')}
-            className="p-3 text-gray-400 hover:text-[var(--theme-color)] hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl transition-all"
+            className="p-3 text-slate-400 hover:text-[var(--theme-color)] hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition-all"
             title="资料库"
           >
             <FolderHeart className="w-6 h-6" />
@@ -136,27 +157,27 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
         <div className="mt-auto flex flex-col gap-6 items-center w-full">
           <button
             onClick={onOpenSettings}
-            className="p-3 text-gray-400 hover:text-[var(--theme-color)] hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl transition-all"
+            className="p-3 text-slate-400 hover:text-[var(--theme-color)] hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition-all"
           >
             <Settings className="w-6 h-6" />
           </button>
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[var(--theme-color)] to-[var(--theme-color-light)] flex items-center justify-center text-white font-bold ring-2 ring-white dark:ring-gray-700 shadow-lg">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[var(--theme-color)] to-[var(--theme-color-light)] flex items-center justify-center text-white font-bold ring-2 ring-white dark:ring-slate-800 shadow-lg">
             AI
           </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="ml-0 md:ml-20 p-4 md:p-8 flex-1 w-full pb-24 md:pb-8 bg-gray-50 dark:bg-gray-900 transition-colors">
+      <main className="ml-0 md:ml-20 p-4 md:p-8 flex-1 w-full pb-24 md:pb-8 custom-bg-transition">
         {/* Header Section */}
-        <header className="fixed md:relative top-0 left-0 right-0 z-40 bg-white/80 dark:bg-gray-900/80 md:bg-transparent backdrop-blur-md md:backdrop-blur-none border-b border-gray-200 dark:border-gray-800 md:border-none px-4 h-16 md:h-auto flex md:flex-col md:items-start items-center justify-between mb-0 md:mb-12 gap-0 md:gap-6 transition-colors">
+        <header className="fixed md:relative top-0 left-0 right-0 z-40 bg-white/80 dark:bg-[#09090b]/80 md:bg-transparent backdrop-blur-md md:backdrop-blur-none border-b border-slate-200 dark:border-white/5 md:border-none px-4 h-16 md:h-auto flex md:flex-col md:items-start items-center justify-between mb-0 md:mb-12 gap-0 md:gap-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[var(--theme-color)]/10 flex items-center justify-center text-[var(--theme-color)] md:hidden">
               <BookOpen className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-lg md:text-3xl font-bold tracking-tight text-gray-900 dark:text-white leading-none">我的小说库</h1>
-              <p className="text-xs md:text-base text-gray-500 dark:text-gray-400 hidden md:block mt-2">目前已有 {novels.length} 本作品正在创作中</p>
+              <h1 className="text-lg md:text-3xl font-bold tracking-tight text-slate-900 dark:text-white leading-none">我的小说库</h1>
+              <p className="text-xs md:text-base text-slate-500 dark:text-slate-400 hidden md:block mt-2">目前已有 {novels.length} 本作品正在创作中</p>
             </div>
           </div>
           
@@ -164,17 +185,17 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
             {/* Search Bar - Mobile: Button toggle, Desktop: Expanded */}
             <div className="relative group">
               <div className="hidden md:block relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[var(--theme-color)] transition-colors" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 group-focus-within:text-[var(--theme-color)] transition-colors" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2.5 w-64 bg-white dark:bg-gray-800 dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all shadow-sm text-sm"
+                  className="pl-10 pr-4 py-2.5 w-64 bg-white dark:bg-[#18181b] dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all shadow-sm text-sm custom-input-bg"
                   placeholder="搜索作品..."
                 />
               </div>
               {/* Mobile Search Button */}
-              <button className="md:hidden w-10 h-10 flex items-center justify-center text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
+              <button className="md:hidden w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
                 <Search className="w-6 h-6" />
               </button>
             </div>
@@ -184,19 +205,19 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
               {/* Desktop Filter Button */}
               <button
                 onClick={() => setShowFilterPanel(!showFilterPanel)}
-                className={`hidden md:flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm ${showFilterPanel ? 'ring-2 ring-[var(--theme-color)] border-transparent' : ''}`}
+                className={`hidden md:flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-[#18181b] border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm custom-input-bg ${showFilterPanel ? 'ring-2 ring-[var(--theme-color)] border-transparent' : ''}`}
               >
-                <Filter className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                <span className="font-medium text-sm text-gray-700 dark:text-gray-200">筛选类型</span>
+                <Filter className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                <span className="font-medium text-sm text-slate-700 dark:text-slate-200">筛选类型</span>
               </button>
 
               {/* Mobile Filter Button */}
               <button
                 onClick={() => setShowFilterPanel(true)}
-                className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium"
+                className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 border border-white/10 rounded-lg text-sm font-medium"
               >
-                <Filter className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                <span className="text-gray-700 dark:text-gray-300">筛选</span>
+                <Filter className="w-4 h-4 text-slate-400" />
+                <span className="text-slate-300">筛选</span>
               </button>
 
               {/* Filter Panel - Adaptive: Dropdown on Desktop, Bottom Sheet on Mobile */}
@@ -209,22 +230,22 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                     z-[101]
                     md:absolute md:right-0 md:mt-3 md:w-80 md:rounded-2xl md:top-full
                     fixed bottom-0 left-0 right-0 rounded-t-3xl
-                    bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border border-gray-200 dark:border-gray-700
+                    bg-white/90 dark:bg-[#18181b]/95 backdrop-blur-xl border border-slate-200 dark:border-slate-700
                     p-6 shadow-2xl animate-in slide-in-from-bottom-10 md:slide-in-from-top-2 duration-200
                     safe-area-bottom
                   `}>
                     {/* Mobile Handle */}
-                    <div className="md:hidden w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6" />
+                    <div className="md:hidden w-12 h-1.5 bg-slate-200 dark:bg-white/20 rounded-full mx-auto mb-6" />
                     
                     <div className="flex items-center justify-between mb-6 md:hidden">
-                      <h2 className="text-xl font-bold text-gray-900 dark:text-white">筛选与排序</h2>
+                      <h2 className="text-xl font-bold text-slate-900 dark:text-white">筛选与排序</h2>
                       <button
                         onClick={() => {
                           setSelectedCategory('全部');
                           setSelectedStatus('全部');
                           setSortBy('updated');
                         }}
-                        className="text-gray-500 dark:text-gray-400 text-sm"
+                        className="text-slate-400 text-sm"
                       >
                         重置
                       </button>
@@ -233,7 +254,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                     <div className="flex flex-col gap-6 max-h-[60vh] overflow-y-auto">
                       {/* Categories */}
                       <div>
-                        <div className="flex items-center gap-2 mb-3 text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center gap-2 mb-3 text-slate-400">
                           <Layers className="w-4 h-4 md:w-4 md:h-4 w-5 h-5" />
                           <span className="text-xs font-bold uppercase tracking-wider">作品题材</span>
                         </div>
@@ -244,8 +265,8 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                               onClick={() => setSelectedCategory(cat)}
                               className={`px-4 py-2 md:px-3 md:py-1.5 text-sm md:text-xs font-medium rounded-xl md:rounded-lg border transition-all ${
                                 selectedCategory === cat
-                                  ? 'bg-[var(--theme-color)]/10 dark:bg-[var(--theme-color)]/20 border-[var(--theme-color)] text-[var(--theme-color)]'
-                                  : 'bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'
+                                  ? 'bg-[var(--theme-color)]/20 border-[var(--theme-color)] text-[var(--theme-color)] shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                                  : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'
                               }`}
                             >
                               {cat}
@@ -256,7 +277,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
 
                       {/* Status */}
                       <div>
-                        <div className="flex items-center gap-2 mb-3 text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center gap-2 mb-3 text-slate-400">
                           <Activity className="w-4 h-4 md:w-4 md:h-4 w-5 h-5" />
                           <span className="text-xs font-bold uppercase tracking-wider">创作状态</span>
                         </div>
@@ -265,8 +286,8 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                             onClick={() => setSelectedStatus('连载中')}
                             className={`flex items-center justify-center gap-2 px-4 py-3 md:px-3 md:py-2 text-sm md:text-xs font-medium rounded-xl md:rounded-lg border transition-all ${
                               selectedStatus === '连载中'
-                                ? 'bg-[var(--theme-color)]/10 dark:bg-[var(--theme-color)]/20 border-[var(--theme-color)] text-[var(--theme-color)]'
-                                : 'bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'
+                                ? 'bg-[var(--theme-color)]/20 border-[var(--theme-color)] text-[var(--theme-color)] shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                                : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'
                             }`}
                           >
                             <span className="w-2 h-2 md:w-1.5 md:h-1.5 rounded-full bg-[var(--theme-color)] animate-pulse"></span>
@@ -276,11 +297,11 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                             onClick={() => setSelectedStatus('已完结')}
                             className={`flex items-center justify-center gap-2 px-4 py-3 md:px-3 md:py-2 text-sm md:text-xs font-medium rounded-xl md:rounded-lg border transition-all ${
                               selectedStatus === '已完结'
-                                ? 'bg-[var(--theme-color)]/10 dark:bg-[var(--theme-color)]/20 border-[var(--theme-color)] text-[var(--theme-color)]'
-                                : 'bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'
+                                ? 'bg-[var(--theme-color)]/20 border-[var(--theme-color)] text-[var(--theme-color)] shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                                : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'
                             }`}
                           >
-                            <span className="w-2 h-2 md:w-1.5 md:h-1.5 rounded-full bg-gray-500"></span>
+                            <span className="w-2 h-2 md:w-1.5 md:h-1.5 rounded-full bg-slate-500"></span>
                             已完结
                           </button>
                         </div>
@@ -288,7 +309,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
 
                       {/* Sort */}
                       <div>
-                        <div className="flex items-center gap-2 mb-3 text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center gap-2 mb-3 text-slate-400">
                           <ArrowUpDown className="w-4 h-4 md:w-4 md:h-4 w-5 h-5" />
                           <span className="text-xs font-bold uppercase tracking-wider">排序方式</span>
                         </div>
@@ -303,8 +324,8 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                               onClick={() => setSortBy(opt.id as any)}
                               className={`flex items-center justify-between w-full px-4 py-3 md:px-3 md:py-2 text-sm rounded-xl md:rounded-lg transition-colors group border ${
                                 sortBy === opt.id
-                                  ? 'bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/5 text-gray-900 dark:text-white font-medium'
-                                  : 'bg-transparent border-transparent text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'
+                                  ? 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/5 text-slate-900 dark:text-white font-medium'
+                                  : 'bg-transparent border-transparent text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'
                               }`}
                             >
                               <span>{opt.label}</span>
@@ -315,14 +336,14 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                       </div>
 
                       {/* Filter Actions (Desktop Only - Mobile has it at bottom) */}
-                      <div className="hidden md:flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700/50">
+                      <div className="hidden md:flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700/50">
                         <button
                           onClick={() => {
                             setSelectedCategory('全部');
                             setSelectedStatus('全部');
                             setSortBy('updated');
                           }}
-                          className="text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                          className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
                         >
                           重置条件
                         </button>
@@ -364,7 +385,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
         <div className="h-16 md:hidden"></div>
         
         <div className="mb-6 md:hidden">
-           <p className="text-sm text-gray-500 dark:text-gray-400">目前已有 {novels.length} 本作品正在创作中</p>
+           <p className="text-sm text-slate-400">目前已有 {novels.length} 本作品正在创作中</p>
         </div>
 
         {/* Novel Grid */}
@@ -373,7 +394,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
             <div
               key={novel.id}
               onClick={() => onSelectNovel(novel.id)}
-              className="group relative aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer shadow-lg md:shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 bg-gray-100 dark:bg-gray-800 active:scale-95 md:active:scale-100"
+              className="group relative aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer shadow-lg md:shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 bg-white dark:bg-[#18181b] active:scale-95 md:active:scale-100"
             >
               {/* Cover Image */}
               <img
@@ -382,10 +403,18 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                 src={novel.coverUrl || '/src/默认封面/默认封面.jpg'}
                 onError={(e) => (e.currentTarget.src = '/src/默认封面/默认封面.jpg')}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-900/30 to-transparent"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent dark:from-black dark:via-black/30 dark:to-transparent"></div>
               
+              {/* Mobile Edit Button */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setEditingNovel(novel); }}
+                className="md:hidden absolute top-2 right-2 w-8 h-8 bg-black/40 backdrop-blur-md hover:bg-black/60 rounded-full flex items-center justify-center text-white z-30 transition-all active:scale-95"
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
+
               {/* Overlay Actions (Desktop) */}
-              <div className="hidden md:flex absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gray-900/60 backdrop-blur-[2px] flex-col justify-center items-center gap-4 z-10">
+              <div className="hidden md:flex absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/60 backdrop-blur-[2px] flex-col justify-center items-center gap-4 z-10">
                 <button
                   onClick={(e) => { e.stopPropagation(); setEditingNovel(novel); }}
                   className="w-12 h-12 bg-[var(--theme-color)] hover:bg-[var(--theme-color-light)] rounded-full flex items-center justify-center text-white shadow-lg transition-transform hover:scale-110 active:scale-95"
@@ -418,10 +447,10 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                   </span>
                 )}
                 <h3 className="text-sm md:text-xl font-bold text-white mb-0.5 md:mb-1 leading-tight shadow-black/50 drop-shadow-md truncate">{novel.title}</h3>
-                <p className="hidden md:block text-gray-200 text-sm line-clamp-2 mb-4 opacity-90 font-light leading-relaxed">
+                <p className="hidden md:block text-slate-200 text-sm line-clamp-2 mb-4 opacity-90 font-light leading-relaxed">
                   {novel.description || "暂无简介，点击进入创作..."}
                 </p>
-                <div className="flex items-center justify-between text-[10px] md:text-xs text-gray-300 md:font-medium opacity-80 md:opacity-100">
+                <div className="flex items-center justify-between text-[10px] md:text-xs text-slate-300 md:font-medium opacity-80 md:opacity-100">
                   <span className="flex items-center gap-1 md:gap-1.5 md:bg-black/20 md:px-2 md:py-1 md:rounded-lg md:backdrop-blur-sm">
                     <span className="hidden md:inline"><BookOpen className="w-3.5 h-3.5" /></span>
                     {novel.chapters?.length || 0} 章节
@@ -435,50 +464,50 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
           {/* New Novel Card */}
           <div
             onClick={onCreateNovel}
-            className="group border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl aspect-[3/4.2] flex flex-col items-center justify-center p-4 md:p-6 text-center hover:bg-gray-100 dark:hover:bg-white/5 md:hover:border-[var(--theme-color)]/50 md:hover:bg-[var(--theme-color)]/5 active:scale-95 transition-all cursor-pointer"
+            className="group border-2 border-dashed border-slate-300 dark:border-white/10 md:border-slate-300 dark:md:border-slate-700 rounded-2xl aspect-[3/4.2] flex flex-col items-center justify-center p-4 md:p-6 text-center hover:bg-slate-50 dark:hover:bg-white/5 md:hover:border-[var(--theme-color)]/50 md:hover:bg-[var(--theme-color)]/5 active:scale-95 transition-all cursor-pointer"
           >
-            <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-white/50 dark:bg-white/5 md:bg-gray-100 dark:md:bg-gray-800 group-hover:bg-[var(--theme-color)]/10 dark:group-hover:bg-[var(--theme-color)]/20 flex items-center justify-center text-gray-400 group-hover:text-[var(--theme-color)] transition-all mb-2 md:mb-4">
+            <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-slate-100 dark:bg-white/5 md:bg-slate-100 dark:md:bg-[#18181b] group-hover:bg-[var(--theme-color)]/10 dark:group-hover:bg-[var(--theme-color)]/20 flex items-center justify-center text-slate-400 group-hover:text-[var(--theme-color)] transition-all mb-2 md:mb-4">
               <Plus className="w-6 h-6 md:w-8 md:h-8" />
             </div>
-            <h4 className="font-bold text-xs md:text-base mb-0 md:mb-1 text-gray-700 dark:text-gray-200 group-hover:text-[var(--theme-color)] transition-colors">新建作品</h4>
-            <p className="hidden md:block text-sm text-gray-500 dark:text-gray-400">开启你的下一段灵感之旅</p>
+            <h4 className="font-bold text-xs md:text-base mb-0 md:mb-1 text-slate-700 dark:text-slate-200 md:text-slate-700 dark:md:text-slate-200 group-hover:text-[var(--theme-color)] transition-colors">新建作品</h4>
+            <p className="hidden md:block text-sm text-slate-500 dark:text-slate-400">开启你的下一段灵感之旅</p>
           </div>
         </div>
 
         {/* Footer Stats (Desktop) */}
-        <footer className="hidden md:flex mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex-wrap gap-8 items-center justify-between opacity-60">
+        <footer className="hidden md:flex mt-20 pt-8 border-t border-slate-200 dark:border-slate-800 flex-wrap gap-8 items-center justify-between opacity-60">
           <div className="flex gap-12">
             <div className="text-center md:text-left">
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">{formatNumber(totalWords)}</div>
-              <div className="text-[10px] uppercase tracking-widest font-bold text-gray-500">累计创作字数</div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">{formatNumber(totalWords)}</div>
+              <div className="text-[10px] uppercase tracking-widest font-bold text-slate-500">累计创作字数</div>
             </div>
             <div className="text-center md:text-left">
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalChapters}</div>
-              <div className="text-[10px] uppercase tracking-widest font-bold text-gray-500">生成章节数</div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">{totalChapters}</div>
+              <div className="text-[10px] uppercase tracking-widest font-bold text-slate-500">生成章节数</div>
             </div>
             <div className="text-center md:text-left">
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">{novels.length}</div>
-              <div className="text-[10px] uppercase tracking-widest font-bold text-gray-500">在更作品</div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">{novels.length}</div>
+              <div className="text-[10px] uppercase tracking-widest font-bold text-slate-500">在更作品</div>
             </div>
           </div>
-          <div className="text-sm text-gray-500 font-medium">
+          <div className="text-sm text-slate-500 font-medium">
             当前版本: v2.4.0-stable © 2024 AI Creative Studio
           </div>
         </footer>
 
         {/* Footer Stats (Mobile) */}
-        <div className="md:hidden mt-12 pt-6 border-t border-white/5 grid grid-cols-3 gap-2 opacity-60 text-center">
+        <div className="md:hidden mt-12 pt-6 border-t border-slate-200 dark:border-white/5 grid grid-cols-3 gap-2 opacity-60 text-center">
           <div>
-            <div className="text-lg font-bold">{formatNumber(totalWords)}</div>
-            <div className="text-[8px] uppercase tracking-wider font-medium">累计字数</div>
+            <div className="text-lg font-bold text-slate-900 dark:text-white">{formatNumber(totalWords)}</div>
+            <div className="text-[8px] uppercase tracking-wider font-medium text-slate-500">累计字数</div>
           </div>
           <div>
-            <div className="text-lg font-bold">{totalChapters}</div>
-            <div className="text-[8px] uppercase tracking-wider font-medium">生成章节</div>
+            <div className="text-lg font-bold text-slate-900 dark:text-white">{totalChapters}</div>
+            <div className="text-[8px] uppercase tracking-wider font-medium text-slate-500">生成章节</div>
           </div>
           <div>
-            <div className="text-lg font-bold">{novels.length}</div>
-            <div className="text-[8px] uppercase tracking-wider font-medium">作品数量</div>
+            <div className="text-lg font-bold text-slate-900 dark:text-white">{novels.length}</div>
+            <div className="text-[8px] uppercase tracking-wider font-medium text-slate-500">作品数量</div>
           </div>
         </div>
       </main>
@@ -492,14 +521,14 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
       </button>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 dark:bg-[#0F172A]/95 backdrop-blur-lg border-t border-gray-200 dark:border-white/5 flex items-center justify-around px-6 z-40 safe-area-bottom md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-lg border-t border-slate-200 dark:border-white/5 flex items-center justify-around px-6 z-40 safe-area-bottom md:hidden">
         <a className="text-[var(--theme-color)] flex flex-col items-center gap-1" href="#" onClick={(e) => { e.preventDefault(); onNavigate?.('dashboard'); }}>
           <LayoutGrid className="w-6 h-6" />
         </a>
-        <a className="text-gray-500 dark:text-slate-500 flex flex-col items-center gap-1" href="#" onClick={(e) => { e.preventDefault(); onNavigate?.('automation'); }}>
+        <a className="text-slate-400 dark:text-slate-500 flex flex-col items-center gap-1" href="#" onClick={(e) => { e.preventDefault(); onNavigate?.('automation'); }}>
           <Zap className="w-6 h-6" />
         </a>
-        <a className="text-gray-500 dark:text-slate-500 flex flex-col items-center gap-1" href="#" onClick={(e) => { e.preventDefault(); onNavigate?.('library'); }}>
+        <a className="text-slate-400 dark:text-slate-500 flex flex-col items-center gap-1" href="#" onClick={(e) => { e.preventDefault(); onNavigate?.('library'); }}>
           <FolderHeart className="w-6 h-6" />
         </a>
         <div
@@ -520,7 +549,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
       {/* Edit Novel Modal */}
       {editingNovel && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-[#18181b] w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
               <h3 className="text-xl font-bold text-slate-900 dark:text-white">编辑作品信息</h3>
               <button onClick={() => setEditingNovel(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
@@ -536,7 +565,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                   type="text"
                   value={editingNovel.title}
                   onChange={(e) => setEditingNovel({...editingNovel, title: e.target.value})}
-                  className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all"
+                  className="w-full px-4 py-2 bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all"
                 />
               </div>
 
@@ -551,14 +580,30 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                       onError={(e) => (e.currentTarget.src = '/src/默认封面/默认封面.jpg')}
                     />
                     <div className="flex-1 space-y-2">
-                        <input
-                          type="text"
-                          value={editingNovel.coverUrl || ''}
-                          onChange={(e) => setEditingNovel({...editingNovel, coverUrl: e.target.value})}
-                          className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all text-sm"
-                          placeholder="https://..."
-                        />
-                        <p className="text-xs text-slate-500">输入图片链接，或保留为空使用默认封面</p>
+                        <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={editingNovel.coverUrl || ''}
+                              onChange={(e) => setEditingNovel({...editingNovel, coverUrl: e.target.value})}
+                              className="flex-1 px-4 py-2 bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all text-sm"
+                              placeholder="https://..."
+                            />
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                accept="image/*"
+                                onChange={handleImageUpload}
+                            />
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors flex items-center gap-2 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                                title="上传封面"
+                            >
+                                <Upload className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <p className="text-xs text-slate-500">输入图片链接，或点击上传按钮选择本地图片（支持最大5MB）</p>
                     </div>
                 </div>
               </div>
@@ -571,7 +616,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                       type="text"
                       value={editingNovel.category || ''}
                       onChange={(e) => setEditingNovel({...editingNovel, category: e.target.value})}
-                      className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all"
+                      className="w-full px-4 py-2 bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all"
                       placeholder="例如：科幻、悬疑..."
                     />
                   </div>
@@ -580,7 +625,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                     <select
                       value={editingNovel.status || '连载中'}
                       onChange={(e) => setEditingNovel({...editingNovel, status: e.target.value as any})}
-                      className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all"
+                      className="w-full px-4 py-2 bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all"
                     >
                         <option value="连载中">连载中</option>
                         <option value="已完结">已完结</option>
@@ -594,16 +639,16 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                 <textarea
                   value={editingNovel.description || ''}
                   onChange={(e) => setEditingNovel({...editingNovel, description: e.target.value})}
-                  className="w-full h-32 px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all resize-none"
+                  className="w-full h-32 px-4 py-2 bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all resize-none"
                   placeholder="请输入作品简介..."
                 />
               </div>
             </div>
 
-            <div className="p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex justify-end gap-3">
+            <div className="p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-[#09090b]/50 flex justify-end gap-3">
               <button
                 onClick={() => setEditingNovel(null)}
-                className="px-5 py-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors font-medium"
+                className="px-5 py-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors font-medium"
               >
                 取消
               </button>

@@ -107,18 +107,18 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar */}
-      <div className="h-14 md:h-16 px-1.5 md:px-10 border-b border-white/5 flex flex-row items-center justify-between bg-[#0f172a] shrink-0 gap-1 md:gap-0">
+      <div className="h-14 md:h-16 px-1.5 md:px-10 border-b border-slate-200 dark:border-white/5 flex flex-row items-center justify-between bg-white dark:bg-[#09090b] shrink-0 gap-1 md:gap-0 custom-header-transition">
         <div className="flex items-center gap-1 md:gap-8 min-w-0">
           {/* 版本切换 */}
-          <div className="flex items-center bg-slate-800/50 rounded-lg border border-white/5 overflow-hidden p-0.5 h-9 md:h-10 shrink-0">
+          <div className="flex items-center bg-slate-100 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/5 overflow-hidden p-0.5 h-9 md:h-10 shrink-0">
             <button
               onClick={onPrevVersion}
               disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
-              className="px-1 h-full text-slate-500 hover:text-white transition-colors disabled:opacity-20"
+              className="px-1 h-full text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-20"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
-            <div className="px-1 text-[9px] md:text-[11px] font-medium text-slate-300 flex items-center gap-0.5 whitespace-nowrap">
+            <div className="px-1 text-[9px] md:text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center gap-0.5 whitespace-nowrap">
               <span className="max-w-[40px] truncate">
                 {(() => {
                   const v = activeChapter.versions?.find(v => v.id === activeChapter.activeVersionId);
@@ -132,7 +132,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
                   return '编辑';
                 })()}
               </span>
-              <span className="text-slate-600 font-mono text-[8px] scale-90">
+              <span className="text-slate-400 dark:text-slate-600 font-mono text-[8px] scale-90">
                 {(() => {
                   const versions = activeChapter.versions || [];
                   const idx = versions.findIndex(v => v.id === activeChapter.activeVersionId);
@@ -143,17 +143,17 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
             <button
               onClick={onNextVersion}
               disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
-              className="px-1 h-full text-slate-500 hover:text-white transition-colors disabled:opacity-20"
+              className="px-1 h-full text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-20"
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Auto开关 */}
-          <div className="flex items-center px-1.5 h-9 md:h-10 bg-white/5 rounded-lg border border-white/5 shrink-0">
+          <div className="flex items-center px-1.5 h-9 md:h-10 bg-slate-100 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/5 shrink-0">
             <div
               onClick={() => setAutoOptimize(!autoOptimize)}
-              className={`w-5 h-2.5 rounded-full relative cursor-pointer transition-colors ${autoOptimize ? 'bg-primary/40' : 'bg-slate-700'}`}
+              className={`w-5 h-2.5 rounded-full relative cursor-pointer transition-colors ${autoOptimize ? 'bg-primary/40' : 'bg-slate-300 dark:bg-slate-700'}`}
             >
               <div className={`absolute top-0.5 w-1.5 h-1.5 bg-white rounded-full transition-all ${autoOptimize ? 'right-0.5' : 'left-0.5'}`}></div>
             </div>
@@ -193,14 +193,14 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
           <div className="flex items-center gap-1 h-9 md:h-10 shrink-0">
             <button
               onClick={onShowAnalysisResult}
-              className="w-8 h-full flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+              className="w-8 h-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-all"
               title="查看分析"
             >
               <BarChart2 className="w-4 h-4" />
             </button>
             <button
               onClick={handleToggleEditWithSync}
-              className={`w-8 h-full flex items-center justify-center hover:bg-white/5 rounded-lg transition-all ${isEditingChapter ? 'text-primary bg-primary/10' : 'text-slate-500 hover:text-white'}`}
+              className={`w-8 h-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-all ${isEditingChapter ? 'text-primary bg-primary/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
               title={isEditingChapter ? "保存" : "编辑"}
             >
               {isEditingChapter ? <Save className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
@@ -210,18 +210,18 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-10 pt-10 md:pt-20 pb-40 custom-scrollbar bg-[#0a0c12]">
+      <div className="flex-1 overflow-y-auto px-4 md:px-10 pt-10 md:pt-20 pb-40 custom-scrollbar bg-white dark:bg-[#09090b] custom-bg-transition">
         <div className="max-w-4xl mx-auto">
           <div className="mb-8 md:mb-16 text-center">
-            <h1 className="text-2xl md:text-5xl font-serif font-bold text-slate-100 tracking-wide mb-4 md:mb-6 px-4">
+            <h1 className="text-2xl md:text-5xl font-serif font-bold text-slate-900 dark:text-slate-100 tracking-wide mb-4 md:mb-6 px-4">
               {activeChapter.title}
             </h1>
-            <div className="flex items-center justify-center gap-2 md:gap-4 text-slate-500/60">
-              <div className="h-[1px] w-8 md:w-16 bg-[#1e2433]"></div>
+            <div className="flex items-center justify-center gap-2 md:gap-4 text-slate-300 dark:text-slate-500/60">
+              <div className="h-[1px] w-8 md:w-16 bg-slate-200 dark:bg-[#1e2433]"></div>
               <span className="text-[9px] md:text-[11px] font-mono uppercase tracking-[0.2em] md:tracking-[0.3em]">
                 {activeChapter.content ? activeChapter.content.length : 0} Words
               </span>
-              <div className="h-[1px] w-8 md:w-16 bg-[#1e2433]"></div>
+              <div className="h-[1px] w-8 md:w-16 bg-slate-200 dark:bg-[#1e2433]"></div>
             </div>
           </div>
 
@@ -230,16 +230,16 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
               ref={textareaRef}
               value={localContent}
               onChange={handleLocalChange}
-              className="w-full h-[500px] md:h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-200/90 leading-[1.8] outline-none resize-none font-serif selection:bg-primary/30 px-2 md:px-0"
+              className="w-full h-[500px] md:h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 leading-[1.8] outline-none resize-none font-serif selection:bg-primary/30 px-2 md:px-0 placeholder-slate-400"
               placeholder="在此处输入章节正文..."
             />
           ) : (
             <article
               ref={contentScrollRef}
-              className="writing-area text-[18px] md:text-[21px] text-slate-200/90 selection:bg-primary/30 font-serif leading-[1.8] px-2 md:px-0"
+              className="writing-area text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 selection:bg-primary/30 font-serif leading-[1.8] px-2 md:px-0"
             >
               {activeChapter.content ? (
-                <div className="prose prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
+                <div className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
                   <ReactMarkdown>
                     {activeChapter.content
                       .replace(/<[^>]+>/g, '')

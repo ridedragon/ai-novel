@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { LayoutProvider } from './contexts/LayoutContext'
+import { ThemeProvider } from './contexts/ThemeContext'
 import './index.css'
 
 // 初始化内存监控 SDK (第四个参数设为 false 以隐藏默认的小悬浮窗)
@@ -23,7 +24,7 @@ setInterval(() => {
         // 关键：捕捉 DOM 节点数量，帮助分析渲染进程负担
         domNodes: document.getElementsByTagName('*').length,
         rss: (window.performance as any).memory.jsHeapSizeLimit || 0, // 使用限制作为对比
-        external: (window.performance as any).memory.totalJSHeapSize - window.performance.memory.usedJSHeapSize,
+        external: (window.performance as any).memory.totalJSHeapSize - (window.performance as any).memory.usedJSHeapSize,
         arrayBuffers: 0
       })
     }).catch(() => {}); // 忽略上报错误
@@ -33,9 +34,11 @@ setInterval(() => {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <LayoutProvider>
-        <App />
-      </LayoutProvider>
+      <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+        <LayoutProvider>
+          <App />
+        </LayoutProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   </React.StrictMode>,
 )

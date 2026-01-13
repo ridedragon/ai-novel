@@ -1,6 +1,7 @@
 import {
   ChevronDown,
   Loader2,
+  Monitor,
   Moon,
   Plus,
   RefreshCw,
@@ -10,6 +11,7 @@ import {
   X
 } from 'lucide-react'
 import React from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 
 // Helper functions for real-time preview
 const adjustColor = (hex: string, lum: number) => {
@@ -45,8 +47,6 @@ interface GlobalSettingsModalProps {
   onClose: () => void
   themeColor: string
   setThemeColor: (color: string) => void
-  themeMode: 'light' | 'dark'
-  setThemeMode: (mode: 'light' | 'dark') => void
   workflowEdgeColor: string
   setWorkflowEdgeColor: (color: string) => void
   apiKey: string
@@ -98,8 +98,6 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   onClose,
   themeColor,
   setThemeColor,
-  themeMode,
-  setThemeMode,
   workflowEdgeColor,
   setWorkflowEdgeColor,
   apiKey,
@@ -145,6 +143,7 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   contextChapterCount,
   setContextChapterCount
 }) => {
+  const { theme, setTheme } = useTheme()
   const [localThemeColor, setLocalThemeColor] = React.useState(themeColor)
   const [localWorkflowEdgeColor, setLocalWorkflowEdgeColor] = React.useState(workflowEdgeColor)
 
@@ -190,19 +189,34 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
           </button>
         </div>
         <div className="space-y-6">
+          {/* Theme Mode Selection */}
           <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-300">外观设置</label>
-              <button
-                onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gray-700/50 hover:bg-gray-700 rounded-lg text-xs font-medium text-gray-200 transition-colors border border-gray-600"
-              >
-                {themeMode === 'dark' ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5 text-yellow-400" />}
-                {themeMode === 'dark' ? '深色模式' : '浅色模式'}
-              </button>
+            <label className="text-sm font-medium text-gray-300">界面主题模式</label>
+            <div className="flex bg-gray-900 rounded-lg p-1 border border-gray-700">
+              {[
+                { value: 'light', label: '白天', icon: Sun },
+                { value: 'dark', label: '黑夜', icon: Moon },
+                { value: 'system', label: '跟随系统', icon: Monitor },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setTheme(option.value as any)}
+                  className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    theme === option.value
+                      ? 'bg-[var(--theme-color)] text-white shadow-sm'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                  }`}
+                >
+                  <option.icon className="w-3.5 h-3.5" />
+                  {option.label}
+                </button>
+              ))}
             </div>
-            
-            <div className="flex items-center gap-3 mt-2">
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-300">Theme Color</label>
+            <div className="flex items-center gap-3">
               <input
                 type="color"
                 value={localThemeColor}
