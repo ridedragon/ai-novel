@@ -182,7 +182,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
     onConfirm: () => {}
   })
 
-  const activeSet = novel.outlineSets?.find(s => s.id === activeOutlineSetId)
+  const activeSet = novel?.outlineSets?.find(s => s.id === activeOutlineSetId)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom of chat

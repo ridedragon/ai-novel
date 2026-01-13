@@ -152,7 +152,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = React.memo(({
     onConfirm: () => {}
   })
 
-  const activeSet = novel.characterSets?.find(s => s.id === activeCharacterSetId)
+  const activeSet = novel?.characterSets?.find(s => s.id === activeCharacterSetId)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom of chat

@@ -178,9 +178,9 @@ export interface SummaryConfig {
 const getStableContent = (chapter: Chapter) => {
   if (chapter.content && chapter.content.trim().length > 0) return chapter.content;
   if (chapter.versions && chapter.versions.length > 0) {
-    const original = chapter.versions.find(v => v.type === 'original');
+    const original = chapter.versions?.find(v => v.type === 'original');
     if (original && original.content) return original.content;
-    const valid = [...chapter.versions].reverse().find(v => v.content && v.content.length > 0);
+    const valid = [...(chapter.versions || [])].reverse().find(v => v.content && v.content.length > 0);
     if (valid) return valid.content;
   }
   return chapter.content || '';
@@ -216,7 +216,7 @@ export const checkAndGenerateSummary = async (
 
   if (!apiKey || !targetNovelId) return;
 
-  const currentNovel = novels.find(n => n.id === targetNovelId);
+  const currentNovel = novels?.find(n => n.id === targetNovelId);
   if (!currentNovel) return undefined;
 
   let currentChaptersSnapshot = (currentNovel.chapters || []).map(c => {
@@ -503,7 +503,7 @@ export const checkAndGenerateSummary = async (
         if (n.id !== targetNovelId) return n;
         const newSummaries = pendingSummaries.filter(c => !n.chapters.some(nc => nc.id === c.id));
         const updatedChapters = n.chapters.map(nc => {
-          const match = pendingSummaries.find(
+          const match = pendingSummaries?.find(
             ps => ps.id === nc.id || (ps.subtype === nc.subtype && ps.summaryRange === nc.summaryRange),
           );
           return match ? { ...nc, content: match.content } : nc;

@@ -97,6 +97,9 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   status?: 'pending' | 'executing' | 'completed' | 'failed';
   targetVolumeId?: string;
   targetVolumeName?: string;
+  splitChapterTitle?: string; // 到达特定章节后分卷 (Legacy)
+  nextVolumeName?: string;    // 分卷后的命名 (Legacy)
+  splitRules?: { id: string; chapterTitle: string; nextVolumeName: string; }[]; // 多次分卷规则
   
   // Workflow V2 Logic
   loopInstructions?: LoopInstruction[];
@@ -373,6 +376,7 @@ const NODE_CONFIGS: Record<NodeTypeKey, any> = {
     color: '#14b8a6', // Teal 500
     defaultLabel: '选择目标分卷',
     presetType: null,
+    splitRules: [], // 初始化空规则列表
   },
   workflowGenerator: {
     typeLabel: '智能生成工作流',
@@ -937,7 +941,7 @@ const NodePropertiesModal = ({
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2.5 col-span-2">
                   <label className="text-[10px] font-bold text-teal-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Library className="w-3 h-3" /> 选择目标分卷
+                    <Library className="w-3 h-3" /> 初始/当前目标分卷
                   </label>
                   <div className="space-y-2">
                     <select
@@ -961,11 +965,116 @@ const NodePropertiesModal = ({
                       />
                     )}
                   </div>
-                  <p className="text-[10px] text-gray-500 leading-relaxed mt-2">
-                    * 此节点之后生成的正文内容将自动保存到该分卷中，直到遇到下一个分卷节点。
+                </div>
+
+                {/* 多次分卷触发器 UI */}
+                <div className="space-y-4 col-span-2 p-5 bg-teal-500/5 border border-teal-500/20 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-teal-400 font-bold text-[10px] uppercase tracking-wider">
+                      <Repeat className="w-3.5 h-3.5" /> 自动分卷触发器 (支持多次)
+                    </div>
+                    <button
+                      onClick={() => {
+                        const currentRules = (node.data.splitRules || []) as any[];
+                        // 兼容 Legacy 数据迁移
+                        const legacyRule = (!currentRules.length && node.data.splitChapterTitle)
+                          ? [{ id: 'legacy', chapterTitle: node.data.splitChapterTitle, nextVolumeName: node.data.nextVolumeName || '新分卷' }]
+                          : [];
+                        
+                        const nextRules = [
+                          ...(currentRules.length ? currentRules : legacyRule),
+                          { id: Date.now().toString(), chapterTitle: '', nextVolumeName: '新分卷' }
+                        ];
+                        updateNodeData(node.id, {
+                          splitRules: nextRules,
+                          // 迁移后清空旧字段以避免逻辑冲突
+                          splitChapterTitle: '',
+                          nextVolumeName: ''
+                        });
+                      }}
+                      className="px-2 py-1 bg-teal-600/20 hover:bg-teal-600/30 text-teal-400 rounded-md text-[10px] font-bold border border-teal-500/30 transition-all"
+                    >
+                      <Plus className="w-3 h-3 inline mr-1" /> 添加触发点
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {(() => {
+                      const rules = (node.data.splitRules || []) as any[];
+                      // 如果规则列表为空但有旧数据，渲染旧数据项
+                      if (rules.length === 0 && node.data.splitChapterTitle) {
+                        rules.push({ id: 'legacy', chapterTitle: node.data.splitChapterTitle, nextVolumeName: node.data.nextVolumeName || '新分卷' });
+                      }
+
+                      const allOutlineTitles = new Set<string>();
+                      activeNovel.outlineSets?.forEach(set => {
+                        set.items.forEach(item => allOutlineTitles.add(item.title));
+                      });
+                      const titleOptions = Array.from(allOutlineTitles);
+
+                      return rules.map((rule, idx) => (
+                        <div key={rule.id} className="grid grid-cols-12 gap-3 items-end bg-gray-900/40 p-3 rounded-lg border border-gray-700/30 group">
+                          <div className="col-span-5 space-y-1.5">
+                            <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">触发章节</label>
+                            <select
+                              value={rule.chapterTitle}
+                              onChange={(e) => {
+                                const nextRules = [...rules];
+                                nextRules[idx] = { ...rule, chapterTitle: e.target.value };
+                                updateNodeData(node.id, { splitRules: nextRules });
+                              }}
+                              className="w-full bg-[#161922] border border-gray-700 rounded-lg px-2.5 py-2 text-xs text-gray-100 outline-none focus:border-teal-500 transition-all"
+                            >
+                              <option value="">-- 选择章节 --</option>
+                              {titleOptions.map(title => (
+                                <option key={title} value={title}>{title}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="col-span-5 space-y-1.5">
+                            <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">新分卷命名</label>
+                            <input
+                              type="text"
+                              value={rule.nextVolumeName}
+                              onChange={(e) => {
+                                const nextRules = [...rules];
+                                nextRules[idx] = { ...rule, nextVolumeName: e.target.value };
+                                updateNodeData(node.id, { splitRules: nextRules });
+                              }}
+                              placeholder="新分卷名称..."
+                              className="w-full bg-[#161922] border border-gray-700 rounded-lg px-2.5 py-2 text-xs text-gray-100 outline-none focus:border-teal-500 transition-all"
+                            />
+                          </div>
+                          <div className="col-span-2 flex justify-center pb-1">
+                            <button
+                              onClick={() => {
+                                const nextRules = rules.filter((_, i) => i !== idx);
+                                updateNodeData(node.id, { splitRules: nextRules });
+                              }}
+                              className="p-2 text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                    
+                    {(!node.data.splitRules || (node.data.splitRules as any[]).length === 0) && !node.data.splitChapterTitle && (
+                      <div className="text-center py-6 border border-dashed border-gray-700 rounded-xl">
+                        <p className="text-[10px] text-gray-600">未设置自动分卷触发器，正文将全部存入初始目标分卷。</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <p className="text-[9px] text-gray-600 leading-relaxed px-1">
+                    * 工作流运行中每当完成指定章节，将立即创建新分卷并把后续章节保存至其中。
                   </p>
                 </div>
               </div>
+              <p className="text-[10px] text-gray-500 leading-relaxed">
+                * 此节点之后生成的正文内容将自动保存到该分卷中，直到遇到下一个分卷节点。
+              </p>
             </div>
           )}
 
@@ -1550,7 +1659,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
   // 同步全局工作流状态
   useEffect(() => {
-    const unsubscribe = workflowManager.subscribe((state) => {
+    const unsubscribeState = workflowManager.subscribe((state) => {
       // 只有当本地状态与全局状态不一致且当前工作流 ID 匹配时才更新
       // 或者是刚刚打开界面（isInitialLoadRef 为 true）
       if (state.activeWorkflowId === activeWorkflowId || !activeWorkflowId || activeWorkflowId === 'default') {
@@ -1560,7 +1669,32 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         if (state.error) setError(state.error);
       }
     });
-    return () => { unsubscribe(); };
+
+    // 核心修复：订阅节点级别的细粒度更新广播
+    // 这允许后台执行的逻辑将状态变更实时推送到新挂载的 UI 实例
+    const unsubscribeNodes = workflowManager.subscribeToNodeUpdates((update) => {
+      setNodes((nds) => {
+        const nextNodes = nds.map(n => {
+          if (n.id === update.nodeId) {
+            // Smart Merge: 仅更新变更的字段，保留原有的位置和其他属性
+            return {
+              ...n,
+              data: { ...n.data, ...update.data }
+            };
+          }
+          return n;
+        });
+        
+        // 同时更新 Ref 以保持同步，防止闭包陷阱
+        nodesRef.current = nextNodes;
+        return nextNodes;
+      });
+    });
+
+    return () => {
+      unsubscribeState();
+      unsubscribeNodes();
+    };
   }, [activeWorkflowId]);
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
@@ -2219,13 +2353,15 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
            return validEdges.some(e => e.target === node.id && visited.has(e.source));
         });
 
-        // 策略 B：如果找不到入口（比如完全独立的闭环），或者有多个入口
-        // 则退化为按屏幕位置排序 (Top-Left 优先)，这符合用户的视觉直觉
+        // 策略 B：如果找不到显式入口（比如完全独立的闭环），或者有多个入口
+        // 则优先寻找 loopNode 类型的节点作为破局点，因为它们通常是循环的逻辑起点
+        // 如果没有循环节点，则退化为按屏幕位置排序 (Top-Left 优先)
         if (candidates.length === 0) {
-          candidates = remainingNodes;
+          const loopNodes = remainingNodes.filter(n => n.data.typeKey === 'loopNode');
+          candidates = loopNodes.length > 0 ? loopNodes : remainingNodes;
         }
 
-        // 按位置排序候选者
+        // 按位置排序候选者 (Top-Left 优先)
         candidates.sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
         
         // 强制选取第一个节点破局
@@ -2321,7 +2457,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     // 2. 更新 React 状态 (如果组件仍挂载)
     setNodes(latestNodes);
 
-    // 3. 显式持久化到存储
+    // 3. 广播节点更新到其他可能的监听者 (解决 UI 重启后的状态同步)
+    workflowManager.broadcastNodeUpdate(nodeId, updates);
+
+    // 4. 显式持久化到存储
     const currentWfs = workflowsRef.current.map(w => {
       if (w.id === activeWorkflowId) {
         return {
@@ -2376,11 +2515,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         // 使用 Map 优化搜索效率，将 O(N^2) 复杂度降低到 O(N)，解决章节/分卷多时的卡顿
         const currentActiveNovel = activeNovelRef.current;
         const volumeStateMap = new Map();
-        currentActiveNovel?.volumes.forEach(v => volumeStateMap.set(v.id, v.collapsed));
+        (currentActiveNovel?.volumes || []).forEach(v => volumeStateMap.set(v.id, v.collapsed));
 
         const mergedNovel: Novel = {
           ...newNovel,
-          volumes: newNovel.volumes.map(v => ({
+          volumes: (newNovel.volumes || []).map(v => ({
             ...v,
             collapsed: volumeStateMap.has(v.id) ? volumeStateMap.get(v.id) : v.collapsed
           }))
@@ -2410,50 +2549,49 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         return;
       }
       
-      // 重置后续节点的执行状态
-      if (startIndex === 0) {
-        terminal.warn(`[DEBUG] 工作流全量重置触发，清空历史执行数据`);
-        
-        // 核心修复：全量运行时，不仅清空 status，还要清空 targetVolumeId 等执行期产生的 ID 关联
-        // 否则 Data Healing 会根据这些残留 ID 找回已删除的旧分卷
-        const resetNodeData = (n: WorkflowNode): WorkflowNode => {
-          const updates: Partial<WorkflowNodeData> = {
-            status: 'pending',
-            outputEntries: []
-          };
-          
-          // 重置正文生成节点的显示名称
-          if (n.data.typeKey === 'chapter') {
-            updates.label = NODE_CONFIGS.chapter.defaultLabel;
-          }
-
-          // 核心修复：全量运行时重置循环计数器，防止继承上次运行的索引导致循环次数错误
-          if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {
-            updates.loopConfig = {
-              ...n.data.loopConfig,
-              currentIndex: 0
-            };
-          }
-
-          // 不再重置 targetVolumeId，保留用户手动配置或上次运行自动匹配的结果
-          // 仅在状态彻底损坏时通过 Data Healing 修复
-          
-          return { ...n, data: { ...n.data, ...updates } };
+      // 核心修复：重置执行路径上节点的执行状态 (不仅限于 startIndex === 0)
+      // 只要是即将执行的节点（i >= startIndex），都应该确保其状态是干净的
+      // 这样可以防止“从中间节点开始运行”时，循环计数器继承了上次运行的旧值导致不循环
+      const resetNodeData = (n: WorkflowNode): WorkflowNode => {
+        const updates: Partial<WorkflowNodeData> = {
+          status: 'pending',
+          outputEntries: []
         };
-
-        setNodes(nds => {
-            const nextNodes = nds.map(resetNodeData);
-            terminal.log(`[DEBUG] 重置后首个节点状态: ${nextNodes[0]?.data.status}`);
-            nodesRef.current = nextNodes; // 同步 Ref
-            return nextNodes;
-        });
-        setEdges(eds => eds.map(e => ({ ...e, animated: false })));
         
-        // 同步更新本地排序后的副本，确保 loop 使用的是干净的数据
-        sortedNodes = sortedNodes.map(resetNodeData);
+        if (n.data.typeKey === 'chapter') {
+          updates.label = NODE_CONFIGS.chapter.defaultLabel;
+        }
 
-        // 重新开始时仅清理节点内部产出状态，不再干涉全局资料集和分卷章节
-      }
+        if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {
+          updates.loopConfig = {
+            ...n.data.loopConfig,
+            currentIndex: 0
+          };
+        }
+        
+        return { ...n, data: { ...n.data, ...updates } };
+      };
+
+      setNodes(nds => {
+          const nextNodes = nds.map(n => {
+            const nodeInSorted = sortedNodes.findIndex(sn => sn.id === n.id);
+            // 只有当节点在当前起始位置之后时才重置，保留前序节点的完成状态和产出
+            if (nodeInSorted >= startIndex) {
+              return resetNodeData(n);
+            }
+            return n;
+          });
+          nodesRef.current = nextNodes; // 同步 Ref
+          return nextNodes;
+      });
+      setEdges(eds => eds.map(e => {
+        const targetInSorted = sortedNodes.findIndex(sn => sn.id === e.target);
+        if (targetInSorted >= startIndex) return { ...e, animated: false };
+        return e;
+      }));
+      
+      // 同步更新本地排序后的副本快照，确保执行循环中使用的是最新的重置后数据
+      sortedNodes = sortedNodes.map((sn, idx) => idx >= startIndex ? resetNodeData(sn) : sn);
 
       let accumContext = ''; // 累积全局和常驻上下文
       let lastNodeOutput = ''; // 累积的前序节点产出
@@ -2546,13 +2684,29 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
              await syncNodeStatus(node.id, { targetVolumeId, targetVolumeName: '', status: 'completed' }, i);
           } else if (!targetVolumeId && pendingFolders.length > 0) {
              // Auto-match logic if default
-             const matchedVol = localNovel.volumes.find(v => v.title === pendingFolders[0]);
+             const matchedVol = (localNovel.volumes || []).find(v => v.title === pendingFolders[0]);
              if (matchedVol) targetVolumeId = matchedVol.id;
           }
 
           if (targetVolumeId) {
              workflowManager.setActiveVolumeAnchor(targetVolumeId);
              terminal.log(`[SaveToVolume] Active Volume Anchor set to ${targetVolumeId}`);
+          }
+
+          // 设置分卷触发器 (多次 + Legacy)
+          const rules = (node.data.splitRules as any[]) || [];
+          if (rules.length > 0) {
+            workflowManager.setPendingSplits(rules);
+            terminal.log(`[SaveToVolume] Multiple Split Triggers set: ${rules.length} rules`);
+          } else {
+            // 兼容 Legacy
+            if (node.data.splitChapterTitle) {
+              workflowManager.setPendingSplit(node.data.splitChapterTitle as string, node.data.nextVolumeName as string);
+              terminal.log(`[SaveToVolume] Legacy Split Trigger set: ${node.data.splitChapterTitle}`);
+            } else {
+              workflowManager.setPendingSplit(undefined, undefined);
+              workflowManager.setPendingSplits([]);
+            }
           }
 
           await syncNodeStatus(node.id, { status: 'completed' }, i);
@@ -2567,10 +2721,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           const loopConfig = node.data.loopConfig || { enabled: true, count: 1, currentIndex: 0 };
           const currentLoopIndex = (loopConfig.currentIndex || 0) + 1;
           
-          // 更新全局 loop_index 变量
-          workflowManager.setContextVar('loop_index', currentLoopIndex);
-          
-          terminal.log(`[LoopNode] Executing loop ${currentLoopIndex} / ${loopConfig.count}`);
+          // 更新进度展示，但不立即修改全局变量，由回跳逻辑控制递增
+          terminal.log(`[LoopNode] Checking loop ${currentLoopIndex} / ${loopConfig.count}`);
 
           // 更新状态为执行中
           await syncNodeStatus(node.id, {
@@ -2641,7 +2793,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                    // 2. 将执行指针 i 设为 targetIndex - 1 (因为循环末尾会 i++)
                    i = targetIndex - 1;
                    
-                   // 3. 更新 LoopNode 自身的计数状态
+                   // 3. 更新全局 loop_index 变量为下一轮的值
+                   workflowManager.setContextVar('loop_index', currentLoopIndex + 1);
+
+                   // 4. 更新 LoopNode 自身的计数状态
                    await syncNodeStatus(node.id, {
                       status: 'pending',
                       loopConfig: { ...loopConfig, currentIndex: currentLoopIndex }
@@ -2653,7 +2808,26 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           } else {
              // 循环结束
              terminal.log(`[LoopNode] Loop completed.`);
-             await syncNodeStatus(node.id, { status: 'completed' }, i);
+             // 核心修复：循环结束时显式重置 currentIndex 为 0，防止状态残留
+             await syncNodeStatus(node.id, {
+                status: 'completed',
+                loopConfig: { ...loopConfig, currentIndex: 0 }
+             }, i);
+
+             // 核心修复：如果循环执行器是在循环体之前的（Head模式），执行结束时需要跳过整个循环体
+             // 寻找物理连线中连回此节点的“最远”节点（Tail）
+             const inEdges = edges.filter(e => e.target === node.id);
+             let maxTailIndex = i;
+             inEdges.forEach(e => {
+                const tailIdx = sortedNodes.findIndex(sn => sn.id === e.source);
+                if (tailIdx > maxTailIndex) maxTailIndex = tailIdx;
+             });
+             
+             if (maxTailIndex > i) {
+                terminal.log(`[LoopNode] Skipping loop body, jumping past index ${maxTailIndex}`);
+                i = maxTailIndex;
+                // 这样下一次 for 循环 i++ 后，将执行循环体之后的节点
+             }
           }
           
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
@@ -2693,8 +2867,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         const loopInstructions = node.data.loopInstructions as LoopInstruction[] || [];
         const specificInstruction = loopInstructions.find(inst => inst.index === currentLoopIndex)?.content || '';
         
+        // 核心修复：循环特定指令应当只针对当前节点生效，不应污染全局累积上下文 (accumContext)
+        let nodeLoopContext = '';
         if (specificInstruction) {
-           accumContext += `\n【第 ${currentLoopIndex} 轮循环特定指令】：\n${specificInstruction}\n`;
+           nodeLoopContext = `\n【第 ${currentLoopIndex} 轮循环特定指令】：\n${specificInstruction}\n`;
         }
 
         // 处理创建文件夹节点
@@ -3048,7 +3224,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         // 3. 构建消息
         // 去重逻辑：如果上个节点的输出已经包含在参考资料中，则不再重复追加 lastNodeOutput
         const isDuplicate = lastNodeOutput && refContext.includes(lastNodeOutput.substring(0, 100)); // 取前100字符判断
-        const finalContext = `${refContext}${accumContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
+        // 核心修复：将 nodeLoopContext (当前循环指令) 拼接到最终上下文中，而不是 accumContext
+        const finalContext = `${refContext}${accumContext}${nodeLoopContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
         
         // 辅助函数：将 string 内容转换为 OpenAI 多模态 content 格式
         const formatContentWithAttachments = (text: string) => {
@@ -3198,11 +3375,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             topK: node.data.overrideAiConfig && node.data.topK !== undefined ? node.data.topK : ((preset as any)?.topK ?? globalConfig.topK),
             stream: (preset as any)?.stream ?? globalConfig.stream,
             maxRetries: globalConfig.maxRetries,
-            systemPrompt: node.data.overrideAiConfig
+            systemPrompt: (node.data.overrideAiConfig
               ? (node.data.promptItems && (node.data.promptItems as any[]).length > 0
                   ? (node.data.promptItems as any[]).filter(p => p.enabled !== false && p.role === 'system').map(p => p.content).join('\n\n')
                   : (node.data.systemPrompt as string || localNovel.systemPrompt || '你是一个专业的小说家。'))
-              : (localNovel.systemPrompt || '你是一个专业的小说家。'),
+              : (localNovel.systemPrompt || '你是一个专业的小说家。')) + nodeLoopContext,
             globalCreationPrompt: globalConfig.globalCreationPrompt,
             longTextMode: globalConfig.longTextMode,
             autoOptimize: globalConfig.autoOptimize,
@@ -3235,7 +3412,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           for (let k = 0; k < items.length; k++) {
             const item = items[k];
             // 核心修复：章节查重必须限制在目标分卷内，支持在不同分卷生成同一套大纲的内容
-            const existingChapter = localNovel.chapters.find(c =>
+            const existingChapter = localNovel.chapters?.find(c =>
               c.title === item.title &&
               (!finalVolumeId || c.volumeId === finalVolumeId)
             );
@@ -3289,6 +3466,41 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               if (updatedNovel) {
                 localNovel = updatedNovel;
               }
+
+              // --- 自动分卷逻辑检测 (支持多次) ---
+              const currentChapter = localNovel.chapters.find(c => c.id === chapterId);
+              if (currentChapter) {
+                const trigger = workflowManager.checkTriggerSplit(currentChapter.title);
+                
+                if (trigger) {
+                  terminal.log(`[Workflow] Triggering automatic volume split at "${trigger.chapterTitle}"`);
+                  const nextVolName = trigger.nextVolumeName || '新分卷';
+
+                  // 1. 创建新分卷
+                  const newVolume = {
+                    id: `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                    title: nextVolName,
+                    collapsed: false
+                  };
+
+                  const splitNovel = {
+                    ...localNovel,
+                    volumes: [...(localNovel.volumes || []), newVolume]
+                  };
+
+                  await updateLocalAndGlobal(splitNovel);
+
+                  // 3. 设置为新的 Active Anchor，并标记该触发规则已处理
+                  workflowManager.setActiveVolumeAnchor(newVolume.id);
+                  workflowManager.markSplitProcessed(trigger.chapterTitle);
+
+                  terminal.log(`[Workflow] Automatic split complete. New volume: ${nextVolName} (${newVolume.id})`);
+                  
+                  // 4. 更新 finalVolumeId 以便后续章节使用新分卷
+                  finalVolumeId = newVolume.id;
+                }
+              }
+
               if (globalConfig.onChapterComplete) {
                 const result = await (globalConfig.onChapterComplete as any)(chapterId, content, updatedNovel);
                 if (result && typeof result === 'object' && (result as Novel).chapters) {
@@ -3394,6 +3606,21 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                messages.push({ role: 'user', content: `上下文信息：\n${finalContext}` });
             }
           }
+        }
+
+        // debug: 在 F12 打印发送给 AI 的内容 (针对大纲、世界观、粗纲、角色集等)
+        if (['outline', 'worldview', 'plotOutline', 'characters', 'inspiration', 'aiChat'].includes(node.data.typeKey as string)) {
+          console.groupCollapsed(`[Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}`);
+          console.log('Messages:', messages);
+          console.log('Config:', {
+            model: finalModel,
+            temperature: finalTemperature,
+            topP: finalTopP,
+            topK: finalTopK,
+            maxTokens: finalMaxTokens
+          });
+          console.log('Constructed Context:', finalContext);
+          console.groupEnd();
         }
 
         const openai = new OpenAI({
@@ -3565,7 +3792,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
         // 恢复节点原本的标签（如果被重试修改过）
         if (retryCount > 0) {
-          updateNodeData(node.id, { label: node.data.label });
+          await syncNodeStatus(node.id, { label: node.data.label }, i);
         }
 
         const newEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({
@@ -3579,7 +3806,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
            workflowManager.processVariableBindings(node.data.variableBinding, result);
         }
 
-        updateNodeData(node.id, { outputEntries: [...newEntries, ...(node.data.outputEntries || [])] });
+        // 核心修复：使用 syncNodeStatus 替代 updateNodeData，确保 Ref 立即更新且数据被持久化
+        // 否则后续的 status: 'completed' 更新会读取到陈旧的 Ref (不包含 outputEntries)，导致产物丢失
+        await syncNodeStatus(node.id, { outputEntries: [...newEntries, ...(node.data.outputEntries || [])] }, i);
 
         // 7. 处理生成内容持久化存储
         let updatedNovelState = { ...localNovel };
@@ -3709,6 +3938,29 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
         // 停止入线动画
         setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
+
+        // 核心修复：自动回跳检测
+        // 如果当前节点有输出连线指向一个“循环执行器”，且该循环执行器是在当前位置之前的（或就是当前节点）
+        // 则必须强制跳转回循环执行器，由它来判定是继续下一轮还是彻底结束
+        const currentOutEdges = edges.filter(e => e.source === node.id);
+        const loopBackEdge = currentOutEdges.find(e => {
+            const targetNode = nodesRef.current.find(n => n.id === e.target);
+            return targetNode?.data.typeKey === 'loopNode';
+        });
+
+        if (loopBackEdge) {
+            const targetIndex = sortedNodes.findIndex(n => n.id === loopBackEdge.target);
+            if (targetIndex !== -1 && targetIndex <= i) {
+                terminal.log(`[Loop] Detected back-link from ${node.data.label} to LoopNode, jumping back...`);
+                
+                // 物理回跳时也要增加循环计数（针对没有 loopNode 但有物理环路的情况）
+                const currentLoopIdx = workflowManager.getContextVar('loop_index') || 1;
+                workflowManager.setContextVar('loop_index', currentLoopIdx + 1);
+
+                i = targetIndex - 1; // 减 1 是因为 for 循环末尾有 i++
+                continue;
+            }
+        }
       }
       
       if (!stopRequestedRef.current) {
@@ -3864,11 +4116,32 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       <div className="bg-gray-900 w-full h-full md:w-[98%] md:h-[95vh] md:rounded-xl shadow-2xl border-none md:border border-gray-700 flex flex-col overflow-hidden relative">
         {/* 执行中状态提示 */}
         {isRunning && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[130] bg-indigo-600/90 border border-indigo-400 px-4 py-2 rounded-full flex items-center gap-3 shadow-2xl animate-in zoom-in-95 duration-300 backdrop-blur-md">
-            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-            <span className="text-xs font-bold text-white tracking-wide">
-              正在执行: {currentNodeIndex === -1 ? '准备中...' : (getOrderedNodes()[currentNodeIndex]?.data.typeLabel || '...')}
-            </span>
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[130] bg-indigo-600/90 border border-indigo-400 pl-4 pr-2 py-2 rounded-full flex items-center gap-3 shadow-2xl animate-in zoom-in-95 duration-300 backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+              <span className="text-xs font-bold text-white tracking-wide">
+                正在执行: {currentNodeIndex === -1 ? '准备中...' : (getOrderedNodes()[currentNodeIndex]?.data.typeLabel || '...')}
+              </span>
+            </div>
+            <div className="h-4 w-px bg-indigo-400/50 mx-1" />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm('是否强制停止当前任务？\n如果任务长时间卡在“准备中”，请点击确定。')) {
+                  stopWorkflow();
+                  // 强制兜底重置状态，防止 stopWorkflow 因异常未完全执行
+                  setTimeout(() => {
+                    setIsRunning(false);
+                    workflowManager.stop();
+                    keepAliveManager.disable();
+                  }, 200);
+                }
+              }}
+              className="p-1 hover:bg-white/20 rounded-full text-indigo-100 hover:text-white transition-colors"
+              title="强制停止"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
         {/* 顶部报错 UI */}
@@ -4052,6 +4325,15 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={resetWorkflowStatus}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-sm font-medium transition-all border border-gray-600 active:scale-95 mr-1"
+              title="重置执行进度和节点状态"
+            >
+              <Repeat className="w-4 h-4" />
+              重置工作流
+            </button>
+
             {isRunning ? (
               <button
                 onClick={stopWorkflow}
@@ -4082,12 +4364,6 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                     <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
                   ))}
                 </select>
-                <button
-                  onClick={resetWorkflowStatus}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-sm font-medium transition-all"
-                >
-                  重置状态
-                </button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
@@ -4114,7 +4390,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 </button>
               </div>
             )}
-            <button 
+            <button
               onClick={handleSaveWorkflow}
               className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-sm font-medium transition-colors border border-gray-600 active:scale-95"
             >

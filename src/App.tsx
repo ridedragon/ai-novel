@@ -502,7 +502,7 @@ const buildReferenceContext = (
 const ensureChapterVersions = (chapter: Chapter): Chapter => {
   // 如果已经有版本历史，只需检查 activeVersionId 的有效性
   if (chapter.versions && chapter.versions.length > 0) {
-    const activeVersion = chapter.versions.find(v => v.id === chapter.activeVersionId);
+    const activeVersion = chapter.versions?.find(v => v.id === chapter.activeVersionId);
     if (!activeVersion) {
       return {
         ...chapter,
@@ -1677,8 +1677,8 @@ function App() {
     // Load Chapter-specific Settings
     if (activeChapterId) {
         const currentNovel = novels.find(n => n.id === activeNovelId)
-        const chapter = currentNovel?.chapters.find(c => c.id === activeChapterId)
-        
+        const chapter = currentNovel?.chapters?.find(c => c.id === activeChapterId)
+
         if (chapter) {
             // 自动加载版本历史：解决冷热分离后，重新加载页面导致版本切换按钮消失的问题
             // 同时确保点击章节时显示的是最新版本（优化版优先）
@@ -2322,10 +2322,10 @@ function App() {
           
           // 核心修复：执行物理清理与总结级联清理
           // 1. 识别被删章节是否带动了某个总结变成孤儿
-          const storyChapters = novel.chapters.filter(c => !c.subtype || c.subtype === 'story');
+          const storyChapters = (novel.chapters || []).filter(c => !c.subtype || c.subtype === 'story');
           const cascadeIds = new Set<number>([chapterId]);
-          
-          novel.chapters.forEach(c => {
+
+          (novel.chapters || []).forEach(c => {
              if (c.subtype === 'small_summary' || c.subtype === 'big_summary') {
                 const range = c.summaryRange?.split('-').map(Number);
                 if (range && range.length === 2) {
@@ -2347,7 +2347,7 @@ function App() {
              storage.deleteChapterVersions(id).catch(() => {});
           });
 
-          const newChapters = novel.chapters.filter(c => !cascadeIds.has(c.id))
+          const newChapters = (novel.chapters || []).filter(c => !cascadeIds.has(c.id))
           setChapters(newChapters)
           if (activeChapterId === chapterId) {
               setActiveChapterId(newChapters[0]?.id || null)
@@ -2359,7 +2359,7 @@ function App() {
 
   const handleRenameChapter = React.useCallback((chapterId: number) => {
       const novel = novelsRef.current.find(n => n.id === activeNovelIdRef.current)
-      const chapter = novel?.chapters.find(c => c.id === chapterId)
+      const chapter = novel?.chapters?.find(c => c.id === chapterId)
       if (!chapter) return
       
       setDialog({
@@ -2379,7 +2379,7 @@ function App() {
 
   const handleMoveChapter = React.useCallback((chapterId: number) => {
     const novel = novelsRef.current.find(n => n.id === activeNovelIdRef.current)
-    const chapter = novel?.chapters.find(c => c.id === chapterId)
+    const chapter = novel?.chapters?.find(c => c.id === chapterId)
     if (!chapter) return
 
     const options = [
@@ -2431,7 +2431,7 @@ function App() {
     // Volumes
     novel.volumes.forEach(vol => {
       content += `【${vol.title}】\n\n`
-      const volChapters = novel.chapters.filter(c => c.volumeId === vol.id && (!c.subtype || c.subtype === 'story'))
+      const volChapters = (novel.chapters || []).filter(c => c.volumeId === vol.id && (!c.subtype || c.subtype === 'story'))
       volChapters.forEach(chap => {
         content += `${chap.title}\n${processContent(chap.content)}\n\n`
       })
@@ -2439,7 +2439,7 @@ function App() {
     })
 
     // Uncategorized
-    const uncategorizedChapters = novel.chapters.filter(c => !c.volumeId && (!c.subtype || c.subtype === 'story'))
+    const uncategorizedChapters = (novel.chapters || []).filter(c => !c.volumeId && (!c.subtype || c.subtype === 'story'))
     if (uncategorizedChapters.length > 0) {
       content += `【未分卷】\n\n`
       uncategorizedChapters.forEach(chap => {
@@ -3578,8 +3578,8 @@ function App() {
 
     // 如果找不到指定的集，尝试复用当前活跃的集或第一个可用的集，避免创建多余的“默认”集
     if (!targetSet && activeNovel?.outlineSets && activeNovel.outlineSets.length > 0) {
-        targetSet = activeNovel.outlineSets.find(s => s.id === activeOutlineSetId) || activeNovel.outlineSets[0];
-        targetSetId = targetSet.id;
+        targetSet = activeNovel.outlineSets?.find(s => s.id === activeOutlineSetId) || activeNovel.outlineSets[0];
+        targetSetId = targetSet?.id || '';
         setActiveOutlineSetId(targetSetId);
     }
 
@@ -3915,8 +3915,8 @@ function App() {
     let targetSet = activeNovel?.characterSets?.find(s => s.id === targetSetId);
 
     if (!targetSet && activeNovel?.characterSets && activeNovel.characterSets.length > 0) {
-        targetSet = activeNovel.characterSets.find(s => s.id === activeCharacterSetId) || activeNovel.characterSets[0];
-        targetSetId = targetSet.id;
+        targetSet = activeNovel.characterSets?.find(s => s.id === activeCharacterSetId) || activeNovel.characterSets[0];
+        targetSetId = targetSet?.id || '';
         handleSetActiveCharacterSetId(targetSetId);
     }
 
@@ -4242,8 +4242,8 @@ function App() {
     let targetSet = activeNovel?.inspirationSets?.find(s => s.id === targetSetId);
 
     if (!targetSet && activeNovel?.inspirationSets && activeNovel.inspirationSets.length > 0) {
-        targetSet = activeNovel.inspirationSets.find(s => s.id === activeInspirationSetId) || activeNovel.inspirationSets[0];
-        targetSetId = targetSet.id;
+        targetSet = activeNovel.inspirationSets?.find(s => s.id === activeInspirationSetId) || activeNovel.inspirationSets[0];
+        targetSetId = targetSet?.id || '';
         setActiveInspirationSetId(targetSetId);
     }
 
@@ -4477,8 +4477,8 @@ function App() {
     let targetSet = activeNovel?.worldviewSets?.find(s => s.id === targetSetId);
 
     if (!targetSet && activeNovel?.worldviewSets && activeNovel.worldviewSets.length > 0) {
-        targetSet = activeNovel.worldviewSets.find(s => s.id === activeWorldviewSetId) || activeNovel.worldviewSets[0];
-        targetSetId = targetSet.id;
+        targetSet = activeNovel.worldviewSets?.find(s => s.id === activeWorldviewSetId) || activeNovel.worldviewSets[0];
+        targetSetId = targetSet?.id || '';
         setActiveWorldviewSetId(targetSetId);
     }
 
@@ -4747,8 +4747,8 @@ function App() {
     let targetSet = activeNovel?.plotOutlineSets?.find(s => s.id === targetSetId);
 
     if (!targetSet && activeNovel?.plotOutlineSets && activeNovel.plotOutlineSets.length > 0) {
-        targetSet = activeNovel.plotOutlineSets.find(s => s.id === activePlotOutlineSetId) || activeNovel.plotOutlineSets[0];
-        targetSetId = targetSet.id;
+        targetSet = activeNovel.plotOutlineSets?.find(s => s.id === activePlotOutlineSetId) || activeNovel.plotOutlineSets[0];
+        targetSetId = targetSet?.id || '';
         setActivePlotOutlineSetId(targetSetId);
     }
 
@@ -5117,8 +5117,8 @@ function App() {
     // 优先从 novelsRef 获取最新内容，防止由于异步状态更新导致的闭包过时（Stale Closure）
     // 这样可以确保即使是在自动创作后紧接着进行的润色，也能获取到刚刚生成的正文
     const currentNovel = novelsRef.current.find(n => n.id === activeNovelId)
-    const latestChapter = currentNovel?.chapters.find(c => c.id === idToUse)
-    
+    const latestChapter = currentNovel?.chapters?.find(c => c.id === idToUse)
+
     // 【BUG 风险点标注：原文丢失】
     // 谨慎修改：此处捕捉的是点击“润色”瞬间的正文内容。
     // 如果用户在此之前进行了手动编辑，而 buildVersions 逻辑认为“原文”已锁定，
@@ -5517,8 +5517,8 @@ function App() {
         if (currIdx >= outline.length) break
         
         const item = outline[currIdx]
-        const existingChapter = currentNovel?.chapters.find(c => c.title === item.title)
-        
+        const existingChapter = currentNovel?.chapters?.find(c => c.title === item.title)
+
         // If we hit an existing chapter
         if (existingChapter && existingChapter.content && existingChapter.content.trim().length > 0) {
             if (batchItems.length === 0) {
@@ -5541,7 +5541,7 @@ function App() {
 
     // Two-pass to ensure stable IDs locally
     const preparedBatch = batchItems.map(({ item }) => {
-        const existing = currentNovel?.chapters.find(c => c.title === item.title)
+        const existing = currentNovel?.chapters?.find(c => c.title === item.title)
         return {
             ...item,
             id: existing ? existing.id : Date.now() + Math.floor(Math.random() * 100000)
@@ -5608,7 +5608,7 @@ function App() {
         let tempNovel = latestNovelState
         if (tempNovel) {
              // Ensure placeholders exist in this temp copy
-             const missing = preparedBatch.filter(b => !tempNovel?.chapters.some(c => c.id === b.id))
+             const missing = preparedBatch.filter(b => !(tempNovel?.chapters || []).some(c => c.id === b.id))
              if (missing.length > 0) {
                  tempNovel = { 
                      ...tempNovel, 
@@ -5617,7 +5617,7 @@ function App() {
              }
         }
 
-        const firstChapterInBatch = tempNovel?.chapters.find(c => c.id === preparedBatch[0].id)
+        const firstChapterInBatch = tempNovel?.chapters?.find(c => c.id === preparedBatch[0].id)
         if (!firstChapterInBatch) throw new Error("Chapter placeholder missing")
 
         const contextMessages = getChapterContextMessages(tempNovel, firstChapterInBatch)
@@ -5709,7 +5709,7 @@ function App() {
                         if (n.id === novelId) {
                             return {
                                 ...n,
-                                chapters: n.chapters.map(c => {
+                                chapters: (n.chapters || []).map(c => {
                                     if (c.id === preparedBatch[0].id) {
                                         let chapterWithHistory = c.versions && c.versions.length > 0 ? c : ensureChapterVersions(c);
                                         const aiVersionId = `v_autowrite_${preparedBatch[0].id}`;
@@ -5831,7 +5831,7 @@ function App() {
                 if (n.id === novelId) {
                     return {
                         ...n,
-                        chapters: n.chapters.map(c => {
+                        chapters: (n.chapters || []).map(c => {
                             const batchIdx = preparedBatch.findIndex(b => b.id === c.id)
                             if (batchIdx !== -1) {
                                 const newChapterContent = finalContents[batchIdx] || '';
@@ -5936,7 +5936,7 @@ function App() {
      
      // 兜底逻辑：如果没有选中 ID，尝试自动选择第一个有内容的大纲集
      if (!effectiveId && activeNovel?.outlineSets) {
-        const firstValidSet = activeNovel.outlineSets.find(s => s.items && s.items.length > 0);
+        const firstValidSet = activeNovel.outlineSets?.find(s => s.items && s.items.length > 0);
         if (firstValidSet) {
             effectiveId = firstValidSet.id;
             handleSetActiveOutlineSetId(effectiveId); // 同步到 UI 状态
@@ -6005,8 +6005,8 @@ function App() {
     // Find the first outline item that does not have a corresponding chapter
     for (let i = 0; i < currentSet.items.length; i++) {
         const item = currentSet.items[i]
-        const existingChapter = activeNovel.chapters.find(c => c.title === item.title)
-        
+        const existingChapter = (activeNovel.chapters || []).find(c => c.title === item.title)
+
         if (!existingChapter || !existingChapter.content || existingChapter.content.trim().length === 0) {
             startIndex = i
             break

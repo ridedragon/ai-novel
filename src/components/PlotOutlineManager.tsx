@@ -223,7 +223,7 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = React.memo(
     onConfirm: () => {}
   })
 
-  const activeSet = novel.plotOutlineSets?.find(s => s.id === activePlotOutlineSetId)
+  const activeSet = novel?.plotOutlineSets?.find(s => s.id === activePlotOutlineSetId)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {

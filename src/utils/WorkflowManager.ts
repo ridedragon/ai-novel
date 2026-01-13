@@ -1,5 +1,5 @@
 import terminal from 'virtual:terminal';
-import { WorkflowGlobalContext, VariableBinding } from '../types';
+import { VariableBinding, WorkflowGlobalContext } from '../types';
 
 export type WorkflowStatus = 'idle' | 'running' | 'paused' | 'failed';
 
@@ -12,7 +12,13 @@ interface WorkflowState {
   globalContext: WorkflowGlobalContext;
 }
 
+export interface NodeStatusUpdate {
+  nodeId: string;
+  data: Partial<any>; // 使用 any 以兼容 WorkflowNodeData，避免循环引用
+}
+
 type StateListener = (state: WorkflowState) => void;
+type NodeUpdateListener = (update: NodeStatusUpdate) => void;
 
 /**
  * WorkflowManager 单例
@@ -29,14 +35,25 @@ class WorkflowManager {
     error: null,
     globalContext: {
       variables: {},
-      executionStack: []
-    }
+      executionStack: [],
+    },
   };
 
   private listeners: Set<StateListener> = new Set();
+  private nodeUpdateListeners: Set<NodeUpdateListener> = new Set();
 
   constructor() {
     // 构造函数保持干净，异步状态恢复将由 UI 组件触发
+  }
+
+  public subscribeToNodeUpdates(listener: NodeUpdateListener) {
+    this.nodeUpdateListeners.add(listener);
+    return () => this.nodeUpdateListeners.delete(listener);
+  }
+
+  public broadcastNodeUpdate(nodeId: string, data: Partial<any>) {
+    const update = { nodeId, data };
+    this.nodeUpdateListeners.forEach(listener => listener(update));
   }
 
   public getState(): WorkflowState {
@@ -58,15 +75,21 @@ class WorkflowManager {
   public start(workflowId: string, startIndex: number = 0) {
     terminal.log(`[WorkflowManager] Starting workflow: ${workflowId} at index ${startIndex}`);
     // 如果是从头开始，重置上下文
-    const newContext: WorkflowGlobalContext = startIndex === 0 ? {
-      variables: {
-        // 初始化系统变量
-        loop_index: 0,
-        batch_range: '',
-      },
-      executionStack: [],
-      activeVolumeAnchor: undefined
-    } : this.state.globalContext;
+    const newContext: WorkflowGlobalContext =
+      startIndex === 0
+        ? {
+            variables: {
+              // 初始化系统变量
+              loop_index: 1,
+              batch_range: '',
+            },
+            executionStack: [],
+            activeVolumeAnchor: undefined,
+            pendingSplitChapter: undefined,
+            pendingNextVolumeName: undefined,
+            pendingSplits: [],
+          }
+        : this.state.globalContext;
 
     this.state = {
       ...this.state,
@@ -75,7 +98,7 @@ class WorkflowManager {
       currentNodeIndex: startIndex,
       activeWorkflowId: workflowId,
       error: null,
-      globalContext: newContext
+      globalContext: newContext,
     };
     this.notify();
   }
@@ -94,7 +117,7 @@ class WorkflowManager {
     // 深度合并变量
     const newVariables = {
       ...this.state.globalContext.variables,
-      ...(updates.variables || {})
+      ...(updates.variables || {}),
     };
 
     this.state = {
@@ -102,8 +125,8 @@ class WorkflowManager {
       globalContext: {
         ...this.state.globalContext,
         ...updates,
-        variables: newVariables
-      }
+        variables: newVariables,
+      },
     };
     this.notify();
   }
@@ -114,7 +137,7 @@ class WorkflowManager {
 
   public setContextVar(key: string, value: any) {
     this.updateContext({
-      variables: { [key]: value }
+      variables: { [key]: value },
     });
   }
 
@@ -126,7 +149,7 @@ class WorkflowManager {
     if (!text) return text;
     return text.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
       const varName = key.trim();
-      
+
       // 特殊系统变量处理
       if (varName === 'active_volume_anchor') {
         return this.state.globalContext.activeVolumeAnchor || match;
@@ -153,7 +176,7 @@ class WorkflowManager {
     if (!bindings || bindings.length === 0) return;
 
     const updates: Record<string, any> = {};
-    
+
     bindings.forEach(binding => {
       if (!binding.targetVar) return;
 
@@ -184,7 +207,7 @@ class WorkflowManager {
   // 批量设置变量的辅助方法
   private setContextVarVars(vars: Record<string, any>) {
     this.updateContext({
-      variables: vars
+      variables: vars,
     });
   }
 
@@ -195,6 +218,80 @@ class WorkflowManager {
 
   public getActiveVolumeAnchor(): string | undefined {
     return this.state.globalContext.activeVolumeAnchor;
+  }
+
+  public setPendingSplit(chapterTitle: string | undefined, nextVolumeName: string | undefined) {
+    this.updateContext({
+      pendingSplitChapter: chapterTitle,
+      pendingNextVolumeName: nextVolumeName,
+    });
+  }
+
+  public getPendingSplit() {
+    return {
+      chapterTitle: this.state.globalContext.pendingSplitChapter,
+      nextVolumeName: this.state.globalContext.pendingNextVolumeName,
+    };
+  }
+
+  public setPendingSplits(rules: any[]) {
+    this.updateContext({
+      pendingSplits: rules.map(r => ({ ...r, processed: false })),
+    });
+    terminal.log(`[WorkflowManager] Pending Splits set: ${rules.length} rules`);
+  }
+
+  public getPendingSplits() {
+    return this.state.globalContext.pendingSplits || [];
+  }
+
+  /**
+   * 检查是否触发分卷
+   * 支持 Legacy (单一触发) 和 V2 (多触发规则)
+   */
+  public checkTriggerSplit(currentChapterTitle: string): { chapterTitle: string; nextVolumeName: string } | null {
+    const context = this.state.globalContext;
+
+    // 1. 优先检查新规则列表
+    if (context.pendingSplits && context.pendingSplits.length > 0) {
+      const rule = context.pendingSplits.find(r => r.chapterTitle === currentChapterTitle && !r.processed);
+      if (rule) {
+        return { chapterTitle: rule.chapterTitle, nextVolumeName: rule.nextVolumeName };
+      }
+    }
+
+    // 2. 兜底 Legacy 逻辑
+    if (context.pendingSplitChapter === currentChapterTitle) {
+      return {
+        chapterTitle: context.pendingSplitChapter,
+        nextVolumeName: context.pendingNextVolumeName || '新分卷',
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * 标记某个分卷规则已处理
+   */
+  public markSplitProcessed(chapterTitle: string) {
+    const context = this.state.globalContext;
+
+    // 清除 Legacy 触发器
+    if (context.pendingSplitChapter === chapterTitle) {
+      this.updateContext({
+        pendingSplitChapter: undefined,
+        pendingNextVolumeName: undefined,
+      });
+    }
+
+    // 标记新规则已处理
+    if (context.pendingSplits) {
+      const newSplits = context.pendingSplits.map(r =>
+        r.chapterTitle === chapterTitle ? { ...r, processed: true } : r,
+      );
+      this.updateContext({ pendingSplits: newSplits });
+    }
   }
 
   public pause(index: number) {

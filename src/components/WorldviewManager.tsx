@@ -152,7 +152,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = React.memo(({
     onConfirm: () => {}
   })
 
-  const activeSet = novel.worldviewSets?.find(s => s.id === activeWorldviewSetId)
+  const activeSet = novel?.worldviewSets?.find(s => s.id === activeWorldviewSetId)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom of chat

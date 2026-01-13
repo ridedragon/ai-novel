@@ -161,7 +161,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
     onConfirm: () => {}
   })
 
-  const activeSet = novel.inspirationSets?.find(s => s.id === activeInspirationSetId)
+  const activeSet = novel?.inspirationSets?.find(s => s.id === activeInspirationSetId)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom of chat

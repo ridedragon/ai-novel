@@ -259,8 +259,18 @@ export interface VariableBinding {
   extractRegex?: string; // Optional: Extract specific part from content
 }
 
+export interface WorkflowSplitRule {
+  id: string;
+  chapterTitle: string;
+  nextVolumeName: string;
+  processed?: boolean;
+}
+
 export interface WorkflowGlobalContext {
   variables: Record<string, any>;
   activeVolumeAnchor?: string; // ID of the volume currently being targeted
+  pendingSplitChapter?: string; // 待触发分卷的章节标题 (Legacy)
+  pendingNextVolumeName?: string; // 自动分卷后的新名称 (Legacy)
+  pendingSplits?: WorkflowSplitRule[]; // 多次分卷规则列表
   executionStack: any[]; // For nested loops (future use)
 }

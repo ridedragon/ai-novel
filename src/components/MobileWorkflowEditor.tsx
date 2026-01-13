@@ -410,7 +410,7 @@ const ConfigPanel = React.memo(({
                 value={editingNode.data.presetId as string}
                 onChange={(e) => {
                   const presets = Object.values(allPresets).flat();
-                  const preset = presets.find(p => p.id === e.target.value);
+                  const preset = presets?.find(p => p.id === e.target.value);
                   onUpdateNodeData(editingNode.id, {
                     presetId: e.target.value,
                     presetName: preset?.name || ''
@@ -606,7 +606,7 @@ const ConfigPanel = React.memo(({
           <div className="space-y-6">
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-teal-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Library className="w-3.5 h-3.5" /> 选择目标分卷
+                <Library className="w-3.5 h-3.5" /> 初始/当前目标分卷
               </label>
               <select
                 value={editingNode.data.targetVolumeId as string}
@@ -627,10 +627,112 @@ const ConfigPanel = React.memo(({
                   className="w-full bg-gray-800 border border-teal-900/40 rounded-2xl px-5 py-3 text-white text-xs outline-none focus:border-teal-500"
                 />
               )}
-              <p className="text-[10px] text-gray-500 leading-relaxed mt-2 px-1">
-                * 此节点之后生成的正文内容将自动保存到该分卷中，直到遇到下一个分卷节点。
+            </div>
+
+            {/* 多次分卷触发器 UI (移动端优化) */}
+            <div className="space-y-4 p-5 bg-teal-500/5 border border-teal-500/20 rounded-3xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-teal-400 font-bold text-[10px] uppercase tracking-wider">
+                  <Repeat className="w-3.5 h-3.5" /> 自动分卷触发器 (多次)
+                </div>
+                <button
+                  onClick={() => {
+                    const currentRules = (editingNode.data.splitRules || []) as any[];
+                    const legacyRule = (!currentRules.length && editingNode.data.splitChapterTitle)
+                      ? [{ id: 'legacy', chapterTitle: editingNode.data.splitChapterTitle, nextVolumeName: editingNode.data.nextVolumeName || '新分卷' }]
+                      : [];
+                    
+                    const nextRules = [
+                      ...(currentRules.length ? currentRules : legacyRule),
+                      { id: Date.now().toString(), chapterTitle: '', nextVolumeName: '新分卷' }
+                    ];
+                    onUpdateNodeData(editingNode.id, {
+                      splitRules: nextRules,
+                      splitChapterTitle: '',
+                      nextVolumeName: ''
+                    });
+                  }}
+                  className="px-2.5 py-1.5 bg-teal-600/20 text-teal-400 rounded-xl text-[10px] font-bold border border-teal-500/30"
+                >
+                  <Plus className="w-3 h-3 inline mr-1" /> 添加规则
+                </button>
+              </div>
+              
+              <div className="space-y-3">
+                {(() => {
+                  const rules = (editingNode.data.splitRules || []) as any[];
+                  if (rules.length === 0 && editingNode.data.splitChapterTitle) {
+                    rules.push({ id: 'legacy', chapterTitle: editingNode.data.splitChapterTitle, nextVolumeName: editingNode.data.nextVolumeName || '新分卷' });
+                  }
+
+                  const allOutlineTitles = new Set<string>();
+                  activeNovel?.outlineSets?.forEach(set => {
+                    set.items.forEach(item => allOutlineTitles.add(item.title));
+                  });
+                  const titleOptions = Array.from(allOutlineTitles);
+
+                  return rules.map((rule, idx) => (
+                    <div key={rule.id} className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">规则 #{idx + 1}</span>
+                        <button
+                          onClick={() => {
+                            const nextRules = rules.filter((_, i) => i !== idx);
+                            onUpdateNodeData(editingNode.id, { splitRules: nextRules });
+                          }}
+                          className="p-1 text-gray-500"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">触发章节</label>
+                        <select
+                          value={rule.chapterTitle}
+                          onChange={(e) => {
+                            const nextRules = [...rules];
+                            nextRules[idx] = { ...rule, chapterTitle: e.target.value };
+                            onUpdateNodeData(editingNode.id, { splitRules: nextRules });
+                          }}
+                          className="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none"
+                        >
+                          <option value="">-- 选择章节 --</option>
+                          {titleOptions.map(title => (
+                            <option key={title} value={title}>{title}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">新分卷命名</label>
+                        <OptimizedInput
+                          value={rule.nextVolumeName}
+                          onChange={(val: string) => {
+                            const nextRules = [...rules];
+                            nextRules[idx] = { ...rule, nextVolumeName: val };
+                            onUpdateNodeData(editingNode.id, { splitRules: nextRules });
+                          }}
+                          placeholder="例如：第二卷..."
+                          className="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none"
+                        />
+                      </div>
+                    </div>
+                  ));
+                })()}
+                
+                {(!editingNode.data.splitRules || (editingNode.data.splitRules as any[]).length === 0) && !editingNode.data.splitChapterTitle && (
+                  <div className="text-center py-6 border border-dashed border-gray-700 rounded-3xl">
+                    <p className="text-[10px] text-gray-600">未设置自动分卷触发器。</p>
+                  </div>
+                )}
+              </div>
+              <p className="text-[9px] text-gray-600 leading-relaxed px-1">
+                * 工作流运行中，每当生成到指定章节，将自动创建并切换至新分卷。
               </p>
             </div>
+
+            <p className="text-[10px] text-gray-500 leading-relaxed mt-2 px-1">
+              * 此节点之后生成的正文内容将自动保存到该分卷中，直到遇到下一个分卷节点。
+            </p>
           </div>
         )}
 
@@ -745,7 +847,7 @@ const ConfigPanel = React.memo(({
           </div>
         )}
 
-        {editingNode.data.typeKey !== 'userInput' && editingNode.data.typeKey !== 'pauseNode' && activeNovel && (
+        {editingNode.data.typeKey !== 'userInput' && editingNode.data.typeKey !== 'pauseNode' && editingNode.data.typeKey !== 'saveToVolume' && activeNovel && (
           <div className="space-y-6 pt-6 border-t border-gray-800">
             <label className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-2">
               <CheckSquare className="w-3.5 h-3.5" /> 关联参考资料集
@@ -1049,17 +1151,50 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     });
     
     const queue: string[] = [];
+    const resultIds: string[] = [];
+    const visited = new Set<string>();
+
+    // 2. 初始化队列：将所有入度为 0 的节点加入队列
     const startNodes = validNodes.filter(n => (inDegree.get(n.id) || 0) === 0)
                            .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
     
-    startNodes.forEach(n => queue.push(n.id));
-    
-    const resultIds: string[] = [];
+    startNodes.forEach(n => {
+      queue.push(n.id);
+      visited.add(n.id);
+    });
+
     const currentInDegree = new Map(inDegree);
 
-    while (queue.length > 0) {
+    // 3. 循环处理
+    while (resultIds.length < validNodes.length) {
+      // 核心修复：环路破局策略 (与 WorkflowEditor 同步)
+      if (queue.length === 0) {
+        const remainingNodes = validNodes.filter(n => !visited.has(n.id));
+        if (remainingNodes.length === 0) break;
+
+        // 策略 A：寻找“入口节点” (Entry Point)
+        let candidates = remainingNodes.filter(node => {
+           return validEdges.some(e => e.target === node.id && visited.has(e.source));
+        });
+
+        // 策略 B：如果没有入口，优先找循环控制节点
+        if (candidates.length === 0) {
+          const loopNodes = remainingNodes.filter(n => n.data.typeKey === 'loopNode');
+          candidates = loopNodes.length > 0 ? loopNodes : remainingNodes;
+        }
+
+        // 按位置排序候选者 (Top-Left 优先)
+        candidates.sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
+        
+        const breaker = candidates[0];
+        queue.push(breaker.id);
+        visited.add(breaker.id);
+      }
+
       const uId = queue.shift()!;
-      resultIds.push(uId);
+      if (!resultIds.includes(uId)) {
+        resultIds.push(uId);
+      }
       
       const neighbors = adjacencyList.get(uId) || [];
       const sortedNeighbors = neighbors
@@ -1068,17 +1203,17 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         .sort((a: any, b: any) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
 
       sortedNeighbors.forEach((v: any) => {
+        if (visited.has(v.id)) return;
         const newDegree = (currentInDegree.get(v.id) || 0) - 1;
         currentInDegree.set(v.id, newDegree);
-        if (newDegree === 0) queue.push(v.id);
+        if (newDegree === 0) {
+          queue.push(v.id);
+          visited.add(v.id);
+        }
       });
     }
     
-    const ordered = resultIds.map(id => validNodes.find(n => n.id === id)!).filter(Boolean);
-    const remaining = validNodes.filter(n => !resultIds.includes(n.id))
-                          .sort((a, b) => (a.position?.y || 0) - (b.position?.y || 0) || (a.position?.x || 0) - (b.position?.x || 0));
-    
-    const finalNodes = [...ordered, ...remaining];
+    const finalNodes = resultIds.map(id => validNodes.find(n => n.id === id)!).filter(Boolean);
     const duration = Date.now() - startTime;
     if (duration > 15) {
       terminal.log(`[PERF] MobileWorkflowEditor.orderedNodes recalculated: ${duration}ms`);
@@ -1126,11 +1261,11 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     workflowsRef.current = workflows;
   }, [workflows]);
 
-  const editingNode = nodes.find(n => n.id === editingNodeId) || null;
+  const editingNode = nodes?.find(n => n.id === editingNodeId) || null;
 
   // 同步全局工作流状态
   useEffect(() => {
-    const unsubscribe = workflowManager.subscribe((state) => {
+    const unsubscribeState = workflowManager.subscribe((state) => {
       if (state.activeWorkflowId === activeWorkflowId || !activeWorkflowId || activeWorkflowId === 'default') {
         setIsRunning(state.isRunning);
         setIsPaused(state.isPaused);
@@ -1138,7 +1273,32 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         if (state.error) setError(state.error);
       }
     });
-    return () => { unsubscribe(); };
+
+    // 核心修复：订阅节点级别的细粒度更新广播
+    const unsubscribeNodes = workflowManager.subscribeToNodeUpdates((update) => {
+      setNodes((nds) => {
+        const nextNodes = nds.map(n => {
+          if (n.id === update.nodeId) {
+            return {
+              ...n,
+              data: { ...n.data, ...update.data }
+            };
+          }
+          return n;
+        });
+        
+        // 同时更新 Ref (如果组件有使用 Ref 缓存 nodes)
+        if (nodesRef.current) {
+            nodesRef.current = nextNodes;
+        }
+        return nextNodes;
+      });
+    });
+
+    return () => {
+      unsubscribeState();
+      unsubscribeNodes();
+    };
   }, [activeWorkflowId]);
 
   // 获取工作流中所有“初始化目录”节点定义的文件夹名
@@ -1201,7 +1361,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   const loadWorkflow = (id: string, workflowList: WorkflowData[]) => {
     // 核心修复：解除加载死锁。如果是初次挂载（nodes为空），即使在运行中也允许加载初始结构
     if (isRunning && nodesRef.current.length > 0) return;
-    const workflow = workflowList.find(w => w.id === id);
+    const workflow = workflowList?.find(w => w.id === id);
     const globalIsRunning = workflowManager.getState().isRunning;
     if (workflow) {
       const restoredNodes = (workflow.nodes || []).map((n: WorkflowNode) => {
@@ -1435,7 +1595,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
   const updateNodeData = (nodeId: string, updates: Partial<WorkflowNodeData>) => {
     setNodes((nds) => {
-      const targetNode = nds.find(n => n.id === nodeId);
+      const targetNode = nds?.find(n => n.id === nodeId);
       const isRenameFolder = (targetNode?.data.typeKey === 'createFolder' || targetNode?.data.typeKey === 'reuseDirectory') && updates.folderName !== undefined && updates.folderName !== targetNode?.data.folderName;
 
       return nds.map((node) => {
@@ -1550,7 +1710,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
   };
 
   const exportWorkflow = (id: string) => {
-    const workflow = workflows.find(w => w.id === id);
+    const workflow = workflows?.find(w => w.id === id);
     if (!workflow) return;
     const exportData = {
       ...workflow,
@@ -1600,7 +1760,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     // 2. 构造最新的节点列表并同步给 Ref
     const latestNodes = nodesRef.current.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n);
     
-    // 3. 显式持久化到存储
+    // 3. 广播节点更新
+    workflowManager.broadcastNodeUpdate(nodeId, updates);
+
+    // 4. 显式持久化到存储
     const currentWfs = workflowsRef.current.map(w => {
       if (w.id === activeWorkflowId) {
         return {
@@ -1682,27 +1845,34 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
       let sortedNodes = orderedNodes;
       
-      // 重置后续节点的执行状态
-      if (startIndex === 0) {
-        setNodes(nds => nds.map(n => {
-          const updates: any = { status: 'pending', outputEntries: [] };
-          // 重置正文生成节点的显示名称
-          if (n.data.typeKey === 'chapter') {
-            updates.label = NODE_CONFIGS.chapter.defaultLabel;
-          }
-          if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {
-            updates.loopConfig = { ...n.data.loopConfig, currentIndex: 0 };
-          }
-          // 不再重置 targetVolumeId，保留用户配置
-          return { ...n, data: { ...n.data, ...updates } };
-        }));
-        setEdges(eds => eds.map(e => ({ ...e, animated: false })));
-        
-        // 同步清空快照，防止历史记录累加
-        sortedNodes = sortedNodes.map(n => ({ ...n, data: { ...n.data, status: 'pending', outputEntries: [] } }));
+      // 核心修复：重置执行路径上节点的执行状态 (不仅限于 startIndex === 0)
+      // 确保即将执行的节点状态是干净的，防止循环计数器残留旧值
+      const resetNodeData = (n: WorkflowNode): WorkflowNode => {
+        const updates: any = { status: 'pending', outputEntries: [] };
+        if (n.data.typeKey === 'chapter') {
+          updates.label = NODE_CONFIGS.chapter.defaultLabel;
+        }
+        if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {
+          updates.loopConfig = { ...n.data.loopConfig, currentIndex: 0 };
+        }
+        return { ...n, data: { ...n.data, ...updates } };
+      };
 
-        // 重新开始时仅清理节点内部产出状态，不再干涉全局资料集和分卷章节
-      }
+      setNodes(nds => nds.map(n => {
+        const nodeInSorted = sortedNodes.findIndex(sn => sn.id === n.id);
+        if (nodeInSorted >= startIndex) {
+          return resetNodeData(n);
+        }
+        return n;
+      }));
+      setEdges(eds => eds.map(e => {
+        const targetInSorted = sortedNodes.findIndex(sn => sn.id === e.target);
+        if (targetInSorted >= startIndex) return { ...e, animated: false };
+        return e;
+      }));
+      
+      // 同步更新排序副本
+      sortedNodes = sortedNodes.map((sn, idx) => idx >= startIndex ? resetNodeData(sn) : sn);
 
       const resolvePendingRef = (list: string[], sets: any[] | undefined) => {
         if (!list) return [];
@@ -1746,7 +1916,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
         // 核心修复：执行时从 Ref 中获取最新的节点数据，防止使用启动时的陈旧快照
         // 这样如果上一次执行停止后，用户修改了分卷名称或其他配置，这里能立即感知到
-        const currentNode = nodesRef.current.find(n => n.id === sortedNodes[i].id);
+        const currentNode = nodesRef.current?.find(n => n.id === sortedNodes[i].id);
         if (!currentNode) continue;
 
         const node = currentNode;
@@ -1787,13 +1957,29 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
              targetVolumeId = newVolume.id;
              await syncNodeStatus(node.id, { targetVolumeId, targetVolumeName: '', status: 'completed' }, i);
           } else if (!targetVolumeId && pendingFolders.length > 0) {
-             const matchedVol = localNovel.volumes.find(v => v.title === pendingFolders[0]);
+             const matchedVol = (localNovel.volumes || []).find(v => v.title === pendingFolders[0]);
              if (matchedVol) targetVolumeId = matchedVol.id;
           }
 
           if (targetVolumeId) {
              workflowManager.setActiveVolumeAnchor(targetVolumeId);
              terminal.log(`[Mobile SaveToVolume] Active Volume Anchor set to ${targetVolumeId}`);
+          }
+
+          // 设置分卷触发器 (多次 + Legacy)
+          const rules = (node.data.splitRules as any[]) || [];
+          if (rules.length > 0) {
+            workflowManager.setPendingSplits(rules);
+            terminal.log(`[Mobile SaveToVolume] Multiple Split Triggers set: ${rules.length} rules`);
+          } else {
+            // 兼容 Legacy
+            if (node.data.splitChapterTitle) {
+              workflowManager.setPendingSplit(node.data.splitChapterTitle as string, node.data.nextVolumeName as string);
+              terminal.log(`[Mobile SaveToVolume] Legacy Split Trigger set: ${node.data.splitChapterTitle}`);
+            } else {
+              workflowManager.setPendingSplit(undefined, undefined);
+              workflowManager.setPendingSplits([]);
+            }
           }
 
           await syncNodeStatus(node.id, { status: 'completed' }, i);
@@ -1806,8 +1992,6 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         if (node.data.typeKey === 'loopNode') {
           const loopConfig = node.data.loopConfig || { enabled: true, count: 1, currentIndex: 0 };
           const currentLoopIndex = (loopConfig.currentIndex || 0) + 1;
-          
-          workflowManager.setContextVar('loop_index', currentLoopIndex);
           
           await syncNodeStatus(node.id, {
             status: 'executing',
@@ -1860,6 +2044,9 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                    setNodes(nextNodes);
                    i = targetIndex - 1;
                    
+                   // 更新全局 loop_index 变量为下一轮的值
+                   workflowManager.setContextVar('loop_index', currentLoopIndex + 1);
+
                    await syncNodeStatus(node.id, {
                       status: 'pending',
                       loopConfig: { ...loopConfig, currentIndex: currentLoopIndex }
@@ -1869,7 +2056,27 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                 }
              }
           } else {
-             await syncNodeStatus(node.id, { status: 'completed' }, i);
+             // 循环结束
+             // 核心修复：循环结束时显式重置 currentIndex 为 0，防止状态残留
+             await syncNodeStatus(node.id, {
+                status: 'completed',
+                loopConfig: { ...loopConfig, currentIndex: 0 }
+             }, i);
+
+             // 核心修复：如果循环执行器是在循环体之前的（Head模式），执行结束时需要跳过整个循环体
+             // 寻找物理连线中连回此节点的“最远”节点（Tail）
+             const inEdges = edges.filter(e => e.target === node.id);
+             let maxTailIndex = i;
+             inEdges.forEach(e => {
+                const tailIdx = sortedNodes.findIndex(sn => sn.id === e.source);
+                if (tailIdx > maxTailIndex) maxTailIndex = tailIdx;
+             });
+             
+             if (maxTailIndex > i) {
+                terminal.log(`[Mobile LoopNode] Loop quota reached. Skipping loop body, jumping to index ${maxTailIndex}`);
+                i = maxTailIndex;
+                // 这样下一次 for 循环 i++ 后，将执行循环体之后的节点
+             }
           }
           
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
@@ -1906,8 +2113,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         const loopInstructions = node.data.loopInstructions as LoopInstruction[] || [];
         const specificInstruction = loopInstructions.find(inst => inst.index === currentLoopIndex)?.content || '';
         
+        // 核心修复：循环特定指令应当只针对当前节点生效，不应污染全局累积上下文 (accumContext)
+        let nodeLoopContext = '';
         if (specificInstruction) {
-           accumContext += `\n【第 ${currentLoopIndex} 轮循环特定指令】：\n${specificInstruction}\n`;
+           nodeLoopContext = `\n【第 ${currentLoopIndex} 轮循环特定指令】：\n${specificInstruction}\n`;
         }
 
         // 处理创建文件夹节点
@@ -2113,7 +2322,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           typePresets = Object.values(allPresets).flat();
         }
 
-        let preset = typePresets.find(p => p.id === node.data.presetId);
+        let preset = typePresets?.find(p => p.id === node.data.presetId);
         if (!preset && node.data.typeKey !== 'aiChat') {
           preset = typePresets[0];
           if (!preset) continue;
@@ -2155,7 +2364,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         });
 
         const isDuplicate = lastNodeOutput && refContext.includes(lastNodeOutput.substring(0, 100));
-        const finalContext = `${refContext}${accumContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
+        // 核心修复：将 nodeLoopContext (当前循环指令) 拼接到最终上下文中，而不是 accumContext
+        const finalContext = `${refContext}${accumContext}${nodeLoopContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
         
         let messages: any[] = [];
         
@@ -2261,11 +2471,11 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             topK: node.data.overrideAiConfig && node.data.topK !== undefined ? node.data.topK : ((preset as any)?.topK ?? globalConfig.topK),
             stream: (preset as any)?.stream ?? globalConfig.stream,
             maxRetries: globalConfig.maxRetries,
-            systemPrompt: node.data.overrideAiConfig
+            systemPrompt: (node.data.overrideAiConfig
               ? (node.data.promptItems && (node.data.promptItems as any[]).length > 0
                   ? (node.data.promptItems as any[]).filter(p => p.enabled !== false && p.role === 'system').map(p => p.content).join('\n\n')
                   : (node.data.systemPrompt as string || localNovel.systemPrompt || '你是一个专业的小说家。'))
-              : (localNovel.systemPrompt || '你是一个专业的小说家。'),
+              : (localNovel.systemPrompt || '你是一个专业的小说家。')) + nodeLoopContext,
             globalCreationPrompt: globalConfig.globalCreationPrompt,
             longTextMode: globalConfig.longTextMode,
             autoOptimize: globalConfig.autoOptimize,
@@ -2299,7 +2509,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           for (let k = 0; k < items.length; k++) {
             const item = items[k];
             // 核心修复：查重逻辑限制在目标分卷内
-            const existingChapter = localNovel.chapters.find(c =>
+            const existingChapter = localNovel.chapters?.find(c =>
               c.title === item.title &&
               (
                 (finalVolumeId && c.volumeId === finalVolumeId) ||
@@ -2363,6 +2573,40 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               if (updatedNovel) {
                 localNovel = updatedNovel;
               }
+
+              // --- 自动二次分卷逻辑检测 (支持多次) ---
+              const currentChapter = localNovel.chapters.find(c => c.id === chapterId);
+              if (currentChapter) {
+                const trigger = workflowManager.checkTriggerSplit(currentChapter.title);
+                
+                if (trigger) {
+                  terminal.log(`[Mobile Workflow] Triggering split at "${trigger.chapterTitle}"`);
+                  const nextVolName = trigger.nextVolumeName || '新分卷';
+
+                  const newVolume = {
+                    id: `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                    title: nextVolName,
+                    collapsed: false
+                  };
+
+                  const splitNovel = {
+                    ...localNovel,
+                    volumes: [...(localNovel.volumes || []), newVolume]
+                  };
+
+                  await updateLocalAndGlobal(splitNovel);
+
+                  // 更新 Anchor 并标记已处理
+                  workflowManager.setActiveVolumeAnchor(newVolume.id);
+                  workflowManager.markSplitProcessed(trigger.chapterTitle);
+
+                  terminal.log(`[Mobile Workflow] Split complete: ${nextVolName}`);
+                  
+                  // 同步更新 finalVolumeId 确保引擎下一章能看到
+                  finalVolumeId = newVolume.id;
+                }
+              }
+
               if (globalConfig.onChapterComplete) {
                 const result = await (globalConfig.onChapterComplete as any)(chapterId, content, updatedNovel);
                 if (result && typeof result === 'object' && (result as Novel).chapters) {
@@ -2438,6 +2682,21 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           }
         }
 
+        // debug: 在 F12 打印发送给 AI 的内容 (针对大纲、世界观、粗纲、角色集等)
+        if (['outline', 'worldview', 'plotOutline', 'characters', 'inspiration', 'aiChat'].includes(node.data.typeKey as string)) {
+          console.groupCollapsed(`[Mobile Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}`);
+          console.log('Messages:', messages);
+          console.log('Config:', {
+            model: finalModel,
+            temperature: finalTemperature,
+            topP: finalTopP,
+            topK: finalTopK,
+            maxTokens: finalMaxTokens
+          });
+          console.log('Constructed Context:', finalContext);
+          console.groupEnd();
+        }
+
         const openai = new OpenAI({
           apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
           baseURL: nodeApiConfig.baseUrl || globalConfig.baseUrl,
@@ -2467,11 +2726,6 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             updateNodeData(node.id, { label: `重试中(${retryCount}/${maxRetries}): ${node.data.typeLabel}` });
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
-
-          // 调试：F12 打印发送给 AI 的全部内容
-          console.group(`[AI REQUEST] 移动端工作流 - ${node.data.label} (${node.data.typeLabel})`);
-          console.log('Messages:', messages);
-          console.groupEnd();
 
           const completion = await openai.chat.completions.create({
             model: finalModel,
@@ -2645,6 +2899,29 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         }
 
         lastNodeOutput += `【${node.data.typeLabel}输出】：\n${result}\n\n`;
+
+        // 核心修复：自动回跳检测
+        // 如果当前节点有输出连线指向一个“循环执行器”，且该循环执行器是在当前位置之前的（或就是当前节点）
+        // 则必须强制跳转回循环执行器，由它来判定是继续下一轮还是彻底结束
+        const currentOutEdges = edges.filter(e => e.source === node.id);
+        const loopBackEdge = currentOutEdges.find(e => {
+            const targetNode = nodesRef.current.find(n => n.id === e.target);
+            return targetNode?.data.typeKey === 'loopNode';
+        });
+
+        if (loopBackEdge) {
+            const targetIndex = sortedNodes.findIndex(n => n.id === loopBackEdge.target);
+            if (targetIndex !== -1 && targetIndex <= i) {
+                terminal.log(`[Mobile Loop] Back-link detected from ${node.data.label}, jumping back to index ${targetIndex}`);
+                
+                // 物理回跳时也要增加循环计数
+                const currentLoopIdx = workflowManager.getContextVar('loop_index') || 1;
+                workflowManager.setContextVar('loop_index', currentLoopIdx + 1);
+
+                i = targetIndex - 1; // 减 1 是因为 for 循环末尾有 i++
+                continue;
+            }
+        }
       }
       
       // 强制清理所有节点的执行状态，确保动画停止
@@ -2674,6 +2951,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       }
       // 错误时清理所有连线动画
       setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+      // 强制停止全局工作流
+      workflowManager.stop();
       keepAliveManager.disable();
     }
   };
@@ -2794,7 +3073,17 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           
           {isRunning ? (
             <button
-              onClick={stopWorkflow}
+              onClick={() => {
+                if (confirm('是否强制停止当前任务？\n如果任务长时间卡在“准备中”，请点击确定。')) {
+                  stopWorkflow();
+                  // 强制兜底重置状态，防止 stopWorkflow 因异常未完全执行
+                  setTimeout(() => {
+                    setIsRunning(false);
+                    workflowManager.stop();
+                    keepAliveManager.disable();
+                  }, 200);
+                }
+              }}
               className="flex flex-col items-center justify-center bg-red-600/20 text-red-500 p-1.5 rounded-lg border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-pulse"
             >
               <Square className="w-3.5 h-3.5 fill-current" />
@@ -2810,81 +3099,82 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             </button>
           )}
 
-          {isRunning ? null : isPaused && currentNodeIndex !== -1 ? (
-            <div className="flex items-center gap-1.5">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[7px] text-gray-500 font-bold uppercase pl-1">跳转执行</span>
-                <select
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1 text-[9px] text-gray-300 outline-none max-w-[80px]"
-                  value=""
-                  onChange={(e) => {
-                    const idx = parseInt(e.target.value);
-                    if (!isNaN(idx)) runWorkflow(idx);
-                  }}
-                >
-                  <option value="" disabled>选择节点...</option>
-                  {orderedNodes.map((n, idx) => (
-                    <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <button
-                onClick={() => runWorkflow(currentNodeIndex)}
-                className="flex flex-col items-center justify-center bg-blue-600/20 text-blue-500 p-1.5 rounded-lg border border-blue-500/20 shadow-lg"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span className="text-[8px] font-bold mt-0.5">继续</span>
-              </button>
-              
-              <button
-                onClick={() => {
-                  if (confirm('确定要重置当前工作流吗？\n\n1. 所有节点进度将归零\n2. 已生成的章节正文将保留\n3. 正在运行的任务将被强制中止')) {
-                    // 1. 立即物理中断
-                    stopRequestedRef.current = true;
-                    if (abortControllerRef.current) {
-                      abortControllerRef.current.abort();
-                    }
+          <button
+            onClick={() => {
+              if (confirm('确定要重置当前工作流吗？\n\n1. 所有节点进度将归零\n2. 已生成的章节正文将保留\n3. 正在运行的任务将被强制中止')) {
+                // 1. 立即物理中断
+                stopRequestedRef.current = true;
+                if (abortControllerRef.current) {
+                  abortControllerRef.current.abort();
+                }
 
-                    const updatedNodes = nodes.map(n => {
-                      const updates: any = {
-                        status: 'pending' as const,
-                        label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label,
-                        outputEntries: [],
-                        targetVolumeName: ''
-                      };
-                      if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {
-                        updates.loopConfig = { ...n.data.loopConfig, currentIndex: 0 };
-                      }
-                      return {
-                        ...n,
-                        data: {
-                          ...n.data,
-                          ...updates
-                        }
-                      };
-                    });
-
-                    // 2. 同步 UI 状态
-                    setNodes(updatedNodes);
-                    setCurrentNodeIndex(-1);
-                    setIsPaused(false);
-                    setError(null);
-                    
-                    // 3. 停止全局管理
-                    workflowManager.stop();
-                    
-                    // 4. 持久化
-                    setWorkflows(prev => prev.map(w => w.id === activeWorkflowId ? { ...w, nodes: updatedNodes, currentNodeIndex: -1 } : w));
+                const updatedNodes = nodes.map(n => {
+                  const updates: any = {
+                    status: 'pending' as const,
+                    label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label,
+                    outputEntries: [],
+                    targetVolumeName: ''
+                  };
+                  if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {
+                    updates.loopConfig = { ...n.data.loopConfig, currentIndex: 0 };
                   }
-                }}
-                className="flex flex-col items-center justify-center p-1.5 bg-gray-700/50 text-gray-400 rounded-lg border border-gray-600/50"
-              >
-                <Settings2 className="w-3.5 h-3.5" />
-                <span className="text-[8px] font-bold mt-0.5">重置</span>
-              </button>
-            </div>
-          ) : (
+                  return {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      ...updates
+                    }
+                  };
+                });
+
+                // 2. 同步 UI 状态
+                setNodes(updatedNodes);
+                setCurrentNodeIndex(-1);
+                setIsPaused(false);
+                setError(null);
+                
+                // 3. 停止全局管理
+                workflowManager.stop();
+                
+                // 4. 持久化
+                setWorkflows(prev => prev.map(w => w.id === activeWorkflowId ? { ...w, nodes: updatedNodes, currentNodeIndex: -1 } : w));
+              }
+            }}
+            className="flex flex-col items-center justify-center p-1.5 bg-gray-700/50 text-gray-400 rounded-lg border border-gray-600/50 active:scale-95"
+            title="重置执行进度和节点状态"
+          >
+            <Repeat className="w-3.5 h-3.5" />
+            <span className="text-[8px] font-bold mt-0.5">重置</span>
+          </button>
+
+          {isRunning ? null : isPaused && currentNodeIndex !== -1 ? (
+              <div className="flex items-center gap-1.5">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[7px] text-gray-500 font-bold uppercase pl-1">跳转执行</span>
+                  <select
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1 text-[9px] text-gray-300 outline-none max-w-[80px]"
+                    value=""
+                    onChange={(e) => {
+                      const idx = parseInt(e.target.value);
+                      if (!isNaN(idx)) runWorkflow(idx);
+                    }}
+                  >
+                    <option value="" disabled>选择节点...</option>
+                    {orderedNodes.map((n, idx) => (
+                      <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <button
+                  onClick={() => runWorkflow(currentNodeIndex)}
+                  className="flex flex-col items-center justify-center bg-blue-600/20 text-blue-500 p-1.5 rounded-lg border border-blue-500/20 shadow-lg"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span className="text-[8px] font-bold mt-0.5">继续</span>
+                </button>
+              </div>
+            ) : (
             <div className="flex items-center gap-1.5">
                <div className="flex flex-col gap-0.5">
                 <span className="text-[7px] text-gray-500 font-bold uppercase pl-1">起始节点</span>

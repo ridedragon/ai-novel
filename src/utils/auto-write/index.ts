@@ -77,7 +77,7 @@ export class AutoWriteEngine {
 
         const item = outline[currIdx];
         // 核心修复：查重逻辑必须绑定分卷。支持用户在不同分卷（如：草稿卷 vs 正式卷）中生成相同大纲的内容而不被跳过。
-        const existingChapter = this.novel.chapters.find(
+        const existingChapter = (this.novel.chapters || []).find(
           c =>
             c.title === item.title &&
             ((targetVolumeId && c.volumeId === targetVolumeId) ||
@@ -115,10 +115,10 @@ export class AutoWriteEngine {
       }
 
       // Apply placeholders
-      const newChapters = [...this.novel.chapters];
+      const newChapters = [...(this.novel.chapters || [])];
       batchItems.forEach(batchItem => {
-        const existingById = newChapters.find(c => c.id === batchItem.id);
-        const existingByTitle = newChapters.find(
+        const existingById = (newChapters || []).find(c => c.id === batchItem.id);
+        const existingByTitle = (newChapters || []).find(
           c => c.title === batchItem.item.title && (!targetVolumeId || c.volumeId === targetVolumeId),
         );
 
@@ -167,7 +167,7 @@ export class AutoWriteEngine {
             dangerouslyAllowBrowser: true,
           });
 
-          const firstChapterInBatch = this.novel.chapters.find(c => c.id === batchItems[0].id);
+          const firstChapterInBatch = this.novel.chapters?.find(c => c.id === batchItems[0].id);
           if (!firstChapterInBatch) throw new Error('Chapter placeholder missing');
 
           const contextMessages = getChapterContextMessages(this.novel, firstChapterInBatch, {
@@ -283,7 +283,7 @@ export class AutoWriteEngine {
 
               this.novel = {
                 ...this.novel,
-                chapters: this.novel.chapters.map(c => {
+                chapters: (this.novel.chapters || []).map(c => {
                   const bIdx = batchItems.findIndex(b => b.id === c.id);
                   if (bIdx !== -1) {
                     const updatedContent = liveContents[bIdx] || '';
@@ -349,7 +349,7 @@ export class AutoWriteEngine {
               };
               // 核心修复 4.2：流式更新期间仅发送增量章节数据 (Delta Update)，显著减轻跨进程通信 (IPC) 压力
               // 我们仅提取本次 batch 涉及的章节传递给 UI，避免传递整个小说对象
-              const deltaChapters = this.novel.chapters.filter(c => batchItems.some(b => b.id === c.id));
+              const deltaChapters = (this.novel.chapters || []).filter(c => batchItems.some(b => b.id === c.id));
               onNovelUpdate({ ...this.novel, chapters: deltaChapters });
             }
             // 优化 4.3：将高频流式统计改为 console.debug，不再发送给 VSCode Terminal
@@ -431,7 +431,7 @@ export class AutoWriteEngine {
           // 如果该章节 ID 对应的是一个用户已经手动修改过的章节，那么用户的手动修改在此处会被 AI 内容彻底抹除。
           this.novel = {
             ...this.novel,
-            chapters: this.novel.chapters.map(c => {
+            chapters: (this.novel.chapters || []).map(c => {
               const bIdx = batchItems.findIndex(b => b.id === c.id);
               if (bIdx !== -1) {
                 const content = finalContents[bIdx] || '';
@@ -469,7 +469,7 @@ export class AutoWriteEngine {
             }),
           };
           // 完成时同样仅发送本批次增量
-          const finalDeltaChapters = this.novel.chapters.filter(c => batchItems.some(b => b.id === c.id));
+          const finalDeltaChapters = (this.novel.chapters || []).filter(c => batchItems.some(b => b.id === c.id));
           onNovelUpdate({ ...this.novel, chapters: finalDeltaChapters });
 
           // 上报章节完成并按需触发自动优化
@@ -527,7 +527,7 @@ export class AutoWriteEngine {
     // 这将补全那些不满步长（如 3 或 6）的残余章节总结
     const lastBatchItem = startIndex > 0 ? outline[startIndex - 1] : null;
     if (lastBatchItem && this.isRunning) {
-      const lastChapter = this.novel.chapters.find(
+      const lastChapter = (this.novel.chapters || []).find(
         c =>
           c.title === lastBatchItem.title &&
           ((targetVolumeId && c.volumeId === targetVolumeId) || (!targetVolumeId && !c.volumeId)),
@@ -637,12 +637,12 @@ export class AutoWriteEngine {
 
           this.novel = {
             ...this.novel,
-            chapters: this.novel.chapters.map(c =>
+            chapters: (this.novel.chapters || []).map(c =>
               c.id === chapterId ? { ...c, analysisResult: currentAnalysisResult } : c,
             ),
           };
           // 异步分析结果上报：仅发送受影响章节
-          const analysisDelta = this.novel.chapters.filter(c => c.id === chapterId);
+          const analysisDelta = (this.novel.chapters || []).filter(c => c.id === chapterId);
           onNovelUpdate({ ...this.novel, chapters: analysisDelta });
         }
       } catch (e: any) {
@@ -726,7 +726,7 @@ export class AutoWriteEngine {
         // 如果在 AI 优化的过程中，用户在主界面又进行了手动编辑，
         // 这里的 `versions.push(optVersion)` 和 `activeVersionId` 的切换，
         // 可能会导致用户最新的手动编辑内容因为处于非活跃版本而被“隐藏”或被后续合并逻辑丢失。
-        const updatedChapters = this.novel.chapters.map(c => {
+        const updatedChapters = (this.novel.chapters || []).map(c => {
           if (c.id === chapterId) {
             const versions = [...(c.versions || [])];
             // 避免重复添加相同的优化版本
@@ -748,7 +748,7 @@ export class AutoWriteEngine {
           chapters: updatedChapters,
         };
         // 异步润色结果上报：仅发送受影响章节
-        const optDelta = this.novel.chapters.filter(c => c.id === chapterId);
+        const optDelta = (this.novel.chapters || []).filter(c => c.id === chapterId);
         onNovelUpdate({ ...this.novel, chapters: optDelta });
       }
     } catch (e: any) {

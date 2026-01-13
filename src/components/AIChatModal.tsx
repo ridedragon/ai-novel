@@ -119,7 +119,7 @@ export function AIChatModal({
       // Outline (System)
       if (activeOutlineSetId) {
           const currentOutlineSet = novel?.outlineSets?.find(s => s.id === activeOutlineSetId)
-          if (currentOutlineSet && currentOutlineSet.items.length > 0) {
+          if (currentOutlineSet && currentOutlineSet.items?.length > 0) {
               const outlineStr = `【当前小说大纲策划】：\n` + currentOutlineSet.items.map((item, idx) => `${idx + 1}. ${item.title}: ${item.summary}`).join('\n')
               chatMessages.push({ role: 'system', content: outlineStr })
           }
