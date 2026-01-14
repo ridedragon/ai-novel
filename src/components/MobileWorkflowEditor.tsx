@@ -59,6 +59,38 @@ import { storage } from '../utils/storage';
 import { workflowManager } from '../utils/WorkflowManager';
 import { WorkflowData, WorkflowEditorProps, WorkflowNode, WorkflowNodeData } from './WorkflowEditor';
 
+// --- 数字解析工具 (与 App.tsx 同步) ---
+const parseAnyNumber = (text: string): number | null => {
+  if (!text) return null;
+  const arabicMatch = text.match(/\d+/);
+  if (arabicMatch) return parseInt(arabicMatch[0]);
+  const chineseNums: Record<string, number> = {
+    '零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+    '百': 100, '千': 1000
+  };
+  const chineseMatch = text.match(/[零一二两三四五六七八九十百千]+/);
+  if (chineseMatch) {
+    const s = chineseMatch[0];
+    if (s.length === 1) return chineseNums[s] ?? null;
+    let result = 0; let temp = 0;
+    for (let i = 0; i < s.length; i++) {
+      const char = s[i]; const num = chineseNums[char];
+      if (num === 10) { if (temp === 0) temp = 1; result += temp * 10; temp = 0; }
+      else if (num === 100) { result += temp * 100; temp = 0; }
+      else { temp = num; }
+    }
+    result += temp; return result > 0 ? result : null;
+  }
+  return null;
+};
+
+const extractTargetEndChapter = (prompt: string): number | null => {
+  if (!prompt) return null;
+  const rangeMatch = prompt.match(/(?:到|至|-|—|直到)\s*([零一二两三四五六七八九十百千\d]+)(?:\s*章)?/);
+  if (rangeMatch) return parseAnyNumber(rangeMatch[1]);
+  return null;
+};
+
 // --- 类型定义 ---
 
 // 结构化的生成内容条目
@@ -2717,8 +2749,14 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         const maxRetries = 2; // 总共尝试 3 次
         let isSuccess = false;
 
-        while (retryCount <= maxRetries && !isSuccess) {
-          if (retryCount > 0) {
+        let isNodeFullyCompleted = false;
+        let nodeIterationCount = 0;
+        let currentMessages = [...messages];
+        const targetEndNum = extractTargetEndChapter(node.data.instruction as string || '') ||
+                           (specificInstruction ? extractTargetEndChapter(specificInstruction) : null);
+
+        while (retryCount <= maxRetries && !isNodeFullyCompleted) {
+          if (retryCount > 0 && !isSuccess) {
             terminal.log(`[Mobile Workflow Retry] 节点 ${node.data.label} JSON 解析失败，正在进行第 ${retryCount} 次重试...`);
             updateNodeData(node.id, { label: `重试中(${retryCount}/${maxRetries}): ${node.data.typeLabel}` });
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -2726,7 +2764,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
           const completion = await openai.chat.completions.create({
             model: finalModel,
-            messages,
+            messages: currentMessages,
             temperature: finalTemperature,
             top_p: finalTopP,
             top_k: (finalTopK && finalTopK > 0) ? finalTopK : undefined,
@@ -2852,6 +2890,38 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             }];
             isSuccess = true;
           }
+
+          // --- 核心修复：移动端大纲节点自动续写 ---
+          if (isSuccess && node.data.typeKey === 'outline' && targetEndNum) {
+            const lastEntry = entriesToStore[entriesToStore.length - 1];
+            const currentLastNum = parseAnyNumber(lastEntry?.title || '');
+
+            if (currentLastNum && currentLastNum < targetEndNum && nodeIterationCount < 5) {
+              terminal.log(`[Mobile 续写] 大纲截断：目标 ${targetEndNum}, 当前 ${currentLastNum}。接龙...`);
+              
+              nodeIterationCount++;
+              const nextStart = currentLastNum + 1;
+              const continuationPrompt = `(系统接龙：刚才你只生成到了第 ${currentLastNum} 章。请不要重复，直接从第 ${nextStart} 章开始继续生成大纲，直到第 ${targetEndNum} 章。请严格遵守 JSON 格式。)`;
+              
+              currentMessages = [
+                ...currentMessages,
+                { role: 'assistant', content: result },
+                { role: 'user', content: continuationPrompt }
+              ];
+              
+              const incrementalEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({
+                id: `${Date.now()}-${nodeIterationCount}-${idx}`,
+                title: e.title,
+                content: e.content
+              }));
+              await syncNodeStatus(node.id, { outputEntries: [...incrementalEntries, ...(nodesRef.current.find(n => n.id === node.id)?.data.outputEntries || [])] }, i);
+              
+              isSuccess = false;
+              continue;
+            }
+          }
+
+          if (isSuccess) isNodeFullyCompleted = true;
         }
 
         if (retryCount > 0) {

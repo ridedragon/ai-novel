@@ -870,6 +870,65 @@ const normalizeGeneratorResult = (data: any[], type: 'outline' | 'character' | '
     }).filter(item => item !== null)
 }
 
+/**
+ * 核心补救逻辑：中文/阿拉伯数字万能解析器
+ * 支持：38, 三十八, 二十, 第12, 第十二...
+ */
+const parseAnyNumber = (text: string): number | null => {
+    if (!text) return null;
+    
+    // 1. 尝试直接提取阿拉伯数字 (最优先)
+    const arabicMatch = text.match(/\d+/);
+    if (arabicMatch) return parseInt(arabicMatch[0]);
+
+    // 2. 汉字数字映射表
+    const chineseNums: Record<string, number> = {
+        '零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+        '百': 100, '千': 1000
+    };
+
+    // 3. 解析汉字数字 (针对 "第十二" 或 "二十三" 这种常见格式)
+    const chineseMatch = text.match(/[零一二两三四五六七八九十百千]+/);
+    if (chineseMatch) {
+        const s = chineseMatch[0];
+        if (s.length === 1) return chineseNums[s] ?? null;
+        
+        let result = 0;
+        let temp = 0;
+        for (let i = 0; i < s.length; i++) {
+            const char = s[i];
+            const num = chineseNums[char];
+            if (num === 10) {
+                if (temp === 0) temp = 1;
+                result += temp * 10;
+                temp = 0;
+            } else if (num === 100) {
+                result += temp * 100;
+                temp = 0;
+            } else {
+                temp = num;
+            }
+        }
+        result += temp;
+        return result > 0 ? result : null;
+    }
+
+    return null;
+};
+
+/**
+ * 辅助函数：从用户指令或节点元数据中提取终点章节号
+ */
+const extractTargetEndChapter = (prompt: string): number | null => {
+    if (!prompt) return null;
+    // 寻找 "到"、"至"、"-" 之后跟着的数字
+    const rangeMatch = prompt.match(/(?:到|至|-|—|直到)\s*([零一二两三四五六七八九十百千\d]+)(?:\s*章)?/);
+    if (rangeMatch) {
+        return parseAnyNumber(rangeMatch[1]);
+    }
+    return null;
+};
+
 
 function App() {
   // --- UI & AI Task States (Moved to top to ensure initialization) ---
@@ -3552,7 +3611,7 @@ function App() {
     }
   }, [activeNovel, activeOutlinePresetId, outlineModel, selectedWorldviewSetIdForModules, selectedWorldviewIndicesForModules, selectedCharacterSetIdForModules, selectedCharacterIndicesForModules, selectedInspirationSetIdForModules, selectedInspirationIndicesForModules, selectedOutlineSetIdForModules, selectedOutlineIndicesForModules, activeNovelId, activeOutlineSetId, globalCreationPrompt])
 
-  const handleGenerateOutline = React.useCallback(async (mode: 'append' | 'replace' | 'chat' = 'append', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string) => {
+  const handleGenerateOutline = React.useCallback(async (mode: 'append' | 'replace' | 'chat' = 'append', overrideSetId?: string | null, source: 'module' | 'chat' = 'module', promptOverride?: string, forcedTargetEnd?: number) => {
     let currentPresetId = activeOutlinePresetId
     if (mode === 'chat') {
         currentPresetId = 'chat'
@@ -3759,6 +3818,26 @@ function App() {
 
               setUserPrompt('')
               terminal.log(`[Outline] Attempt ${attempt + 1} successful.`)
+
+              // --- 核心修复：自动接龙救场逻辑 ---
+              const lastItem = outlineData[outlineData.length - 1];
+              const currentLastNum = parseAnyNumber(lastItem.title);
+              // 优先级：显式参数 > 尝试从 Prompt 解析
+              const finalTargetEnd = forcedTargetEnd || extractTargetEndChapter(promptOverride || userPrompt);
+
+              if (mode !== 'chat' && finalTargetEnd && currentLastNum && currentLastNum < finalTargetEnd) {
+                  terminal.log(`[逻辑补救] 目标章:${finalTargetEnd}, 当前章:${currentLastNum}。检测到截断，自动发起接龙请求...`);
+                  
+                  // 1.5秒后发起续写请求，给用户和数据库一点缓冲
+                  setTimeout(() => {
+                      const nextStart = currentLastNum + 1;
+                      const continuationPrompt = `(系统接龙：刚才由于长度限制你只写到了第 ${currentLastNum} 章。请不要重复，直接从第 ${nextStart} 章开始继续向下生成大纲，直到第 ${finalTargetEnd} 章。请严格遵守 JSON 格式。)`;
+                      handleGenerateOutline('append', targetSetId, source, continuationPrompt, finalTargetEnd);
+                  }, 1500);
+                  
+                  return; // 阻止 setIsGeneratingOutline(false)，让 UI 保持 Loading 状态
+              }
+
               break // Success
           } else {
             throw new Error('Format error: Not an array')
