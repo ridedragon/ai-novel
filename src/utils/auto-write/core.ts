@@ -180,18 +180,26 @@ export const getChapterContext = (
         });
       }
 
-      // 3. 收集所有结束于当前章之前的总结
+      // 3. 收集总结
       const allSummaries = chapters
         .filter(c => (c.subtype === 'big_summary' || c.subtype === 'small_summary') && c.summaryRange)
         .filter(s => {
+          // 全书模式：只要有范围就全选，不再受分卷限制
           if (isAllScope) return true;
           if (filterVolumeId) return s.volumeId === filterVolumeId;
-          // 强化：即便处于“未分类”作用域，也只允许同样“未分类”的总结进入
           if (filterUncategorized) return !s.volumeId;
-          // 绝对防御：非全书模式下，严禁任何不匹配分卷 ID 的总结进入（防止漂移）
           return false;
         })
-        .filter(s => parseRange(s.summaryRange!).end < currentNum);
+        .filter(s => {
+          // 全书模式：小总结彻底取消序号过滤
+          if (
+            isAllScope &&
+            (s.subtype === 'small_summary' || (typeof s.title === 'string' && s.title.includes('小总结')))
+          )
+            return true;
+          // 仅对大总结或非全书模式应用序号过滤
+          return parseRange(s.summaryRange!).end < currentNum;
+        });
 
       // 去重
       const rangeMap = new Map<string, Chapter>();
@@ -204,15 +212,17 @@ export const getChapterContext = (
         (a, b) => parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start,
       );
 
-      // 核心修复：根据作用域（全书/本卷）决定总结提取策略
-      // 获取范围内最近的一个大总结（作为补充参考，不再作为强制截断点）
+      // 核心修复：根据作用域决定总结提取策略
+      // 获取范围内最近的一个大总结（兼容 subtype 或 标题关键字）
       const latestBigSummary = uniqueSummaries
-        .filter(s => s.subtype === 'big_summary')
+        .filter(s => s.subtype === 'big_summary' || (typeof s.title === 'string' && s.title.includes('大总结')))
         .sort((a, b) => parseRange(b.summaryRange!).end - parseRange(a.summaryRange!).end)[0];
 
-      // 提取所有有效的“小总结”，不再被大总结截断
+      // 提取所有有效的“小总结”
       const effectiveSmallSummaries = uniqueSummaries.filter(s => {
-        if (s.subtype !== 'small_summary') return false;
+        const isSmallSum = s.subtype === 'small_summary' || (typeof s.title === 'string' && s.title.includes('小总结'));
+        if (!isSmallSum) return false;
+        // 全书模式下：不进行任何过滤，发送所有小总结（已由 uniqueSummaries 保证唯一性和顺序）
         if (isAllScope) return true;
         if (filterVolumeId) return s.volumeId === filterVolumeId;
         if (filterUncategorized) return !s.volumeId;
@@ -332,17 +342,32 @@ export const getChapterContextMessages = (
         });
       }
 
-      // 3. 收集总结
+      // 3. 收集总结 (兼容识别逻辑)
       const allSummaries = chapters
-        .filter(c => (c.subtype === 'big_summary' || c.subtype === 'small_summary') && c.summaryRange)
+        .filter(c => {
+          const isSum =
+            c.subtype === 'big_summary' ||
+            c.subtype === 'small_summary' ||
+            (typeof c.title === 'string' && (c.title.includes('总结') || c.title.includes('摘要')));
+          return isSum && !!c.summaryRange;
+        })
         .filter(s => {
+          // 全书模式：只要有范围就全选
           if (isAllScope) return true;
           if (filterVolumeId) return s.volumeId === filterVolumeId;
-          // 同上强化
           if (filterUncategorized) return !s.volumeId;
           return false;
         })
-        .filter(s => parseRange(s.summaryRange!).end < currentNum);
+        .filter(s => {
+          // 全书模式：小总结彻底取消序号过滤
+          if (
+            isAllScope &&
+            (s.subtype === 'small_summary' || (typeof s.title === 'string' && s.title.includes('小总结')))
+          )
+            return true;
+          // 仅对大总结或非全书模式应用序号过滤
+          return parseRange(s.summaryRange!).end < currentNum;
+        });
 
       // 去重
       const rangeMap = new Map<string, Chapter>();
@@ -355,15 +380,16 @@ export const getChapterContextMessages = (
         (a, b) => parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start,
       );
 
-      // 核心修复：根据作用域（全书/本卷）决定总结提取策略
-      // 获取范围内最近的一个大总结（作为补充参考，不再作为强制截断点）
+      // 获取范围内最近的一个大总结 (兼容识别逻辑)
       const latestBigSummary = uniqueSummaries
-        .filter(s => s.subtype === 'big_summary')
+        .filter(s => s.subtype === 'big_summary' || (typeof s.title === 'string' && s.title.includes('大总结')))
         .sort((a, b) => parseRange(b.summaryRange!).end - parseRange(a.summaryRange!).end)[0];
 
-      // 提取所有有效的“小总结”，不再被大总结截断
+      // 提取所有有效的“小总结”
       const effectiveSmallSummaries = uniqueSummaries.filter(s => {
-        if (s.subtype !== 'small_summary') return false;
+        const isSmallSum = s.subtype === 'small_summary' || (typeof s.title === 'string' && s.title.includes('小总结'));
+        if (!isSmallSum) return false;
+        // 全书模式下：不进行任何过滤，发送所有小总结
         if (isAllScope) return true;
         if (filterVolumeId) return s.volumeId === filterVolumeId;
         if (filterUncategorized) return !s.volumeId;
