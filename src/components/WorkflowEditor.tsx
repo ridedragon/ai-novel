@@ -3918,6 +3918,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         let isNodeFullyCompleted = false;
         let nodeIterationCount = 0;
         let currentMessages = [...messages];
+        let accumulatedNewEntries: OutputEntry[] = []; // 新增：记录本次执行产生的所有新条目
         const targetEndNum = extractTargetEndChapter(node.data.instruction as string || '') ||
                            (specificInstruction ? extractTargetEndChapter(specificInstruction) : null);
 
@@ -4077,6 +4078,14 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
           // --- 核心修复：工作流大纲/剧情粗纲节点自动续写判断 ---
           const isOutlineNode = node.data.typeKey === 'outline' || node.data.typeKey === 'plotOutline';
+          
+          // 转换为 OutputEntry 格式并存入累加器
+          const currentIterationEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({
+            id: `${Date.now()}-${nodeIterationCount}-${idx}`,
+            title: e.title,
+            content: e.content
+          }));
+
           if (isSuccess && isOutlineNode && targetEndNum) {
             const lastEntry = entriesToStore[entriesToStore.length - 1];
             const currentLastNum = parseAnyNumber(lastEntry?.title || '');
@@ -4084,6 +4093,15 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             if (currentLastNum && currentLastNum < targetEndNum && nodeIterationCount < 5) {
               terminal.log(`[Workflow 续写] 大纲节点检测到截断：目标 ${targetEndNum}, 当前 ${currentLastNum}。准备接龙...`);
               
+              // 核心修复：更新累加器，确保同步到设定集时包含此片段
+              accumulatedNewEntries = [...accumulatedNewEntries, ...currentIterationEntries];
+
+              // 1. 将已生成的产物先存起来（增量保存，使用 Ref 确保不覆盖历史）
+              const latestNode = nodesRef.current.find(n => n.id === node.id);
+              const historyEntries = latestNode?.data.outputEntries || [];
+              // 注意：使用 [...history, ...new] 保持顺序
+              await syncNodeStatus(node.id, { outputEntries: [...historyEntries, ...currentIterationEntries] }, i);
+
               nodeIterationCount++;
               // 构造续写指令并更新下一轮的消息列表
               const nextStart = currentLastNum + 1;
@@ -4095,21 +4113,16 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 { role: 'user', content: continuationPrompt }
               ];
               
-              // 将已生成的产物先存起来（增量保存）
-              const incrementalEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({
-                id: `${Date.now()}-${nodeIterationCount}-${idx}`,
-                title: e.title,
-                content: e.content
-              }));
-              await syncNodeStatus(node.id, { outputEntries: [...incrementalEntries, ...(nodesRef.current.find(n => n.id === node.id)?.data.outputEntries || [])] }, i);
-              
               // 重置 isSuccess 触发下一轮 while 循环，但不增加 retryCount (因为这不是解析失败)
               isSuccess = false;
               continue;
             }
           }
           
-          if (isSuccess) isNodeFullyCompleted = true;
+          if (isSuccess) {
+            accumulatedNewEntries = [...accumulatedNewEntries, ...currentIterationEntries];
+            isNodeFullyCompleted = true;
+          }
         }
 
         // 恢复节点原本的标签（如果被重试修改过）
@@ -4117,34 +4130,34 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           await syncNodeStatus(node.id, { label: node.data.label }, i);
         }
 
-        const newEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({
-          id: `${Date.now()}-${idx}`,
-          title: e.title,
-          content: e.content
-        }));
-
         // V2: Capture Variables from output
         if (node.data.variableBinding && node.data.variableBinding.length > 0) {
            workflowManager.processVariableBindings(node.data.variableBinding, result);
         }
 
         // 核心修复：使用 syncNodeStatus 替代 updateNodeData，确保 Ref 立即更新且数据被持久化
-        // 否则后续的 status: 'completed' 更新会读取到陈旧的 Ref (不包含 outputEntries)，导致产物丢失
-        await syncNodeStatus(node.id, { outputEntries: [...newEntries, ...(node.data.outputEntries || [])] }, i);
+        // 修正：从 nodesRef 获取最新历史，并将本次循环中尚未保存的累加结果合并进去
+        const latestNodeFinal = nodesRef.current.find(n => n.id === node.id);
+        const finalHistoryEntries = latestNodeFinal?.data.outputEntries || [];
+        
+        // 过滤掉已经保存过的条目（如果是通过续写逻辑保存过的）
+        const alreadySavedIds = new Set(finalHistoryEntries.map(e => e.id));
+        const unsavedEntries = accumulatedNewEntries.filter(e => !alreadySavedIds.has(e.id));
+
+        if (unsavedEntries.length > 0) {
+          await syncNodeStatus(node.id, { outputEntries: [...finalHistoryEntries, ...unsavedEntries] }, i);
+        }
 
         // 7. 处理生成内容持久化存储
+        // 核心修正：使用 accumulatedNewEntries 确保“接龙”生成的所有片段都能存入小说设定集
+        const finalEntriesToStore = accumulatedNewEntries.length > 0 ? accumulatedNewEntries : entriesToStore;
         let updatedNovelState = { ...localNovel };
         let novelChanged = false;
 
         if (node.data.folderName || currentWorkflowFolder) {
           const folderName = node.data.folderName || currentWorkflowFolder;
           
-          // 查找匹配的设定集 ID（由于可能存在重名，优先通过逻辑关联）
           const findTargetSet = (sets: any[] | undefined) => {
-            // 1. 优先通过显式 ID 关联查找 (如果节点属性中保存了 ID，且该 ID 依然有效)
-            // 注意：由于 node.data.selectedXXX 可能包含多个，这里通常处理自动同步到关联目录的行为
-            
-            // 2. 尝试通过名称匹配
             return sets?.find(s => s.name === folderName);
           };
 
@@ -4156,7 +4169,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 worldviewSets: updatedNovelState.worldviewSets?.map(s => {
                   if (s.id === targetSet.id) {
                     const newEntries = [...s.entries];
-                    entriesToStore.forEach(e => {
+                    finalEntriesToStore.forEach(e => {
                       const idx = newEntries.findIndex(ne => ne.item === e.title);
                       if (idx !== -1) newEntries[idx] = { item: e.title, setting: e.content };
                       else newEntries.push({ item: e.title, setting: e.content });
@@ -4176,7 +4189,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 characterSets: updatedNovelState.characterSets?.map(s => {
                   if (s.id === targetSet.id) {
                     const newChars = [...s.characters];
-                    entriesToStore.forEach(e => {
+                    finalEntriesToStore.forEach(e => {
                       const idx = newChars.findIndex(nc => nc.name === e.title);
                       if (idx !== -1) newChars[idx] = { name: e.title, bio: e.content };
                       else newChars.push({ name: e.title, bio: e.content });
@@ -4196,8 +4209,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 outlineSets: updatedNovelState.outlineSets?.map(s => {
                   if (s.id === targetSet.id) {
                     const newItems = [...s.items];
-                    entriesToStore.forEach(e => {
-                      // 增强匹配：支持模糊匹配“第X章”
+                    finalEntriesToStore.forEach(e => {
                       const cleanTitle = (t: string) => t.replace(/\s+/g, '');
                       const targetClean = cleanTitle(e.title);
                       const idx = newItems.findIndex(ni => cleanTitle(ni.title) === targetClean || ni.title === e.title);
@@ -4205,7 +4217,6 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                       if (idx !== -1) newItems[idx] = { ...newItems[idx], title: e.title, summary: e.content };
                       else newItems.push({ title: e.title, summary: e.content });
                     });
-                    // 排序大纲条目
                     newItems.sort((a, b) => (parseAnyNumber(a.title) || 0) - (parseAnyNumber(b.title) || 0));
                     return { ...s, items: newItems };
                   }
@@ -4213,8 +4224,6 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 })
               };
               novelChanged = true;
-            } else {
-              terminal.warn(`[Workflow] Outline node execution finished, but no matching outline set found for folder "${folderName}". Content remains in node only.`);
             }
           } else if (node.data.typeKey === 'inspiration') {
             const targetSet = findTargetSet(updatedNovelState.inspirationSets);
@@ -4224,7 +4233,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 inspirationSets: updatedNovelState.inspirationSets?.map(s => {
                   if (s.id === targetSet.id) {
                     const newItems = [...s.items];
-                    entriesToStore.forEach(e => {
+                    finalEntriesToStore.forEach(e => {
                       const idx = newItems.findIndex(ni => ni.title === e.title);
                       if (idx !== -1) newItems[idx] = { title: e.title, content: e.content };
                       else newItems.push({ title: e.title, content: e.content });
@@ -4244,7 +4253,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 plotOutlineSets: updatedNovelState.plotOutlineSets?.map(s => {
                   if (s.id === targetSet.id) {
                     const newItems = [...s.items];
-                    entriesToStore.forEach((e, idx) => {
+                    finalEntriesToStore.forEach((e, idx) => {
                       const existIdx = newItems.findIndex(ni => ni.title === e.title);
                       if (existIdx !== -1) newItems[existIdx] = { ...newItems[existIdx], description: e.content };
                       else newItems.push({ id: `plot_${Date.now()}_${idx}`, title: e.title, description: e.content, type: 'scene' });

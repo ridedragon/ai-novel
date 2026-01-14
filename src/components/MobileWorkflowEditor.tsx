@@ -2949,6 +2949,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         let isNodeFullyCompleted = false;
         let nodeIterationCount = 0;
         let currentMessages = [...messages];
+        let accumulatedNewEntries: OutputEntry[] = []; // 新增：记录本次执行产生的所有新条目
         const targetEndNum = extractTargetEndChapter(node.data.instruction as string || '') ||
                            (specificInstruction ? extractTargetEndChapter(specificInstruction) : null);
 
@@ -3090,6 +3091,13 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
           // --- 核心修复：移动端大纲/剧情粗纲节点自动续写 ---
           const isOutlineNode = node.data.typeKey === 'outline' || node.data.typeKey === 'plotOutline';
+          
+          const currentIterationEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({
+            id: `${Date.now()}-${nodeIterationCount}-${idx}`,
+            title: e.title,
+            content: e.content
+          }));
+
           if (isSuccess && isOutlineNode && targetEndNum) {
             const lastEntry = entriesToStore[entriesToStore.length - 1];
             const currentLastNum = parseAnyNumber(lastEntry?.title || '');
@@ -3097,6 +3105,15 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             if (currentLastNum && currentLastNum < targetEndNum && nodeIterationCount < 5) {
               terminal.log(`[Mobile 续写] 大纲截断：目标 ${targetEndNum}, 当前 ${currentLastNum}。接龙...`);
               
+              // 核心修复：手机端同步更新累加器
+              accumulatedNewEntries = [...accumulatedNewEntries, ...currentIterationEntries];
+
+              // 1. 将已生成的产物先存起来（增量保存，使用 Ref 确保不覆盖历史）
+              const latestNode = nodesRef.current.find(n => n.id === node.id);
+              const historyEntries = latestNode?.data.outputEntries || [];
+              // 注意：使用 [...history, ...new] 保持自然顺序 (1, 2, 3...)
+              await syncNodeStatus(node.id, { outputEntries: [...historyEntries, ...currentIterationEntries] }, i);
+
               nodeIterationCount++;
               const nextStart = currentLastNum + 1;
               const continuationPrompt = `(系统接龙：刚才你只生成到了第 ${currentLastNum} 章。请不要重复，直接从第 ${nextStart} 章开始继续生成大纲，直到第 ${targetEndNum} 章。请严格遵守 JSON 格式。)`;
@@ -3107,31 +3124,39 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                 { role: 'user', content: continuationPrompt }
               ];
               
-              const incrementalEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({
-                id: `${Date.now()}-${nodeIterationCount}-${idx}`,
-                title: e.title,
-                content: e.content
-              }));
-              await syncNodeStatus(node.id, { outputEntries: [...incrementalEntries, ...(nodesRef.current.find(n => n.id === node.id)?.data.outputEntries || [])] }, i);
-              
               isSuccess = false;
               continue;
             }
           }
 
-          if (isSuccess) isNodeFullyCompleted = true;
+          if (isSuccess) {
+            accumulatedNewEntries = [...accumulatedNewEntries, ...currentIterationEntries];
+            isNodeFullyCompleted = true;
+          }
         }
 
         if (retryCount > 0) {
           updateNodeData(node.id, { label: node.data.label });
         }
 
-        const newEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({ id: `${Date.now()}-${idx}`, title: e.title, content: e.content }));
-        // 核心修复：从 nodesRef 获取最新产物列表，防止“接龙”数据被覆盖
-        const latestEntries = nodesRef.current.find(n => n.id === node.id)?.data.outputEntries || [];
-        await syncNodeStatus(node.id, { status: 'completed', outputEntries: [...newEntries, ...latestEntries] }, i);
+        // 核心修复：最终状态同步逻辑同步至 PC 端
+        const latestNodeFinal = nodesRef.current.find(n => n.id === node.id);
+        const finalHistoryEntries = latestNodeFinal?.data.outputEntries || [];
+        
+        // 过滤掉已经保存过的条目
+        const alreadySavedIds = new Set(finalHistoryEntries.map(e => e.id));
+        const unsavedEntries = accumulatedNewEntries.filter(e => !alreadySavedIds.has(e.id));
+
+        if (unsavedEntries.length > 0 || node.data.status !== 'completed') {
+          await syncNodeStatus(node.id, {
+            status: 'completed',
+            outputEntries: [...finalHistoryEntries, ...unsavedEntries]
+          }, i);
+        }
 
         // 持久化到 Novel
+        // 核心修正：使用 accumulatedNewEntries 确保“接龙”生成的所有片段都能存入小说设定集
+        const finalEntriesToStore = accumulatedNewEntries.length > 0 ? accumulatedNewEntries : entriesToStore;
         if (currentWorkflowFolder) {
           const folderName = currentWorkflowFolder;
           let updatedNovelState = { ...localNovel };
@@ -3141,7 +3166,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             const targetSet = sets?.find(s => s.name === folderName);
             if (targetSet) {
               const newItems = [...(type === 'worldview' ? targetSet.entries : type === 'character' ? targetSet.characters : targetSet.items)];
-              entriesToStore.forEach(e => {
+              finalEntriesToStore.forEach(e => {
                 const titleKey = type === 'worldview' ? 'item' : type === 'character' ? 'name' : 'title';
                 const contentKey = type === 'worldview' ? 'setting' : type === 'character' ? 'bio' : (type === 'plotOutline' ? 'description' : (type === 'inspiration' ? 'content' : 'summary'));
                 const idx = newItems.findIndex((ni: any) => ni[titleKey] === e.title);
@@ -3162,7 +3187,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             const targetSet = updatedNovelState.outlineSets?.find(s => s.name === folderName);
             if (targetSet) {
               const newItems = [...targetSet.items];
-              entriesToStore.forEach(e => {
+              finalEntriesToStore.forEach(e => {
                 const cleanTitle = (t: string) => t.replace(/\s+/g, '');
                 const targetClean = cleanTitle(e.title);
                 const idx = newItems.findIndex((ni: any) => cleanTitle(ni.title) === targetClean || ni.title === e.title);
