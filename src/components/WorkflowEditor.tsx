@@ -3464,40 +3464,6 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 localNovel = updatedNovel;
               }
 
-              // --- 自动分卷逻辑检测 (支持多次) ---
-              const currentChapter = localNovel.chapters.find(c => c.id === chapterId);
-              if (currentChapter) {
-                const trigger = workflowManager.checkTriggerSplit(currentChapter.title);
-                
-                if (trigger) {
-                  terminal.log(`[Workflow] Triggering automatic volume split at "${trigger.chapterTitle}"`);
-                  const nextVolName = trigger.nextVolumeName || '新分卷';
-
-                  // 1. 创建新分卷
-                  const newVolume = {
-                    id: `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                    title: nextVolName,
-                    collapsed: false
-                  };
-
-                  const splitNovel = {
-                    ...localNovel,
-                    volumes: [...(localNovel.volumes || []), newVolume]
-                  };
-
-                  await updateLocalAndGlobal(splitNovel);
-
-                  // 3. 设置为新的 Active Anchor，并标记该触发规则已处理
-                  workflowManager.setActiveVolumeAnchor(newVolume.id);
-                  workflowManager.markSplitProcessed(trigger.chapterTitle);
-
-                  terminal.log(`[Workflow] Automatic split complete. New volume: ${nextVolName} (${newVolume.id})`);
-                  
-                  // 4. 更新 finalVolumeId 以便后续章节使用新分卷
-                  finalVolumeId = newVolume.id;
-                }
-              }
-
               if (globalConfig.onChapterComplete) {
                 const result = await (globalConfig.onChapterComplete as any)(chapterId, content, updatedNovel);
                 if (result && typeof result === 'object' && (result as Novel).chapters) {
@@ -3507,6 +3473,41 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               // 正文生成节点不再维护 outputEntries 列表，因为内容直接写入目录
               // 核心修复：必须将最新的 localNovel 返回给引擎
               return localNovel;
+            },
+            async (title) => {
+              // --- 核心修复：提前进行分卷预检 ---
+              const trigger = workflowManager.checkTriggerSplit(title);
+              if (trigger) {
+                terminal.log(`[Workflow] Triggering PRE-CHAPTER automatic volume split at "${trigger.chapterTitle}"`);
+                const nextVolName = trigger.nextVolumeName || '新分卷';
+
+                // 1. 创建新分卷
+                const newVolume = {
+                  id: `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                  title: nextVolName,
+                  collapsed: false
+                };
+
+                const splitNovel = {
+                  ...localNovel,
+                  volumes: [...(localNovel.volumes || []), newVolume]
+                };
+
+                // 2. 立即更新 UI 和内存快照
+                await updateLocalAndGlobal(splitNovel);
+
+                // 3. 设置为新的 Active Anchor，并标记该触发规则已处理
+                workflowManager.setActiveVolumeAnchor(newVolume.id);
+                workflowManager.markSplitProcessed(trigger.chapterTitle);
+
+                terminal.log(`[Workflow] Pre-chapter split complete. Target volume will be: ${nextVolName} (${newVolume.id})`);
+                
+                // 4. 返回最新的小说对象和新的分卷 ID 给引擎，实现原子化同步
+                return {
+                  updatedNovel: splitNovel,
+                  newVolumeId: newVolume.id
+                };
+              }
             },
             finalVolumeId,
             false,

@@ -140,6 +140,44 @@ export const storage = {
     return JSON.stringify(novel.inspirationSets || []);
   },
 
+  // 辅助函数：全量上报本地数据到服务器
+  async _pushAllToRemote(novels: Novel[]) {
+    if (!novels || novels.length === 0) return;
+
+    // 1. 推送列表
+    await saveToApi(NOVELS_KEY, novels);
+
+    // 2. 遍历所有书籍，推送详情（如果服务器没有的话）
+    for (const novel of novels) {
+      const nid = novel.id;
+      // 从 IDB 读取各个分块并上传
+      const [meta, wv, char, out, plot, ref, insp] = await Promise.all([
+        get(`${METADATA_PREFIX}${nid}`),
+        get(`${WORLDVIEW_PREFIX}${nid}`),
+        get(`${CHARACTERS_PREFIX}${nid}`),
+        get(`${OUTLINE_PREFIX}${nid}`),
+        get(`${PLOT_OUTLINE_PREFIX}${nid}`),
+        get(`${REFERENCE_PREFIX}${nid}`),
+        get(`${INSPIRATION_PREFIX}${nid}`),
+      ]);
+
+      const tasks = [];
+      if (meta) tasks.push(saveToApi(`${METADATA_PREFIX}${nid}`, meta));
+      if (wv) tasks.push(saveToApi(`${WORLDVIEW_PREFIX}${nid}`, wv));
+      if (char) tasks.push(saveToApi(`${CHARACTERS_PREFIX}${nid}`, char));
+      if (out) tasks.push(saveToApi(`${OUTLINE_PREFIX}${nid}`, out));
+      if (plot) tasks.push(saveToApi(`${PLOT_OUTLINE_PREFIX}${nid}`, plot));
+      if (ref) tasks.push(saveToApi(`${REFERENCE_PREFIX}${nid}`, ref));
+      if (insp) tasks.push(saveToApi(`${INSPIRATION_PREFIX}${nid}`, insp));
+
+      if (tasks.length > 0) {
+        await Promise.all(tasks);
+        terminal.log(`[STORAGE] 已上报《${novel.title}》的详情数据至服务器`);
+      }
+    }
+    terminal.log('[STORAGE] 全量数据上报服务器完成');
+  },
+
   async getNovels(): Promise<Novel[]> {
     try {
       // 1. 尝试从 IndexedDB 获取
@@ -148,55 +186,59 @@ export const storage = {
       // 2. 尝试从 API 获取远程数据状态
       const remoteNovels = await fetchFromApi<Novel[]>(NOVELS_KEY);
 
-      // 3. 同步逻辑
-      if (!novels || novels.length === 0) {
-        // 场景 A: 本地为空 (如新开的 Chrome)，远程有数据 -> 拉取
-        if (remoteNovels && remoteNovels.length > 0) {
-          novels = remoteNovels;
-          await set(NOVELS_KEY, novels);
-          terminal.log('[STORAGE] 本地为空，已从远程服务器同步书籍列表');
-        }
-      } else {
-        // 场景 B: 本地有数据 (如原本的 Edge)，远程为空 -> 推送 (初始化远程)
-        // 增强版：不仅推送列表，还推送所有书籍的详情元数据 (世界观、大纲等)
-        if (!remoteNovels || remoteNovels.length === 0) {
-          terminal.log('[STORAGE] 远程为空，正在将本地数据(含详情)全量初始化到服务器...');
+      // 3. 同步与合并逻辑 (核心修复：解决多浏览器书籍数目不一致)
+      let needsLocalSave = false;
+      let needsRemoteSave = false;
 
-          // 1. 推送列表
-          const pushPromise = saveToApi(NOVELS_KEY, novels).then(async () => {
-            if (!novels) return;
-            // 2. 遍历所有书籍，推送详情
-            for (const novel of novels) {
-              const nid = novel.id;
-              // 从 IDB 读取各个分块并上传
-              const [meta, wv, char, out, plot, ref, insp] = await Promise.all([
-                get(`${METADATA_PREFIX}${nid}`),
-                get(`${WORLDVIEW_PREFIX}${nid}`),
-                get(`${CHARACTERS_PREFIX}${nid}`),
-                get(`${OUTLINE_PREFIX}${nid}`),
-                get(`${PLOT_OUTLINE_PREFIX}${nid}`),
-                get(`${REFERENCE_PREFIX}${nid}`),
-                get(`${INSPIRATION_PREFIX}${nid}`),
-              ]);
+      const mergedMap = new Map<string, Novel>();
 
-              const tasks = [];
-              if (meta) tasks.push(saveToApi(`${METADATA_PREFIX}${nid}`, meta));
-              if (wv) tasks.push(saveToApi(`${WORLDVIEW_PREFIX}${nid}`, wv));
-              if (char) tasks.push(saveToApi(`${CHARACTERS_PREFIX}${nid}`, char));
-              if (out) tasks.push(saveToApi(`${OUTLINE_PREFIX}${nid}`, out));
-              if (plot) tasks.push(saveToApi(`${PLOT_OUTLINE_PREFIX}${nid}`, plot));
-              if (ref) tasks.push(saveToApi(`${REFERENCE_PREFIX}${nid}`, ref));
-              if (insp) tasks.push(saveToApi(`${INSPIRATION_PREFIX}${nid}`, insp));
+      // 先放入本地数据
+      if (novels && novels.length > 0) {
+        novels.forEach(n => mergedMap.set(n.id, n));
+      }
 
-              if (tasks.length > 0) {
-                await Promise.all(tasks);
-                terminal.log(`[STORAGE] 已自动上报《${novel.title}》的详情数据`);
-              }
+      // 再拉取远程数据进行合并
+      if (remoteNovels && remoteNovels.length > 0) {
+        remoteNovels.forEach(rn => {
+          if (!mergedMap.has(rn.id)) {
+            // 发现远程有本地没有的书籍
+            mergedMap.set(rn.id, rn);
+            needsLocalSave = true;
+          }
+        });
+
+        // 反向检查：如果本地有的书籍远程没有，则需要触发远程同步
+        if (novels) {
+          const remoteIds = new Set(remoteNovels.map(rn => rn.id));
+          for (const ln of novels) {
+            if (!remoteIds.has(ln.id)) {
+              needsRemoteSave = true;
+              break;
             }
-            terminal.log('[STORAGE] 全量数据上报完成');
-          });
+          }
+        } else {
+          // 本地原本完全为空，直接使用远程数据
+          needsLocalSave = true;
+        }
+      } else if (novels && novels.length > 0) {
+        // 远程完全为空，本地不为空，需要初始化远程
+        needsRemoteSave = true;
+      }
 
-          pushPromise.catch(e => console.error('[STORAGE] 数据自动上报失败', e));
+      // 如果产生变化，执行持久化
+      if (needsLocalSave || needsRemoteSave) {
+        const mergedList = Array.from(mergedMap.values());
+        novels = mergedList;
+
+        if (needsLocalSave) {
+          await set(NOVELS_KEY, novels);
+          terminal.log(`[STORAGE] 书籍列表已同步：本地发现缺失，已合并远程数据。当前总数: ${novels.length}`);
+        }
+
+        if (needsRemoteSave) {
+          terminal.log(`[STORAGE] 书籍列表已同步：远程发现缺失，正在上报本地书籍...`);
+          // 异步推送，不阻塞 UI 加载
+          this._pushAllToRemote(novels).catch(e => console.error('[STORAGE] 远程上报失败', e));
         }
       }
 

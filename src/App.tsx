@@ -7243,7 +7243,7 @@ function App() {
             <span className="hidden md:inline">防断连</span>
           </button>
           <div
-            className={`flex items-center gap-1 px-1.5 md:px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${longTextMode ? 'bg-primary/10 text-primary border-primary/30' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-white/5'}`}
+            className={`flex items-center gap-0.5 md:gap-1 px-1 md:px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${longTextMode ? 'bg-primary/10 text-primary border-primary/30' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-white/5'}`}
             onClick={() => setLongTextMode(!longTextMode)}
           >
             <BookMarked className="w-4 h-4" />
@@ -7253,7 +7253,7 @@ function App() {
                 value={contextScope}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) => { e.stopPropagation(); setContextScope(e.target.value); }}
-                className="bg-transparent border-none outline-none text-[10px] ml-1 font-bold text-slate-500 dark:text-slate-500"
+                className="bg-transparent border-none outline-none text-[10px] ml-0.5 md:ml-1 font-bold text-slate-500 dark:text-slate-500 max-w-[50px] md:max-w-none"
               >
                 <option value="all">全书</option>
                 <option value="current">本卷</option>
@@ -7261,8 +7261,8 @@ function App() {
               </select>
             )}
           </div>
-          <div className="h-4 w-[1px] bg-slate-200 dark:bg-[#1e2433] mx-1"></div>
-          <button className="flex items-center gap-1 px-1.5 md:px-3 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-slate-200 dark:hover:border-white/10 text-slate-500 dark:text-slate-400" onClick={() => setShowRegexModal(true)}>
+          <div className="hidden md:block h-4 w-[1px] bg-slate-200 dark:bg-[#1e2433] mx-1"></div>
+          <button className="flex items-center gap-1 px-1 md:px-3 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-xs border border-transparent hover:border-slate-200 dark:hover:border-white/10 text-slate-500 dark:text-slate-400" onClick={() => setShowRegexModal(true)}>
             <Code className="w-4 h-4" />
             <span className="hidden md:inline">正则</span>
           </button>

@@ -40,6 +40,7 @@ export class AutoWriteEngine {
       updatedNovel?: Novel,
       forceFinal?: boolean,
     ) => Promise<Novel | void>,
+    onBeforeChapter?: (title: string) => Promise<{ updatedNovel?: Novel; newVolumeId?: string } | void>,
     targetVolumeId?: string,
     includeFullOutline: boolean = false,
     outlineSetId: string | null = null,
@@ -69,13 +70,32 @@ export class AutoWriteEngine {
     const maxBatchSize = this.config.consecutiveChapterCount > 1 ? this.config.consecutiveChapterCount : 1;
 
     while (startIndex < outline.length && this.isRunning) {
-      const batchItems: { item: OutlineItem; idx: number; id: number }[] = [];
+      const batchItems: { item: OutlineItem; idx: number; id: number; volumeId?: string }[] = [];
 
       for (let i = 0; i < maxBatchSize; i++) {
         const currIdx = startIndex + i;
         if (currIdx >= outline.length) break;
 
         const item = outline[currIdx];
+
+        // --- 核心修复：分卷预检拦截 ---
+        // 在创建任何占位符或生成内容前，先询问 UI 是否需要分卷。
+        // 这解决了分卷触发章被错误归入上一个分卷的问题。
+        if (onBeforeChapter) {
+          const beforeResult = await onBeforeChapter(item.title);
+          if (beforeResult) {
+            if (beforeResult.updatedNovel) {
+              // 原子化同步：立即更新引擎内部的副本，防止旧快照覆盖 UI 新创建的分卷
+              this.novel = beforeResult.updatedNovel;
+            }
+            if (beforeResult.newVolumeId) {
+              // 立即切换当前及后续章节的目标分卷
+              targetVolumeId = beforeResult.newVolumeId;
+              terminal.log(`[AutoWriteEngine] Switched targetVolumeId to ${targetVolumeId} for chapter: ${item.title}`);
+            }
+          }
+        }
+
         // 核心修复：查重逻辑必须绑定分卷。支持用户在不同分卷（如：草稿卷 vs 正式卷）中生成相同大纲的内容而不被跳过。
         const existingChapter = (this.novel.chapters || []).find(
           c =>
@@ -106,6 +126,7 @@ export class AutoWriteEngine {
           item,
           idx: currIdx,
           id: existingChapter ? existingChapter.id : Date.now() + Math.floor(Math.random() * 100000),
+          volumeId: targetVolumeId, // 锁定每一章所属的分卷 ID，防止批量生成时的分卷偏移
         });
       }
 
@@ -117,9 +138,10 @@ export class AutoWriteEngine {
       // Apply placeholders
       const newChapters = [...(this.novel.chapters || [])];
       batchItems.forEach(batchItem => {
+        const itemVolId = batchItem.volumeId;
         const existingById = (newChapters || []).find(c => c.id === batchItem.id);
         const existingByTitle = (newChapters || []).find(
-          c => c.title === batchItem.item.title && (!targetVolumeId || c.volumeId === targetVolumeId),
+          c => c.title === batchItem.item.title && (!itemVolId || c.volumeId === itemVolId),
         );
 
         if (!existingById && !existingByTitle) {
@@ -127,14 +149,14 @@ export class AutoWriteEngine {
             id: batchItem.id,
             title: batchItem.item.title,
             content: '',
-            volumeId: targetVolumeId,
+            volumeId: itemVolId,
           });
         } else if (existingByTitle) {
           batchItem.id = existingByTitle.id;
           // 深度修复：即便章节已存在，如果它处于“未分卷”状态，且当前生成任务明确了目标分卷，
           // 则在执行时将其归类到该分卷中。这解决了用户看到的“空卷”且章节在“未分卷”中的问题。
-          if ((!existingByTitle.volumeId || existingByTitle.volumeId === '') && targetVolumeId) {
-            existingByTitle.volumeId = targetVolumeId;
+          if ((!existingByTitle.volumeId || existingByTitle.volumeId === '') && itemVolId) {
+            existingByTitle.volumeId = itemVolId;
           }
         }
       });
