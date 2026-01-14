@@ -399,23 +399,21 @@ export const storage = {
     const contentPromises = (novel.chapters || []).map(async chapter => {
       if (chapter.content && lastSavedContentCache.has(chapter.id)) return;
 
-      let content = await get<string>(`chapter_content_${chapter.id}`);
+      const localContent = await get<string>(`chapter_content_${chapter.id}`);
+      let content: string = localContent || '';
 
       // 本地无内容，尝试远程
-      if (content === undefined) {
+      if (!content) {
         const remoteContent = await fetchFromApi<string>(`chapter_content_${chapter.id}`);
         if (remoteContent !== null) {
           content = remoteContent;
           // 同步回本地
-          await set(`chapter_content_${chapter.id}`, content);
+          await set(`chapter_content_${chapter.id}`, remoteContent);
         }
       } else {
         // 本地有内容，异步确保远程也有 (反向同步)
-        // 同样，为了不频繁请求，可以做一个简单的检查或者只在特定时机触发
-        // 这里为了确保一致性，在加载时做一次覆盖写入是比较稳妥的初始化方式
-        // 但对于章节正文，内容较大，我们只在“疑似未同步”时做？
-        // 简化策略：异步推送。
-        saveToApi(`chapter_content_${chapter.id}`, content).catch(() => {});
+        const contentToSync = content;
+        saveToApi(`chapter_content_${chapter.id}`, contentToSync).catch(() => {});
 
         // 同时也同步版本历史
         this.getChapterVersions(chapter.id).then(versions => {
@@ -425,10 +423,8 @@ export const storage = {
         });
       }
 
-      if (content !== undefined) {
-        chapter.content = content;
-        lastSavedContentCache.set(chapter.id, content);
-      }
+      chapter.content = content;
+      lastSavedContentCache.set(chapter.id, content);
     });
 
     await Promise.all(contentPromises);
@@ -655,6 +651,38 @@ export const storage = {
     } catch (e) {
       console.error('Failed to save novels to IndexedDB', e);
       throw e;
+    }
+  },
+
+  // 获取特定章节的正文内容（含内存缓存和远程回退控制）
+  async getChapterContent(chapterId: number): Promise<string> {
+    try {
+      // 1. 尝试从内存缓存获取
+      const cached = lastSavedContentCache.get(chapterId);
+      if (cached !== undefined) {
+        return cached;
+      }
+
+      // 2. 尝试从 IndexedDB 获取
+      const localValue = await get<string>(`chapter_content_${chapterId}`);
+      let content: string = localValue ?? '';
+
+      // 3. 尝试从 API 获取 (如果本地为空，则回退)
+      if (!content) {
+        const remoteValue = await fetchFromApi<string>(`chapter_content_${chapterId}`);
+        if (remoteValue !== null) {
+          content = remoteValue;
+          // 同步回本地
+          await set(`chapter_content_${chapterId}`, remoteValue);
+        }
+      }
+
+      // 4. 更新缓存并返回
+      lastSavedContentCache.set(chapterId, content);
+      return content;
+    } catch (e) {
+      console.error(`[STORAGE] Failed to get chapter content for ${chapterId}`, e);
+      return '';
     }
   },
 

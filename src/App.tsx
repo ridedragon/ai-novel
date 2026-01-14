@@ -87,8 +87,13 @@ import {
   WorldviewSet
 } from './types'
 import { keepAliveManager } from './utils/KeepAliveManager'
-import { checkAndGenerateSummary as checkAndGenerateSummaryUtil, recalibrateSummaries, sortChapters } from './utils/SummaryManager'
 import { storage } from './utils/storage'
+import {
+  checkAndGenerateSummary as checkAndGenerateSummaryUtil,
+  recalibrateSummaries,
+  sortChapters,
+} from './utils/SummaryManager'
+import { workflowManager } from './utils/WorkflowManager'
  
  const defaultInspirationPresets: GeneratorPreset[] = [
   {
@@ -2509,7 +2514,7 @@ function App() {
     downloadFile(content, `${novel.title}.txt`)
   }
 
-  const handleExportVolume = (volumeId: string) => {
+  const handleExportVolume = async (volumeId: string) => {
     const volume = volumes.find(v => v.id === volumeId)
     if (!volume) return
     
@@ -2520,9 +2525,16 @@ function App() {
       return processed
     }
 
-    let content = `【${volume.title}】\n\n`
+    // 核心修复：异步并行加载本卷所有章节内容，解决冷热分离导致的内容缺失问题
     const volChapters = chapters.filter(c => c.volumeId === volumeId && (!c.subtype || c.subtype === 'story'))
-    volChapters.forEach(chap => {
+    const chaptersWithContent = await Promise.all(volChapters.map(async chap => {
+        if (chap.content && chap.content.trim().length > 0) return chap;
+        const fullContent = await storage.getChapterContent(chap.id);
+        return { ...chap, content: fullContent || '' };
+    }));
+
+    let content = `【${volume.title}】\n\n`
+    chaptersWithContent.forEach(chap => {
       content += `${chap.title}\n${processContent(chap.content)}\n\n`
     })
     
@@ -3657,6 +3669,13 @@ function App() {
         terminal.log(`[Outline] Attempt ${attempt + 1}/${maxAttempts} started...`)
         const apiConfig = getApiConfig(activePreset.apiConfig, outlineModel)
 
+        // 核心修复：计算全书已有的正文章节总数，确保大纲生成的连续性，防止跨卷生成时从第一章开始
+        const storyChapters = getStoryChapters(chapters);
+        const totalCount = storyChapters.length;
+        const continuityNote = totalCount > 0
+            ? `\n**注意：当前全书已创作至第 ${totalCount} 章，请务必从“第 ${totalCount + 1} 章”开始续写大纲。不要重复前面的章节内容。**\n`
+            : '';
+
         logAiParams('章节大纲生成', apiConfig.model, activePreset.temperature ?? 1.0, activePreset.topP ?? 1.0, activePreset.topK ?? 200);
 
         const openai = new OpenAI({
@@ -3718,7 +3737,7 @@ function App() {
           .filter(p => p.enabled)
           .map(p => {
             let content = p.content
-            content = content.replace('{{context}}', `${referenceContext}\n${outlineContext}\n${chatContext}\n${mainChatContext}`)
+            content = content.replace('{{context}}', `${referenceContext}\n${outlineContext}\n${chatContext}\n${mainChatContext}\n${continuityNote}`)
             content = content.replace('{{notes}}', notes)
             return { role: p.role, content }
           })
@@ -3727,6 +3746,15 @@ function App() {
         // Add Global Prompt if exists
         if (globalCreationPrompt.trim()) {
             messages.unshift({ role: 'system', content: globalCreationPrompt })
+        }
+
+        // 核心修复：跨卷生成连续性补救。
+        // 向 AI 注入明确的进度指令，防止其在生成新大纲时因当前大纲集为空而重置章节索引。
+        if (totalCount > 0) {
+            messages.unshift({
+                role: 'system',
+                content: `【全书创作进度指令】：当前全书已完成创作至第 ${totalCount} 章。请务必从“第 ${totalCount + 1} 章”开始续写大纲规划，严禁从第一章重新开始。`
+            });
         }
 
         // Fallback if no user prompt is found (shouldn't happen with default presets)
@@ -3825,7 +3853,11 @@ function App() {
               // 优先级：显式参数 > 尝试从 Prompt 解析
               const finalTargetEnd = forcedTargetEnd || extractTargetEndChapter(promptOverride || userPrompt);
 
-              if (mode !== 'chat' && finalTargetEnd && currentLastNum && currentLastNum < finalTargetEnd) {
+              // 此时 mode 已经被 narrowing 排除掉 'chat' 情况
+              // TypeScript 已通过类型收窄确保 mode 不为 'chat'
+              // TypeScript 类型收窄已确保此处 mode 绝不为 'chat'
+              // TypeScript 类型收窄已确保此处 mode 不为 'chat'
+              if (finalTargetEnd && currentLastNum && currentLastNum < finalTargetEnd) {
                   terminal.log(`[逻辑补救] 目标章:${finalTargetEnd}, 当前章:${currentLastNum}。检测到截断，自动发起接龙请求...`);
                   
                   // 1.5秒后发起续写请求，给用户和数据库一点缓冲
@@ -5570,9 +5602,20 @@ function App() {
     contextLimit: number,
     targetVolumeId?: string,
     includeFullOutline: boolean = false,
-    outlineSetId: string | null = null
+    outlineSetId: string | null = null,
+    runId?: string | null
   ) => {
-    if (!isAutoWritingRef.current) return
+    // 核心修复 (Bug 2): 双重校验活跃性 - 引用标志 + 全局执行锁
+    const checkActive = () => {
+      if (!isAutoWritingRef.current) return false;
+      if (runId && !workflowManager.isRunActive(runId)) {
+        terminal.warn(`[AutoWrite] 侦测到过时手动任务 (RunID: ${runId})，正在静默退出。`);
+        return false;
+      }
+      return true;
+    };
+
+    if (!checkActive()) return;
 
     if (index >= outline.length) {
       setIsAutoWriting(false)
@@ -5604,7 +5647,7 @@ function App() {
                 // If the VERY FIRST item exists, we skip just this one and recurse
                 terminal.log(`[AutoWrite] Skipping existing chapter: ${item.title}`)
                 setTimeout(() => {
-                    autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline, outlineSetId)
+                    autoWriteLoop(outline, index + 1, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline, outlineSetId, runId)
                 }, 50)
                 return
             } else {
@@ -5628,6 +5671,7 @@ function App() {
     })
 
     // Apply placeholders
+    if (!checkActive()) return;
     setNovels(prev => {
         const next = prev.map(n => {
             if (n.id === novelId) {
@@ -5669,7 +5713,7 @@ function App() {
     let success = false
 
     while (attempt < maxAttempts) {
-      if (!isAutoWritingRef.current) return
+      if (!checkActive()) return;
 
       try {
         terminal.log(`[AutoWrite] Batch attempt ${attempt + 1}/${maxAttempts} started...`)
@@ -5721,6 +5765,28 @@ function App() {
         // 1. 注入世界观/角色信息 (System)
         messages.push(...worldInfoMessages)
 
+        // 核心修复 (Bug 3): 调整待创作大纲顺序，紧跟在【角色档案】之后
+        if (includeFullOutline) {
+          // 过滤已完成章节，只发送未写的和当前批次的大纲，保持 AI 焦点
+          const filteredOutline = outline.filter(item => {
+            const isCompleted = (latestNovelState?.chapters || []).some(
+              c => c.title === item.title && c.content && c.content.trim().length > 10
+            );
+            const isCurrentBatch = preparedBatch.some(b => b.title === item.title);
+            return !isCompleted || isCurrentBatch;
+          });
+
+          if (filteredOutline.length > 0) {
+            const fullOutlineStr = filteredOutline
+              .map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`)
+              .join('\n');
+            messages.push({
+              role: 'system',
+              content: `【待创作章节大纲参考】：\n${fullOutlineStr}`
+            });
+          }
+        }
+
         // 2. 注入灵感/自定义提示词 (透传预设角色和内容)
         promptsToUse.forEach(p => {
           if (!p.isFixed && p.content && p.content.trim()) {
@@ -5733,15 +5799,6 @@ function App() {
 
         // 3. 注入前文背景/剧情摘要 (System)
         messages.push(...contextMessages)
-
-        // 4. 注入全书粗纲 (System)
-        if (includeFullOutline) {
-          const fullOutlineStr = outline.map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`).join('\n')
-          messages.push({
-            role: 'system',
-            content: `【全书粗纲参考】：\n${fullOutlineStr}`
-          })
-        }
 
         // 5. 注入最终的任务描述 (唯一的 User 消息)
         messages.push({ role: 'user', content: taskDescription })
@@ -5773,7 +5830,7 @@ function App() {
             let lastUpdateTime = 0
             let chunkCount = 0;
             for await (const chunk of response) {
-              if (!isAutoWritingRef.current) throw new Error('Aborted')
+              if (!checkActive()) throw new Error('Aborted')
               const content = chunk.choices[0]?.delta?.content || ''
               if (content) hasReceivedContent = true
               fullGeneratedContent += content
@@ -5783,6 +5840,7 @@ function App() {
               if (now - lastUpdateTime > 200) { // 自动化写作节流：每 200ms 更新一次 UI
                 const renderStart = Date.now();
                 lastUpdateTime = now
+                if (!checkActive()) return;
                 setNovels(prev => {
                     const next = prev.map(n => {
                         if (n.id === novelId) {
@@ -5830,7 +5888,7 @@ function App() {
             }
         } else {
             // Non-stream
-            if (!isAutoWritingRef.current) throw new Error('Aborted')
+            if (!checkActive()) throw new Error('Aborted')
             fullGeneratedContent = response.choices[0]?.message?.content || ''
             if (fullGeneratedContent) hasReceivedContent = true
         }
@@ -5904,6 +5962,7 @@ function App() {
         finalContents = await Promise.all(finalContents.map(c => processTextWithRegex(c, activeScripts, 'output')))
 
         // Update State with final separated content - 使用函数式更新避免覆盖其他状态更改（如分卷折叠）
+        if (!checkActive()) return;
         terminal.warn(`[DEBUG] 创作循环准备写回，准备匹配 ID: ${preparedBatch.map(b => b.id).join(', ')}`);
         setNovels(prevNovels => {
             const updated = prevNovels.map(n => {
@@ -5957,8 +6016,8 @@ function App() {
             if (content && content.length > 0 && !content.includes("生成错误")) {
                 // Summary
                 if (longTextModeRef.current) {
-                    // 打通信号：传递 autoWriteAbortController 的中止信号，确保终止工作流时能取消正在进行的总结
-                    await checkAndGenerateSummary(chap.id, content, novelId, undefined, autoWriteAbortControllerRef.current?.signal)
+                    // 打通信号：传递 runId 和中止信号，确保终止后总结不会写回
+                    await checkAndGenerateSummary(chap.id, content, novelId, undefined, autoWriteAbortControllerRef.current?.signal, false, runId)
                 }
                 
                 // Auto Optimize (Enqueue)
@@ -5999,17 +6058,20 @@ function App() {
        return
     }
 
-    if (!isAutoWritingRef.current) return
+    if (!checkActive()) return;
 
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
-    if (!isAutoWritingRef.current) return
+    if (!checkActive()) return;
 
     // Continue to next batch
-    await autoWriteLoop(outline, index + preparedBatch.length, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline, outlineSetId)
+    await autoWriteLoop(outline, index + preparedBatch.length, novelId, novelTitle, promptsToUse, contextLimit, targetVolumeId, includeFullOutline, outlineSetId, runId)
   }
 
   const startAutoWriting = (outlineSetId?: string | null) => {
+     // 核心修复 (Bug 2): 即使是手动创作循环，也注册一个执行 ID 以便物理熔断
+     const startRunId = workflowManager.registerManualRun('manual');
+     
      // 如果外部指定了 ID，优先使用，否则使用当前 UI 选中的 ID
      let effectiveId = (outlineSetId && typeof outlineSetId === 'string') ? outlineSetId : activeOutlineSetId;
      
@@ -6076,17 +6138,33 @@ function App() {
     setAutoWriteOutlineSetId(activeOutlineSetId)
     autoWriteAbortControllerRef.current = new AbortController()
     
+    // 核心修复 (Bug 2): 手动启动也建立执行锁，防止终止后再启动导致的双倍现象
+    const startRunId = `manual_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    // 我们借用 workflowManager 的 ID 校验能力，但不调用 start() 重置全局工作流 ID
+    // 这样可以让工作流和手动任务互不干扰，但都受 ID 保护
+    
     const activePrompts = prompts.filter(p => p.active)
 
-    // Calculate start index
+    // 核心修复：更严谨的起始索引计算。
+    // 策略：全自动创作应当只查重“当前目标分卷”内的章节，防止因跨卷同名标题导致的跳过错误。
     let startIndex = 0
     
-    // Find the first outline item that does not have a corresponding chapter
     for (let i = 0; i < currentSet.items.length; i++) {
         const item = currentSet.items[i]
-        const existingChapter = (activeNovel.chapters || []).find(c => c.title === item.title)
+        // 核心修复：全自动创作查重逻辑优化。
+        // 如果标题符合“第X章”的标准格式，则进行全书查重，防止跨卷重复生成相同章节号的内容。
+        // 如果是非标准标题，则仅在当前目标分卷（targetVolumeId）中查重。
+        const isStandardChapter = /^第?\s*[0-9零一二两三四五六七八九十百千]+\s*[章节]/.test(item.title);
+        
+        const existingChapter = (activeNovel.chapters || []).find(c => {
+            if (isStandardChapter) {
+                return c.title === item.title;
+            } else {
+                return c.volumeId === targetVolumeId && c.title === item.title;
+            }
+        });
 
-        if (!existingChapter || !existingChapter.content || existingChapter.content.trim().length === 0) {
+        if (!existingChapter || !existingChapter.content || existingChapter.content.trim().length < 10) {
             startIndex = i
             break
         }
@@ -6113,7 +6191,7 @@ function App() {
     }
 
     // Pass contextLength directly, remove previousContent parameter
-    autoWriteLoop(currentSet.items, startIndex, activeNovel.id, activeNovel.title, activePrompts, contextLength, targetVolumeId, includeFullOutlineInAutoWrite, activeOutlineSetId)
+    autoWriteLoop(currentSet.items, startIndex, activeNovel.id, activeNovel.title, activePrompts, contextLength, targetVolumeId, includeFullOutlineInAutoWrite, activeOutlineSetId, startRunId)
   }
 
   const handleQuickGenerate = async () => {
@@ -6342,7 +6420,9 @@ function App() {
 
         // Trigger Summary Generation
         if (longTextModeRef.current && activeChapterId) {
-             checkAndGenerateSummary(activeChapterId, processedFullContent)
+             // 核心修复 (Bug 2): 对话续写也引入临时运行 ID 保护
+             const continueRunId = workflowManager.registerManualRun('continue');
+             checkAndGenerateSummary(activeChapterId, processedFullContent, activeNovelId || '', undefined, generateAbortControllerRef.current?.signal, false, continueRunId)
         }
 
         // Trigger Auto Optimize
@@ -6410,9 +6490,17 @@ function App() {
     }))
   }
 
-  // Summary Generation Helper
-  const checkAndGenerateSummary = async (targetChapterId: number, currentContent: string, targetNovelId: string = activeNovelId || '', updatedNovel?: Novel, signal?: AbortSignal, forceFinal?: boolean) => {
-    if (!longTextModeRef.current) return
+  // Summary Generation Helper (Bug 2 修复：支持传入 runId 执行锁)
+  async function checkAndGenerateSummary(
+    targetChapterId: number,
+    currentContent: string,
+    targetNovelId: string = activeNovelId || '',
+    updatedNovel?: Novel,
+    signal?: AbortSignal,
+    forceFinal?: boolean,
+    runId?: string | null,
+  ) {
+    if (!longTextModeRef.current) return;
 
     return await checkAndGenerateSummaryUtil(
       targetChapterId,
@@ -6430,12 +6518,13 @@ function App() {
         bigSummaryPrompt,
         contextChapterCount: Number(contextChapterCountRef.current) || 1,
         contextScope: contextScopeRef.current,
+        runId, // 核心：runId 必须作为 config 对象的属性
       },
-      (msg) => terminal.log(msg),
-      (msg) => terminal.error(msg),
+      msg => terminal.log(msg),
+      msg => terminal.error(msg),
       signal,
-      forceFinal
-    )
+      forceFinal,
+    );
   }
 
   const handleScanSummaries = async () => {
@@ -6931,9 +7020,9 @@ function App() {
                   activeOptimizePresetId,
                   analysisPresets,
                   activeAnalysisPresetId,
-                  onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel, forceFinal?: boolean) => {
+                  onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel, forceFinal?: boolean, runId?: string | null) => {
                     if (longTextModeRef.current) {
-                      return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel, undefined, forceFinal);
+                      return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel, undefined, forceFinal, runId);
                     }
                   },
                   updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
@@ -7039,9 +7128,9 @@ function App() {
                   activeOptimizePresetId,
                   analysisPresets,
                   activeAnalysisPresetId,
-                  onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel, forceFinal?: boolean) => {
+                  onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel, forceFinal?: boolean, runId?: string | null) => {
                     if (longTextModeRef.current) {
-                      return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel, undefined, forceFinal);
+                      return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel, undefined, forceFinal, runId);
                     }
                   },
                   updateAutoOptimize: (val: boolean) => setAutoOptimize(val),
@@ -7377,9 +7466,10 @@ function App() {
                   <Folder className="w-3.5 h-3.5 text-yellow-600/70" />
                   <span className="font-medium truncate flex-1">{volume.title}</span>
                   <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); addNewChapter(volume.id); }} className="p-1 hover:text-slate-900 dark:hover:text-white"><Plus className="w-3 h-3" /></button>
-                    <button onClick={(e) => { e.stopPropagation(); handleRenameVolume(volume.id, volume.title); }} className="p-1 hover:text-slate-900 dark:hover:text-white"><Edit3 className="w-3 h-3" /></button>
-                    <button onClick={(e) => { e.stopPropagation(); handleDeleteVolume(volume.id); }} className="p-1 hover:text-red-500 dark:hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); addNewChapter(volume.id); }} className="p-1 hover:text-slate-900 dark:hover:text-white" title="添加章节"><Plus className="w-3 h-3" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleExportVolume(volume.id); }} className="p-1 hover:text-slate-900 dark:hover:text-white" title="导出此分卷"><Download className="w-3 h-3" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleRenameVolume(volume.id, volume.title); }} className="p-1 hover:text-slate-900 dark:hover:text-white" title="重命名分卷"><Edit3 className="w-3 h-3" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteVolume(volume.id); }} className="p-1 hover:text-red-500 dark:hover:text-red-400" title="删除分卷"><Trash2 className="w-3 h-3" /></button>
                   </div>
                 </div>
                 {!volume.collapsed && (
@@ -7388,10 +7478,17 @@ function App() {
                       <div
                         key={chapter.id}
                         onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
-                        className={`px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-primary/10 dark:bg-primary/15 text-primary border-l-2 border-primary' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'}`}
+                        className={`group px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-primary/10 dark:bg-primary/15 text-primary border-l-2 border-primary' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'}`}
                       >
                         <FileText className={`w-[14px] h-[14px] ${chapter.subtype === 'small_summary' ? 'text-primary' : chapter.subtype === 'big_summary' ? 'text-amber-500 dark:text-amber-400' : ''}`} />
-                        <span className="truncate">{chapter.title}</span>
+                        <span className="truncate flex-1">{chapter.title}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chapter.id); }}
+                          className="md:opacity-0 group-hover:opacity-100 p-1.5 md:p-1 text-slate-400 hover:text-red-500 transition-all"
+                          title="删除章节"
+                        >
+                          <Trash2 className="w-4 h-4 md:w-3 md:h-3" />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -7404,10 +7501,17 @@ function App() {
                 <div
                   key={chapter.id}
                   onClick={() => { setActiveChapterId(chapter.id); setShowOutline(false); }}
-                  className={`px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-primary/10 dark:bg-primary/15 text-primary border-l-2 border-primary' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'}`}
+                  className={`group px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-primary/10 dark:bg-primary/15 text-primary border-l-2 border-primary' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'}`}
                 >
                   <FileText className="w-[14px] h-[14px]" />
-                  <span className="truncate">{chapter.title}</span>
+                  <span className="truncate flex-1">{chapter.title}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chapter.id); }}
+                    className="md:opacity-0 group-hover:opacity-100 p-1.5 md:p-1 text-slate-400 hover:text-red-500 transition-all"
+                    title="删除章节"
+                  >
+                    <Trash2 className="w-4 h-4 md:w-3 md:h-3" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -8245,6 +8349,7 @@ function App() {
                   setChapters(prev => prev.map(c => c.id === activeChapterId ? { ...withVersions, activeVersionId: v.id, content: v.content } : c));
                 }
               }}
+              onDeleteChapter={handleDeleteChapter}
             />
           </div>
         )}
@@ -10003,9 +10108,9 @@ function App() {
           activeOptimizePresetId,
           analysisPresets,
           activeAnalysisPresetId,
-          onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel, forceFinal?: boolean) => {
+          onChapterComplete: async (chapterId: number, content: string, updatedNovel?: Novel, forceFinal?: boolean, runId?: string | null) => {
             if (longTextModeRef.current) {
-              return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel, undefined, forceFinal);
+              return await checkAndGenerateSummary(chapterId, content, activeNovelId || '', updatedNovel, undefined, forceFinal, runId);
             }
           },
           updateAutoOptimize: (val: boolean) => setAutoOptimize(val),

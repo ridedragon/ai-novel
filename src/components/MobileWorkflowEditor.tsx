@@ -224,7 +224,7 @@ type NodeTypeKey = 'createFolder' | 'reuseDirectory' | 'saveToVolume' | 'userInp
 const NODE_CONFIGS: Record<NodeTypeKey, any> = {
   pauseNode: { typeLabel: '暂停', icon: PauseCircle, color: '#64748b', defaultLabel: '暂停等待', presetType: null },
   loopNode: { typeLabel: '循环', icon: Repeat, color: '#0ea5e9', defaultLabel: '循环控制', presetType: null },
-  saveToVolume: { typeLabel: '分卷', icon: Library, color: '#14b8a6', defaultLabel: '选择目标分卷', presetType: null },
+  saveToVolume: { typeLabel: '分卷规划', icon: Library, color: '#14b8a6', defaultLabel: '分卷规划器', presetType: 'completion' },
   workflowGenerator: { typeLabel: '架构', icon: Wand2, color: '#f87171', defaultLabel: '工作流架构师', presetType: 'generator' },
   createFolder: { typeLabel: '目录', icon: FolderPlus, color: '#818cf8', defaultLabel: '初始化目录', presetType: null },
   reuseDirectory: { typeLabel: '复用', icon: Folder, color: '#fbbf24', defaultLabel: '切换目录节点', presetType: null },
@@ -432,7 +432,7 @@ const ConfigPanel = React.memo(({
           </div>
         )}
 
-        {editingNode.data.presetType && (
+        {editingNode.data.presetType && editingNode.data.typeKey !== 'saveToVolume' && (
           <div className="space-y-3">
             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
               <Cpu className="w-3.5 h-3.5" /> 基础模板 (调用系统预设)
@@ -466,7 +466,7 @@ const ConfigPanel = React.memo(({
           </div>
         )}
 
-        {(editingNode.data.typeKey === 'aiChat' || editingNode.data.typeKey === 'workflowGenerator') && (
+        {(editingNode.data.typeKey === 'aiChat' || editingNode.data.typeKey === 'workflowGenerator' || editingNode.data.typeKey === 'saveToVolume') && (
           <div className="space-y-4 pt-4 border-t border-gray-800">
             {editingNode.data.typeKey === 'workflowGenerator' && (
               <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 mb-4">
@@ -523,12 +523,18 @@ const ConfigPanel = React.memo(({
                   const newVal = !editingNode.data.overrideAiConfig;
                   const updates: any = { overrideAiConfig: newVal };
                   // 开启自定义时，如果提示词列表为空，自动初始化包含上下文占位符的默认模版
-                  // 这样可以确保“全局输入”和“参考资料”能直接传递给 AI
                   if (newVal && (!editingNode.data.promptItems || (editingNode.data.promptItems as any[]).length === 0)) {
-                    updates.promptItems = [
-                      { id: 'sys-1', role: 'system', content: '你是一个专业的创作助手。', enabled: true },
-                      { id: 'user-1', role: 'user', content: '{{context}}', enabled: true }
-                    ];
+                    if (editingNode.data.typeKey === 'saveToVolume') {
+                      updates.promptItems = [
+                        { id: 'sys-1', role: 'system', content: '你是一名拥有丰富经验的网文作家和架构师，擅长规划长篇小说的整体节奏与结构。你的任务是根据用户提供的故事核心创意、世界观和主要角色，为其设计一份专业、可行、富有吸引力的小说分卷大纲。此大纲将作为写作的路线图。\n\n规划要求\n\n1. 宏观结构：你需要规划整部小说的分卷（卷） 结构。分卷数量需符合故事体量。\n2. 具体内容：为每一个分卷定义：\n   · 分卷名称：一个能概括本卷核心主题或高潮的、具有吸引力的标题（例如：崛起之卷、风暴之卷、终局之战等）。\n   · 章节范围：明确标注该分卷涵盖的章节，格式为“第XX章 - 第XX章”。\n   · 基本内容概述：用一段话（100-200字）概括该分卷的核心剧情走向、关键冲突、角色重大转变及阶段性的结局（如小高潮、重大转折或悬念）。概述需保持在大纲层面，避免细化到具体场景对话。\n3. 逻辑性：各分卷之间需有清晰的逻辑递进和节奏变化（如：开端铺垫、矛盾发展、冲突升级、高潮决战、结局收尾）。', enabled: true },
+                        { id: 'user-1', role: 'user', content: '我已理解你的角色和任务。接下来，我已经为你提供这部小说的【故事核心要素】。请你严格根据这些要素，并遵循上述所有要求与格式，生成一份完整的、可用于指导写作的小说分卷。\n\n{{context}}', enabled: true }
+                      ];
+                    } else {
+                      updates.promptItems = [
+                        { id: 'sys-1', role: 'system', content: '你是一个专业的创作助手。', enabled: true },
+                        { id: 'user-1', role: 'user', content: '{{context}}', enabled: true }
+                      ];
+                    }
                   }
                   onUpdateNodeData(editingNode.id, updates);
                 }}
@@ -540,6 +546,38 @@ const ConfigPanel = React.memo(({
 
             {editingNode.data.overrideAiConfig && (
               <div className="space-y-5 animate-in fade-in slide-in-from-top-2 duration-200 bg-gray-800/30 p-4 rounded-3xl border border-gray-700/50">
+                {/* API 快速选择器 */}
+                <div className="space-y-2">
+                  <label className="text-[10px] text-indigo-400 font-bold uppercase">快速同步 API 设置</label>
+                  <div className="relative">
+                    <select
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-xs text-gray-300 outline-none appearance-none"
+                      value=""
+                      onChange={(e) => {
+                        const [key, url] = e.target.value.split('|');
+                        if (key && url) {
+                          onUpdateNodeData(editingNode.id, { apiKey: key, baseUrl: url });
+                        }
+                      }}
+                    >
+                      <option value="" disabled>选择已有 API 配置...</option>
+                      {(() => {
+                        const apis = [];
+                        if (globalConfig?.apiKey) apis.push({ name: '主设置 API', key: globalConfig.apiKey, url: globalConfig.baseUrl });
+                        Object.values(allPresets).flat().forEach(p => {
+                          if (p.apiConfig?.apiKey && p.apiConfig?.baseUrl) {
+                            apis.push({ name: `预设: ${p.name}`, key: p.apiConfig.apiKey, url: p.apiConfig.baseUrl });
+                          }
+                        });
+                        return apis.filter((v, i, a) => a.findIndex(t => t.url === v.url) === i).map((api, idx) => (
+                          <option key={idx} value={`${api.key}|${api.url}`}>{api.name} ({api.url})</option>
+                        ));
+                      })()}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500 pointer-events-none" />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-[10px] text-gray-400 uppercase">模型 (Model)</label>
                   <div className="relative">
@@ -637,28 +675,15 @@ const ConfigPanel = React.memo(({
         {editingNode.data.typeKey === 'saveToVolume' && (
           <div className="space-y-6">
             <div className="space-y-3">
-              <label className="text-[10px] font-bold text-teal-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Library className="w-3.5 h-3.5" /> 初始/当前目标分卷
+              <label className="text-[10px] font-bold text-teal-400 uppercase tracking-widest flex items-center gap-2">
+                <FileText className="w-3.5 h-3.5" /> 分卷规划内容
               </label>
-              <select
-                value={editingNode.data.targetVolumeId as string}
-                onChange={(e) => onUpdateNodeData(editingNode.id, { targetVolumeId: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none"
-              >
-                <option value="">{pendingFolders.length > 0 ? `-- 自动匹配分卷 (${pendingFolders[0]}) --` : '-- 默认/未分卷 --'}</option>
-                <option value="NEW_VOLUME">+ 新建分卷...</option>
-                {activeNovel?.volumes.map(v => (
-                  <option key={v.id} value={v.id}>{v.title}</option>
-                ))}
-              </select>
-              {editingNode.data.targetVolumeId === 'NEW_VOLUME' && (
-                <OptimizedInput
-                  value={editingNode.data.targetVolumeName}
-                  onChange={(val: string) => handleUpdate({ targetVolumeName: val })}
-                  placeholder="输入新分卷名称..."
-                  className="w-full bg-gray-800 border border-teal-900/40 rounded-2xl px-5 py-3 text-white text-xs outline-none focus:border-teal-500"
-                />
-              )}
+              <OptimizedTextarea
+                value={editingNode.data.volumeContent || ''}
+                onChange={(val: string) => handleUpdate({ volumeContent: val })}
+                className="w-full h-48 bg-gray-800 border border-teal-500/30 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed"
+                placeholder="AI 生成的内容将出现在这里..."
+              />
             </div>
 
             {/* 多次分卷触发器 UI (移动端优化) */}
@@ -1828,6 +1853,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     }
     
     workflowManager.start(activeWorkflowId, startIndex);
+    const startRunId = workflowManager.getCurrentRunId(); // 核心修复 (Bug 2): 锁定本次执行 ID
+    
     setStopRequested(false);
     setError(null);
     stopRequestedRef.current = false;
@@ -1872,6 +1899,16 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       };
 
       let sortedNodes = orderedNodes;
+
+      // 活跃性校验闭包 (核心修复 Bug 2)
+      const checkActive = () => {
+        if (stopRequestedRef.current) return false;
+        if (!workflowManager.isRunActive(startRunId)) {
+          terminal.warn(`[Mobile Workflow] 侦测到过时执行实例 (RunID: ${startRunId})，正在拦截更新以防双倍生成。`);
+          return false;
+        }
+        return true;
+      };
       
       // 核心修复：重置执行路径上节点的执行状态 (不仅限于 startIndex === 0)
       // 确保即将执行的节点状态是干净的，防止循环计数器残留旧值
@@ -1926,6 +1963,14 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             currentWorkflowFolder = prevNode.data.folderName;
           } else if (prevNode.data.typeKey === 'userInput') {
             accumContext += `【全局输入】：\n${prevNode.data.instruction}\n\n`;
+          } else if (prevNode.data.typeKey === 'saveToVolume') {
+            // 核心修复：移动端断点恢复时，恢复分卷触发规则和锚点
+            if (prevNode.data.splitRules && (prevNode.data.splitRules as any[]).length > 0) {
+              workflowManager.setPendingSplits(prevNode.data.splitRules as any[]);
+            }
+            if (prevNode.data.targetVolumeId) {
+              workflowManager.setActiveVolumeAnchor(prevNode.data.targetVolumeId as string);
+            }
           }
           // 获取上一个执行完的节点的产出作为 lastNodeOutput
           // 核心修复：移动端同步逻辑 - 如果是循环回跳产生的多条历史记录，应该将所有历史记录（按时间倒序恢复为正序）都拼接到上下文中
@@ -1937,7 +1982,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       }
       
       for (let i = startIndex; i < sortedNodes.length; i++) {
-        if (stopRequestedRef.current) {
+        if (!checkActive()) {
           workflowManager.pause(i);
           break;
         }
@@ -1965,54 +2010,170 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           return;
         }
 
-        // --- Save To Volume Node Logic ---
+        // --- Save To Volume Node Logic (分卷规划器) ---
         if (node.data.typeKey === 'saveToVolume') {
-          terminal.log(`[Mobile SaveToVolume] Executing node ${node.data.label}`);
+          terminal.log(`[Mobile SaveToVolume] Executing volume planning: ${node.data.label}`);
+          await syncNodeStatus(node.id, { status: 'executing' }, i);
           
-          let targetVolumeId = node.data.targetVolumeId as string;
-          
-          if (targetVolumeId === 'NEW_VOLUME' && node.data.targetVolumeName) {
-             const newVolume = {
-               id: `vol_${Date.now()}`,
-               title: node.data.targetVolumeName as string,
-               collapsed: false
-             };
-             const updatedNovel: Novel = {
-               ...localNovel as Novel,
-               volumes: [...(localNovel.volumes || []), newVolume]
-             };
-             await updateLocalAndGlobal(updatedNovel);
-             targetVolumeId = newVolume.id;
-             await syncNodeStatus(node.id, { targetVolumeId, targetVolumeName: '', status: 'completed' }, i);
-          } else if (!targetVolumeId && pendingFolders.length > 0) {
-             const matchedVol = (localNovel.volumes || []).find(v => v.title === pendingFolders[0]);
-             if (matchedVol) targetVolumeId = matchedVol.id;
-          }
-
-          if (targetVolumeId) {
-             workflowManager.setActiveVolumeAnchor(targetVolumeId);
-             terminal.log(`[Mobile SaveToVolume] Active Volume Anchor set to ${targetVolumeId}`);
-          }
-
-          // 设置分卷触发器 (多次 + Legacy)
-          const rules = (node.data.splitRules as any[]) || [];
-          if (rules.length > 0) {
-            workflowManager.setPendingSplits(rules);
-            terminal.log(`[Mobile SaveToVolume] Multiple Split Triggers set: ${rules.length} rules`);
-          } else {
-            // 兼容 Legacy
-            if (node.data.splitChapterTitle) {
-              workflowManager.setPendingSplit(node.data.splitChapterTitle as string, node.data.nextVolumeName as string);
-              terminal.log(`[Mobile SaveToVolume] Legacy Split Trigger set: ${node.data.splitChapterTitle}`);
-            } else {
-              workflowManager.setPendingSplit(undefined, undefined);
-              workflowManager.setPendingSplits([]);
+          if (!node.data.overrideAiConfig) {
+            // 兼容旧逻辑
+            let targetVolumeId = node.data.targetVolumeId as string;
+            if (targetVolumeId === 'NEW_VOLUME' && node.data.targetVolumeName) {
+               const newVolume = { id: `vol_${Date.now()}`, title: node.data.targetVolumeName as string, collapsed: false };
+               const updatedNovel: Novel = { ...localNovel as Novel, volumes: [...(localNovel.volumes || []), newVolume] };
+               await updateLocalAndGlobal(updatedNovel);
+               targetVolumeId = newVolume.id;
+               await syncNodeStatus(node.id, { targetVolumeId, targetVolumeName: '', status: 'completed' }, i);
             }
+            if (targetVolumeId) workflowManager.setActiveVolumeAnchor(targetVolumeId);
+            const rules = (node.data.splitRules as any[]) || [];
+            if (rules.length > 0) workflowManager.setPendingSplits(rules);
+            await syncNodeStatus(node.id, { status: 'completed' }, i);
+            setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
+            continue;
           }
 
-          await syncNodeStatus(node.id, { status: 'completed' }, i);
+          // AI 分卷规划逻辑 (移动端)
+          const volTypePresets = allPresets[node.data.presetType as string] || [];
+          let volPreset = volTypePresets.find(p => p.id === node.data.presetId) || volTypePresets[0];
+
+          const volNodeApiConfig = (volPreset as any)?.apiConfig || {};
+          const openai = new OpenAI({
+            apiKey: (node.data.apiKey) ? node.data.apiKey : (volNodeApiConfig.apiKey || globalConfig.apiKey),
+            baseURL: (node.data.baseUrl) ? node.data.baseUrl : (volNodeApiConfig.baseUrl || globalConfig.baseUrl),
+            dangerouslyAllowBrowser: true
+          });
+
+          const planningModel = node.data.model || volNodeApiConfig.model || globalConfig.model;
+          
+          // 构建上下文 (对于规划节点也需要参考资料)
+          // 核心修复：分卷节点上下文构建升级 (移动端)，支持所有参考资料类型
+          let planningRefContext = '';
+          const planningAttachments: { type: 'image' | 'pdf', url: string, name: string }[] = [];
+
+          const resolvePendingRefInternal = (list: string[], sets: any[] | undefined) => {
+            return list.map(id => {
+              if (id && typeof id === 'string' && id.startsWith('pending:')) {
+                const folderName = id.replace('pending:', '');
+                const matched = sets?.find(s => s.name === folderName);
+                return matched ? matched.id : id;
+              }
+              return id;
+            });
+          };
+
+          const pWorldview = resolvePendingRefInternal([...(node.data.selectedWorldviewSets || [])], localNovel.worldviewSets);
+          const pCharacters = resolvePendingRefInternal([...(node.data.selectedCharacterSets || [])], localNovel.characterSets);
+          const pOutlines = resolvePendingRefInternal([...(node.data.selectedOutlineSets || [])], localNovel.outlineSets);
+          const pInspirations = resolvePendingRefInternal([...(node.data.selectedInspirationSets || [])], localNovel.inspirationSets);
+          const pFolders = [...(node.data.selectedReferenceFolders || [])];
+
+          pWorldview.forEach(id => {
+              const set = localNovel.worldviewSets?.find(s => s.id === id);
+              if (set) planningRefContext += `【参考世界观 (${set.name})】：\n${set.entries.map(e => `· ${e.item}: ${e.setting}`).join('\n')}\n`;
+          });
+          pCharacters.forEach(id => {
+              const set = localNovel.characterSets?.find(s => s.id === id);
+              if (set) planningRefContext += `【参考角色 (${set.name})】：\n${set.characters.map(c => `· ${c.name}: ${c.bio}`).join('\n')}\n`;
+          });
+          pOutlines.forEach(id => {
+              const set = localNovel.outlineSets?.find(s => s.id === id);
+              if (set) planningRefContext += `【参考粗纲 (${set.name})】：\n${set.items.map(i => `· ${i.title}: ${i.summary}`).join('\n')}\n`;
+          });
+          pInspirations.forEach(id => {
+              const set = localNovel.inspirationSets?.find(s => s.id === id);
+              if (set) planningRefContext += `【参考灵感 (${set.name})】：\n${set.items.map(i => `· ${i.title}: ${i.content}`).join('\n')}\n`;
+          });
+          pFolders.forEach(folderId => {
+              const folder = localNovel.referenceFolders?.find(f => f.id === folderId);
+              if (folder) {
+                  localNovel.referenceFiles?.filter(f => f.parentId === folderId).forEach(f => {
+                      if (f.type.startsWith('text/') || f.name.endsWith('.md') || f.name.endsWith('.txt')) {
+                          planningRefContext += `· 文件: ${f.name}\n内容: ${f.content}\n---\n`;
+                      } else if (f.type.startsWith('image/')) {
+                          planningAttachments.push({ type: 'image', url: f.content, name: f.name });
+                      } else if (f.type === 'application/pdf') {
+                          planningAttachments.push({ type: 'pdf', url: f.content, name: f.name });
+                      }
+                  });
+              }
+          });
+
+          // 核心修复：包含前序节点产出
+          const planningFinalContext = `${planningRefContext}${accumContext}${lastNodeOutput ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
+
+          const formatAtts = (text: string) => {
+            if (planningAttachments.length === 0) return text;
+            const content: any[] = [{ type: 'text', text }];
+            planningAttachments.forEach(att => {
+              if (att.type === 'image') content.push({ type: 'image_url', image_url: { url: att.url } });
+              else if (att.type === 'pdf') content.push({ type: 'file', file_url: { url: att.url.startsWith('data:') ? att.url : `data:application/pdf;base64,${att.url}` } } as any);
+            });
+            return content;
+          };
+
+          const nodePromptItems = (node.data.promptItems as any[]) || [];
+          let planningMessages: any[] = [];
+          if (nodePromptItems.length > 0) {
+            let hasContextPlaceholder = false;
+            planningMessages = nodePromptItems.filter(p => p.enabled !== false).map(p => {
+              if (p.content.includes('{{context}}')) hasContextPlaceholder = true;
+              const content = workflowManager.interpolate(p.content.replace('{{context}}', planningFinalContext));
+              return { role: p.role, content: p.role === 'user' ? formatAtts(content) : content };
+            });
+            if (!hasContextPlaceholder && planningFinalContext.trim()) {
+              planningMessages.unshift({ role: 'user', content: formatAtts(`【参考背景与全局输入】：\n${planningFinalContext}`) });
+            }
+          } else {
+            planningMessages = [
+              { role: 'system', content: '你是一名拥有丰富经验的长篇小说架构师。' },
+              { role: 'user', content: formatAtts(`请根据以下参考资料和全局要求规划分卷大纲：\n\n${planningFinalContext}`) }
+            ];
+          }
+          if (node.data.instruction) planningMessages.push({ role: 'user', content: workflowManager.interpolate(node.data.instruction) });
+
+          // debug: 在 F12 打印分卷规划节点发送给 AI 的内容 (移动端)
+          console.groupCollapsed(`[Mobile Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}`);
+          console.log('Messages:', planningMessages);
+          console.log('Config:', {
+            model: planningModel,
+            temperature: node.data.temperature ?? 0.7,
+          });
+          console.log('Constructed Context:', planningFinalContext);
+          console.groupEnd();
+
+          const completion = await openai.chat.completions.create({
+            model: planningModel,
+            messages: planningMessages,
+            temperature: node.data.temperature ?? 0.7,
+          } as any, { signal: abortControllerRef.current?.signal });
+
+          const aiResponse = completion.choices[0]?.message?.content || '';
+          terminal.log(`[Mobile SaveToVolume] AI Response:\n${aiResponse.slice(0, 300)}...`);
+
+          const parsedRules = workflowManager.parseVolumesFromAI(aiResponse);
+          if (parsedRules.length > 0) {
+            await syncNodeStatus(node.id, {
+              splitRules: parsedRules,
+              volumeContent: aiResponse,
+              outputEntries: [{ id: `vol_plan_${Date.now()}`, title: '分卷规划结果', content: aiResponse }],
+              status: 'completed'
+            }, i);
+            workflowManager.setPendingSplits(parsedRules);
+            if (parsedRules[0].nextVolumeName) {
+               const existingVol = localNovel.volumes?.find(v => v.title === parsedRules[0].nextVolumeName);
+               if (existingVol) workflowManager.setActiveVolumeAnchor(existingVol.id);
+            }
+          } else {
+            await syncNodeStatus(node.id, { status: 'failed' }, i);
+            throw new Error('无法从 AI 返回的内容中解析出分卷规划。');
+          }
+
+          // 核心修复：优先传递文本框内容
+          const finalVolumeOutput = node.data.volumeContent || aiResponse;
+          lastNodeOutput += `【分卷规划内容】：\n${finalVolumeOutput}\n\n`;
+
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
-          await new Promise(resolve => setTimeout(resolve, 50));
           continue;
         }
 
@@ -2169,15 +2330,13 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             const updatedNovel = { ...localNovel };
             let changed = false;
 
-            // 自动创建与目录名称相同的分卷
-            const volumeResult = createSetIfNotExist(updatedNovel.volumes, currentWorkflowFolder, () => ({
-              id: `vol_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-              title: currentWorkflowFolder,
-              collapsed: false,
-            }));
-            if (volumeResult.isNew) {
-              updatedNovel.volumes = [...(updatedNovel.volumes || []), volumeResult.set];
-              changed = true;
+            // 不再自动创建分卷，改由分卷规划节点负责
+            const volumeResult: { id: string; isNew: boolean; set: any } = { id: '', isNew: false, set: null };
+            const existingVol = updatedNovel.volumes?.find(v => v.title === currentWorkflowFolder);
+            if (existingVol) {
+              volumeResult.id = existingVol.id;
+              volumeResult.set = existingVol;
+              workflowManager.setActiveVolumeAnchor(existingVol.id);
             }
 
             const worldviewResult = createSetIfNotExist(updatedNovel.worldviewSets, currentWorkflowFolder, () => ({
@@ -2536,14 +2695,18 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           const items = currentSet?.items || [];
           for (let k = 0; k < items.length; k++) {
             const item = items[k];
-            // 核心修复：查重逻辑限制在目标分卷内
-            const existingChapter = localNovel.chapters?.find(c =>
-              c.title === item.title &&
-              (
-                (finalVolumeId && c.volumeId === finalVolumeId) ||
-                (!finalVolumeId && (!c.volumeId || c.volumeId === ''))
-              )
-            );
+            // 核心修复：移动端同步全自动创作查重逻辑优化。
+            const isStandardChapter = /^第?\s*[0-9零一二两三四五六七八九十百千]+\s*[章节]/.test(item.title);
+            const existingChapter = localNovel.chapters?.find(c => {
+              if (isStandardChapter) {
+                return c.title === item.title;
+              }
+              return (
+                c.title === item.title &&
+                ((finalVolumeId && c.volumeId === finalVolumeId) ||
+                  (!finalVolumeId && (!c.volumeId || c.volumeId === '')))
+              );
+            });
             if (!existingChapter || !existingChapter.content || existingChapter.content.trim().length === 0) {
               writeStartIndex = k;
               break;
@@ -2575,6 +2738,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               updateNodeData(node.id, { label: displayStatus });
             },
             (updatedNovel) => {
+              if (!checkActive()) return;
               // 核心修复 4.2：支持增量更新合并，防止 localNovel 被 deltaChapters 覆盖而丢失历史章节
               const allLocalChaptersMap = new Map((localNovel.chapters || []).map(c => [c.id, c]));
               
@@ -2598,12 +2762,14 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
               updateLocalAndGlobal(localNovel);
             },
             async (chapterId, content, updatedNovel) => {
+              if (!checkActive()) return;
               if (updatedNovel) {
                 localNovel = updatedNovel;
               }
 
               if (globalConfig.onChapterComplete) {
-                const result = await (globalConfig.onChapterComplete as any)(chapterId, content, updatedNovel);
+                // 核心修复 (Bug 2): 手机端总结任务也锁定 RunID
+                const result = await (globalConfig.onChapterComplete as any)(chapterId, content, updatedNovel, false, startRunId);
                 if (result && typeof result === 'object' && (result as Novel).chapters) {
                   localNovel = result as Novel;
                 }
@@ -2619,38 +2785,53 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                 terminal.log(`[Mobile Workflow] Triggering PRE-CHAPTER split at "${trigger.chapterTitle}"`);
                 const nextVolName = trigger.nextVolumeName || '新分卷';
 
-                const newVolume = {
-                  id: `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                  title: nextVolName,
-                  collapsed: false
-                };
+                // 1. 核心修复：移动端分卷创建幂等化。先查找是否已存在同名分卷
+                const existingVol = localNovel.volumes?.find(v => v.title === nextVolName);
+                let targetVolId = '';
+                let splitNovel = { ...localNovel };
 
-                const splitNovel = {
-                  ...localNovel,
-                  volumes: [...(localNovel.volumes || []), newVolume]
-                };
+                if (existingVol) {
+                  targetVolId = existingVol.id;
+                  terminal.log(`[Mobile Workflow] Reusing existing volume: ${nextVolName} (${targetVolId})`);
+                } else {
+                  const newVolume = {
+                    id: `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                    title: nextVolName,
+                    collapsed: false
+                  };
+                  targetVolId = newVolume.id;
+                  splitNovel = {
+                    ...localNovel,
+                    volumes: [...(localNovel.volumes || []), newVolume]
+                  };
+                  terminal.log(`[Mobile Workflow] Created new volume: ${nextVolName} (${targetVolId})`);
+                }
 
-                // 立即同步 UI 和本地内存快照，防止状态竞争导致的消失
+                // 2. 立即同步 UI 和本地内存快照，防止状态竞争导致的消失
                 await updateLocalAndGlobal(splitNovel);
 
-                // 更新 Anchor 并标记规则已处理
-                workflowManager.setActiveVolumeAnchor(newVolume.id);
+                // 3. 更新 Anchor 并标记规则已处理
+                workflowManager.setActiveVolumeAnchor(targetVolId);
                 workflowManager.markSplitProcessed(trigger.chapterTitle);
 
-                terminal.log(`[Mobile Workflow] Pre-chapter split complete: ${nextVolName} (${newVolume.id})`);
+                terminal.log(`[Mobile Workflow] Pre-chapter split complete: ${nextVolName} (${targetVolId})`);
                 
                 // 返回最新状态给引擎，实现原子化同步
                 return {
                   updatedNovel: splitNovel,
-                  newVolumeId: newVolume.id
+                  newVolumeId: targetVolId
                 };
               }
             },
             finalVolumeId,
-            false,
+            true, // 核心修复 (Bug 3): 手机端开启大纲注入
             selectedOutlineSetId,
-            abortControllerRef.current?.signal
+            abortControllerRef.current?.signal,
+            startRunId // 核心修复 (Bug 2): 透传 RunID
           );
+
+          if (!checkActive()) return;
+
           await syncNodeStatus(node.id, {
             label: NODE_CONFIGS.chapter.defaultLabel,
             status: 'completed'
@@ -2891,8 +3072,9 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             isSuccess = true;
           }
 
-          // --- 核心修复：移动端大纲节点自动续写 ---
-          if (isSuccess && node.data.typeKey === 'outline' && targetEndNum) {
+          // --- 核心修复：移动端大纲/剧情粗纲节点自动续写 ---
+          const isOutlineNode = node.data.typeKey === 'outline' || node.data.typeKey === 'plotOutline';
+          if (isSuccess && isOutlineNode && targetEndNum) {
             const lastEntry = entriesToStore[entriesToStore.length - 1];
             const currentLastNum = parseAnyNumber(lastEntry?.title || '');
 
@@ -2929,7 +3111,9 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         }
 
         const newEntries: OutputEntry[] = entriesToStore.map((e, idx) => ({ id: `${Date.now()}-${idx}`, title: e.title, content: e.content }));
-        await syncNodeStatus(node.id, { status: 'completed', outputEntries: [...newEntries, ...(node.data.outputEntries || [])] }, i);
+        // 核心修复：从 nodesRef 获取最新产物列表，防止“接龙”数据被覆盖
+        const latestEntries = nodesRef.current.find(n => n.id === node.id)?.data.outputEntries || [];
+        await syncNodeStatus(node.id, { status: 'completed', outputEntries: [...newEntries, ...latestEntries] }, i);
 
         // 持久化到 Novel
         if (currentWorkflowFolder) {
@@ -3180,7 +3364,12 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                     status: 'pending' as const,
                     label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label,
                     outputEntries: [],
-                    targetVolumeName: ''
+                    targetVolumeName: '',
+                    // 核心修复：清理分卷规则
+                    splitRules: n.data.typeKey === 'saveToVolume' ? [] : n.data.splitRules,
+                    splitChapterTitle: n.data.typeKey === 'saveToVolume' ? '' : n.data.splitChapterTitle,
+                    nextVolumeName: n.data.typeKey === 'saveToVolume' ? '' : n.data.nextVolumeName,
+                    volumeContent: n.data.typeKey === 'saveToVolume' ? '' : n.data.volumeContent,
                   };
                   if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {
                     updates.loopConfig = { ...n.data.loopConfig, currentIndex: 0 };

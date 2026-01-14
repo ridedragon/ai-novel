@@ -173,6 +173,7 @@ export interface SummaryConfig {
   bigSummaryPrompt: string;
   contextChapterCount?: number;
   contextScope?: string;
+  runId?: string | null; // 核心修复 (Bug 2): 支持执行锁校验
 }
 
 const getStableContent = (chapter: Chapter) => {
@@ -201,6 +202,21 @@ export const checkAndGenerateSummary = async (
   forceFinal?: boolean,
 ): Promise<Novel | undefined> => {
   if (signal?.aborted) return;
+
+  // 核心修复 (Bug 2): 引入工作流状态校验闭包
+  const { workflowManager } = await import('./WorkflowManager');
+  const checkActive = () => {
+    if (signal?.aborted) return false;
+    // 如果传入了 runId，则强制校验其活跃性。若未传入则视为非锁任务（兼容模式）
+    if (config.runId && !workflowManager.isRunActive(config.runId)) {
+      terminal.warn(`[SummaryManager] 侦测到过时总结任务 (RunID: ${config.runId})，正在拦截。`);
+      return false;
+    }
+    return true;
+  };
+
+  if (!checkActive()) return;
+
   const startTime = Date.now();
   const {
     apiKey,
@@ -337,8 +353,9 @@ export const checkAndGenerateSummary = async (
         { signal },
       );
 
+      if (!checkActive()) return;
       const summaryContent = completion.choices[0]?.message?.content || '';
-      if (summaryContent) {
+      if (summaryContent && checkActive()) {
         const existingIndex = currentChaptersSnapshot.findIndex(
           c => c.subtype === subtype && c.summaryRange === rangeStr,
         );
@@ -497,7 +514,7 @@ export const checkAndGenerateSummary = async (
     }
   }
 
-  if (pendingSummaries.length > 0) {
+  if (pendingSummaries.length > 0 && checkActive()) {
     setNovels(prev =>
       prev.map(n => {
         if (n.id !== targetNovelId) return n;

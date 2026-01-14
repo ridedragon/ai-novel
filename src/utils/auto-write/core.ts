@@ -54,6 +54,14 @@ export const buildWorldInfoMessages = (
   if (!novel) return [];
   const messages: ChatMessage[] = [];
 
+  // 1. 注入粗纲 (System)
+  if (novel.description && novel.description.trim()) {
+    messages.push({
+      role: 'system',
+      content: `【全书粗纲】：\n${novel.description}`,
+    });
+  }
+
   let targetName = '';
   if (activeOutlineSetId) {
     targetName = novel.outlineSets?.find(s => s.id === activeOutlineSetId)?.name || '';

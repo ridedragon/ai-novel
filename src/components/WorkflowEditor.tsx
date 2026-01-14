@@ -157,6 +157,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   baseUrl?: string;
   // 工作流生成节点特定设置
   autoFillContent?: boolean; // AI 是否自动填写生成的节点内容
+  volumeContent?: string; // AI 生成的分卷规划原始内容
 }
 
 export type WorkflowNode = Node<WorkflowNodeData>;
@@ -403,11 +404,11 @@ const NODE_CONFIGS: Record<NodeTypeKey, any> = {
     presetType: null,
   },
   saveToVolume: {
-    typeLabel: '保存至分卷',
+    typeLabel: '分卷规划',
     icon: Library,
     color: '#14b8a6', // Teal 500
-    defaultLabel: '选择目标分卷',
-    presetType: null,
+    defaultLabel: '分卷规划器',
+    presetType: 'completion',
     splitRules: [], // 初始化空规则列表
   },
   workflowGenerator: {
@@ -607,6 +608,7 @@ const NodePropertiesModal = ({
   const [localLabel, setLocalLabel] = useState(node.data.label);
   const [localFolderName, setLocalFolderName] = useState(node.data.folderName);
   const [localInstruction, setLocalInstruction] = useState(node.data.instruction);
+  const [localVolumeContent, setLocalVolumeContent] = useState(node.data.volumeContent || '');
   const [showAdvancedAI, setShowAdvancedAI] = useState(false);
   const [isEditingPrompts, setIsEditingPrompts] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -615,7 +617,8 @@ const NodePropertiesModal = ({
     setLocalLabel(node.data.label);
     setLocalFolderName(node.data.folderName);
     setLocalInstruction(node.data.instruction);
-  }, [node.id]);
+    setLocalVolumeContent(node.data.volumeContent || '');
+  }, [node.id, node.data.volumeContent]);
 
   const debouncedUpdate = (updates: Partial<WorkflowNodeData>) => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -704,7 +707,7 @@ const NodePropertiesModal = ({
             </div>
           </div>
 
-          {node.data.presetType && node.data.typeKey !== 'workflowGenerator' && (
+          {node.data.presetType && node.data.typeKey !== 'workflowGenerator' && node.data.typeKey !== 'saveToVolume' && (
             <div className="space-y-3 pt-6 border-t border-gray-700/30">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
                 <Cpu className="w-3.5 h-3.5" /> 基础模板 (调用系统预设)
@@ -740,7 +743,7 @@ const NodePropertiesModal = ({
             </div>
           )}
 
-          {(node.data.typeKey === 'aiChat' || node.data.typeKey === 'workflowGenerator') && (
+          {(node.data.typeKey === 'aiChat' || node.data.typeKey === 'workflowGenerator' || node.data.typeKey === 'saveToVolume') && (
             <div className="space-y-4 pt-6 border-t border-gray-700/30">
               {node.data.typeKey === 'workflowGenerator' && (
                 <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-4 mb-4">
@@ -816,10 +819,17 @@ const NodePropertiesModal = ({
                     // 开启自定义时，如果提示词列表为空，自动初始化包含上下文占位符的默认模版
                     // 这样可以确保“全局输入”和“参考资料”能直接传递给 AI
                     if (newVal && (!node.data.promptItems || (node.data.promptItems as any[]).length === 0)) {
-                      updates.promptItems = [
-                        { id: 'sys-1', role: 'system', content: '你是一个专业的创作助手。', enabled: true },
-                        { id: 'user-1', role: 'user', content: '{{context}}', enabled: true }
-                      ];
+                      if (node.data.typeKey === 'saveToVolume') {
+                        updates.promptItems = [
+                          { id: 'sys-1', role: 'system', content: '你是一名拥有丰富经验的网文作家和架构师，擅长规划长篇小说的整体节奏与结构。你的任务是根据用户提供的故事核心创意、世界观和主要角色，为其设计一份专业、可行、富有吸引力的小说分卷大纲。此大纲将作为写作的路线图。\n\n规划要求\n\n1. 宏观结构：你需要规划整部小说的分卷（卷） 结构。分卷数量需符合故事体量。\n2. 具体内容：为每一个分卷定义：\n   · 分卷名称：一个能概括本卷核心主题或高潮的、具有吸引力的标题（例如：崛起之卷、风暴之卷、终局之战等）。\n   · 章节范围：明确标注该分卷涵盖的章节，格式为“第XX章 - 第XX章”。\n   · 基本内容概述：用一段话（100-200字）概括该分卷的核心剧情走向、关键冲突、角色重大转变及阶段性的结局（如小高潮、重大转折或悬念）。概述需保持在大纲层面，避免细化到具体场景对话。\n3. 逻辑性：各分卷之间需有清晰的逻辑递进和节奏变化（如：开端铺垫、矛盾发展、冲突升级、高潮决战、结局收尾）。', enabled: true },
+                          { id: 'user-1', role: 'user', content: '我已理解你的角色和任务。接下来，我已经为你提供这部小说的【故事核心要素】。请你严格根据这些要素，并遵循上述所有要求与格式，生成一份完整的、可用于指导写作的小说分卷。\n\n{{context}}', enabled: true }
+                        ];
+                      } else {
+                        updates.promptItems = [
+                          { id: 'sys-1', role: 'system', content: '你是一个专业的创作助手。', enabled: true },
+                          { id: 'user-1', role: 'user', content: '{{context}}', enabled: true }
+                        ];
+                      }
                     }
                     updateNodeData(node.id, updates);
                     if (newVal) setShowAdvancedAI(true);
@@ -849,6 +859,38 @@ const NodePropertiesModal = ({
 
               {node.data.overrideAiConfig && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  {/* API 快速选择器 */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] text-indigo-400 font-bold uppercase flex items-center gap-1.5">
+                      <Settings2 className="w-3 h-3" /> 快速同步 API 设置
+                    </label>
+                    <select
+                      className="w-full bg-[#161922] border border-indigo-900/30 rounded-lg px-3 py-2 text-xs text-gray-300 outline-none focus:border-indigo-500 transition-all"
+                      value=""
+                      onChange={(e) => {
+                        const [key, url] = e.target.value.split('|');
+                        if (key && url) {
+                          updateNodeData(node.id, { apiKey: key, baseUrl: url });
+                        }
+                      }}
+                    >
+                      <option value="" disabled>从现有配置中选择以自动填充...</option>
+                      {(() => {
+                        const apis = [];
+                        if (globalConfig?.apiKey) apis.push({ name: '主设置 API', key: globalConfig.apiKey, url: globalConfig.baseUrl });
+                        Object.values(allPresets).flat().forEach(p => {
+                          if (p.apiConfig?.apiKey && p.apiConfig?.baseUrl) {
+                            apis.push({ name: `预设: ${p.name}`, key: p.apiConfig.apiKey, url: p.apiConfig.baseUrl });
+                          }
+                        });
+                        // 按 URL 去重
+                        return apis.filter((v, i, a) => a.findIndex(t => t.url === v.url) === i).map((api, idx) => (
+                          <option key={idx} value={`${api.key}|${api.url}`}>{api.name} ({api.url})</option>
+                        ));
+                      })()}
+                    </select>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2 col-span-2">
                       <label className="text-[10px] text-indigo-400 font-bold uppercase">API Key</label>
@@ -970,35 +1012,22 @@ const NodePropertiesModal = ({
 
           {node.data.typeKey === 'saveToVolume' && activeNovel && (
             <div className="space-y-6 pt-6 border-t border-gray-700/30">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2.5 col-span-2">
-                  <label className="text-[10px] font-bold text-teal-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Library className="w-3 h-3" /> 初始/当前目标分卷
-                  </label>
-                  <div className="space-y-2">
-                    <select
-                      value={node.data.targetVolumeId as string}
-                      onChange={(e) => updateNodeData(node.id, { targetVolumeId: e.target.value, targetVolumeName: '' })}
-                      className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:border-teal-500 focus:ring-1 focus:ring-teal-500/50 outline-none transition-all"
-                    >
-                      <option value="">{pendingFolders.length > 0 ? `-- 自动匹配分卷 (${pendingFolders[0]}) --` : '-- 默认/未分卷 --'}</option>
-                      <option value="NEW_VOLUME">+ 新建分卷...</option>
-                      {activeNovel.volumes.map(v => (
-                        <option key={v.id} value={v.id}>{v.title}</option>
-                      ))}
-                    </select>
-                    {node.data.targetVolumeId === 'NEW_VOLUME' && (
-                      <input
-                        type="text"
-                        value={node.data.targetVolumeName as string}
-                        onChange={(e) => updateNodeData(node.id, { targetVolumeName: e.target.value })}
-                        placeholder="输入新分卷名称..."
-                        className="w-full bg-[#161922] border border-teal-900/40 rounded-lg px-4 py-2 text-xs text-teal-100 focus:border-teal-500 outline-none transition-all"
-                      />
-                    )}
-                  </div>
-                </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-teal-400 uppercase tracking-widest flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5" /> 分卷规划内容 (AI 生成/可手动修改)
+                </label>
+                <textarea
+                  value={localVolumeContent}
+                  onChange={(e) => {
+                    setLocalVolumeContent(e.target.value);
+                    debouncedUpdate({ volumeContent: e.target.value });
+                  }}
+                  placeholder="AI 生成的分卷规划内容将出现在这里，您也可以手动编辑以调整分卷..."
+                  className="w-full h-48 bg-[#161922] border border-teal-500/30 rounded-lg p-4 text-sm text-gray-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500/50 outline-none resize-none font-mono leading-relaxed transition-all"
+                />
+              </div>
 
+              <div className="grid grid-cols-2 gap-6">
                 {/* 多次分卷触发器 UI */}
                 <div className="space-y-4 col-span-2 p-5 bg-teal-500/5 border border-teal-500/20 rounded-xl">
                   <div className="flex items-center justify-between">
@@ -2520,6 +2549,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     }
     
     workflowManager.start(activeWorkflowId, startIndex);
+    const startRunId = workflowManager.getCurrentRunId(); // 核心修复 (Bug 2): 锁定本次执行 ID
+    
     setStopRequested(false);
     setError(null);
     stopRequestedRef.current = false;
@@ -2578,6 +2609,16 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         return;
       }
       
+      // 活跃性校验闭包 (核心修复 Bug 2)
+      const checkActive = () => {
+        if (stopRequestedRef.current) return false;
+        if (!workflowManager.isRunActive(startRunId)) {
+          terminal.warn(`[Workflow] 侦测到过时执行实例 (RunID: ${startRunId})，正在拦截更新以防双倍生成。`);
+          return false;
+        }
+        return true;
+      };
+
       // 核心修复：重置执行路径上节点的执行状态 (不仅限于 startIndex === 0)
       // 只要是即将执行的节点（i >= startIndex），都应该确保其状态是干净的
       // 这样可以防止“从中间节点开始运行”时，循环计数器继承了上次运行的旧值导致不循环
@@ -2646,6 +2687,14 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             currentWorkflowFolder = prevNode.data.folderName;
           } else if (prevNode.data.typeKey === 'userInput') {
             accumContext += `【全局输入】：\n${prevNode.data.instruction}\n\n`;
+          } else if (prevNode.data.typeKey === 'saveToVolume') {
+            // 核心修复：断点恢复时，必须从已完成的“分卷规划”节点恢复触发规则和锚点
+            if (prevNode.data.splitRules && (prevNode.data.splitRules as any[]).length > 0) {
+              workflowManager.setPendingSplits(prevNode.data.splitRules as any[]);
+            }
+            if (prevNode.data.targetVolumeId) {
+              workflowManager.setActiveVolumeAnchor(prevNode.data.targetVolumeId as string);
+            }
           }
           // 获取上一个执行完的节点的产出作为 lastNodeOutput
           // 核心修复：如果是循环回跳产生的多条历史记录，应该将所有历史记录（按时间倒序恢复为正序）都拼接到上下文中
@@ -2660,7 +2709,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       }
       
       for (let i = startIndex; i < sortedNodes.length; i++) {
-        if (stopRequestedRef.current) {
+        if (!checkActive()) {
           workflowManager.pause(i);
           break;
         }
@@ -2690,57 +2739,180 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           return;
         }
 
-        // --- Save To Volume Node Logic ---
+        // --- Save To Volume Node Logic (分卷规划器) ---
         if (node.data.typeKey === 'saveToVolume') {
-          terminal.log(`[SaveToVolume] Executing node ${node.data.label}`);
+          terminal.log(`[SaveToVolume] Executing volume planning: ${node.data.label}`);
+          await syncNodeStatus(node.id, { status: 'executing' }, i);
           
-          let targetVolumeId = node.data.targetVolumeId as string;
-          
-          // Handle NEW_VOLUME creation if needed (though usually handled in UI, double check here)
-          if (targetVolumeId === 'NEW_VOLUME' && node.data.targetVolumeName) {
-             const newVolume = {
-               id: `vol_${Date.now()}`,
-               title: node.data.targetVolumeName as string,
-               collapsed: false
-             };
-             const updatedNovel: Novel = {
-               ...localNovel as Novel,
-               volumes: [...(localNovel.volumes || []), newVolume]
-             };
-             await updateLocalAndGlobal(updatedNovel);
-             targetVolumeId = newVolume.id;
-             // Update node data to reflect the new ID
-             await syncNodeStatus(node.id, { targetVolumeId, targetVolumeName: '', status: 'completed' }, i);
-          } else if (!targetVolumeId && pendingFolders.length > 0) {
-             // Auto-match logic if default
-             const matchedVol = (localNovel.volumes || []).find(v => v.title === pendingFolders[0]);
-             if (matchedVol) targetVolumeId = matchedVol.id;
-          }
-
-          if (targetVolumeId) {
-             workflowManager.setActiveVolumeAnchor(targetVolumeId);
-             terminal.log(`[SaveToVolume] Active Volume Anchor set to ${targetVolumeId}`);
-          }
-
-          // 设置分卷触发器 (多次 + Legacy)
-          const rules = (node.data.splitRules as any[]) || [];
-          if (rules.length > 0) {
-            workflowManager.setPendingSplits(rules);
-            terminal.log(`[SaveToVolume] Multiple Split Triggers set: ${rules.length} rules`);
-          } else {
-            // 兼容 Legacy
-            if (node.data.splitChapterTitle) {
-              workflowManager.setPendingSplit(node.data.splitChapterTitle as string, node.data.nextVolumeName as string);
-              terminal.log(`[SaveToVolume] Legacy Split Trigger set: ${node.data.splitChapterTitle}`);
-            } else {
-              workflowManager.setPendingSplit(undefined, undefined);
-              workflowManager.setPendingSplits([]);
+          if (!node.data.overrideAiConfig) {
+            // 兼容旧逻辑：如果不开启 AI，则仅作为静态锚点或 Legacy 触发器
+            let targetVolumeId = node.data.targetVolumeId as string;
+            if (targetVolumeId === 'NEW_VOLUME' && node.data.targetVolumeName) {
+               const newVolume = { id: `vol_${Date.now()}`, title: node.data.targetVolumeName as string, collapsed: false };
+               const updatedNovel: Novel = { ...localNovel as Novel, volumes: [...(localNovel.volumes || []), newVolume] };
+               await updateLocalAndGlobal(updatedNovel);
+               targetVolumeId = newVolume.id;
+               await syncNodeStatus(node.id, { targetVolumeId, targetVolumeName: '', status: 'completed' }, i);
             }
+            if (targetVolumeId) workflowManager.setActiveVolumeAnchor(targetVolumeId);
+            const rules = (node.data.splitRules as any[]) || [];
+            if (rules.length > 0) workflowManager.setPendingSplits(rules);
+            await syncNodeStatus(node.id, { status: 'completed' }, i);
+            setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
+            continue;
           }
 
-          await syncNodeStatus(node.id, { status: 'completed' }, i);
+          // AI 分卷规划逻辑
+          // 获取对应类型的预设
+          const volTypePresets = allPresets[node.data.presetType as string] || [];
+          let volPresetForPlan = volTypePresets.find(p => p.id === node.data.presetId) || volTypePresets[0];
+
+          const volNodeApiConfig = (volPresetForPlan as any)?.apiConfig || {};
+          const volOpenai = new OpenAI({
+            apiKey: (node.data.apiKey) ? node.data.apiKey : (volNodeApiConfig.apiKey || globalConfig.apiKey),
+            baseURL: (node.data.baseUrl) ? node.data.baseUrl : (volNodeApiConfig.baseUrl || globalConfig.baseUrl),
+            dangerouslyAllowBrowser: true
+          });
+
+          const planningModel = node.data.model || volNodeApiConfig.model || globalConfig.model;
+          
+          // 构建上下文 (对于规划节点也需要参考资料)
+          // 核心修复：分卷节点上下文构建升级，支持所有参考资料类型及多模态附件
+          let planningRefContext = '';
+          const planningAttachments: { type: 'image' | 'pdf', url: string, name: string }[] = [];
+          
+          const resolvePendingRefInternal = (list: string[], sets: any[] | undefined) => {
+            return list.map(id => {
+              if (id && typeof id === 'string' && id.startsWith('pending:')) {
+                const folderName = id.replace('pending:', '');
+                const matched = sets?.find(s => s.name === folderName);
+                return matched ? matched.id : id;
+              }
+              return id;
+            });
+          };
+
+          const pWorldview = resolvePendingRefInternal([...(node.data.selectedWorldviewSets || [])], localNovel.worldviewSets);
+          const pCharacters = resolvePendingRefInternal([...(node.data.selectedCharacterSets || [])], localNovel.characterSets);
+          const pOutlines = resolvePendingRefInternal([...(node.data.selectedOutlineSets || [])], localNovel.outlineSets);
+          const pInspirations = resolvePendingRefInternal([...(node.data.selectedInspirationSets || [])], localNovel.inspirationSets);
+          const pFolders = [...(node.data.selectedReferenceFolders || [])];
+
+          pWorldview.forEach(id => {
+              const set = localNovel.worldviewSets?.find(s => s.id === id);
+              if (set) planningRefContext += `【参考世界观 (${set.name})】：\n${set.entries.map(e => `· ${e.item}: ${e.setting}`).join('\n')}\n`;
+          });
+          pCharacters.forEach(id => {
+              const set = localNovel.characterSets?.find(s => s.id === id);
+              if (set) planningRefContext += `【参考角色 (${set.name})】：\n${set.characters.map(c => `· ${c.name}: ${c.bio}`).join('\n')}\n`;
+          });
+          pOutlines.forEach(id => {
+              const set = localNovel.outlineSets?.find(s => s.id === id);
+              if (set) planningRefContext += `【参考粗纲 (${set.name})】：\n${set.items.map(i => `· ${i.title}: ${i.summary}`).join('\n')}\n`;
+          });
+          pInspirations.forEach(id => {
+              const set = localNovel.inspirationSets?.find(s => s.id === id);
+              if (set) planningRefContext += `【参考灵感 (${set.name})】：\n${set.items.map(i => `· ${i.title}: ${i.content}`).join('\n')}\n`;
+          });
+          pFolders.forEach(folderId => {
+              const folder = localNovel.referenceFolders?.find(f => f.id === folderId);
+              if (folder) {
+                  localNovel.referenceFiles?.filter(f => f.parentId === folderId).forEach(f => {
+                      if (f.type.startsWith('text/') || f.name.endsWith('.md') || f.name.endsWith('.txt')) {
+                          planningRefContext += `· 文件: ${f.name}\n内容: ${f.content}\n---\n`;
+                      } else if (f.type.startsWith('image/')) {
+                          planningAttachments.push({ type: 'image', url: f.content, name: f.name });
+                      } else if (f.type === 'application/pdf') {
+                          planningAttachments.push({ type: 'pdf', url: f.content, name: f.name });
+                      }
+                  });
+              }
+          });
+
+          const planningFinalContextStr = `${planningRefContext}${accumContext}${lastNodeOutput ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
+
+          const formatAtts = (text: string) => {
+            if (planningAttachments.length === 0) return text;
+            const content: any[] = [{ type: 'text', text }];
+            planningAttachments.forEach(att => {
+              if (att.type === 'image') content.push({ type: 'image_url', image_url: { url: att.url } });
+              else if (att.type === 'pdf') content.push({ type: 'file', file_url: { url: att.url.startsWith('data:') ? att.url : `data:application/pdf;base64,${att.url}` } } as any);
+            });
+            return content;
+          };
+
+          // 构建消息
+          const nodePromptItems = (node.data.promptItems as GeneratorPrompt[]) || [];
+          let planningMessages: any[] = [];
+          if (nodePromptItems.length > 0) {
+            let hasContextPlaceholder = false;
+            planningMessages = nodePromptItems.filter(p => p.enabled !== false).map(p => {
+              if (p.content.includes('{{context}}')) hasContextPlaceholder = true;
+              const content = workflowManager.interpolate(p.content.replace('{{context}}', planningFinalContextStr));
+              return { role: p.role, content: p.role === 'user' ? formatAtts(content) : content };
+            });
+            // 自动补全注入逻辑
+            if (!hasContextPlaceholder && planningFinalContextStr.trim()) {
+              planningMessages.unshift({ role: 'user', content: formatAtts(`【参考背景与全局输入】：\n${planningFinalContextStr}`) });
+            }
+          } else {
+            planningMessages = [
+              { role: 'system', content: '你是一名拥有丰富经验特的长篇小说架构师。' },
+              { role: 'user', content: formatAtts(`请根据以下参考资料和全局要求规划分卷大纲：\n\n${planningFinalContextStr}`) }
+            ];
+          }
+          if (node.data.instruction) planningMessages.push({ role: 'user', content: workflowManager.interpolate(node.data.instruction) });
+
+          // debug: 在 F12 打印分卷规划节点发送给 AI 的内容
+          console.groupCollapsed(`[Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}`);
+          console.log('Messages:', planningMessages);
+          console.log('Config:', {
+            model: planningModel,
+            temperature: node.data.temperature ?? 0.7,
+          });
+          console.log('Constructed Context:', planningFinalContextStr);
+          console.groupEnd();
+
+          const volCompletion = await volOpenai.chat.completions.create({
+            model: planningModel,
+            messages: planningMessages,
+            temperature: node.data.temperature ?? 0.7,
+          } as any, { signal: abortControllerRef.current?.signal });
+
+          const aiResponse = volCompletion.choices[0]?.message?.content || '';
+          terminal.log(`[SaveToVolume] AI Response:\n${aiResponse.slice(0, 300)}...`);
+
+          // 解析 AI 响应
+          const parsedRules = workflowManager.parseVolumesFromAI(aiResponse);
+          if (parsedRules.length > 0) {
+            // 更新节点规则
+            await syncNodeStatus(node.id, {
+              splitRules: parsedRules,
+              volumeContent: aiResponse, // 自动同步 AI 回复到文本框
+              outputEntries: [{ id: `vol_plan_${Date.now()}`, title: '分卷规划结果', content: aiResponse }],
+              status: 'completed'
+            }, i);
+            // 更新全局触发器
+            workflowManager.setPendingSplits(parsedRules);
+            
+            // 自动将第一卷设为当前锚点 (如果存在)
+            if (parsedRules[0].nextVolumeName) {
+               const existingVol = localNovel.volumes?.find(v => v.title === parsedRules[0].nextVolumeName);
+               if (existingVol) {
+                 workflowManager.setActiveVolumeAnchor(existingVol.id);
+               }
+            }
+          } else {
+            terminal.error('[SaveToVolume] Failed to parse any volume rules from AI response.');
+            await syncNodeStatus(node.id, { status: 'failed' }, i);
+            throw new Error('无法从 AI 返回的内容中解析出分卷规划，请检查提示词或 AI 输出格式。');
+          }
+
+          // 核心修复：优先使用文本框中的内容传递给下游，实现“手动编辑可生效”
+          const finalVolumeOutput = node.data.volumeContent || aiResponse;
+          lastNodeOutput += `【分卷规划内容】：\n${finalVolumeOutput}\n\n`;
+
           setEdges(eds => eds.map(e => e.target === node.id ? { ...e, animated: false } : e));
-          await new Promise(resolve => setTimeout(resolve, 50));
           continue;
         }
 
@@ -2926,19 +3098,13 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             const updatedNovel = { ...localNovel };
             let changed = false;
 
-            // 自动创建与目录名称相同的分卷
-            const volumeResult = createSetIfNotExist(updatedNovel.volumes, currentWorkflowFolder, () => ({
-              id: `vol_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-              title: currentWorkflowFolder,
-              collapsed: false,
-            }));
-            if (volumeResult.isNew) {
-              updatedNovel.volumes = [...(updatedNovel.volumes || []), volumeResult.set];
-              changed = true;
-            }
-            // V2: Set Active Anchor automatically
-            if (volumeResult.set && volumeResult.set.id) {
-               workflowManager.setActiveVolumeAnchor(volumeResult.set.id);
+            // 不再自动创建同名分卷，改由分卷规划节点负责
+            const volumeResult: { id: string; isNew: boolean; set: any } = { id: '', isNew: false, set: null };
+            const existingVol = updatedNovel.volumes?.find(v => v.title === currentWorkflowFolder);
+            if (existingVol) {
+              volumeResult.id = existingVol.id;
+              volumeResult.set = existingVol;
+              workflowManager.setActiveVolumeAnchor(existingVol.id);
             }
 
             const worldviewResult = createSetIfNotExist(updatedNovel.worldviewSets, currentWorkflowFolder, () => ({
@@ -3043,9 +3209,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
           // 寻找对应预设
           const genPresets = (allPresets as any).generator || [];
-          let genPreset = genPresets.find((p: any) => p.id === node.data.presetId) || genPresets[0];
+          const genPreset = genPresets.find((p: any) => p.id === node.data.presetId) || genPresets[0];
 
-          const openai = new OpenAI({
+          const genOpenai = new OpenAI({
             apiKey: (node.data.overrideAiConfig && node.data.apiKey) ? node.data.apiKey : (genPreset?.apiConfig?.apiKey || globalConfig.apiKey),
             baseURL: (node.data.overrideAiConfig && node.data.baseUrl) ? node.data.baseUrl : (genPreset?.apiConfig?.baseUrl || globalConfig.baseUrl),
             dangerouslyAllowBrowser: true
@@ -3088,13 +3254,13 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             ];
           }
 
-          const completion = await openai.chat.completions.create({
+          const genCompletion = await genOpenai.chat.completions.create({
             model: (node.data.overrideAiConfig && node.data.model) ? node.data.model : (genPreset?.apiConfig?.model || globalConfig.model),
             messages: generatorMessages,
             temperature: (node.data.overrideAiConfig && node.data.temperature !== undefined) ? node.data.temperature : (genPreset?.temperature ?? 0.7),
           });
 
-          const aiResponse = completion.choices[0]?.message?.content || '';
+          const aiResponse = genCompletion.choices[0]?.message?.content || '';
           
           try {
             // 解析 JSON
@@ -3440,11 +3606,20 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           const items = currentSet?.items || [];
           for (let k = 0; k < items.length; k++) {
             const item = items[k];
-            // 核心修复：章节查重必须限制在目标分卷内，支持在不同分卷生成同一套大纲的内容
-            const existingChapter = localNovel.chapters?.find(c =>
-              c.title === item.title &&
-              (!finalVolumeId || c.volumeId === finalVolumeId)
-            );
+            // 核心修复：全自动创作查重逻辑优化。
+            // 如果标题符合“第X章”的标准格式，则进行全书查重，防止因分卷 ID 偏移导致的重复生成。
+            // 如果是非标准标题，则维持分卷隔离。
+            const isStandardChapter = /^第?\s*[0-9零一二两三四五六七八九十百千]+\s*[章节]/.test(item.title);
+            const existingChapter = localNovel.chapters?.find(c => {
+              if (isStandardChapter) {
+                return c.title === item.title;
+              }
+              return (
+                c.title === item.title &&
+                ((finalVolumeId && c.volumeId === finalVolumeId) ||
+                  (!finalVolumeId && (!c.volumeId || c.volumeId === '')))
+              );
+            });
             if (!existingChapter || !existingChapter.content || existingChapter.content.trim().length === 0) {
               writeStartIndex = k;
               break;
@@ -3488,16 +3663,19 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 }
               }
               
+              if (!checkActive()) return;
               localNovel = { ...localNovel, chapters: Array.from(allLocalChaptersMap.values()) };
               updateLocalAndGlobal(localNovel);
             },
             async (chapterId, content, updatedNovel) => {
+              if (!checkActive()) return;
               if (updatedNovel) {
                 localNovel = updatedNovel;
               }
 
               if (globalConfig.onChapterComplete) {
-                const result = await (globalConfig.onChapterComplete as any)(chapterId, content, updatedNovel);
+                // 核心修复 (Bug 2): PC 工作流总结任务也锁定 RunID
+                const result = await (globalConfig.onChapterComplete as any)(chapterId, content, updatedNovel, false, startRunId);
                 if (result && typeof result === 'object' && (result as Novel).chapters) {
                   localNovel = result as Novel;
                 }
@@ -3513,39 +3691,57 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 terminal.log(`[Workflow] Triggering PRE-CHAPTER automatic volume split at "${trigger.chapterTitle}"`);
                 const nextVolName = trigger.nextVolumeName || '新分卷';
 
-                // 1. 创建新分卷
-                const newVolume = {
-                  id: `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                  title: nextVolName,
-                  collapsed: false
-                };
+                // 1. 核心修复：分卷创建幂等化。先查找是否已存在同名分卷，防止重复创建导致的 ID 偏移
+                const existingVol = localNovel.volumes?.find(v => v.title === nextVolName);
+                let targetVolId = '';
+                let splitNovel = { ...localNovel };
 
-                const splitNovel = {
-                  ...localNovel,
-                  volumes: [...(localNovel.volumes || []), newVolume]
-                };
+                if (existingVol) {
+                  targetVolId = existingVol.id;
+                  terminal.log(`[Workflow] Reusing existing volume: ${nextVolName} (${targetVolId})`);
+                } else {
+                  // 只有不存在时才创建新 ID
+                  const newVolume = {
+                    id: `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                    title: nextVolName,
+                    collapsed: false
+                  };
+                  targetVolId = newVolume.id;
+                  splitNovel = {
+                    ...localNovel,
+                    volumes: [...(localNovel.volumes || []), newVolume]
+                  };
+                  terminal.log(`[Workflow] Created new volume: ${nextVolName} (${targetVolId})`);
+                }
 
                 // 2. 立即更新 UI 和内存快照
                 await updateLocalAndGlobal(splitNovel);
 
                 // 3. 设置为新的 Active Anchor，并标记该触发规则已处理
-                workflowManager.setActiveVolumeAnchor(newVolume.id);
+                workflowManager.setActiveVolumeAnchor(targetVolId);
                 workflowManager.markSplitProcessed(trigger.chapterTitle);
 
-                terminal.log(`[Workflow] Pre-chapter split complete. Target volume will be: ${nextVolName} (${newVolume.id})`);
+                terminal.log(`[Workflow] Pre-chapter split complete. Target volume will be: ${nextVolName} (${targetVolId})`);
                 
                 // 4. 返回最新的小说对象和新的分卷 ID 给引擎，实现原子化同步
                 return {
                   updatedNovel: splitNovel,
-                  newVolumeId: newVolume.id
+                  newVolumeId: targetVolId
                 };
               }
             },
             finalVolumeId,
-            false,
+            true, // 核心修复 (Bug 3): 开启大纲注入开关，允许后续章节大纲发送给 AI
             selectedOutlineSetId,
-            abortControllerRef.current?.signal
+            abortControllerRef.current?.signal,
+            startRunId // 核心修复 (Bug 2): 透传锁定的 ID
           );
+
+          // 核心修复 (Bug 2): 引擎运行结束后，再次校验 ID
+          if (!checkActive()) {
+            terminal.log('[Workflow] Engine returned but RunID is inactive. Silently stopping UI updates.');
+            return;
+          }
 
           await syncNodeStatus(node.id, {
             label: NODE_CONFIGS.chapter.defaultLabel,
@@ -3826,8 +4022,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             isSuccess = true;
           }
 
-          // --- 核心修复：工作流大纲节点自动续写判断 ---
-          if (isSuccess && node.data.typeKey === 'outline' && targetEndNum) {
+          // --- 核心修复：工作流大纲/剧情粗纲节点自动续写判断 ---
+          const isOutlineNode = node.data.typeKey === 'outline' || node.data.typeKey === 'plotOutline';
+          if (isSuccess && isOutlineNode && targetEndNum) {
             const lastEntry = entriesToStore[entriesToStore.length - 1];
             const currentLastNum = parseAnyNumber(lastEntry?.title || '');
 
@@ -4131,6 +4328,12 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           updates.targetVolumeName = '';
           // 重置正文生成节点的显示名称为默认值
           updates.label = NODE_CONFIGS.chapter.defaultLabel;
+        } else if (n.data.typeKey === 'saveToVolume') {
+          // 核心修复：重置工作流时，清理分卷规划节点的多次分卷触发器内容
+          updates.splitRules = [];
+          updates.splitChapterTitle = '';
+          updates.nextVolumeName = '';
+          updates.volumeContent = '';
         }
 
         // 核心修复：手动重置时也需要将循环计数归零
@@ -4335,6 +4538,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                                   // 重置正文生成节点的动态关联，保留用户配置
                                   targetVolumeName: n.data.typeKey === 'chapter' ? '' : n.data.targetVolumeName,
                                   label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label,
+                                  // 核心修复：重置非当前工作流进度时也清理分卷规则
+                                  splitRules: n.data.typeKey === 'saveToVolume' ? [] : n.data.splitRules,
+                                  splitChapterTitle: n.data.typeKey === 'saveToVolume' ? '' : n.data.splitChapterTitle,
+                                  nextVolumeName: n.data.typeKey === 'saveToVolume' ? '' : n.data.nextVolumeName,
                                 }
                               }));
 

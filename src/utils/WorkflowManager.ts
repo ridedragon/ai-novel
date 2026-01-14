@@ -39,6 +39,9 @@ class WorkflowManager {
     },
   };
 
+  // 核心修复 (Bug 2): 引入全局执行 ID，用于识别并废弃过时的异步回调
+  private currentRunId: string | null = null;
+
   private listeners: Set<StateListener> = new Set();
   private nodeUpdateListeners: Set<NodeUpdateListener> = new Set();
 
@@ -73,7 +76,12 @@ class WorkflowManager {
   }
 
   public start(workflowId: string, startIndex: number = 0) {
-    terminal.log(`[WorkflowManager] Starting workflow: ${workflowId} at index ${startIndex}`);
+    // 核心修复 (Bug 2): 生成并锁定本次运行的唯一 ID
+    this.currentRunId = `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    terminal.log(
+      `[WorkflowManager] Starting workflow: ${workflowId} at index ${startIndex} (RunID: ${this.currentRunId})`,
+    );
+
     // 如果是从头开始，重置上下文
     const newContext: WorkflowGlobalContext =
       startIndex === 0
@@ -101,6 +109,32 @@ class WorkflowManager {
       globalContext: newContext,
     };
     this.notify();
+  }
+
+  public getCurrentRunId(): string | null {
+    return this.currentRunId;
+  }
+
+  /**
+   * 检查提供的 ID 是否为当前活跃的运行 ID (Bug 2 深度修复)
+   */
+  public isRunActive(runId: string | null | undefined): boolean {
+    // 如果 runId 为空，说明该任务未受锁保护（如旧版数据），允许其继续以保持兼容
+    if (!runId) return true;
+
+    // 核心逻辑：传入的 ID 必须与全局最新 ID 一致，且系统处于运行状态
+    return this.currentRunId === runId && this.state.isRunning;
+  }
+
+  /**
+   * 为手动任务注册一个执行 ID
+   */
+  public registerManualRun(type: string): string {
+    const runId = `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    this.currentRunId = runId;
+    this.state.isRunning = true;
+    terminal.log(`[WorkflowManager] Manual run registered: ${runId}`);
+    return runId;
   }
 
   public updateProgress(index: number) {
@@ -249,16 +283,20 @@ class WorkflowManager {
    * 规范化章节标题，支持中文数字转换
    * 例如："第一章" -> "1", "第11章" -> "11", "1" -> "1"
    */
+  /**
+   * 规范化章节标题，支持中文数字转换 (Bug 1 增强)
+   * 采用与移动端同步的解析逻辑，提升分卷触发匹配的鲁棒性
+   */
   private normalizeChapterToken(title: string): string {
     if (!title) return '';
     // 移除空白字符、"第"、"章" 以及冒号等分隔符
-    let text = title.replace(/\s+/g, '').replace(/[第章：:]/g, '');
+    let text = title.replace(/\s+/g, '').replace(/[第章：:。.、]/g, '');
 
-    // 中文数字映射
-    const chnNumChar: Record<string, number> = {
+    const chineseNums: Record<string, number> = {
       零: 0,
       一: 1,
       二: 2,
+      两: 2,
       三: 3,
       四: 4,
       五: 5,
@@ -266,38 +304,41 @@ class WorkflowManager {
       七: 7,
       八: 8,
       九: 9,
+      十: 10,
+      百: 100,
+      千: 1000,
     };
 
-    // 尝试将前面的中文数字转换为阿拉伯数字
-    const chineseToNumber = (str: string) => {
-      if (/^\d+$/.test(str)) return str;
+    const chineseMatch = text.match(/[零一二两三四五六七八九十百千]+/);
+    if (chineseMatch) {
+      const s = chineseMatch[0];
+      if (s.length === 1) return String(chineseNums[s] ?? text);
 
-      let res = 0;
+      let result = 0;
       let temp = 0;
-      for (let i = 0; i < str.length; i++) {
-        const char = str[i];
-        const val = chnNumChar[char];
-        if (val !== undefined) {
-          temp = val;
-          if (i === str.length - 1) res += temp;
-        } else if (char === '十') {
+      for (let i = 0; i < s.length; i++) {
+        const char = s[i];
+        const num = chineseNums[char];
+        if (num === 10) {
           if (temp === 0) temp = 1;
-          res += temp * 10;
+          result += temp * 10;
+          temp = 0;
+        } else if (num === 100) {
+          result += temp * 100;
+          temp = 0;
+        } else if (num === 1000) {
+          result += temp * 1000;
           temp = 0;
         } else {
-          // 遇到非数字字符，停止转换数字部分
-          res += temp;
-          break;
+          temp = num;
         }
       }
-      return res > 0 ? String(res) : str;
-    };
-
-    // 提取开头的数字部分（中文或阿拉伯）
-    const match = text.match(/^([零一二三四五六七八九十]+|\d+)/);
-    if (match) {
-      return chineseToNumber(match[1]);
+      result += temp;
+      return result > 0 ? String(result) : text;
     }
+
+    const arabicMatch = text.match(/\d+/);
+    if (arabicMatch) return arabicMatch[0];
 
     return text;
   }
@@ -367,6 +408,110 @@ class WorkflowManager {
     }
   }
 
+  /**
+   * 从 AI 返回的文本中解析分卷规划规则
+   * 采用“深度分块模糊解析”算法，具备极强的格式兼容性
+   */
+  public parseVolumesFromAI(aiText: string): any[] {
+    if (!aiText) return [];
+
+    const rules: any[] = [];
+    const timestamp = Date.now();
+
+    // 策略 1：深度分块模糊解析 (首选，抗干扰强)
+    // 逻辑：以“分卷名称”作为分隔符切块，每个分块内独立提取信息
+    const sections = aiText.split(/[*]*分卷名称[*]*[:：]/);
+
+    for (let i = 1; i < sections.length; i++) {
+      const section = sections[i];
+
+      // 1. 提取名称 (分卷名称关键词后的第一行，移除 Markdown 符号)
+      const nameMatch = section.match(/^\s*[*]*([^\n*]+)[*]*/);
+      const name = nameMatch ? nameMatch[1].trim() : '新分卷';
+
+      // 2. 提取范围 (支持各种连接符和可选的“第/章”文字)
+      const rangeMatch = section.match(
+        /(?:章节范围|范围)[:：]\s*(?:第)?\s*([零一二两三四五六七八九十百千\d]+)\s*(?:章)?\s*[-－—至到~]\s*(?:第)?\s*([零一二两三四五六七八九十百千\d]+)\s*(?:章)?/,
+      );
+
+      // 3. 提取概述 (寻找“基本内容概述”关键词直到下一个分卷块开始或全文结束)
+      const summaryMatch = section.match(
+        /(?:基本内容概述|概述|内容)[:：]\s*([\s\S]*?)(?=\n\s*[*]*(?:分卷名称|章节范围|第|$))/,
+      );
+      const summary = summaryMatch ? summaryMatch[1].trim() : '';
+
+      if (rangeMatch) {
+        const startStr = rangeMatch[1];
+        const endStr = rangeMatch[2];
+        const startNum = parseInt(this.normalizeChapterToken(startStr));
+        const endNum = parseInt(this.normalizeChapterToken(endStr));
+
+        rules.push({
+          id: `vol_rule_block_${timestamp}_${rules.length}`,
+          chapterTitle: `第${startStr}章`, // 使用触发章节作为锚点
+          nextVolumeName: name,
+          description: summary,
+          startChapter: isNaN(startNum) ? undefined : startNum,
+          endChapter: isNaN(endNum) ? undefined : endNum,
+          processed: false,
+        });
+      }
+    }
+
+    if (rules.length > 0) {
+      terminal.log(`[WorkflowManager] Successfully parsed ${rules.length} volume rules using Block Parser`);
+      return rules;
+    }
+
+    // 策略 2：JSON 解析 (针对少数强制 JSON 的模型)
+    try {
+      const cleanJson = aiText.replace(/```json\s*([\s\S]*?)```/gi, '$1').trim();
+      const startIdx = Math.max(cleanJson.indexOf('['), cleanJson.indexOf('{'));
+      if (startIdx !== -1) {
+        const parsed = JSON.parse(cleanJson.substring(startIdx));
+        const items = Array.isArray(parsed) ? parsed : parsed.volumes || [];
+        items.forEach((item: any, idx: number) => {
+          const sStr = String(item.startChapter || item.start || '');
+          const sNum = parseInt(this.normalizeChapterToken(sStr));
+          rules.push({
+            id: `vol_rule_json_${timestamp}_${idx}`,
+            chapterTitle: `第${sStr || sNum}章`,
+            nextVolumeName: item.title || item.name || '新分卷',
+            description: item.summary || item.description || '',
+            processed: false,
+          });
+        });
+      }
+    } catch (e) {}
+
+    // 策略 3：模糊行匹配 (最后的兜底)
+    if (rules.length === 0) {
+      const lines = aiText.split('\n');
+      lines.forEach((line, idx) => {
+        const fuzzy = line.match(
+          /(?:第)?\s*([零一二两三四五六七八九十百千\d]+)\s*(?:章)?\s*[-－—至到~]\s*(?:第)?\s*([零一二两三四五六七八九十百千\d]+)\s*(?:章)?/,
+        );
+        if (fuzzy) {
+          const name =
+            line
+              .replace(fuzzy[0], '')
+              .replace(/[0-9.．:：、\s()（）分卷第章]/g, '')
+              .trim() || `第${fuzzy[1]}章起`;
+          rules.push({
+            id: `vol_rule_fuzzy_${timestamp}_${idx}`,
+            chapterTitle: `第${fuzzy[1]}章`,
+            nextVolumeName: name,
+            description: '自动提取',
+            processed: false,
+          });
+        }
+      });
+    }
+
+    terminal.log(`[WorkflowManager] Final parsing result: ${rules.length} volume rules found`);
+    return rules;
+  }
+
   public pause(index: number) {
     terminal.log(`[WorkflowManager] Pausing workflow at index ${index}`);
     this.state = {
@@ -379,7 +524,8 @@ class WorkflowManager {
   }
 
   public stop() {
-    terminal.log(`[WorkflowManager] Stopping/Completing workflow`);
+    terminal.log(`[WorkflowManager] Stopping/Completing workflow (RunID reset)`);
+    this.currentRunId = null;
     this.state = {
       ...this.state,
       isRunning: false,

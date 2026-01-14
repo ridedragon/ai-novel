@@ -645,30 +645,44 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
               </div>
             </div>
 
-            <div className="p-4 md:p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-[#09090b]/50 flex justify-end gap-3">
-              <button
-                onClick={() => setEditingNovel(null)}
-                className="px-5 py-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors font-medium"
-              >
-                取消
-              </button>
+            <div className="p-4 md:p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-[#09090b]/50 flex flex-wrap justify-between items-center gap-3">
               <button
                 onClick={() => {
-                    if (editingNovel) {
-                        onUpdateNovel(editingNovel.id, {
-                            title: editingNovel.title,
-                            description: editingNovel.description,
-                            coverUrl: editingNovel.coverUrl,
-                            category: editingNovel.category,
-                            status: editingNovel.status
-                        });
-                        setEditingNovel(null);
-                    }
+                  if (editingNovel) {
+                    onDeleteNovel(editingNovel.id);
+                    setEditingNovel(null);
+                  }
                 }}
-                className="px-6 py-2.5 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white rounded-xl shadow-lg shadow-[var(--theme-color)]/20 transition-all font-bold"
+                className="px-4 py-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors flex items-center gap-2 text-sm font-bold border border-red-200 dark:border-red-500/20 order-2 md:order-1 w-full md:w-auto justify-center"
               >
-                保存修改
+                <Trash2 className="w-4 h-4" />
+                删除作品
               </button>
+              <div className="flex gap-3 flex-1 justify-end order-1 md:order-2">
+                <button
+                  onClick={() => setEditingNovel(null)}
+                  className="px-5 py-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors font-medium text-sm"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => {
+                      if (editingNovel) {
+                          onUpdateNovel(editingNovel.id, {
+                              title: editingNovel.title,
+                              description: editingNovel.description,
+                              coverUrl: editingNovel.coverUrl,
+                              category: editingNovel.category,
+                              status: editingNovel.status
+                          });
+                          setEditingNovel(null);
+                      }
+                  }}
+                  className="px-6 py-2.5 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white rounded-xl shadow-lg shadow-[var(--theme-color)]/20 transition-all font-bold text-sm"
+                >
+                  保存修改
+                </button>
+              </div>
             </div>
           </div>
         </div>

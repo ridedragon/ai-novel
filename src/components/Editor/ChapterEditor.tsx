@@ -7,6 +7,7 @@ import {
   Save,
   Settings,
   StopCircle,
+  Trash2,
   Wand2
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
@@ -31,6 +32,7 @@ interface ChapterEditorProps {
   onPrevVersion: () => void;
   onNextVersion: () => void;
   onSwitchVersion: (version: ChapterVersion) => void;
+  onDeleteChapter: (chapterId: number) => void;
 }
 
 export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
@@ -49,6 +51,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
   onPrevVersion,
   onNextVersion,
   onSwitchVersion,
+  onDeleteChapter,
 }) => {
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -204,6 +207,13 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(({
               title={isEditingChapter ? "保存" : "编辑"}
             >
               {isEditingChapter ? <Save className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={() => activeChapter && onDeleteChapter(activeChapter.id)}
+              className="w-8 md:w-10 h-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-all"
+              title="删除本章"
+            >
+              <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
             </button>
           </div>
         </div>

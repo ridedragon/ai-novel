@@ -264,6 +264,9 @@ export interface WorkflowSplitRule {
   chapterTitle: string;
   nextVolumeName: string;
   processed?: boolean;
+  description?: string; // 分卷剧情概述
+  startChapter?: number;
+  endChapter?: number;
 }
 
 export interface WorkflowGlobalContext {

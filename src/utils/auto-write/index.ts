@@ -45,6 +45,7 @@ export class AutoWriteEngine {
     includeFullOutline: boolean = false,
     outlineSetId: string | null = null,
     signal?: AbortSignal,
+    runId?: string | null,
   ) {
     terminal.log(
       `[DEBUG] AutoWriteEngine.run STARTED: startIndex=${startIndex}, targetVolumeId=${targetVolumeId}, novelTitle=${this.novel.title}`,
@@ -69,7 +70,19 @@ export class AutoWriteEngine {
 
     const maxBatchSize = this.config.consecutiveChapterCount > 1 ? this.config.consecutiveChapterCount : 1;
 
-    while (startIndex < outline.length && this.isRunning) {
+    // 核心修复 (Bug 2): 引入全局工作流管理器校验函数
+    const { workflowManager } = await import('../WorkflowManager');
+    const checkActive = () => {
+      if (!this.isRunning) return false;
+      if (runId && !workflowManager.isRunActive(runId)) {
+        terminal.warn(`[AutoWriteEngine] 侦测到过时的执行实例 (RunID: ${runId})，正在静默退出以防双倍生成。`);
+        this.stop();
+        return false;
+      }
+      return true;
+    };
+
+    while (startIndex < outline.length && checkActive()) {
       const batchItems: { item: OutlineItem; idx: number; id: number; volumeId?: string }[] = [];
 
       for (let i = 0; i < maxBatchSize; i++) {
@@ -96,13 +109,20 @@ export class AutoWriteEngine {
           }
         }
 
-        // 核心修复：查重逻辑必须绑定分卷。支持用户在不同分卷（如：草稿卷 vs 正式卷）中生成相同大纲的内容而不被跳过。
-        const existingChapter = (this.novel.chapters || []).find(
-          c =>
+        // 核心修复：查重逻辑优化。
+        // 1. 如果标题符合“第X章”的标准格式，则进行全书查重，防止因分卷 ID 偏移导致的重复生成。
+        // 2. 如果是非标准标题，则维持分卷隔离，支持用户在不同分卷（如：草稿卷 vs 正式卷）中生成相同标题的内容。
+        const isStandardChapter = /^第?\s*[0-9零一二两三四五六七八九十百千]+\s*[章节]/.test(item.title);
+        const existingChapter = (this.novel.chapters || []).find(c => {
+          if (isStandardChapter) {
+            return c.title === item.title;
+          }
+          return (
             c.title === item.title &&
             ((targetVolumeId && c.volumeId === targetVolumeId) ||
-              (!targetVolumeId && (!c.volumeId || c.volumeId === ''))),
-        );
+              (!targetVolumeId && (!c.volumeId || c.volumeId === '')))
+          );
+        });
 
         if (existingChapter && existingChapter.content && existingChapter.content.trim().length > 0) {
           terminal.log(
@@ -110,9 +130,12 @@ export class AutoWriteEngine {
           );
 
           console.log(`[AutoWrite] Skipping existing chapter and checking for summaries: ${item.title}`);
+          // 核心修复 (Bug 2)：校验执行 ID 有效性，杜绝多实例并跑
+          if (!checkActive()) return;
+
           // 即使跳过已存在的章节，也触发一次完成回调，确保由于跳过导致的缺失总结能被补全
           const resultNovel = await onChapterComplete(existingChapter.id, existingChapter.content, this.novel);
-          if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
+          if (checkActive() && resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
             this.novel = resultNovel as Novel;
           }
 
@@ -139,10 +162,12 @@ export class AutoWriteEngine {
       const newChapters = [...(this.novel.chapters || [])];
       batchItems.forEach(batchItem => {
         const itemVolId = batchItem.volumeId;
+        const isStandardChapter = /^第?\s*[0-9零一二两三四五六七八九十百千]+\s*[章节]/.test(batchItem.item.title);
         const existingById = (newChapters || []).find(c => c.id === batchItem.id);
-        const existingByTitle = (newChapters || []).find(
-          c => c.title === batchItem.item.title && (!itemVolId || c.volumeId === itemVolId),
-        );
+        const existingByTitle = (newChapters || []).find(c => {
+          if (isStandardChapter) return c.title === batchItem.item.title;
+          return c.title === batchItem.item.title && (!itemVolId || c.volumeId === itemVolId);
+        });
 
         if (!existingById && !existingByTitle) {
           newChapters.push({
@@ -205,19 +230,42 @@ export class AutoWriteEngine {
 
           let taskDescription = '';
           if (batchItems.length > 1) {
-            taskDescription = `你正在创作小说《${this.novel.title}》。请一次性撰写以下 ${batchItems.length} 章的内容。\n**重要：请严格使用 "### 章节标题" 作为每一章的分隔符。**\n\n`;
+            taskDescription = `你正在创作连续的小说故事。请一次性撰写以下 ${batchItems.length} 章的内容。\n**重要：请严格使用 "### 章节标题" 作为每一章的分隔符。**\n\n`;
             batchItems.forEach((b, idx) => {
               taskDescription += `第 ${idx + 1} 部分：\n标题：${b.item.title}\n大纲：${b.item.summary}\n\n`;
             });
             taskDescription += `\n请开始撰写，确保内容连贯，不要包含任何多余的解释，直接输出正文。格式示例：\n### ${batchItems[0].item.title}\n(第一章正文...)\n### ${batchItems[1].item.title}\n(第二章正文...)\n`;
           } else {
-            taskDescription = `你正在创作小说《${this.novel.title}》。\n当前章节：${batchItems[0].item.title}\n本章大纲：${batchItems[0].item.summary}\n\n请根据大纲和前文剧情，撰写本章正文。文笔要生动流畅。`;
+            taskDescription = `你正在创作连续的小说故事。\n当前章节：${batchItems[0].item.title}\n本章大纲：${batchItems[0].item.summary}\n\n请根据大纲和前文剧情，撰写本章正文。文笔要生动流畅。`;
           }
 
-          const messages: any[] = [{ role: 'system', content: this.config.systemPrompt }];
+          const messages: any[] = [];
+
+          // 0. 基础系统提示词 (System)
+          messages.push({ role: 'system', content: this.config.systemPrompt });
 
           // 1. 注入世界观和角色信息 (System)
           messages.push(...worldInfoMessages);
+
+          // 核心修复 (Bug 3)：调整待创作大纲顺序，紧跟在【角色档案】之后，并确保 system 角色
+          if (includeFullOutline) {
+            // 过滤已完成章节的大纲，只发送未写的和当前批次的大纲
+            const filteredOutline = outline.filter(item => {
+              const isCompleted = (this.novel.chapters || []).some(
+                c => c.title === item.title && c.content && c.content.trim().length > 10,
+              );
+              const isCurrentBatch = batchItems.some(b => b.item.title === item.title);
+              return !isCompleted || isCurrentBatch;
+            });
+
+            if (filteredOutline.length > 0) {
+              const fullOutlineStr = filteredOutline.map((item, i) => `· ${item.title}: ${item.summary}`).join('\n');
+              messages.push({
+                role: 'system',
+                content: `【待创作章节大纲参考】：\n${fullOutlineStr}`,
+              });
+            }
+          }
 
           // 2. 注入灵感/自定义提示词 (透传预设角色和内容)
           activePrompts.forEach(p => {
@@ -232,17 +280,18 @@ export class AutoWriteEngine {
           // 3. 注入前文背景/剧情摘要 (System)
           messages.push(...contextMessages);
 
-          // 4. 注入全书粗纲 (System)
-          if (includeFullOutline) {
-            const fullOutlineStr = outline.map((item, i) => `${i + 1}. ${item.title}: ${item.summary}`).join('\n');
-            messages.push({
-              role: 'system',
-              content: `【全书粗纲参考】：\n${fullOutlineStr}`,
-            });
-          }
-
           // 5. 注入最终的任务描述 (唯一的 User 消息)
           messages.push({ role: 'user', content: taskDescription });
+
+          // 6. 如果存在循环特定指令，以 User 身份追加 (满足用户最新需求)
+          if (this.config.systemPrompt.includes('【第') && this.config.systemPrompt.includes('轮循环特定指令】')) {
+            const loopMatch = this.config.systemPrompt.match(/【第 \d+ 轮循环特定指令】：\n([\s\S]*?)$/);
+            if (loopMatch && loopMatch[1]) {
+              messages.push({ role: 'user', content: `当前轮次特定要求：\n${loopMatch[1].trim()}` });
+              // 从 systemPrompt 中移除，避免重复发送且角色混乱
+              messages[0].content = messages[0].content.replace(loopMatch[0], '').trim();
+            }
+          }
 
           // 调试：F12 打印发送给 AI 的全部内容
           console.group(`[AI REQUEST] 工作流正文创作 - ${this.novel.title}`);
@@ -284,7 +333,7 @@ export class AutoWriteEngine {
             });
 
             for await (const chunk of response) {
-              if (!this.isRunning || this.abortController?.signal.aborted) throw new Error('Aborted');
+              if (!checkActive() || this.abortController?.signal.aborted) throw new Error('Aborted');
               const content = chunk.choices[0]?.delta?.content || '';
               fullGeneratedContent += content;
               streamTokenCount++;
@@ -497,17 +546,20 @@ export class AutoWriteEngine {
           // 上报章节完成并按需触发自动优化
           // 核心修复：由 Promise.all 改为顺序执行，防止由于并发产生的状态覆盖导致总结丢失（Stale State Conflict）
           for (let i = 0; i < batchItems.length; i++) {
+            // 核心修复 (Bug 2)：循环内部检查 ID，防止终止后的残余回调导致双倍生成
+            if (!checkActive()) break;
+
             const item = batchItems[i];
             const chapterId = item.id;
             const content = finalContents[i];
 
             const resultNovel = await onChapterComplete(chapterId, content, this.novel);
-            if (resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
+            if (checkActive() && resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
               this.novel = resultNovel as Novel;
             }
 
             // 联动“自动优化”按钮逻辑：如果配置开启，直接触发内部优化函数
-            if (this.config.autoOptimize && this.isRunning) {
+            if (checkActive() && this.config.autoOptimize) {
               terminal.log(`[AutoWrite] Auto-optimization (background) triggered for chapter ${chapterId}.`);
               // 第十九次修复：自动优化任务在后台静默运行，不阻塞主流程
               this.optimizeChapter(chapterId, content, () => {}, onNovelUpdate, getActiveScripts(), true);
