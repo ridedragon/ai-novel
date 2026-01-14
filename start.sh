@@ -15,6 +15,9 @@ fi
 echo "Starting Kilo-Memory Cyber-Monitor..."
 npm run monitor &
 
+echo "Starting Persistence Storage Server..."
+npm run server &
+
 echo "Starting development server..."
 
 # 端口清理逻辑

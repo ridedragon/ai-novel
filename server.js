@@ -99,8 +99,9 @@ app.delete('/api/storage/:key', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n📦 Data Persistence Server is active!`);
-  console.log(`🔗 Endpoint: http://localhost:${PORT}/api/storage`);
+  console.log(`🔗 Endpoint: http://0.0.0.0:${PORT}/api/storage`);
   console.log(`📂 Data Dir: ${DATA_DIR}\n`);
+  console.log(`💡 Note: If accessing from a phone, use the PC's IP address instead of localhost.\n`);
 });

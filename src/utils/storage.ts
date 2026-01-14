@@ -36,8 +36,20 @@ let lastSavedNovelsJson = '';
 // 引入序列化锁，确保工作流保存操作按顺序执行，防止异步写入竞态导致的旧数据覆盖新数据
 let workflowSaveQueue: Promise<void> = Promise.resolve();
 
-// 后端 API 地址
-const API_BASE_URL = 'http://localhost:3001/api/storage';
+// 后端 API 地址 - 动态获取当前主机名，适配手机 Termux 或局域网访问
+const getApiBaseUrl = () => {
+  // 优先尝试从 URL 参数中获取远程存储地址（用于调试或特殊部署场景）
+  const params = new URLSearchParams(window.location.search);
+  const override = params.get('api_url');
+  if (override) return override;
+
+  // 默认逻辑：跟随当前页面主机名
+  const hostname = window.location.hostname || 'localhost';
+  return `${window.location.protocol}//${hostname}:3001/api/storage`;
+};
+
+const API_BASE_URL = getApiBaseUrl();
+console.log(`[STORAGE] API Base URL initialized as: ${API_BASE_URL}`);
 
 // 辅助 API 请求函数
 async function fetchFromApi<T>(key: string): Promise<T | null> {

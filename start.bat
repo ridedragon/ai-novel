@@ -21,6 +21,9 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8002') do (
 echo Starting Kilo-Memory Cyber-Monitor...
 start /b cmd /c "npm run monitor"
 
+echo Starting Persistence Storage Server...
+start /b cmd /c "npm run server"
+
 echo Starting development server...
 call npm run dev
 pause

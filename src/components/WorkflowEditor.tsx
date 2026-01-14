@@ -1015,21 +1015,18 @@ const NodePropertiesModal = ({
                       return rules.map((rule, idx) => (
                         <div key={rule.id} className="grid grid-cols-12 gap-3 items-end bg-gray-900/40 p-3 rounded-lg border border-gray-700/30 group">
                           <div className="col-span-5 space-y-1.5">
-                            <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">触发章节</label>
-                            <select
+                            <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">触发章节 (如: 第一章/1)</label>
+                            <input
+                              type="text"
                               value={rule.chapterTitle}
                               onChange={(e) => {
                                 const nextRules = [...rules];
                                 nextRules[idx] = { ...rule, chapterTitle: e.target.value };
                                 updateNodeData(node.id, { splitRules: nextRules });
                               }}
+                              placeholder="例如: 第一章 或 1"
                               className="w-full bg-[#161922] border border-gray-700 rounded-lg px-2.5 py-2 text-xs text-gray-100 outline-none focus:border-teal-500 transition-all"
-                            >
-                              <option value="">-- 选择章节 --</option>
-                              {titleOptions.map(title => (
-                                <option key={title} value={title}>{title}</option>
-                              ))}
-                            </select>
+                            />
                           </div>
                           <div className="col-span-5 space-y-1.5">
                             <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">新分卷命名</label>

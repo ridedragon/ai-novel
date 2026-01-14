@@ -686,21 +686,17 @@ const ConfigPanel = React.memo(({
                         </button>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">触发章节</label>
-                        <select
+                        <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">触发章节 (如: 第一章/1)</label>
+                        <OptimizedInput
                           value={rule.chapterTitle}
-                          onChange={(e) => {
+                          onChange={(val: string) => {
                             const nextRules = [...rules];
-                            nextRules[idx] = { ...rule, chapterTitle: e.target.value };
+                            nextRules[idx] = { ...rule, chapterTitle: val };
                             onUpdateNodeData(editingNode.id, { splitRules: nextRules });
                           }}
+                          placeholder="例如: 第一章 或 1"
                           className="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none"
-                        >
-                          <option value="">-- 选择章节 --</option>
-                          {titleOptions.map(title => (
-                            <option key={title} value={title}>{title}</option>
-                          ))}
-                        </select>
+                        />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">新分卷命名</label>

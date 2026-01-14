@@ -246,24 +246,92 @@ class WorkflowManager {
   }
 
   /**
+   * 规范化章节标题，支持中文数字转换
+   * 例如："第一章" -> "1", "第11章" -> "11", "1" -> "1"
+   */
+  private normalizeChapterToken(title: string): string {
+    if (!title) return '';
+    // 移除空白字符、"第"、"章" 以及冒号等分隔符
+    let text = title.replace(/\s+/g, '').replace(/[第章：:]/g, '');
+
+    // 中文数字映射
+    const chnNumChar: Record<string, number> = {
+      零: 0,
+      一: 1,
+      二: 2,
+      三: 3,
+      四: 4,
+      五: 5,
+      六: 6,
+      七: 7,
+      八: 8,
+      九: 9,
+    };
+
+    // 尝试将前面的中文数字转换为阿拉伯数字
+    const chineseToNumber = (str: string) => {
+      if (/^\d+$/.test(str)) return str;
+
+      let res = 0;
+      let temp = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str[i];
+        const val = chnNumChar[char];
+        if (val !== undefined) {
+          temp = val;
+          if (i === str.length - 1) res += temp;
+        } else if (char === '十') {
+          if (temp === 0) temp = 1;
+          res += temp * 10;
+          temp = 0;
+        } else {
+          // 遇到非数字字符，停止转换数字部分
+          res += temp;
+          break;
+        }
+      }
+      return res > 0 ? String(res) : str;
+    };
+
+    // 提取开头的数字部分（中文或阿拉伯）
+    const match = text.match(/^([零一二三四五六七八九十]+|\d+)/);
+    if (match) {
+      return chineseToNumber(match[1]);
+    }
+
+    return text;
+  }
+
+  /**
    * 检查是否触发分卷
    * 支持 Legacy (单一触发) 和 V2 (多触发规则)
+   * 增强匹配逻辑：支持“第一章”、“1”等多种格式的灵活匹配
    */
   public checkTriggerSplit(currentChapterTitle: string): { chapterTitle: string; nextVolumeName: string } | null {
     const context = this.state.globalContext;
+    const normalizedCurrent = this.normalizeChapterToken(currentChapterTitle);
+
+    const isMatch = (targetTitle: string) => {
+      if (!targetTitle) return false;
+      // 1. 精确匹配
+      if (targetTitle === currentChapterTitle) return true;
+      // 2. 规范化匹配 (处理 "1" 匹配 "第一章")
+      const normalizedTarget = this.normalizeChapterToken(targetTitle);
+      return normalizedTarget === normalizedCurrent;
+    };
 
     // 1. 优先检查新规则列表
     if (context.pendingSplits && context.pendingSplits.length > 0) {
-      const rule = context.pendingSplits.find(r => r.chapterTitle === currentChapterTitle && !r.processed);
+      const rule = context.pendingSplits.find(r => !r.processed && isMatch(r.chapterTitle));
       if (rule) {
-        return { chapterTitle: rule.chapterTitle, nextVolumeName: rule.nextVolumeName };
+        return { chapterTitle: currentChapterTitle, nextVolumeName: rule.nextVolumeName };
       }
     }
 
     // 2. 兜底 Legacy 逻辑
-    if (context.pendingSplitChapter === currentChapterTitle) {
+    if (context.pendingSplitChapter && isMatch(context.pendingSplitChapter)) {
       return {
-        chapterTitle: context.pendingSplitChapter,
+        chapterTitle: currentChapterTitle,
         nextVolumeName: context.pendingNextVolumeName || '新分卷',
       };
     }
@@ -276,9 +344,16 @@ class WorkflowManager {
    */
   public markSplitProcessed(chapterTitle: string) {
     const context = this.state.globalContext;
+    const normalizedCurrent = this.normalizeChapterToken(chapterTitle);
+
+    const isMatch = (targetTitle: string) => {
+      if (!targetTitle) return false;
+      if (targetTitle === chapterTitle) return true;
+      return this.normalizeChapterToken(targetTitle) === normalizedCurrent;
+    };
 
     // 清除 Legacy 触发器
-    if (context.pendingSplitChapter === chapterTitle) {
+    if (context.pendingSplitChapter && isMatch(context.pendingSplitChapter)) {
       this.updateContext({
         pendingSplitChapter: undefined,
         pendingNextVolumeName: undefined,
@@ -287,9 +362,7 @@ class WorkflowManager {
 
     // 标记新规则已处理
     if (context.pendingSplits) {
-      const newSplits = context.pendingSplits.map(r =>
-        r.chapterTitle === chapterTitle ? { ...r, processed: true } : r,
-      );
+      const newSplits = context.pendingSplits.map(r => (isMatch(r.chapterTitle) ? { ...r, processed: true } : r));
       this.updateContext({ pendingSplits: newSplits });
     }
   }
