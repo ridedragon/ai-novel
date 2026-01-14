@@ -203,71 +203,43 @@ export const getChapterContext = (
         (a, b) => parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start,
       );
 
-      // 获取最近的一个大总结
+      // 核心修复：根据作用域（全书/本卷）决定总结提取策略
+      // 获取范围内最近的一个大总结（作为补充参考，不再作为强制截断点）
       const latestBigSummary = uniqueSummaries
         .filter(s => s.subtype === 'big_summary')
         .sort((a, b) => parseRange(b.summaryRange!).end - parseRange(a.summaryRange!).end)[0];
 
-      const bigSummaryStart = latestBigSummary ? parseRange(latestBigSummary.summaryRange!).start : 0;
-      const bigSummaryEnd = latestBigSummary ? parseRange(latestBigSummary.summaryRange!).end : scopeStartNum - 1;
-
-      // --- 线性五段式构建 ---
-
-      // 第1段: 大总结之前的所有小总结
-      uniqueSummaries
-        .filter(s => s.subtype === 'small_summary' && parseRange(s.summaryRange!).start < (bigSummaryStart || 999999))
-        .forEach(s => {
-          contextContent += `【剧情概要 (${s.title})】：\n${s.content}\n\n`;
-        });
-
-      // 第2段: 大总结之前的细节正文 (回看深度)
-      const detailStartNum = Math.max(scopeStartNum, bigSummaryEnd - contextChapterCount + 1);
-      const detailStoryChapters = storyChapters.filter((c, idx) => {
-        const cNum = idx + 1;
-        return cNum >= detailStartNum && cNum <= bigSummaryEnd;
-      });
-      detailStoryChapters.forEach(c => {
-        contextContent += `### [参考细节] ${c.title}\n${getEffectiveChapterContent(c)}\n\n`;
+      // 提取所有有效的“小总结”，不再被大总结截断
+      const effectiveSmallSummaries = uniqueSummaries.filter(s => {
+        if (s.subtype !== 'small_summary') return false;
+        if (isAllScope) return true;
+        if (filterVolumeId) return s.volumeId === filterVolumeId;
+        if (filterUncategorized) return !s.volumeId;
+        return true;
       });
 
-      // 第3段: 最近大总结
+      // --- 结构化上下文构建 ---
+
+      // 1. 注入小总结链（确保全书/本卷所有细节摘要都被发送）
+      effectiveSmallSummaries.forEach(s => {
+        contextContent += `【剧情概要 (${s.title})】：\n${s.content}\n\n`;
+      });
+
+      // 2. 注入最近的大总结（作为宏观参考）
       if (latestBigSummary) {
-        contextContent += `【剧情大纲 (${latestBigSummary.title})】：\n${latestBigSummary.content}\n\n`;
+        contextContent += `【阶段剧情大纲 (${latestBigSummary.title})】：\n${latestBigSummary.content}\n\n`;
       }
 
-      // 第4段: 大总结之后的全部连贯内容 (小总结 + 正文)
-      const afterContent: { type: 'summary' | 'story'; num: number; content: string; title: string }[] = [];
+      // 3. 注入最近几章的正文细节（基于回看深度）
+      const storyStartNum = Math.max(scopeStartNum, currentNum - contextChapterCount);
+      const recentStoryChapters = storyChapters.filter((c, idx) => {
+        const cNum = idx + 1;
+        return cNum >= storyStartNum && cNum < currentNum;
+      });
 
-      uniqueSummaries
-        .filter(s => s.subtype === 'small_summary' && parseRange(s.summaryRange!).start > bigSummaryEnd)
-        .forEach(s => {
-          afterContent.push({
-            type: 'summary',
-            num: parseRange(s.summaryRange!).start,
-            content: s.content,
-            title: s.title,
-          });
-        });
-
-      storyChapters
-        .filter((c, idx) => {
-          const cNum = idx + 1;
-          return cNum > bigSummaryEnd && cNum < currentNum;
-        })
-        .forEach((c, idx) => {
-          const cNum = storyChapters.indexOf(c) + 1;
-          afterContent.push({ type: 'story', num: cNum, content: getEffectiveChapterContent(c), title: c.title });
-        });
-
-      afterContent
-        .sort((a, b) => a.num - b.num)
-        .forEach(item => {
-          if (item.type === 'summary') {
-            contextContent += `【剧情概要 (${item.title})】：\n${item.content}\n\n`;
-          } else {
-            contextContent += `### ${item.title}\n${item.content}\n\n`;
-          }
-        });
+      recentStoryChapters.forEach(c => {
+        contextContent += `### [前文回顾] ${c.title}\n${getEffectiveChapterContent(c)}\n\n`;
+      });
     }
   } else {
     const volumeId = targetChapter.volumeId;
@@ -381,86 +353,52 @@ export const getChapterContextMessages = (
         (a, b) => parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start,
       );
 
-      // 获取最近的一个大总结
+      // 核心修复：根据作用域（全书/本卷）决定总结提取策略
+      // 获取范围内最近的一个大总结（作为补充参考，不再作为强制截断点）
       const latestBigSummary = uniqueSummaries
         .filter(s => s.subtype === 'big_summary')
         .sort((a, b) => parseRange(b.summaryRange!).end - parseRange(a.summaryRange!).end)[0];
 
-      const bigSummaryStart = latestBigSummary ? parseRange(latestBigSummary.summaryRange!).start : 0;
-      const bigSummaryEnd = latestBigSummary ? parseRange(latestBigSummary.summaryRange!).end : scopeStartNum - 1;
-
-      // --- 线性五段式构建 ---
-
-      // 第1段: 大总结之前的所有小总结
-      uniqueSummaries
-        .filter(s => s.subtype === 'small_summary' && parseRange(s.summaryRange!).start < (bigSummaryStart || 999999))
-        .forEach(s => {
-          messages.push({
-            role: 'system',
-            content: `【剧情概要 (${s.title})】：\n${s.content}`,
-          });
-        });
-
-      // 第2段: 大总结之前的细节正文 (回看深度)
-      const detailStartNum = Math.max(scopeStartNum, bigSummaryEnd - contextChapterCount + 1);
-      const detailStoryChapters = storyChapters.filter((c, idx) => {
-        const cNum = idx + 1;
-        return cNum >= detailStartNum && cNum <= bigSummaryEnd;
+      // 提取所有有效的“小总结”，不再被大总结截断
+      const effectiveSmallSummaries = uniqueSummaries.filter(s => {
+        if (s.subtype !== 'small_summary') return false;
+        if (isAllScope) return true;
+        if (filterVolumeId) return s.volumeId === filterVolumeId;
+        if (filterUncategorized) return !s.volumeId;
+        return true;
       });
-      detailStoryChapters.forEach(c => {
+
+      // --- 结构化消息构建 ---
+
+      // 1. 注入小总结链（作为 System 消息）
+      effectiveSmallSummaries.forEach(s => {
         messages.push({
           role: 'system',
-          content: `【前文参考细节 - ${c.title}】：\n${getEffectiveChapterContent(c)}`,
+          content: `【阶段剧情概要 (${s.title})】：\n${s.content}`,
         });
       });
 
-      // 第3段: 最近大总结
+      // 2. 注入最近的大总结（作为 System 消息）
       if (latestBigSummary) {
         messages.push({
           role: 'system',
-          content: `【剧情大纲 (${latestBigSummary.title})】：\n${latestBigSummary.content}`,
+          content: `【全书剧情回顾大纲 (${latestBigSummary.title})】：\n${latestBigSummary.content}`,
         });
       }
 
-      // 第4段: 大总结之后的全部连贯内容 (小总结 + 正文)
-      const afterContent: { type: 'summary' | 'story'; num: number; content: string; title: string }[] = [];
+      // 3. 注入最近几章的正文细节（作为 System 消息，基于回看深度）
+      const storyStartNum = Math.max(scopeStartNum, currentNum - contextChapterCount);
+      const recentStoryChapters = storyChapters.filter((c, idx) => {
+        const cNum = idx + 1;
+        return cNum >= storyStartNum && cNum < currentNum;
+      });
 
-      uniqueSummaries
-        .filter(s => s.subtype === 'small_summary' && parseRange(s.summaryRange!).start > bigSummaryEnd)
-        .forEach(s => {
-          afterContent.push({
-            type: 'summary',
-            num: parseRange(s.summaryRange!).start,
-            content: s.content,
-            title: s.title,
-          });
+      recentStoryChapters.forEach(c => {
+        messages.push({
+          role: 'system',
+          content: `【前文回顾细节 - ${c.title}】：\n${getEffectiveChapterContent(c)}`,
         });
-
-      storyChapters
-        .filter((c, idx) => {
-          const cNum = idx + 1;
-          return cNum > bigSummaryEnd && cNum < currentNum;
-        })
-        .forEach((c, idx) => {
-          const cNum = storyChapters.indexOf(c) + 1;
-          afterContent.push({ type: 'story', num: cNum, content: getEffectiveChapterContent(c), title: c.title });
-        });
-
-      afterContent
-        .sort((a, b) => a.num - b.num)
-        .forEach(item => {
-          if (item.type === 'summary') {
-            messages.push({
-              role: 'system',
-              content: `【剧情概要 (${item.title})】：\n${item.content}`,
-            });
-          } else {
-            messages.push({
-              role: 'system',
-              content: `【前文回顾 - ${item.title}】：\n${item.content}`,
-            });
-          }
-        });
+      });
     }
   } else {
     // 非长上下文模式

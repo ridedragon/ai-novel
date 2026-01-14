@@ -1,5 +1,5 @@
 import terminal from 'virtual:terminal';
-import { VariableBinding, WorkflowGlobalContext } from '../types';
+import { VariableBinding, WorkflowContextSnapshot, WorkflowGlobalContext } from '../types';
 
 export type WorkflowStatus = 'idle' | 'running' | 'paused' | 'failed';
 
@@ -75,29 +75,48 @@ class WorkflowManager {
     this.listeners.forEach(listener => listener(currentState));
   }
 
-  public start(workflowId: string, startIndex: number = 0) {
+  public start(workflowId: string, startIndex: number = 0, snapshot?: WorkflowContextSnapshot) {
     // 核心修复 (Bug 2): 生成并锁定本次运行的唯一 ID
     this.currentRunId = `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     terminal.log(
       `[WorkflowManager] Starting workflow: ${workflowId} at index ${startIndex} (RunID: ${this.currentRunId})`,
     );
 
-    // 如果是从头开始，重置上下文
-    const newContext: WorkflowGlobalContext =
-      startIndex === 0
-        ? {
-            variables: {
-              // 初始化系统变量
-              loop_index: 1,
-              batch_range: '',
-            },
-            executionStack: [],
-            activeVolumeAnchor: undefined,
-            pendingSplitChapter: undefined,
-            pendingNextVolumeName: undefined,
-            pendingSplits: [],
-          }
-        : this.state.globalContext;
+    // 确定新的上下文逻辑
+    let newContext: WorkflowGlobalContext;
+
+    if (startIndex === 0) {
+      // 1. 完全从头开始：彻底重置
+      newContext = {
+        variables: {
+          loop_index: 1,
+          batch_range: '',
+        },
+        executionStack: [],
+        activeVolumeAnchor: undefined,
+        pendingSplitChapter: undefined,
+        pendingNextVolumeName: undefined,
+        pendingSplits: [],
+      };
+    } else if (snapshot) {
+      // 2. 恢复执行且提供了持久化快照：尝试从快照恢复
+      terminal.log(`[WorkflowManager] Resuming with context snapshot recovery.`);
+      newContext = {
+        variables: snapshot.variables || { loop_index: 1 },
+        executionStack: [],
+        activeVolumeAnchor: snapshot.activeVolumeAnchor,
+        pendingSplits: snapshot.pendingSplits || [],
+      };
+
+      // 核心增强 (Bug 1 反馈修复)：如果恢复时没有锚点，但不是从头开始，尝试从全局变量回溯
+      // 这能解决因快照未能及时保存导致的“分卷归类丢失”问题
+      if (!newContext.activeVolumeAnchor && startIndex > 0) {
+        terminal.warn(`[WorkflowManager] Anchor missing in snapshot. Will attempt back-tracing in engine.`);
+      }
+    } else {
+      // 3. 正常的内存内继续执行
+      newContext = this.state.globalContext;
+    }
 
     this.state = {
       ...this.state,
@@ -179,6 +198,50 @@ class WorkflowManager {
    * 变量插值引擎
    * 将字符串中的 {{variable}} 替换为全局上下文中的值
    */
+  /**
+   * 将数字转换为中文大写数字 (如 24 -> 二十四)
+   */
+  /**
+   * 将数字转换为中文大写数字 (如 24 -> 二十四)
+   * 采用更严谨的网文序号转换逻辑
+   */
+  public toChineseNumeral(num: number): string {
+    if (num === 0) return '零';
+    if (num === 10) return '十';
+
+    const zh = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+    const units = ['', '十', '百', '千', '万'];
+
+    let res = '';
+    const s = String(num);
+    const len = s.length;
+
+    for (let i = 0; i < len; i++) {
+      const n = Number(s[i]);
+      const u = len - i - 1;
+
+      if (n !== 0) {
+        // 处理 10-19 的特殊读法 (一十 -> 十)
+        if (len === 2 && i === 0 && n === 1) {
+          res += units[u];
+        } else {
+          res += zh[n] + units[u];
+        }
+      } else {
+        // 处理中间的零
+        if (res !== '' && res[res.length - 1] !== '零' && u !== 0) {
+          res += '零';
+        }
+      }
+    }
+
+    return res.replace(/零$/, '');
+  }
+
+  /**
+   * 变量插值引擎
+   * 将字符串中的 {{variable}} 替换为全局上下文中的值
+   */
   public interpolate(text: string): string {
     if (!text) return text;
     return text.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
@@ -188,10 +251,13 @@ class WorkflowManager {
       if (varName === 'active_volume_anchor') {
         return this.state.globalContext.activeVolumeAnchor || match;
       }
-      if (varName === 'loop_index') {
-        // 如果在循环栈中，优先取栈顶的 index
-        // 目前简化处理，直接取全局变量
-        return String(this.state.globalContext.variables['loop_index'] ?? 0);
+      if (varName === 'loop_index' || varName === 'loop_idx') {
+        const val = this.state.globalContext.variables['loop_index'] ?? 0;
+        return String(val);
+      }
+      if (varName === 'chinese_loop_index' || varName === 'chapter_index') {
+        const val = this.state.globalContext.variables['loop_index'] ?? 0;
+        return this.toChineseNumeral(Number(val));
       }
 
       const val = this.state.globalContext.variables[varName];
@@ -280,6 +346,18 @@ class WorkflowManager {
   }
 
   /**
+   * 获取当前执行上下文快照 (Bug 1 修复：用于持久化)
+   */
+  public getSnapshot(): WorkflowContextSnapshot {
+    const ctx = this.state.globalContext;
+    return {
+      activeVolumeAnchor: ctx.activeVolumeAnchor,
+      pendingSplits: ctx.pendingSplits,
+      variables: ctx.variables,
+    };
+  }
+
+  /**
    * 规范化章节标题，支持中文数字转换
    * 例如："第一章" -> "1", "第11章" -> "11", "1" -> "1"
    */
@@ -287,11 +365,23 @@ class WorkflowManager {
    * 规范化章节标题，支持中文数字转换 (Bug 1 增强)
    * 采用与移动端同步的解析逻辑，提升分卷触发匹配的鲁棒性
    */
+  /**
+   * 规范化章节标题，提取其中的数字序号 (Bug 1 反馈加固)
+   * 目标：将 "第二十一章：新陈之间" 或 "第21章" 都统一识别为 "21"
+   */
   private normalizeChapterToken(title: string): string {
     if (!title) return '';
-    // 移除空白字符、"第"、"章" 以及冒号等分隔符
-    let text = title.replace(/\s+/g, '').replace(/[第章：:。.、]/g, '');
 
+    // 1. 提取第一段连续的中文数字或阿拉伯数字
+    const match = title.match(/[零一二三四五六七八九十百千]+|\d+/);
+    if (!match) return title;
+
+    const token = match[0];
+
+    // 2. 如果是纯数字，直接返回
+    if (/^\d+$/.test(token)) return token;
+
+    // 3. 处理中文数字转换
     const chineseNums: Record<string, number> = {
       零: 0,
       一: 1,
@@ -309,38 +399,29 @@ class WorkflowManager {
       千: 1000,
     };
 
-    const chineseMatch = text.match(/[零一二两三四五六七八九十百千]+/);
-    if (chineseMatch) {
-      const s = chineseMatch[0];
-      if (s.length === 1) return String(chineseNums[s] ?? text);
+    if (token.length === 1) return String(chineseNums[token] ?? token);
 
-      let result = 0;
-      let temp = 0;
-      for (let i = 0; i < s.length; i++) {
-        const char = s[i];
-        const num = chineseNums[char];
-        if (num === 10) {
-          if (temp === 0) temp = 1;
-          result += temp * 10;
-          temp = 0;
-        } else if (num === 100) {
-          result += temp * 100;
-          temp = 0;
-        } else if (num === 1000) {
-          result += temp * 1000;
-          temp = 0;
-        } else {
-          temp = num;
-        }
+    let result = 0;
+    let temp = 0;
+    for (let i = 0; i < token.length; i++) {
+      const char = token[i];
+      const num = chineseNums[char];
+      if (num === 10) {
+        if (temp === 0) temp = 1;
+        result += temp * 10;
+        temp = 0;
+      } else if (num === 100) {
+        result += temp * 100;
+        temp = 0;
+      } else if (num === 1000) {
+        result += temp * 1000;
+        temp = 0;
+      } else {
+        temp = num;
       }
-      result += temp;
-      return result > 0 ? String(result) : text;
     }
-
-    const arabicMatch = text.match(/\d+/);
-    if (arabicMatch) return arabicMatch[0];
-
-    return text;
+    result += temp;
+    return result > 0 ? String(result) : token;
   }
 
   /**

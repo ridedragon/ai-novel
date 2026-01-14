@@ -167,6 +167,12 @@ export interface Novel {
   referenceFolders?: ReferenceFolder[];
 }
 
+export interface WorkflowContextSnapshot {
+  activeVolumeAnchor?: string;
+  pendingSplits?: WorkflowSplitRule[];
+  variables: Record<string, any>;
+}
+
 export interface PromptItem {
   id: number;
   name: string;

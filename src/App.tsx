@@ -5105,18 +5105,27 @@ function App() {
                });
                const uniqueSummaries = Array.from(rangeMap.values());
 
-               // 获取范围内最近的一个大总结
+               // 核心修复：根据作用域（全书/本卷）决定总结提取策略
+               // 获取范围内最近的一个大总结（作为补充参考，不再作为截断点）
                const latestBigSummary = uniqueSummaries
                  .filter(s => s.subtype === 'big_summary')
                  .sort((a, b) => parseRange(b.summaryRange!).end - parseRange(a.summaryRange!).end)[0];
                
-               const bigSummaryEnd = latestBigSummary ? parseRange(latestBigSummary.summaryRange!).end : 0;
-
-               // 筛选有效总结：最近的大总结 + 该总结之后的所有小总结
+               // 筛选有效总结
                const effectiveSummaries = uniqueSummaries
                  .filter(s => {
+                   // 1. 如果是大总结，仅保留最近的一个作为宏观参考
                    if (s.subtype === 'big_summary') return s.id === latestBigSummary?.id;
-                   return parseRange(s.summaryRange!).start > bigSummaryEnd;
+                   
+                   // 2. 如果是小总结：
+                   // 如果选择全书模式，必须发送全书所有的小总结（不被大总结截断）
+                   if (contextScopeRef.current === 'all') return true;
+                   
+                   // 如果是本卷模式，仅发送属于本卷的小总结
+                   if (filterVolumeId) return s.volumeId === filterVolumeId;
+                   if (filterUncategorized) return !s.volumeId;
+                   
+                   return true;
                  })
                  .sort((a, b) => parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start);
 

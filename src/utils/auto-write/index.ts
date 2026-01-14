@@ -47,6 +47,30 @@ export class AutoWriteEngine {
     signal?: AbortSignal,
     runId?: string | null,
   ) {
+    // 核心增强 (Bug 1 反馈加固)：引擎级分卷继承机制
+    // 如果外部未传入目标分卷（由于快照丢失或重启），自动回溯现有章节的最后一章所属的分卷
+    if (!targetVolumeId && this.novel.chapters && this.novel.chapters.length > 0) {
+      for (let k = this.novel.chapters.length - 1; k >= 0; k--) {
+        if (this.novel.chapters[k].volumeId) {
+          targetVolumeId = this.novel.chapters[k].volumeId;
+          terminal.log(`[AutoWrite] Recovered targetVolumeId from last chapter: ${targetVolumeId}`);
+          break;
+        }
+      }
+    }
+
+    // 核心增强 (Bug 1 反馈加固)：引擎级分卷继承机制
+    // 如果外部未传入目标分卷（由于快照丢失或重启），自动回溯现有章节的最后一章所属的分卷
+    if (!targetVolumeId && this.novel.chapters && this.novel.chapters.length > 0) {
+      for (let k = this.novel.chapters.length - 1; k >= 0; k--) {
+        if (this.novel.chapters[k].volumeId) {
+          targetVolumeId = this.novel.chapters[k].volumeId;
+          terminal.log(`[AutoWrite] Recovered targetVolumeId from last chapter: ${targetVolumeId}`);
+          break;
+        }
+      }
+    }
+
     terminal.log(
       `[DEBUG] AutoWriteEngine.run STARTED: startIndex=${startIndex}, targetVolumeId=${targetVolumeId}, novelTitle=${this.novel.title}`,
     );
@@ -109,19 +133,19 @@ export class AutoWriteEngine {
           }
         }
 
-        // 核心修复：查重逻辑优化。
-        // 1. 如果标题符合“第X章”的标准格式，则进行全书查重，防止因分卷 ID 偏移导致的重复生成。
-        // 2. 如果是非标准标题，则维持分卷隔离，支持用户在不同分卷（如：草稿卷 vs 正式卷）中生成相同标题的内容。
-        const isStandardChapter = /^第?\s*[0-9零一二两三四五六七八九十百千]+\s*[章节]/.test(item.title);
+        // 核心修复 (Bug 2)：查重逻辑优化。
+        // 1. 查重范围应严格限制在当前目标分卷（targetVolumeId）内。
+        // 2. 这解决了用户删除当前卷章节后，因“回收站”或“其他卷”存在同名章而导致引擎跳过生成的问题。
         const existingChapter = (this.novel.chapters || []).find(c => {
-          if (isStandardChapter) {
-            return c.title === item.title;
-          }
-          return (
-            c.title === item.title &&
-            ((targetVolumeId && c.volumeId === targetVolumeId) ||
-              (!targetVolumeId && (!c.volumeId || c.volumeId === '')))
-          );
+          const isTitleMatch = c.title === item.title;
+          if (!isTitleMatch) return false;
+
+          const isSameVolume =
+            (targetVolumeId && c.volumeId === targetVolumeId) ||
+            (!targetVolumeId && (!c.volumeId || c.volumeId === ''));
+
+          // 核心逻辑：仅在同一分卷内进行查重
+          return isSameVolume;
         });
 
         if (existingChapter && existingChapter.content && existingChapter.content.trim().length > 0) {
@@ -159,23 +183,57 @@ export class AutoWriteEngine {
       }
 
       // Apply placeholders
-      const newChapters = [...(this.novel.chapters || [])];
+      let newChapters = [...(this.novel.chapters || [])];
       batchItems.forEach(batchItem => {
         const itemVolId = batchItem.volumeId;
-        const isStandardChapter = /^第?\s*[0-9零一二两三四五六七八九十百千]+\s*[章节]/.test(batchItem.item.title);
-        const existingById = (newChapters || []).find(c => c.id === batchItem.id);
-        const existingByTitle = (newChapters || []).find(c => {
-          if (isStandardChapter) return c.title === batchItem.item.title;
-          return c.title === batchItem.item.title && (!itemVolId || c.volumeId === itemVolId);
+        const existingById = newChapters.find(c => c.id === batchItem.id);
+        const existingByTitle = newChapters.find(c => {
+          return (
+            c.title === batchItem.item.title &&
+            ((itemVolId && c.volumeId === itemVolId) || (!itemVolId && (!c.volumeId || c.volumeId === '')))
+          );
         });
 
         if (!existingById && !existingByTitle) {
-          newChapters.push({
+          const newChapter = {
             id: batchItem.id,
             title: batchItem.item.title,
             content: '',
             volumeId: itemVolId,
-          });
+          };
+
+          // 核心修复：优化章节插入位置 (Bug 1 反馈修复)
+          // 不再简单 push，而是尝试插入到同分卷最后一章之后，或全书末尾
+          if (itemVolId) {
+            // 寻找同卷最后一章的物理位置
+            let lastIndexInVol = -1;
+            for (let k = newChapters.length - 1; k >= 0; k--) {
+              if (newChapters[k].volumeId === itemVolId) {
+                lastIndexInVol = k;
+                break;
+              }
+            }
+
+            if (lastIndexInVol !== -1) {
+              newChapters.splice(lastIndexInVol + 1, 0, newChapter);
+            } else {
+              // 如果该分卷目前还是空的，则插入到全书最近一个有分卷章节的后面
+              let lastAnyVolIndex = -1;
+              for (let k = newChapters.length - 1; k >= 0; k--) {
+                if (newChapters[k].volumeId) {
+                  lastAnyVolIndex = k;
+                  break;
+                }
+              }
+              if (lastAnyVolIndex !== -1) {
+                newChapters.splice(lastAnyVolIndex + 1, 0, newChapter);
+              } else {
+                newChapters.push(newChapter);
+              }
+            }
+          } else {
+            newChapters.push(newChapter);
+          }
         } else if (existingByTitle) {
           batchItem.id = existingByTitle.id;
           // 深度修复：即便章节已存在，如果它处于“未分卷”状态，且当前生成任务明确了目标分卷，

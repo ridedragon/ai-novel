@@ -169,6 +169,7 @@ export interface WorkflowData {
   edges: Edge[];
   currentNodeIndex?: number;
   lastModified: number;
+  contextSnapshot?: any; // 存储 WorkflowContextSnapshot
 }
 
 // --- Workflow V2 Execution Types ---
@@ -1921,7 +1922,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             nodes: nodesRef.current, // 核心修复：自动保存使用 Ref 抓取绝对最新的内存快照
             edges,
             currentNodeIndex,
-            lastModified: Date.now()
+            lastModified: Date.now(),
+            contextSnapshot: workflowManager.getSnapshot()
           };
         }
         return w;
@@ -2525,7 +2527,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           ...w,
           nodes: latestNodes,
           currentNodeIndex: currentIndex,
-          lastModified: Date.now()
+          lastModified: Date.now(),
+          contextSnapshot: workflowManager.getSnapshot()
         };
       }
       return w;
@@ -2548,7 +2551,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       return;
     }
     
-    workflowManager.start(activeWorkflowId, startIndex);
+    const currentWf = workflowsRef.current.find(w => w.id === activeWorkflowId);
+    workflowManager.start(activeWorkflowId, startIndex, currentWf?.contextSnapshot);
     const startRunId = workflowManager.getCurrentRunId(); // 核心修复 (Bug 2): 锁定本次执行 ID
     
     setStopRequested(false);
@@ -2683,8 +2687,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
         for (let j = 0; j < startIndex; j++) {
           const prevNode = sortedNodes[j];
-          if (prevNode.data.typeKey === 'createFolder') {
-            currentWorkflowFolder = prevNode.data.folderName;
+          if (prevNode.data.typeKey === 'createFolder' || prevNode.data.typeKey === 'reuseDirectory') {
+            currentWorkflowFolder = prevNode.data.folderName || currentWorkflowFolder;
           } else if (prevNode.data.typeKey === 'userInput') {
             accumContext += `【全局输入】：\n${prevNode.data.instruction}\n\n`;
           } else if (prevNode.data.typeKey === 'saveToVolume') {
@@ -2696,6 +2700,21 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               workflowManager.setActiveVolumeAnchor(prevNode.data.targetVolumeId as string);
             }
           }
+
+          // 核心增强 (Bug 1 反馈修复)：断点恢复时，如果仍然没有锚点，从现有章节回溯
+          // 核心增强 (Bug 1 反馈修复)：断点恢复时，如果仍然没有锚点，从现有章节回溯
+          if (!workflowManager.getActiveVolumeAnchor() && localNovel.chapters && localNovel.chapters.length > 0) {
+            // 找到最后一个有分卷 ID 的章节
+            for (let k = localNovel.chapters.length - 1; k >= 0; k--) {
+              const chap = localNovel.chapters[k];
+              if (chap.volumeId) {
+                workflowManager.setActiveVolumeAnchor(chap.volumeId);
+                terminal.log(`[Workflow] Back-traced active volume anchor from chapter "${chap.title}": ${chap.volumeId}`);
+                break;
+              }
+            }
+          }
+
           // 获取上一个执行完的节点的产出作为 lastNodeOutput
           // 核心修复：如果是循环回跳产生的多条历史记录，应该将所有历史记录（按时间倒序恢复为正序）都拼接到上下文中
           if (prevNode.data.outputEntries && prevNode.data.outputEntries.length > 0) {
@@ -3504,10 +3523,18 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             ? resolvePendingRef([node.data.selectedOutlineSets[0]], localNovel.outlineSets)[0]
             : null;
 
-          // 如果节点没选大纲集，尝试自动匹配当前工作目录对应的大纲集
+          // 如果节点没选大纲集，尝试自动匹配当前工作目录或节点自身关联目录对应的大纲集
           if (!selectedOutlineSetId || selectedOutlineSetId.startsWith('pending:')) {
-             const matched = localNovel.outlineSets?.find(s => s.name === currentWorkflowFolder);
-             if (matched) selectedOutlineSetId = matched.id;
+             const targetFolder = currentWorkflowFolder || node.data.folderName;
+             const matched = localNovel.outlineSets?.find(s => s.name === targetFolder);
+             if (matched) {
+               selectedOutlineSetId = matched.id;
+             } else if (!targetFolder && localNovel.outlineSets && localNovel.outlineSets.length > 0) {
+               // 如果没有任何目录上下文，且只有一个大纲集，则尝试兜底使用它
+               if (localNovel.outlineSets.length === 1) {
+                 selectedOutlineSetId = localNovel.outlineSets[0].id;
+               }
+             }
           }
 
           let currentSet = localNovel.outlineSets?.find(s => s.id === selectedOutlineSetId);
@@ -3515,11 +3542,15 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           if (node.data.typeKey === 'chapter') {
             if (!currentSet || !currentSet.items || currentSet.items.length === 0) {
               // 最后尝试：如果仍然没找到，但有正在执行的工作流目录，可能大纲集刚被创建但状态未同步
-              const fallbackSet = localNovel.outlineSets?.[localNovel.outlineSets.length - 1];
-              if (fallbackSet && fallbackSet.items && fallbackSet.items.length > 0 && (!currentWorkflowFolder || fallbackSet.name === currentWorkflowFolder)) {
+              const fallbackSet = localNovel.outlineSets?.find(s => s.name === (currentWorkflowFolder || node.data.folderName)) ||
+                                 localNovel.outlineSets?.[localNovel.outlineSets.length - 1];
+              
+              if (fallbackSet && fallbackSet.items && fallbackSet.items.length > 0) {
                 currentSet = fallbackSet;
+                terminal.log(`[Workflow] Chapter node auto-recovered outline set: ${currentSet.name}`);
               } else {
-                throw new Error(`未关联大纲集或关联的大纲集(${currentSet?.name || '未知'})内容为空。请检查：1. 前置大纲节点是否已成功运行 2. 节点属性中是否已勾选对应的大纲集`);
+                const folderDesc = currentWorkflowFolder ? `目录 "${currentWorkflowFolder}"` : (node.data.folderName ? `关联目录 "${node.data.folderName}"` : '未指定目录');
+                throw new Error(`未关联大纲集或关联的大纲集内容为空 (${folderDesc})。请检查：1. 前置大纲节点是否已成功运行并产生内容 2. 节点属性中是否已勾选对应的大纲集 3. 目录名是否匹配`);
               }
             }
           }
@@ -3534,8 +3565,25 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           // 验证 Anchor 有效性
           if (finalVolumeId) {
              if (!latestVolumes.some(v => v.id === finalVolumeId)) {
+                terminal.warn(`[Workflow] Cached anchor ${finalVolumeId} is invalid. Clearing.`);
                 finalVolumeId = ''; // Anchor 失效
              }
+          }
+
+          // 核心增强 (Bug 1 反馈修复)：回溯逻辑。
+          // 如果当前没有锚点，向上回溯最近一个已存在的章节所属的分卷
+          // 核心增强 (Bug 1 反馈修复)：回溯逻辑。
+          // 如果当前没有锚点，向上回溯最近一个已存在的章节所属的分卷
+          if (!finalVolumeId && localNovel.chapters && localNovel.chapters.length > 0) {
+            for (let k = localNovel.chapters.length - 1; k >= 0; k--) {
+              const chapVolId = localNovel.chapters[k].volumeId;
+              if (chapVolId) {
+                finalVolumeId = chapVolId;
+                workflowManager.setActiveVolumeAnchor(finalVolumeId);
+                terminal.log(`[Workflow] Engine recovered volume anchor from existing chapters: ${finalVolumeId}`);
+                break;
+              }
+            }
           }
 
           // 兼容性/兜底逻辑: 自动匹配逻辑 (针对“自动匹配分卷”模式)
@@ -4088,7 +4136,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           
           // 查找匹配的设定集 ID（由于可能存在重名，优先通过逻辑关联）
           const findTargetSet = (sets: any[] | undefined) => {
-            // 尝试通过名称匹配
+            // 1. 优先通过显式 ID 关联查找 (如果节点属性中保存了 ID，且该 ID 依然有效)
+            // 注意：由于 node.data.selectedXXX 可能包含多个，这里通常处理自动同步到关联目录的行为
+            
+            // 2. 尝试通过名称匹配
             return sets?.find(s => s.name === folderName);
           };
 
@@ -4141,16 +4192,24 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                   if (s.id === targetSet.id) {
                     const newItems = [...s.items];
                     entriesToStore.forEach(e => {
-                      const idx = newItems.findIndex(ni => ni.title === e.title);
-                      if (idx !== -1) newItems[idx] = { title: e.title, summary: e.content };
+                      // 增强匹配：支持模糊匹配“第X章”
+                      const cleanTitle = (t: string) => t.replace(/\s+/g, '');
+                      const targetClean = cleanTitle(e.title);
+                      const idx = newItems.findIndex(ni => cleanTitle(ni.title) === targetClean || ni.title === e.title);
+                      
+                      if (idx !== -1) newItems[idx] = { ...newItems[idx], title: e.title, summary: e.content };
                       else newItems.push({ title: e.title, summary: e.content });
                     });
+                    // 排序大纲条目
+                    newItems.sort((a, b) => (parseAnyNumber(a.title) || 0) - (parseAnyNumber(b.title) || 0));
                     return { ...s, items: newItems };
                   }
                   return s;
                 })
               };
               novelChanged = true;
+            } else {
+              terminal.warn(`[Workflow] Outline node execution finished, but no matching outline set found for folder "${folderName}". Content remains in node only.`);
             }
           } else if (node.data.typeKey === 'inspiration') {
             const targetSet = findTargetSet(updatedNovelState.inspirationSets);
@@ -4272,7 +4331,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           nodes,
           edges,
           currentNodeIndex,
-          lastModified: Date.now()
+          lastModified: Date.now(),
+          contextSnapshot: workflowManager.getSnapshot()
         };
       }
       return w;
@@ -4371,7 +4431,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             ...w,
             nodes: updatedNodes,
             currentNodeIndex: -1,
-            lastModified: Date.now()
+            lastModified: Date.now(),
+            contextSnapshot: undefined
           };
         }
         return w;

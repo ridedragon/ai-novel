@@ -1959,8 +1959,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       if (startIndex > 0) {
         for (let j = 0; j < startIndex; j++) {
           const prevNode = sortedNodes[j];
-          if (prevNode.data.typeKey === 'createFolder') {
-            currentWorkflowFolder = prevNode.data.folderName;
+          if (prevNode.data.typeKey === 'createFolder' || prevNode.data.typeKey === 'reuseDirectory') {
+            currentWorkflowFolder = prevNode.data.folderName || currentWorkflowFolder;
           } else if (prevNode.data.typeKey === 'userInput') {
             accumContext += `【全局输入】：\n${prevNode.data.instruction}\n\n`;
           } else if (prevNode.data.typeKey === 'saveToVolume') {
@@ -2593,10 +2593,17 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             ? resolvePendingRef([node.data.selectedOutlineSets[0]], localNovel.outlineSets)[0]
             : null;
 
-          // 如果节点没选大纲集，尝试自动匹配当前工作目录对应的大纲集
+          // 如果节点没选大纲集，尝试自动匹配当前工作目录或节点自身关联目录对应的大纲集
           if (!selectedOutlineSetId || selectedOutlineSetId.startsWith('pending:')) {
-             const matched = localNovel.outlineSets?.find(s => s.name === currentWorkflowFolder);
-             if (matched) selectedOutlineSetId = matched.id;
+             const targetFolder = currentWorkflowFolder || node.data.folderName;
+             const matched = localNovel.outlineSets?.find(s => s.name === targetFolder);
+             if (matched) {
+               selectedOutlineSetId = matched.id;
+             } else if (!targetFolder && localNovel.outlineSets && localNovel.outlineSets.length > 0) {
+               if (localNovel.outlineSets.length === 1) {
+                 selectedOutlineSetId = localNovel.outlineSets[0].id;
+               }
+             }
           }
 
           let currentSet = localNovel.outlineSets?.find(s => s.id === selectedOutlineSetId);
@@ -2604,11 +2611,15 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           if (node.data.typeKey === 'chapter') {
             if (!currentSet || !currentSet.items || currentSet.items.length === 0) {
               // 最后尝试：如果仍然没找到，但有正在执行的工作流目录，可能大纲集刚被创建但状态未同步
-              const fallbackSet = localNovel.outlineSets?.[localNovel.outlineSets.length - 1];
-              if (fallbackSet && fallbackSet.items && fallbackSet.items.length > 0 && (!currentWorkflowFolder || fallbackSet.name === currentWorkflowFolder)) {
+              const fallbackSet = localNovel.outlineSets?.find(s => s.name === (currentWorkflowFolder || node.data.folderName)) ||
+                                 localNovel.outlineSets?.[localNovel.outlineSets.length - 1];
+              
+              if (fallbackSet && fallbackSet.items && fallbackSet.items.length > 0) {
                 currentSet = fallbackSet;
+                terminal.log(`[Mobile Workflow] Chapter node auto-recovered outline set: ${currentSet.name}`);
               } else {
-                throw new Error(`未关联大纲集或关联的大纲集(${currentSet?.name || '未知'})内容为空。请检查：1. 前置大纲节点是否已成功运行 2. 节点属性中是否已勾选对应的大纲集`);
+                const folderDesc = currentWorkflowFolder ? `目录 "${currentWorkflowFolder}"` : (node.data.folderName ? `关联目录 "${node.data.folderName}"` : '未指定目录');
+                throw new Error(`未关联大纲集或关联的大纲集内容为空 (${folderDesc})。请检查：1. 前置大纲节点是否已成功运行并产生内容 2. 节点属性中是否已勾选对应的大纲集 3. 目录名是否匹配`);
               }
             }
           }
@@ -3142,7 +3153,22 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
           if (node.data.typeKey === 'worldview') updatedNovelState.worldviewSets = updateSets(updatedNovelState.worldviewSets, 'worldview');
           else if (node.data.typeKey === 'characters') updatedNovelState.characterSets = updateSets(updatedNovelState.characterSets, 'character');
-          else if (node.data.typeKey === 'outline') updatedNovelState.outlineSets = updateSets(updatedNovelState.outlineSets, 'outline');
+          else if (node.data.typeKey === 'outline') {
+            const targetSet = updatedNovelState.outlineSets?.find(s => s.name === folderName);
+            if (targetSet) {
+              const newItems = [...targetSet.items];
+              entriesToStore.forEach(e => {
+                const cleanTitle = (t: string) => t.replace(/\s+/g, '');
+                const targetClean = cleanTitle(e.title);
+                const idx = newItems.findIndex((ni: any) => cleanTitle(ni.title) === targetClean || ni.title === e.title);
+                if (idx !== -1) newItems[idx] = { ...newItems[idx], title: e.title, summary: e.content };
+                else newItems.push({ title: e.title, summary: e.content });
+              });
+              newItems.sort((a: any, b: any) => (parseAnyNumber(a.title) || 0) - (parseAnyNumber(b.title) || 0));
+              updatedNovelState.outlineSets = updatedNovelState.outlineSets?.map(s => s.id === targetSet.id ? { ...s, items: newItems } : s);
+              novelChanged = true;
+            }
+          }
           else if (node.data.typeKey === 'inspiration') updatedNovelState.inspirationSets = updateSets(updatedNovelState.inspirationSets, 'inspiration');
           else if (node.data.typeKey === 'plotOutline') updatedNovelState.plotOutlineSets = updateSets(updatedNovelState.plotOutlineSets, 'plotOutline');
 
