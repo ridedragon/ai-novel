@@ -2165,7 +2165,12 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
                if (existingVol) workflowManager.setActiveVolumeAnchor(existingVol.id);
             }
           } else {
-            await syncNodeStatus(node.id, { status: 'failed' }, i);
+            // 即使解析失败，也将内容写入 volumeContent 供用户查看并手动修改
+            await syncNodeStatus(node.id, {
+              status: 'failed',
+              volumeContent: aiResponse,
+              outputEntries: [{ id: `vol_plan_fail_${Date.now()}`, title: '分卷规划 (解析失败)', content: aiResponse }]
+            }, i);
             throw new Error('无法从 AI 返回的内容中解析出分卷规划。');
           }
 

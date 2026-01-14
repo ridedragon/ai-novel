@@ -196,8 +196,9 @@ export const getChapterContext = (
       // 去重
       const rangeMap = new Map<string, Chapter>();
       allSummaries.forEach(s => {
-        const range = s.summaryRange!;
-        if (!rangeMap.has(range) || s.id > rangeMap.get(range)!.id) rangeMap.set(range, s);
+        // 使用卷ID和范围组合作为Key，确保在全书范围内唯一
+        const rangeKey = `${s.volumeId || 'default'}-${s.summaryRange}`;
+        if (!rangeMap.has(rangeKey) || s.id > rangeMap.get(rangeKey)!.id) rangeMap.set(rangeKey, s);
       });
       const uniqueSummaries = Array.from(rangeMap.values()).sort(
         (a, b) => parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start,
@@ -346,8 +347,9 @@ export const getChapterContextMessages = (
       // 去重
       const rangeMap = new Map<string, Chapter>();
       allSummaries.forEach(s => {
-        const range = s.summaryRange!;
-        if (!rangeMap.has(range) || s.id > rangeMap.get(range)!.id) rangeMap.set(range, s);
+        // 使用卷ID和范围组合作为Key，确保在全书范围内唯一
+        const rangeKey = `${s.volumeId || 'default'}-${s.summaryRange}`;
+        if (!rangeMap.has(rangeKey) || s.id > rangeMap.get(rangeKey)!.id) rangeMap.set(rangeKey, s);
       });
       const uniqueSummaries = Array.from(rangeMap.values()).sort(
         (a, b) => parseRange(a.summaryRange!).start - parseRange(b.summaryRange!).start,
