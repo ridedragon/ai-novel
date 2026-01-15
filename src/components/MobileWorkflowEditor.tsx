@@ -3302,18 +3302,26 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
     } catch (e: any) {
       const isAbort = e.name === 'AbortError' || /aborted/i.test(e.message);
       if (!isAbort) {
-        setError(`执行失败: ${e.message}`);
+        // 发生真实错误时，设置全局错误状态
+        // 注意：workflowManager.setError 会自动设置 isPaused=true，从而保留当前的 currentNodeIndex
         workflowManager.setError(e.message);
-        // 错误时将当前节点标记为失败
-        const failedNodeId = orderedNodes[currentNodeIndex]?.id;
+        setError(`执行失败: ${e.message}`);
+        
+        // 获取当前正在执行（即报错）的节点
+        // 优先从全局状态获取，因为本地 state 可能由于 notify 延迟而滞后
+        const realTimeIndex = workflowManager.getState().currentNodeIndex;
+        const failedNodeId = orderedNodes[realTimeIndex]?.id;
+        
         if (failedNodeId) {
           setNodes(nds => nds.map(n => n.id === failedNodeId ? { ...n, data: { ...n.data, status: 'failed' } } : n));
         }
+      } else {
+        // 用户手动中止
+        workflowManager.pause(workflowManager.getState().currentNodeIndex);
       }
+      
       // 错误时清理所有连线动画
       setEdges(eds => eds.map(e => ({ ...e, animated: false })));
-      // 强制停止全局工作流
-      workflowManager.stop();
       keepAliveManager.disable();
     }
   };

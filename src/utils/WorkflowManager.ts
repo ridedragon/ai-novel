@@ -98,15 +98,28 @@ class WorkflowManager {
         pendingNextVolumeName: undefined,
         pendingSplits: [],
       };
-    } else if (snapshot) {
-      // 2. 恢复执行且提供了持久化快照：尝试从快照恢复
-      terminal.log(`[WorkflowManager] Resuming with context snapshot recovery.`);
-      newContext = {
-        variables: snapshot.variables || { loop_index: 1 },
-        executionStack: [],
-        activeVolumeAnchor: snapshot.activeVolumeAnchor,
-        pendingSplits: snapshot.pendingSplits || [],
-      };
+    } else if (startIndex > 0) {
+      // 2. 恢复执行逻辑
+      const memoryContext = this.state.globalContext;
+      const hasMemory = Object.keys(memoryContext.variables).length > 2 || memoryContext.activeVolumeAnchor;
+
+      if (hasMemory && this.state.activeWorkflowId === workflowId) {
+        // 2a. 优先使用内存中的上下文 (最实时)
+        terminal.log(`[WorkflowManager] Resuming with in-memory context.`);
+        newContext = memoryContext;
+      } else if (snapshot) {
+        // 2b. 内存丢失或切换了工作流，尝试从持久化快照恢复
+        terminal.log(`[WorkflowManager] Resuming with context snapshot recovery.`);
+        newContext = {
+          variables: snapshot.variables || { loop_index: 1 },
+          executionStack: [],
+          activeVolumeAnchor: snapshot.activeVolumeAnchor,
+          pendingSplits: snapshot.pendingSplits || [],
+        };
+      } else {
+        // 2c. 既无内存也无快照，维持现状
+        newContext = memoryContext;
+      }
 
       // 核心增强 (Bug 1 反馈修复)：如果恢复时没有锚点，但不是从头开始，尝试从全局变量回溯
       // 这能解决因快照未能及时保存导致的“分卷归类丢失”问题

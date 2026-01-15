@@ -4344,37 +4344,49 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     } catch (e: any) {
       keepAliveManager.disable();
       const isAbort = e.name === 'AbortError' || /aborted/i.test(e.message);
+      
       if (isAbort) {
-        console.log('Workflow execution aborted by user');
-        return; // 用户主动中止，不显示错误弹窗
+        terminal.log('[Workflow] 用户中止或任务已取消');
+        // 手动中止时，在全局状态记录暂停位置
+        workflowManager.pause(workflowManager.getState().currentNodeIndex);
+      } else {
+        console.error(e);
+        // 1. 设置全局错误状态 (会自动暂停并保留索引)
+        workflowManager.setError(e.message);
+        setError(`执行失败: ${e.message}`);
+
+        // 2. 更新故障节点 UI
+        // 核心修复：使用实时索引 realTimeIndex 而非滞后的 state.currentNodeIndex
+        const realTimeIndex = workflowManager.getState().currentNodeIndex;
+        const currentOrder = getOrderedNodes();
+        const failedNode = currentOrder[realTimeIndex];
+        
+        if (failedNode) {
+          const nextNodesFailed = nodesRef.current.map(n => n.id === failedNode.id ? { ...n, data: { ...n.data, status: 'failed' as const } } : n);
+          nodesRef.current = nextNodesFailed;
+          setNodes(nextNodesFailed);
+        }
       }
-      console.error(e);
-      // 更新当前节点状态为失败
-      const currentOrder = getOrderedNodes();
-      const failedNode = currentOrder[currentNodeIndex];
-      if (failedNode) {
-        const nextNodesFailed = nodesRef.current.map(n => n.id === failedNode.id ? { ...n, data: { ...n.data, status: 'failed' as const } } : n);
-        nodesRef.current = nextNodesFailed;
-        setNodes(nextNodesFailed);
-      }
-      // 核心修复：发生错误时，务必清理所有连线动画，防止视觉卡死
+
+      // 3. 清理视觉效果
       setEdges(eds => eds.map(e => ({ ...e, animated: false })));
-      // 将报错信息显示在 UI 上，而不是使用 alert
-      setError(`执行失败: ${e.message}`);
-      workflowManager.setError(e.message);
     }
   };
 
   const stopWorkflow = () => {
     terminal.log('[WORKFLOW] STOP requested by user.');
+    
+    // 获取实时进度索引
+    const realTimeIndex = workflowManager.getState().currentNodeIndex;
+
     // 停止时显式更新工作流列表并保存
     const updatedWorkflows = workflows.map(w => {
       if (w.id === activeWorkflowId) {
         return {
           ...w,
-          nodes,
+          nodes: nodesRef.current,
           edges,
-          currentNodeIndex,
+          currentNodeIndex: realTimeIndex,
           lastModified: Date.now(),
           contextSnapshot: workflowManager.getSnapshot()
         };
@@ -4389,7 +4401,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    workflowManager.pause(currentNodeIndex);
+    
+    // 全局暂停
+    workflowManager.pause(realTimeIndex);
     // 强制清理执行状态，确保 UI 动画立即停止
     setNodes(nds => {
       const nextNodes = nds.map(n => ({
