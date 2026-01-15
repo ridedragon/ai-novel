@@ -941,6 +941,7 @@ function App() {
   const [isAutoWriting, setIsAutoWriting] = useState(false)
   const [optimizingChapterIds, setOptimizingChapterIds] = useState<Set<number>>(new Set())
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false)
+  const [outlineStatus, setOutlineStatus] = useState('')
   const [isGeneratingCharacters, setIsGeneratingCharacters] = useState(false)
   const [isGeneratingWorldview, setIsGeneratingWorldview] = useState(false)
   const [isGeneratingInspiration, setIsGeneratingInspiration] = useState(false)
@@ -3641,6 +3642,7 @@ function App() {
     }
     
     setIsGeneratingOutline(true)
+    setOutlineStatus('准备请求 AI...')
     setError('')
     outlineAbortControllerRef.current = new AbortController()
 
@@ -3666,7 +3668,17 @@ function App() {
     while (attempt < maxAttempts) {
       try {
         if (outlineAbortControllerRef.current?.signal.aborted) break
-        terminal.log(`[Outline] Attempt ${attempt + 1}/${maxAttempts} started...`)
+        
+        // 计算生成范围日志
+        const currentSet = activeNovel?.outlineSets?.find(s => s.id === targetSetId);
+        const startNum = mode === 'append' ? (currentSet?.items.length || 0) + 1 : 1;
+        
+        let statusMsg = `正在生成第 ${startNum} 章起的大纲`
+        if (forcedTargetEnd) statusMsg += ` (目标至第 ${forcedTargetEnd} 章)`
+        if (attempt > 0) statusMsg += ` [第 ${attempt + 1}/${maxAttempts} 次尝试]`
+        setOutlineStatus(statusMsg)
+
+        terminal.log(`[Outline] ${statusMsg}...`)
         const apiConfig = getApiConfig(activePreset.apiConfig, outlineModel)
 
         // 核心修复：计算全书已有的正文章节总数，确保大纲生成的连续性，防止跨卷生成时从第一章开始
@@ -3845,6 +3857,7 @@ function App() {
               }))
 
               setUserPrompt('')
+              setOutlineStatus('成功解析大纲数据')
               terminal.log(`[Outline] Attempt ${attempt + 1} successful.`)
 
               // --- 核心修复：自动接龙救场逻辑 ---
@@ -3858,6 +3871,8 @@ function App() {
               // TypeScript 类型收窄已确保此处 mode 绝不为 'chat'
               // TypeScript 类型收窄已确保此处 mode 不为 'chat'
               if (finalTargetEnd && currentLastNum && currentLastNum < finalTargetEnd) {
+                  const rescueMsg = `已完成至第 ${currentLastNum} 章，准备触发自动接龙...`;
+                  setOutlineStatus(rescueMsg);
                   terminal.log(`[逻辑补救] 目标章:${finalTargetEnd}, 当前章:${currentLastNum}。检测到截断，自动发起接龙请求...`);
                   
                   // 1.5秒后发起续写请求，给用户和数据库一点缓冲
@@ -3899,6 +3914,7 @@ function App() {
         if (attempt >= maxAttempts) {
           setError(errorMsg || '生成大纲出错 (重试次数已耗尽)')
         } else {
+          setOutlineStatus(`请求失败，准备进行第 ${attempt + 1} 次重试...`);
           await new Promise(resolve => setTimeout(resolve, 1000))
         }
       }
@@ -8055,6 +8071,7 @@ function App() {
                           onRegenerateAll={handleRegenerateAllOutline}
                           onRegenerateItem={handleRegenerateOutlineItem}
                           isGenerating={isGeneratingOutline}
+                          outlineStatus={outlineStatus}
                           onStopGeneration={() => {
                              outlineAbortControllerRef.current?.abort()
                              setIsGeneratingOutline(false)

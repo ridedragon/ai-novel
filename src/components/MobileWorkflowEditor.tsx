@@ -2196,13 +2196,40 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           console.log('Constructed Context:', planningFinalContext);
           console.groupEnd();
 
-          const completion = await openai.chat.completions.create({
-            model: planningModel,
-            messages: planningMessages,
-            temperature: node.data.temperature ?? 0.7,
-          } as any, { signal: abortControllerRef.current?.signal });
+          let aiResponse = '';
+          let volRetryCount = 0;
+          const maxVolRetries = 2;
+          let volSuccess = false;
 
-          const aiResponse = completion.choices[0]?.message?.content || '';
+          while (volRetryCount <= maxVolRetries && !volSuccess) {
+            if (volRetryCount > 0) {
+              updateNodeData(node.id, { label: `重试规划(${volRetryCount}/${maxVolRetries})...` });
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+
+            try {
+              const completion = await openai.chat.completions.create({
+                model: planningModel,
+                messages: planningMessages,
+                temperature: node.data.temperature ?? 0.7,
+              } as any, { signal: abortControllerRef.current?.signal });
+
+              aiResponse = completion.choices[0]?.message?.content || '';
+              if (aiResponse) {
+                volSuccess = true;
+              } else {
+                volRetryCount++;
+              }
+            } catch (volErr: any) {
+              if (volErr.name === 'AbortError' || /aborted/i.test(volErr.message)) throw volErr;
+              if (volRetryCount < maxVolRetries) {
+                volRetryCount++;
+                terminal.error(`[Mobile SaveToVolume Retry] API 报错: ${volErr.message}`);
+                continue;
+              }
+              throw volErr;
+            }
+          }
           terminal.log(`[Mobile SaveToVolume] AI Response:\n${aiResponse.slice(0, 300)}...`);
 
           const parsedRules = workflowManager.parseVolumesFromAI(aiResponse);
@@ -2506,13 +2533,39 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             ];
           }
 
-          const completion = await openai.chat.completions.create({
-            model: (node.data.overrideAiConfig && node.data.model) ? node.data.model : (genPreset?.apiConfig?.model || globalConfig.model),
-            messages: generatorMessages,
-            temperature: (node.data.overrideAiConfig && node.data.temperature !== undefined) ? node.data.temperature : 0.7,
-          });
+          let aiResponse = '';
+          let genRetryCount = 0;
+          const maxGenRetries = 2;
+          let genSuccess = false;
 
-          const aiResponse = completion.choices[0]?.message?.content || '';
+          while (genRetryCount <= maxGenRetries && !genSuccess) {
+            if (genRetryCount > 0) {
+              updateNodeData(node.id, { label: `重试架构(${genRetryCount}/${maxGenRetries})...` });
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+
+            try {
+              const completion = await openai.chat.completions.create({
+                model: (node.data.overrideAiConfig && node.data.model) ? node.data.model : (genPreset?.apiConfig?.model || globalConfig.model),
+                messages: generatorMessages,
+                temperature: (node.data.overrideAiConfig && node.data.temperature !== undefined) ? node.data.temperature : 0.7,
+              });
+
+              aiResponse = completion.choices[0]?.message?.content || '';
+              if (aiResponse) {
+                genSuccess = true;
+              } else {
+                genRetryCount++;
+              }
+            } catch (genErr: any) {
+              if (genRetryCount < maxGenRetries) {
+                genRetryCount++;
+                terminal.error(`[Mobile WorkflowGenerator Retry] API 报错: ${genErr.message}`);
+                continue;
+              }
+              throw genErr;
+            }
+          }
           try {
             const cleanJson = aiResponse.replace(/```json\s*([\s\S]*?)```/gi, '$1').trim();
             const dslData = JSON.parse(cleanJson);
@@ -3009,25 +3062,45 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
 
         while (retryCount <= maxRetries && !isNodeFullyCompleted) {
           if (retryCount > 0 && !isSuccess) {
-            terminal.log(`[Mobile Workflow Retry] 节点 ${node.data.label} JSON 解析失败，正在进行第 ${retryCount} 次重试...`);
+            terminal.log(`[Mobile Workflow Retry] 节点 ${node.data.label} 正在进行第 ${retryCount} 次重试...`);
             updateNodeData(node.id, { label: `重试中(${retryCount}/${maxRetries}): ${node.data.typeLabel}` });
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // 手机端退避延迟稍长，应对不稳网络
+            await new Promise(resolve => setTimeout(resolve, 1500 * Math.pow(2, retryCount - 1)));
           }
 
-          const completion = await openai.chat.completions.create({
-            model: finalModel,
-            messages: currentMessages,
-            temperature: finalTemperature,
-            top_p: finalTopP,
-            top_k: (finalTopK && finalTopK > 0) ? finalTopK : undefined,
-            max_tokens: finalMaxTokens,
-          } as any, { signal: abortControllerRef.current?.signal });
+          try {
+            const completion = await openai.chat.completions.create({
+              model: finalModel,
+              messages: currentMessages,
+              temperature: finalTemperature,
+              top_p: finalTopP,
+              top_k: (finalTopK && finalTopK > 0) ? finalTopK : undefined,
+              max_tokens: finalMaxTokens,
+            } as any, { signal: abortControllerRef.current?.signal });
 
-          result = completion.choices[0]?.message?.content || '';
-          if (!result || result.trim().length === 0) {
-            throw new Error('AI 返回内容为空，已终止工作流。请检查网络或模型配置。');
+            result = completion.choices[0]?.message?.content || '';
+            if (!result || result.trim().length === 0) {
+              if (retryCount < maxRetries) {
+                terminal.warn(`[Mobile Workflow Retry] AI 返回为空，准备重试...`);
+                retryCount++;
+                isSuccess = false;
+                continue;
+              }
+              throw new Error('AI 返回内容为空，已终止工作流。请检查网络或模型配置。');
+            }
+            terminal.log(`[Workflow Output] ${node.data.typeLabel} - ${node.data.label}:\n${result.slice(0, 500)}${result.length > 500 ? '...' : ''}`);
+          } catch (apiErr: any) {
+            const isAbort = apiErr.name === 'AbortError' || /aborted/i.test(apiErr.message);
+            if (isAbort) throw apiErr;
+
+            if (retryCount < maxRetries) {
+              terminal.error(`[Mobile Workflow API Error] ${apiErr.message}。准备重试...`);
+              retryCount++;
+              isSuccess = false;
+              continue;
+            }
+            throw apiErr;
           }
-          terminal.log(`[Workflow Output] ${node.data.typeLabel} - ${node.data.label}:\n${result.slice(0, 500)}${result.length > 500 ? '...' : ''}`);
           
           // 6. 结构化解析 AI 输出并更新节点产物
           try {
@@ -3157,7 +3230,9 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             const currentLastNum = parseAnyNumber(lastEntry?.title || '');
 
             if (currentLastNum && currentLastNum < targetEndNum && nodeIterationCount < 5) {
-              terminal.log(`[Mobile 续写] 大纲截断：目标 ${targetEndNum}, 当前 ${currentLastNum}。接龙...`);
+              const rescueMsg = `已完成至第 ${currentLastNum} 章，准备接龙 (目标 ${targetEndNum})...`;
+              terminal.log(`[Mobile 续写] ${rescueMsg}`);
+              updateNodeData(node.id, { label: rescueMsg });
               
               // 核心修复：手机端同步更新累加器
               accumulatedNewEntries = [...accumulatedNewEntries, ...currentIterationEntries];

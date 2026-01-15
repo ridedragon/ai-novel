@@ -640,7 +640,12 @@ export class AutoWriteEngine {
             this.isRunning = false;
             throw err; // 抛出错误以中止工作流，防止误跳到下一个节点
           } else {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // 退避重试延迟：1s, 2s, 4s...
+            const delay = 1000 * Math.pow(2, attempt - 1);
+            onStatusUpdate(
+              `API 报错，${Math.round(delay / 1000)}s 后进行第 ${attempt}/${this.config.maxRetries} 次重试...`,
+            );
+            await new Promise(resolve => setTimeout(resolve, delay));
           }
         }
       }
@@ -749,18 +754,36 @@ export class AutoWriteEngine {
 >> -----------------------------------------------------------
           `);
 
-          const completion = await openai.chat.completions.create(
-            {
-              model: this.config.analysisModel || this.config.model,
-              messages: analysisMessages,
-              temperature: analysisPreset.temperature ?? 1.0,
-              top_p: analysisPreset.topP ?? 1.0,
-              top_k: analysisPreset.topK && analysisPreset.topK > 0 ? analysisPreset.topK : 200,
-            } as any,
-            { signal: optimizationAbortController.signal },
-          );
+          let analysisAttempt = 0;
+          const maxAnalysisRetries = 1;
+          let analysisSuccess = false;
 
-          currentAnalysisResult = completion.choices[0]?.message?.content || '';
+          while (analysisAttempt <= maxAnalysisRetries && !analysisSuccess) {
+            try {
+              const completion = await openai.chat.completions.create(
+                {
+                  model: this.config.analysisModel || this.config.model,
+                  messages: analysisMessages,
+                  temperature: analysisPreset.temperature ?? 1.0,
+                  top_p: analysisPreset.topP ?? 1.0,
+                  top_k: analysisPreset.topK && analysisPreset.topK > 0 ? analysisPreset.topK : 200,
+                } as any,
+                { signal: optimizationAbortController.signal },
+              );
+
+              currentAnalysisResult = completion.choices[0]?.message?.content || '';
+              if (currentAnalysisResult) analysisSuccess = true;
+              else analysisAttempt++;
+            } catch (anaErr: any) {
+              if (anaErr.name === 'AbortError') throw anaErr;
+              if (analysisAttempt < maxAnalysisRetries) {
+                analysisAttempt++;
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                continue;
+              }
+              throw anaErr;
+            }
+          }
           terminal.log(
             `[Analysis Result] chapter ${chapterId}:\n${currentAnalysisResult.slice(0, 500)}${
               currentAnalysisResult.length > 500 ? '...' : ''
@@ -829,18 +852,37 @@ export class AutoWriteEngine {
 >> -----------------------------------------------------------
       `);
 
-      const completion = await openai.chat.completions.create(
-        {
-          model: this.config.optimizeModel || this.config.model,
-          messages: messages,
-          temperature: activePreset.temperature ?? 1.0,
-          top_p: activePreset.topP ?? 1.0,
-          top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 200,
-        } as any,
-        { signal: optimizationAbortController.signal },
-      );
+      let optAttempt = 0;
+      const maxOptRetries = 2;
+      let optSuccess = false;
+      let optimizedContent = '';
 
-      let optimizedContent = completion.choices[0]?.message?.content || '';
+      while (optAttempt <= maxOptRetries && !optSuccess) {
+        try {
+          const completion = await openai.chat.completions.create(
+            {
+              model: this.config.optimizeModel || this.config.model,
+              messages: messages,
+              temperature: activePreset.temperature ?? 1.0,
+              top_p: activePreset.topP ?? 1.0,
+              top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 200,
+            } as any,
+            { signal: optimizationAbortController.signal },
+          );
+
+          optimizedContent = completion.choices[0]?.message?.content || '';
+          if (optimizedContent) optSuccess = true;
+          else optAttempt++;
+        } catch (optErr: any) {
+          if (optErr.name === 'AbortError') throw optErr;
+          if (optAttempt < maxOptRetries) {
+            optAttempt++;
+            await new Promise(resolve => setTimeout(resolve, 2000 * optAttempt));
+            continue;
+          }
+          throw optErr;
+        }
+      }
       terminal.log(`[Optimization Result] chapter ${chapterId} length: ${optimizedContent.length}`);
       if (optimizedContent) {
         // 核心修复：对优化后的正文也要应用正则脚本

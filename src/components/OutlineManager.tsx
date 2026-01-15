@@ -41,6 +41,7 @@ interface OutlineManagerProps {
   onRegenerateAll?: () => void
   onRegenerateItem?: (index: number) => void
   isGenerating?: boolean
+  outlineStatus?: string
   onStopGeneration?: () => void
   regeneratingItemIndices?: Set<number>
   userPrompt?: string
@@ -106,6 +107,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
   onRegenerateItem,
   isGenerating,
   onStopGeneration,
+  outlineStatus,
   regeneratingItemIndices,
   userPrompt,
   setUserPrompt,
@@ -530,6 +532,26 @@ export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col bg-gray-900 min-w-0 h-full overflow-hidden relative">
+        {isGenerating && (
+          <div className="absolute inset-0 bg-white/10 dark:bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-4 transition-all">
+            <div className="flex items-center gap-3 bg-white dark:bg-slate-800 px-6 py-4 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-300">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-200">AI 正在努力规划剧情...</span>
+                {outlineStatus && (
+                  <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 mt-1">{outlineStatus}</span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={onStopGeneration}
+              className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-500 text-xs font-bold rounded-full border border-red-500/30 transition-all flex items-center gap-2"
+            >
+              <StopCircle className="w-4 h-4" />
+              停止生成
+            </button>
+          </div>
+        )}
         {activeSet ? (
           <>
             {/* Toolbar */}
