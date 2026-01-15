@@ -621,6 +621,41 @@ const NodePropertiesModal = ({
     setLocalVolumeContent(node.data.volumeContent || '');
   }, [node.id, node.data.volumeContent]);
 
+  // 整合所有分类 API 模型并去重 (PC端同步)
+  const consolidatedModelList = useMemo(() => {
+    const list = [...(globalConfig?.modelList || [])];
+    if (globalConfig?.model) list.push(globalConfig.model);
+    if (globalConfig?.outlineModel) list.push(globalConfig.outlineModel);
+    if (globalConfig?.characterModel) list.push(globalConfig.characterModel);
+    if (globalConfig?.worldviewModel) list.push(globalConfig.worldviewModel);
+    if (globalConfig?.inspirationModel) list.push(globalConfig.inspirationModel);
+    if (globalConfig?.plotOutlineModel) list.push(globalConfig.plotOutlineModel);
+    if (globalConfig?.optimizeModel) list.push(globalConfig.optimizeModel);
+    if (globalConfig?.analysisModel) list.push(globalConfig.analysisModel);
+    
+    // 核心增强：整合所有预设方案中定义的模型
+    // 注意：Object.values(allPresets).flat() 仅覆盖了当前组件状态中的 allPresets
+    // 我们还需要显式读取 localStorage 中的其他分类预设以确保完整
+    const presetTypes = ['outline', 'character', 'worldview', 'inspiration', 'plotOutline', 'completion', 'optimize', 'analysis', 'chat', 'generator'];
+    presetTypes.forEach(t => {
+      try {
+        const saved = localStorage.getItem(`${t}Presets`);
+        if (saved) {
+          const presets = JSON.parse(saved) as GeneratorPreset[];
+          presets.forEach(p => {
+            if (p.apiConfig?.model) list.push(p.apiConfig.model);
+          });
+        }
+      } catch (e) {}
+    });
+
+    Object.values(allPresets).flat().forEach(p => {
+      if (p.apiConfig?.model) list.push(p.apiConfig.model);
+    });
+    
+    return Array.from(new Set(list.filter(Boolean)));
+  }, [globalConfig, allPresets]);
+
   const debouncedUpdate = (updates: Partial<WorkflowNodeData>) => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
@@ -929,7 +964,7 @@ const NodePropertiesModal = ({
                           value=""
                         >
                           <option value="" disabled>从预设列表选择...</option>
-                          {globalConfig?.modelList?.map((m: string) => (
+                          {consolidatedModelList.map((m: any) => (
                             <option key={m} value={m}>{m}</option>
                           ))}
                         </select>

@@ -347,6 +347,41 @@ const ConfigPanel = React.memo(({
     ])).filter(Boolean);
   }, [activeNovel?.volumes, activeNovel?.worldviewSets, activeNovel?.characterSets, activeNovel?.outlineSets]);
 
+  // 整合所有分类 API 模型并去重
+  const consolidatedModelList = React.useMemo(() => {
+    const list = [...(globalConfig?.modelList || [])];
+    if (globalConfig?.model) list.push(globalConfig.model);
+    if (globalConfig?.outlineModel) list.push(globalConfig.outlineModel);
+    if (globalConfig?.characterModel) list.push(globalConfig.characterModel);
+    if (globalConfig?.worldviewModel) list.push(globalConfig.worldviewModel);
+    if (globalConfig?.inspirationModel) list.push(globalConfig.inspirationModel);
+    if (globalConfig?.plotOutlineModel) list.push(globalConfig.plotOutlineModel);
+    if (globalConfig?.optimizeModel) list.push(globalConfig.optimizeModel);
+    if (globalConfig?.analysisModel) list.push(globalConfig.analysisModel);
+    
+    // 核心增强：整合所有预设方案中定义的模型 (手机端)
+    // 显式扫描 localStorage 确保覆盖所有分类
+    const presetTypes = ['outline', 'character', 'worldview', 'inspiration', 'plotOutline', 'completion', 'optimize', 'analysis', 'chat', 'generator'];
+    presetTypes.forEach(t => {
+      try {
+        const saved = localStorage.getItem(`${t}Presets`);
+        if (saved) {
+          const presets = JSON.parse(saved) as GeneratorPreset[];
+          presets.forEach(p => {
+            if (p.apiConfig?.model) list.push(p.apiConfig.model);
+          });
+        }
+      } catch (e) {}
+    });
+
+    Object.values(allPresets).flat().forEach(p => {
+      if (p.apiConfig?.model) list.push(p.apiConfig.model);
+    });
+    
+    // 过滤空值并去重
+    return Array.from(new Set(list.filter(Boolean)));
+  }, [globalConfig, allPresets]);
+
   const handleUpdate = (updates: Partial<WorkflowNodeData>) => {
     onUpdateNodeData(editingNode.id, updates);
   };
@@ -611,7 +646,7 @@ const ConfigPanel = React.memo(({
                       className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-xs text-white outline-none appearance-none"
                     >
                       <option value="">跟随系统默认 (或模板设置)</option>
-                      {globalConfig?.modelList?.map((m: string) => (
+                      {consolidatedModelList.map((m: any) => (
                         <option key={m} value={m}>{m}</option>
                       ))}
                     </select>
