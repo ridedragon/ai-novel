@@ -578,6 +578,30 @@ const ConfigPanel = React.memo(({
                   </div>
                 </div>
 
+                {editingNode.data.typeKey === 'saveToVolume' && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">API Key</label>
+                      <OptimizedInput
+                        type="password"
+                        value={editingNode.data.apiKey as string || ''}
+                        onChange={(val: string) => onUpdateNodeData(editingNode.id, { apiKey: val })}
+                        className="w-full bg-gray-800 border border-indigo-900/30 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-indigo-500 transition-all"
+                        placeholder="不填则使用全局设置..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">API Base URL</label>
+                      <OptimizedInput
+                        value={editingNode.data.baseUrl as string || ''}
+                        onChange={(val: string) => onUpdateNodeData(editingNode.id, { baseUrl: val })}
+                        className="w-full bg-gray-800 border border-indigo-900/30 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-indigo-500 transition-all"
+                        placeholder="例如: https://api.openai.com/v1"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <label className="text-[10px] text-gray-400 uppercase">模型 (Model)</label>
                   <div className="relative">
