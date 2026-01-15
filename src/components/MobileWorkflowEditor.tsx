@@ -467,7 +467,7 @@ const ConfigPanel = React.memo(({
           </div>
         )}
 
-        {editingNode.data.presetType && editingNode.data.typeKey !== 'saveToVolume' && (
+        {editingNode.data.presetType && editingNode.data.typeKey !== 'saveToVolume' && editingNode.data.typeKey !== 'aiChat' && (
           <div className="space-y-3">
             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
               <Cpu className="w-3.5 h-3.5" /> 基础模板 (调用系统预设)
@@ -486,14 +486,9 @@ const ConfigPanel = React.memo(({
                 className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none"
               >
                 <option value="">-- 不使用预设模板 (使用主设置) --</option>
-                {editingNode.data.typeKey === 'aiChat'
-                  ? Object.values(allPresets).flat().map(p => (
-                      <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认'})</option>
-                    ))
-                  : (allPresets[editingNode.data.presetType as string] || []).map(p => (
-                      <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认'})</option>
-                    ))
-                }
+                {(allPresets[editingNode.data.presetType as string] || []).map(p => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认'})</option>
+                ))}
               </select>
               <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
             </div>
@@ -613,7 +608,7 @@ const ConfigPanel = React.memo(({
                   </div>
                 </div>
 
-                {editingNode.data.typeKey === 'saveToVolume' && (
+                {(editingNode.data.typeKey === 'saveToVolume' || editingNode.data.typeKey === 'aiChat' || editingNode.data.typeKey === 'workflowGenerator') && (
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <label className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">API Key</label>
@@ -2983,8 +2978,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         }
 
         const openai = new OpenAI({
-          apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
-          baseURL: nodeApiConfig.baseUrl || globalConfig.baseUrl,
+          apiKey: (node.data.overrideAiConfig && node.data.apiKey) ? node.data.apiKey : (nodeApiConfig.apiKey || globalConfig.apiKey),
+          baseURL: (node.data.overrideAiConfig && node.data.baseUrl) ? node.data.baseUrl : (nodeApiConfig.baseUrl || globalConfig.baseUrl),
           dangerouslyAllowBrowser: true
         });
 

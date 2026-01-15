@@ -743,7 +743,7 @@ const NodePropertiesModal = ({
             </div>
           </div>
 
-          {node.data.presetType && node.data.typeKey !== 'workflowGenerator' && node.data.typeKey !== 'saveToVolume' && (
+          {node.data.presetType && node.data.typeKey !== 'workflowGenerator' && node.data.typeKey !== 'saveToVolume' && node.data.typeKey !== 'aiChat' && (
             <div className="space-y-3 pt-6 border-t border-gray-700/30">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
                 <Cpu className="w-3.5 h-3.5" /> 基础模板 (调用系统预设)
@@ -762,14 +762,9 @@ const NodePropertiesModal = ({
                   className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none appearance-none cursor-pointer transition-all"
                 >
                   <option value="">-- 不使用预设模板 (使用主设置) --</option>
-                  {node.data.typeKey === 'aiChat'
-                    ? Object.values(allPresets).flat().map(p => (
-                        <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认模型'})</option>
-                      ))
-                    : (allPresets[node.data.presetType as string] || []).map(p => (
-                        <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认'})</option>
-                      ))
-                  }
+                  {(allPresets[node.data.presetType as string] || []).map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.apiConfig?.model || '默认'})</option>
+                  ))}
                 </select>
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
               </div>
@@ -3938,8 +3933,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         }
 
         const openai = new OpenAI({
-          apiKey: nodeApiConfig.apiKey || globalConfig.apiKey,
-          baseURL: nodeApiConfig.baseUrl || globalConfig.baseUrl,
+          apiKey: (node.data.overrideAiConfig && node.data.apiKey) ? node.data.apiKey : (nodeApiConfig.apiKey || globalConfig.apiKey),
+          baseURL: (node.data.overrideAiConfig && node.data.baseUrl) ? node.data.baseUrl : (nodeApiConfig.baseUrl || globalConfig.baseUrl),
           dangerouslyAllowBrowser: true
         });
 
