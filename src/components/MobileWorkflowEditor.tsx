@@ -86,8 +86,18 @@ const parseAnyNumber = (text: string): number | null => {
 
 const extractTargetEndChapter = (prompt: string): number | null => {
   if (!prompt) return null;
+  // 1. 寻找范围终点: "到"、"至"、"-" 之后跟着的数字 (例如: 1-30章)
   const rangeMatch = prompt.match(/(?:到|至|-|—|直到)\s*([零一二两三四五六七八九十百千\d]+)(?:\s*章)?/);
   if (rangeMatch) return parseAnyNumber(rangeMatch[1]);
+
+  // 2. 寻找绝对章节数: "共xx章"、"生成xx章"、"xx章大纲" (例如: 生成30章)
+  const countMatch = prompt.match(/(?:共|生成|写|规划|准备|大纲|内容)\s*([零一二两三四五六七八九十百千\d]+)\s*章/);
+  if (countMatch) return parseAnyNumber(countMatch[1]);
+
+  // 3. 兜底: 寻找任何带"章"的数字 (例如: 30章)
+  const fallbackMatch = prompt.match(/([零一二两三四五六七八九十百千\d]+)\s*章/);
+  if (fallbackMatch) return parseAnyNumber(fallbackMatch[1]);
+
   return null;
 };
 
@@ -2189,22 +2199,22 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           }
           if (node.data.instruction) planningMessages.push({ role: 'user', content: workflowManager.interpolate(node.data.instruction) });
 
-          // debug: 在 F12 打印分卷规划节点发送给 AI 的内容 (移动端)
-          console.groupCollapsed(`[Mobile Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}`);
-          console.log('Messages:', planningMessages);
-          console.log('Config:', {
-            model: planningModel,
-            temperature: node.data.temperature ?? 0.7,
-          });
-          console.log('Constructed Context:', planningFinalContext);
-          console.groupEnd();
-
           let aiResponse = '';
           let volRetryCount = 0;
           const maxVolRetries = 2;
           let volSuccess = false;
 
           while (volRetryCount <= maxVolRetries && !volSuccess) {
+            // debug: 在 F12 打印分卷规划节点发送给 AI 的内容 (移动端)
+            console.groupCollapsed(`[Mobile Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}${volRetryCount > 0 ? ` (重试 ${volRetryCount})` : ''}`);
+            console.log('Messages:', planningMessages);
+            console.log('Config:', {
+              model: planningModel,
+              temperature: node.data.temperature ?? 0.7,
+            });
+            console.log('Constructed Context:', planningFinalContext);
+            console.groupEnd();
+
             if (volRetryCount > 0) {
               updateNodeData(node.id, { label: `重试规划(${volRetryCount}/${maxVolRetries})...` });
               await new Promise(resolve => setTimeout(resolve, 2000));
@@ -2666,8 +2676,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
         });
 
         const isDuplicate = lastNodeOutput && refContext.includes(lastNodeOutput.substring(0, 100));
-        // 核心修复：将 nodeLoopContext (当前循环指令) 拼接到最终上下文中，而不是 accumContext
-        const finalContext = `${refContext}${accumContext}${nodeLoopContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
+        // 核心修复：Context 仅包含背景资料，循环指令改为独立 User 消息发送
+        const finalContext = `${refContext}${accumContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
         
         let messages: any[] = [];
         
@@ -2697,6 +2707,14 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           messages.push({ role: 'user', content: node.data.instruction });
         } else if (messages.length === 0) {
           messages.push({ role: 'user', content: '请生成内容' });
+        }
+
+        // 核心修复：如果存在循环特定指令，将其作为独立的 User 消息追加，确保 F12 可见
+        if (specificInstruction) {
+          messages.push({
+            role: 'user',
+            content: `【第 ${currentLoopIndex} 轮循环特定执行指令】：\n${specificInstruction}`
+          });
         }
 
         // 处理正文生成节点
@@ -3031,21 +3049,6 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           }
         }
 
-        // debug: 在 F12 打印发送给 AI 的内容 (针对大纲、世界观、粗纲、角色集等)
-        if (['outline', 'worldview', 'plotOutline', 'characters', 'inspiration', 'aiChat'].includes(node.data.typeKey as string)) {
-          console.groupCollapsed(`[Mobile Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}`);
-          console.log('Messages:', messages);
-          console.log('Config:', {
-            model: finalModel,
-            temperature: finalTemperature,
-            topP: finalTopP,
-            topK: finalTopK,
-            maxTokens: finalMaxTokens
-          });
-          console.log('Constructed Context:', finalContext);
-          console.groupEnd();
-        }
-
         const openai = new OpenAI({
           apiKey: (node.data.overrideAiConfig && node.data.apiKey) ? node.data.apiKey : (nodeApiConfig.apiKey || globalConfig.apiKey),
           baseURL: (node.data.overrideAiConfig && node.data.baseUrl) ? node.data.baseUrl : (nodeApiConfig.baseUrl || globalConfig.baseUrl),
@@ -3085,6 +3088,21 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           }
 
           try {
+            // debug: 在 F12 打印发送给 AI 的内容 (针对大纲、世界观、粗纲、角色集等)
+            if (['outline', 'worldview', 'plotOutline', 'characters', 'inspiration', 'aiChat'].includes(node.data.typeKey as string)) {
+              console.groupCollapsed(`[Mobile Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}${retryCount > 0 ? ` (重试 ${retryCount})` : ''}${nodeIterationCount > 0 ? ` (续写 ${nodeIterationCount})` : ''}`);
+              console.log('Messages:', currentMessages);
+              console.log('Config:', {
+                model: finalModel,
+                temperature: finalTemperature,
+                topP: finalTopP,
+                topK: finalTopK,
+                maxTokens: finalMaxTokens
+              });
+              console.log('Constructed Context:', finalContext);
+              console.groupEnd();
+            }
+
             const completion = await openai.chat.completions.create({
               model: finalModel,
               messages: currentMessages,
@@ -3245,9 +3263,12 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             const lastEntry = entriesToStore[entriesToStore.length - 1];
             const currentLastNum = parseAnyNumber(lastEntry?.title || '');
 
+            // PowerShell 探测日志：帮助确认解析状态
+            terminal.log(`[Mobile Workflow Logic] 章节解析状态 - 当前最后章节: ${currentLastNum || '未知'}, 识别到目标终点: ${targetEndNum || '未识别'}`);
+
             if (currentLastNum && currentLastNum < targetEndNum && nodeIterationCount < 5) {
-              const rescueMsg = `已完成至第 ${currentLastNum} 章，准备接龙 (目标 ${targetEndNum})...`;
-              terminal.log(`[Mobile 续写] ${rescueMsg}`);
+              const rescueMsg = `目前 AI 返回大纲为第 1 章 - 第 ${currentLastNum} 章，未达用户指令需求（目标至第 ${targetEndNum} 章），追加触发，AI 将进行续写大纲...`;
+              terminal.log(rescueMsg);
               updateNodeData(node.id, { label: rescueMsg });
               
               // 核心修复：手机端同步更新累加器

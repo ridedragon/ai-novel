@@ -926,11 +926,18 @@ const parseAnyNumber = (text: string): number | null => {
  */
 const extractTargetEndChapter = (prompt: string): number | null => {
     if (!prompt) return null;
-    // 寻找 "到"、"至"、"-" 之后跟着的数字
+    // 1. 寻找范围终点: "到"、"至"、"-" 之后跟着的数字 (例如: 1-30章)
     const rangeMatch = prompt.match(/(?:到|至|-|—|直到)\s*([零一二两三四五六七八九十百千\d]+)(?:\s*章)?/);
-    if (rangeMatch) {
-        return parseAnyNumber(rangeMatch[1]);
-    }
+    if (rangeMatch) return parseAnyNumber(rangeMatch[1]);
+
+    // 2. 寻找绝对章节数: "共xx章"、"生成xx章"、"xx章大纲" (例如: 生成30章)
+    const countMatch = prompt.match(/(?:共|生成|写|规划|准备|大纲|内容)\s*([零一二两三四五六七八九十百千\d]+)\s*章/);
+    if (countMatch) return parseAnyNumber(countMatch[1]);
+
+    // 3. 兜底: 寻找任何带"章"的数字 (例如: 30章)
+    const fallbackMatch = prompt.match(/([零一二两三四五六七八九十百千\d]+)\s*章/);
+    if (fallbackMatch) return parseAnyNumber(fallbackMatch[1]);
+
     return null;
 };
 
@@ -3774,6 +3781,9 @@ function App() {
             messages.push({ role: 'user', content: userPrompt || (mode !== 'chat' ? '请根据以上对话内容和设定，生成新的大纲章节。' : '') })
         }
 
+        // F12 日志：打印发送给 AI 的完整内容
+        console.log('%c [AI Request] 发送给 AI 的大纲续写/生成请求:', 'color: #67c23a; font-weight: bold;', messages);
+
         const completion = await openai.chat.completions.create({
           model: apiConfig.model,
           messages: messages,
@@ -3866,14 +3876,14 @@ function App() {
               // 优先级：显式参数 > 尝试从 Prompt 解析
               const finalTargetEnd = forcedTargetEnd || extractTargetEndChapter(promptOverride || userPrompt);
 
+              // PowerShell 探测日志：帮助确认解析状态
+              terminal.log(`[Outline Logic] 章节解析状态 - 当前最后章节: ${currentLastNum || '未知'}, 识别到目标终点: ${finalTargetEnd || '未识别'}`);
+
               // 此时 mode 已经被 narrowing 排除掉 'chat' 情况
-              // TypeScript 已通过类型收窄确保 mode 不为 'chat'
-              // TypeScript 类型收窄已确保此处 mode 绝不为 'chat'
-              // TypeScript 类型收窄已确保此处 mode 不为 'chat'
               if (finalTargetEnd && currentLastNum && currentLastNum < finalTargetEnd) {
-                  const rescueMsg = `已完成至第 ${currentLastNum} 章，准备触发自动接龙...`;
+                  const rescueMsg = `目前 AI 返回大纲为第 1 章 - 第 ${currentLastNum} 章，未达用户指令需求（目标至第 ${finalTargetEnd} 章），追加触发，AI 将进行续写大纲...`;
                   setOutlineStatus(rescueMsg);
-                  terminal.log(`[逻辑补救] 目标章:${finalTargetEnd}, 当前章:${currentLastNum}。检测到截断，自动发起接龙请求...`);
+                  terminal.log(rescueMsg);
                   
                   // 1.5秒后发起续写请求，给用户和数据库一点缓冲
                   setTimeout(() => {

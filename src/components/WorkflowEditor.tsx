@@ -88,8 +88,18 @@ const parseAnyNumber = (text: string): number | null => {
 
 const extractTargetEndChapter = (prompt: string): number | null => {
   if (!prompt) return null;
+  // 1. 寻找范围终点: "到"、"至"、"-" 之后跟着的数字 (例如: 1-30章)
   const rangeMatch = prompt.match(/(?:到|至|-|—|直到)\s*([零一二两三四五六七八九十百千\d]+)(?:\s*章)?/);
   if (rangeMatch) return parseAnyNumber(rangeMatch[1]);
+
+  // 2. 寻找绝对章节数: "共xx章"、"生成xx章"、"xx章大纲" (例如: 生成30章)
+  const countMatch = prompt.match(/(?:共|生成|写|规划|准备|大纲|内容)\s*([零一二两三四五六七八九十百千\d]+)\s*章/);
+  if (countMatch) return parseAnyNumber(countMatch[1]);
+
+  // 3. 兜底: 寻找任何带"章"的数字 (例如: 30章)
+  const fallbackMatch = prompt.match(/([零一二两三四五六七八九十百千\d]+)\s*章/);
+  if (fallbackMatch) return parseAnyNumber(fallbackMatch[1]);
+
   return null;
 };
 
@@ -3526,8 +3536,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         // 3. 构建消息
         // 去重逻辑：如果上个节点的输出已经包含在参考资料中，则不再重复追加 lastNodeOutput
         const isDuplicate = lastNodeOutput && refContext.includes(lastNodeOutput.substring(0, 100)); // 取前100字符判断
-        // 核心修复：将 nodeLoopContext (当前循环指令) 拼接到最终上下文中，而不是 accumContext
-        const finalContext = `${refContext}${accumContext}${nodeLoopContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
+        // 核心修复：Context 仅包含背景资料，循环指令改为独立 User 消息发送，以便 F12 监控
+        const finalContext = `${refContext}${accumContext}${(!isDuplicate && lastNodeOutput) ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''}`;
         
         // 辅助函数：将 string 内容转换为 OpenAI 多模态 content 格式
         const formatContentWithAttachments = (text: string) => {
@@ -3599,6 +3609,14 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         }
 
         if (messages.length === 0) messages.push({ role: 'user', content: node.data.instruction || '请生成内容' });
+
+        // 核心修复：如果存在循环特定指令，将其作为独立的 User 消息追加，确保 F12 可见且 AI 权重最高
+        if (specificInstruction) {
+          messages.push({
+            role: 'user',
+            content: formatContentWithAttachments(`【第 ${currentLoopIndex} 轮循环特定执行指令】：\n${specificInstruction}`)
+          });
+        }
 
         // 4. 处理正文生成节点 (使用专用的 AutoWriteEngine，跳过通用的单次 AI 调用)
         if (node.data.typeKey === 'chapter') {
@@ -4026,6 +4044,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
           `);
 
           try {
+            // F12 日志：打印发送给 AI 的完整内容
+            console.log('%c [Workflow AI Request] 发送给 AI 的大纲续写/生成请求:', 'color: #409EFF; font-weight: bold;', currentMessages);
+
             const completion = await openai.chat.completions.create({
               model: finalModel,
               messages: currentMessages,
@@ -4194,9 +4215,12 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             const lastEntry = entriesToStore[entriesToStore.length - 1];
             const currentLastNum = parseAnyNumber(lastEntry?.title || '');
 
+            // PowerShell 探测日志：帮助确认解析状态
+            terminal.log(`[Workflow Logic] 章节解析状态 - 当前最后章节: ${currentLastNum || '未知'}, 识别到目标终点: ${targetEndNum || '未识别'}`);
+
             if (currentLastNum && currentLastNum < targetEndNum && nodeIterationCount < 5) {
-              const rescueMsg = `已完成至第 ${currentLastNum} 章，准备接龙 (目标 ${targetEndNum})...`;
-              terminal.log(`[Workflow 续写] ${rescueMsg}`);
+              const rescueMsg = `目前 AI 返回大纲为第 1 章 - 第 ${currentLastNum} 章，未达用户指令需求（目标至第 ${targetEndNum} 章），追加触发，AI 将进行续写大纲...`;
+              terminal.log(rescueMsg);
               updateNodeData(node.id, { label: rescueMsg });
               
               // 核心修复：更新累加器，确保同步到设定集时包含此片段
