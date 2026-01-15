@@ -1537,7 +1537,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
             nodes,
             edges,
             currentNodeIndex,
-            lastModified: Date.now()
+            lastModified: Date.now(),
+            contextSnapshot: workflowManager.getSnapshot()
           };
         }
         return w;
@@ -1877,7 +1878,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           ...w,
           nodes: latestNodes,
           currentNodeIndex: currentIndex,
-          lastModified: Date.now()
+          lastModified: Date.now(),
+          contextSnapshot: workflowManager.getSnapshot()
         };
       }
       return w;
@@ -1906,7 +1908,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
       return;
     }
     
-    workflowManager.start(activeWorkflowId, startIndex);
+    const currentWf = workflowsRef.current.find(w => w.id === activeWorkflowId);
+    workflowManager.start(activeWorkflowId, startIndex, currentWf?.contextSnapshot);
     const startRunId = workflowManager.getCurrentRunId(); // 核心修复 (Bug 2): 锁定本次执行 ID
     
     setStopRequested(false);
@@ -2739,6 +2742,19 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = (props) => {
           // 2. 确定最终分卷 ID (此处必须实时从 localNovel 中获取，确保能感知到刚创建的分卷)
           // 优先级 0: 检查上下文中的 Active Volume Anchor (由 SaveToVolume 节点设置)
           let finalVolumeId = workflowManager.getActiveVolumeAnchor() || '';
+
+          // 核心修复：移动端锚点自愈逻辑。如果锚点丢失，尝试从现有章节回溯
+          if (!finalVolumeId && localNovel.chapters && localNovel.chapters.length > 0) {
+            for (let k = localNovel.chapters.length - 1; k >= 0; k--) {
+              const chapVolId = localNovel.chapters[k].volumeId;
+              if (chapVolId) {
+                finalVolumeId = chapVolId;
+                workflowManager.setActiveVolumeAnchor(finalVolumeId);
+                terminal.log(`[Mobile Workflow] 锚点丢失，已从现有章节回溯恢复: ${finalVolumeId}`);
+                break;
+              }
+            }
+          }
           
           // 获取最新的分卷列表（从执行中的内存状态获取）
           const latestVolumes = localNovel.volumes || [];
