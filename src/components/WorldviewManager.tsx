@@ -125,6 +125,9 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = React.memo(({
   showReferenceSelector,
   onToggleReferenceSelector
 }) => {
+  // Safety check
+  if (!novel) return <div className="flex-1 flex items-center justify-center text-gray-500">数据加载中...</div>
+
   // Local State for Set Management
   const [showChat, setShowChat] = useState(false)
   const [newSetName, setNewSetName] = useState('')
@@ -364,7 +367,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = React.memo(({
             <Globe className="w-5 h-5 text-[var(--theme-color)]" />
             <span>世界观文件列表</span>
             <span className="md:hidden text-xs text-gray-500 font-normal ml-2">
-              ({novel.worldviewSets?.length || 0})
+              ({novel?.worldviewSets?.length || 0})
             </span>
           </h3>
           <div className="md:hidden text-gray-400">
@@ -375,8 +378,8 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = React.memo(({
         {/* List Content */}
         <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isMobileListOpen ? 'max-h-[50vh] opacity-100' : 'max-h-0 opacity-0 md:max-h-none md:opacity-100'}`}>
            <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-              {novel.worldviewSets?.map(set => (
-                <div 
+              {novel?.worldviewSets?.map(set => (
+                <div
                   key={set.id}
                   onClick={() => {
                      onSetActiveWorldviewSetId(set.id)
@@ -427,7 +430,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = React.memo(({
                   )}
                 </div>
               ))}
-              {(!novel.worldviewSets || novel.worldviewSets.length === 0) && (
+              {(!novel?.worldviewSets || novel.worldviewSets.length === 0) && (
                  <div className="text-center py-8 text-gray-500 text-xs italic">
                     暂无世界观文件，请新建
                  </div>

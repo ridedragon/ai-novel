@@ -131,6 +131,9 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
   showReferenceSelector,
   onToggleReferenceSelector
 }) => {
+  // Safety check
+  if (!novel) return <div className="flex-1 flex items-center justify-center text-gray-500">数据加载中...</div>
+
   // Local State for Set Management
   const [showChat, setShowChat] = useState(false)
   const [newSetName, setNewSetName] = useState('')
@@ -378,7 +381,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
             <Lightbulb className="w-5 h-5 text-[var(--theme-color)]" />
             <span>灵感集列表</span>
             <span className="md:hidden text-xs text-gray-500 font-normal ml-2">
-              ({novel.inspirationSets?.length || 0})
+              ({novel?.inspirationSets?.length || 0})
             </span>
           </h3>
           <div className="md:hidden text-gray-400">
@@ -389,8 +392,8 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
         {/* List Content */}
         <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isMobileListOpen ? 'max-h-[50vh] opacity-100' : 'max-h-0 opacity-0 md:max-h-none md:opacity-100'}`}>
            <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-              {novel.inspirationSets?.map(set => (
-                <div 
+              {novel?.inspirationSets?.map(set => (
+                <div
                   key={set.id}
                   onClick={() => {
                      onSetActiveInspirationSetId(set.id)
@@ -441,7 +444,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
                   )}
                 </div>
               ))}
-              {(!novel.inspirationSets || novel.inspirationSets.length === 0) && (
+              {(!novel?.inspirationSets || novel.inspirationSets.length === 0) && (
                  <div className="text-center py-8 text-gray-500 text-xs italic">
                     暂无灵感集，请新建
                  </div>

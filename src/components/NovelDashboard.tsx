@@ -335,8 +335,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                     </div>
                     
                 </div>
-              </div>
-            )}
+              )}
             </div>
 
             {/* Create Button (Desktop) */}

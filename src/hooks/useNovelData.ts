@@ -146,7 +146,7 @@ export function useNovelData() {
             if (healed) loadedNovel.volumes = newVolumes;
           }
 
-          setNovels(prev => prev.map(n => (n.id === loadedNovel.id ? loadedNovel : n)));
+          setNovels(prev => prev.map(n => (n.id === loadedNovel.id ? { ...loadedNovel } : n)));
 
           // 自动选择第一章
           setActiveChapterId(prev => {

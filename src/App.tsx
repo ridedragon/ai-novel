@@ -8,7 +8,7 @@ import {
   Settings,
   Zap
 } from 'lucide-react'
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 // 导入重构后的 Hooks
 import { useAIGenerators } from './hooks/useAIGenerators'
@@ -88,14 +88,70 @@ function App() {
   const [editingGeneratorPromptIndex, setEditingGeneratorPromptIndex] = useState<number | null>(null);
   const [tempEditingPrompt, setTempEditingPrompt] = useState<GeneratorPrompt | null>(null);
 
+  // 各模块的 User Prompt 状态
+  const [inspirationUserPrompt, setInspirationUserPrompt] = useState('');
+  const [worldviewUserPrompt, setWorldviewUserPrompt] = useState('');
+  const [characterUserPrompt, setCharacterUserPrompt] = useState('');
+  const [outlineUserPrompt, setOutlineUserPrompt] = useState('');
+  const [plotOutlineUserPrompt, setPlotOutlineUserPrompt] = useState('');
+
+  // AI 生成控制 Refs
+  const outlineAbortControllerRef = useRef<AbortController | null>(null);
+  const characterAbortControllerRef = useRef<AbortController | null>(null);
+  const worldviewAbortControllerRef = useRef<AbortController | null>(null);
+  const inspirationAbortControllerRef = useRef<AbortController | null>(null);
+  const plotOutlineAbortControllerRef = useRef<AbortController | null>(null);
+  const generateAbortControllerRef = useRef<AbortController | null>(null);
+
+  // 参考选择器状态
+  const [selectedWorldviewSetId, setSelectedWorldviewSetId] = useState<string | null>(null);
+  const [selectedWorldviewIndices, setSelectedWorldviewIndices] = useState<number[]>([]);
+  const [showWorldviewSelector, setShowWorldviewSelector] = useState(false);
+
+  const [selectedCharacterSetId, setSelectedCharacterSetId] = useState<string | null>(null);
+  const [selectedCharacterIndices, setSelectedCharacterIndices] = useState<number[]>([]);
+  const [showCharacterSelector, setShowCharacterSelector] = useState(false);
+
+  const [selectedInspirationSetId, setSelectedInspirationSetId] = useState<string | null>(null);
+  const [selectedInspirationIndices, setSelectedInspirationIndices] = useState<number[]>([]);
+  const [showInspirationSelector, setShowInspirationSelector] = useState(false);
+
+  const [selectedOutlineSetId, setSelectedOutlineSetId] = useState<string | null>(null);
+  const [selectedOutlineIndices, setSelectedOutlineIndices] = useState<number[]>([]);
+  const [showOutlineSelector, setShowOutlineSelector] = useState(false);
+
+  const [selectedReferenceType, setSelectedReferenceType] = useState<string | null>(null);
+  const [selectedReferenceIndices, setSelectedReferenceIndices] = useState<number[]>([]);
+  const [showReferenceSelector, setShowReferenceSelector] = useState(false);
+
+  // 辅助函数：切换条目选择
+  const handleToggleItem = (type: 'worldview' | 'character' | 'inspiration' | 'outline' | 'reference', setId: string, index: number) => {
+    const setIndicesMap = {
+      worldview: setSelectedWorldviewIndices,
+      character: setSelectedCharacterIndices,
+      inspiration: setSelectedInspirationIndices,
+      outline: setSelectedOutlineIndices,
+      reference: setSelectedReferenceIndices
+    };
+    
+    setIndicesMap[type](prev => {
+      if (prev.includes(index)) return prev.filter(i => i !== index);
+      return [...prev, index];
+    });
+  };
+
   // 对话框状态
   const [dialog, setDialog] = useState<any>({ isOpen: false, type: 'alert', title: '', message: '', inputValue: '', onConfirm: () => {} });
   const closeDialog = () => setDialog((prev: any) => ({ ...prev, isOpen: false }));
 
   // --- 3. 派生状态与业务逻辑 ---
-  const activeChapter = useMemo(() => 
+  const activeChapter = useMemo(() =>
     novelData.chapters.find(c => c.id === novelData.activeChapterId) || novelData.chapters[0]
   , [novelData.chapters, novelData.activeChapterId]);
+
+  const activePreset = useMemo(() =>
+    completion.completionPresets.find(p => p.id === completion.activePresetId)
+  , [completion.completionPresets, completion.activePresetId]);
 
   useEffect(() => {
     if (novelData.activeChapterId) {
@@ -164,7 +220,7 @@ function App() {
   const handleChapterComplete = async (chapterId: number, content: string, updatedNovel?: Novel, forceFinal?: boolean, runId?: string | null) => {
     if (config.longTextMode && novelData.activeNovelId) {
       return await checkAndGenerateSummary(
-        chapterId, content, novelData.activeNovelId, 
+        chapterId, content, novelData.activeNovelId,
         updatedNovel ? [updatedNovel] : novelData.novelsRef.current,
         novelData.setNovels,
         {
@@ -177,6 +233,25 @@ function App() {
       );
     }
   };
+
+  const handleSendToModule = useCallback((module: 'worldview' | 'character' | 'outline', content: string) => {
+    if (module === 'worldview') {
+      setWorldviewUserPrompt(content);
+      setCreationModule('worldview');
+    } else if (module === 'character') {
+      setCharacterUserPrompt(content);
+      setCreationModule('characters');
+    } else if (module === 'outline') {
+      setOutlineUserPrompt(content);
+      setCreationModule('outline');
+    }
+  }, []);
+
+  const handleReturnToMainWithContent = useCallback((content: string) => {
+    setCreationModule('menu'); // 暂定返回主菜单，或者如果有关联的 ChapterEditor 逻辑，可以在这里处理
+    // 如果需要将内容填充到主编辑器，可以在这里操作
+    console.log('Return with content:', content);
+  }, []);
 
   // --- 4. 渲染分发 ---
 
@@ -271,9 +346,339 @@ function App() {
           creationModule={creationModule} setCreationModule={setCreationModule} activeNovel={novelData.activeNovel || null}
           globalCreationPrompt={config.globalCreationPrompt} setGlobalCreationPrompt={config.setGlobalCreationPrompt}
           setShowWorkflowEditor={setShowWorkflowEditor} handleSwitchModule={handleSwitchModule}
-          inspirationProps={{ ...novelData, ...aiGenerators, ...generators, userPrompt: '', setUserPrompt: () => {} }}
-          characterProps={{ ...novelData, ...aiGenerators, ...generators }} worldviewProps={{ ...novelData, ...aiGenerators, ...generators }}
-          outlineProps={{ ...novelData, ...aiGenerators, ...generators, ...autoWrite }} plotOutlineProps={{ ...novelData, ...aiGenerators, ...generators }}
+          inspirationProps={{
+            ...novelData,
+            ...aiGenerators,
+            ...generators,
+            userPrompt: inspirationUserPrompt,
+            setUserPrompt: setInspirationUserPrompt,
+            onShowSettings: () => { setGeneratorSettingsType('inspiration'); setShowGeneratorSettingsModal(true); },
+            
+            // Reference Selectors Props
+            // Reference Selectors Props
+            selectedWorldviewSetId, selectedWorldviewIndices,
+            onSelectWorldviewSet: (id: string | null) => { setSelectedWorldviewSetId(id); setSelectedWorldviewIndices([]); },
+            onToggleWorldviewItem: (setId: string, idx: number) => handleToggleItem('worldview', setId, idx),
+            showWorldviewSelector, onToggleWorldviewSelector: setShowWorldviewSelector,
+
+            selectedCharacterSetId, selectedCharacterIndices,
+            onSelectCharacterSet: (id: string | null) => { setSelectedCharacterSetId(id); setSelectedCharacterIndices([]); },
+            onToggleCharacterItem: (setId: string, idx: number) => handleToggleItem('character', setId, idx),
+            showCharacterSelector, onToggleCharacterSelector: setShowCharacterSelector,
+
+            selectedInspirationSetId, selectedInspirationIndices,
+            onSelectInspirationSet: (id: string | null) => { setSelectedInspirationSetId(id); setSelectedInspirationIndices([]); },
+            onToggleInspirationItem: (setId: string, idx: number) => handleToggleItem('inspiration', setId, idx),
+            showInspirationSelector, onToggleInspirationSelector: setShowInspirationSelector,
+
+            selectedOutlineSetId, selectedOutlineIndices,
+            onSelectOutlineSet: (id: string | null) => { setSelectedOutlineSetId(id); setSelectedOutlineIndices([]); },
+            onToggleOutlineItem: (setId: string, idx: number) => handleToggleItem('outline', setId, idx),
+            showOutlineSelector, onToggleOutlineSelector: setShowOutlineSelector,
+
+            selectedReferenceType, selectedReferenceIndices,
+            onSelectReferenceSet: (id: string | null) => { setSelectedReferenceType(id); setSelectedReferenceIndices([]); },
+            onToggleReferenceItem: (setId: string, idx: number) => handleToggleItem('reference', setId, idx),
+            showReferenceSelector, onToggleReferenceSelector: setShowReferenceSelector,
+
+            onGenerateInspiration: (mode: 'generate' | 'chat' = 'generate') => aiGenerators.handleGenerateInspiration({
+              mode,
+              source: 'module',
+              activeNovel: novelData.activeNovel || undefined,
+              activeInspirationSetId: novelData.activeInspirationSetId,
+              activeInspirationPresetId: generators.activeInspirationPresetId,
+              lastNonChatInspirationPresetId: generators.lastNonChatInspirationPresetId,
+              inspirationPresets: generators.inspirationPresets,
+              inspirationModel: config.inspirationModel,
+              globalApiKey: config.apiKey,
+              globalBaseUrl: config.baseUrl,
+              globalModel: config.model,
+              globalCreationPrompt: config.globalCreationPrompt,
+              maxRetries: config.maxRetries,
+              userPrompt: inspirationUserPrompt,
+              activeChapter: activeChapter,
+              contextLength: activePreset?.contextLength || 4000,
+              selectedRefs: {
+                worldviewSetId: selectedWorldviewSetId, worldviewIndices: selectedWorldviewIndices,
+                characterSetId: selectedCharacterSetId, characterIndices: selectedCharacterIndices,
+                inspirationSetId: selectedInspirationSetId, inspirationIndices: selectedInspirationIndices,
+                outlineSetId: selectedOutlineSetId, outlineIndices: selectedOutlineIndices
+              },
+              onNovelsUpdate: novelData.setNovels,
+              onError: (msg: string) => setDialog({ isOpen: true, type: 'alert', title: '错误', message: msg, onConfirm: closeDialog }),
+              onSuccess: () => { if (inspirationUserPrompt) setInspirationUserPrompt(''); },
+              inspirationAbortControllerRef
+            }),
+            onStopGeneration: () => inspirationAbortControllerRef.current?.abort(),
+            onSendToModule: handleSendToModule,
+            onReturnToMainWithContent: handleReturnToMainWithContent
+          }}
+          characterProps={{
+            ...novelData,
+            ...aiGenerators,
+            ...generators,
+            userPrompt: characterUserPrompt,
+            setUserPrompt: setCharacterUserPrompt,
+            onShowSettings: () => { setGeneratorSettingsType('character'); setShowGeneratorSettingsModal(true); },
+            
+            // Reference Selectors Props
+            // Reference Selectors Props
+            selectedWorldviewSetId, selectedWorldviewIndices,
+            onSelectWorldviewSet: (id: string | null) => { setSelectedWorldviewSetId(id); setSelectedWorldviewIndices([]); },
+            onToggleWorldviewItem: (setId: string, idx: number) => handleToggleItem('worldview', setId, idx),
+            showWorldviewSelector, onToggleWorldviewSelector: setShowWorldviewSelector,
+
+            selectedCharacterSetId, selectedCharacterIndices,
+            onSelectCharacterSet: (id: string | null) => { setSelectedCharacterSetId(id); setSelectedCharacterIndices([]); },
+            onToggleCharacterItem: (setId: string, idx: number) => handleToggleItem('character', setId, idx),
+            showCharacterSelector, onToggleCharacterSelector: setShowCharacterSelector,
+
+            selectedInspirationSetId, selectedInspirationIndices,
+            onSelectInspirationSet: (id: string | null) => { setSelectedInspirationSetId(id); setSelectedInspirationIndices([]); },
+            onToggleInspirationItem: (setId: string, idx: number) => handleToggleItem('inspiration', setId, idx),
+            showInspirationSelector, onToggleInspirationSelector: setShowInspirationSelector,
+
+            selectedOutlineSetId, selectedOutlineIndices,
+            onSelectOutlineSet: (id: string | null) => { setSelectedOutlineSetId(id); setSelectedOutlineIndices([]); },
+            onToggleOutlineItem: (setId: string, idx: number) => handleToggleItem('outline', setId, idx),
+            showOutlineSelector, onToggleOutlineSelector: setShowOutlineSelector,
+
+            selectedReferenceType, selectedReferenceIndices,
+            onSelectReferenceSet: (id: string | null) => { setSelectedReferenceType(id); setSelectedReferenceIndices([]); },
+            onToggleReferenceItem: (setId: string, idx: number) => handleToggleItem('reference', setId, idx),
+            showReferenceSelector, onToggleReferenceSelector: setShowReferenceSelector,
+
+            onGenerateCharacters: (mode: 'generate' | 'chat' = 'generate') => aiGenerators.handleGenerateCharacters({
+              mode,
+              source: 'module',
+              activeNovel: novelData.activeNovel || undefined,
+              activeCharacterSetId: novelData.activeCharacterSetId,
+              activeCharacterPresetId: generators.activeCharacterPresetId,
+              lastNonChatCharacterPresetId: generators.lastNonChatCharacterPresetId,
+              characterPresets: generators.characterPresets,
+              characterModel: config.characterModel,
+              globalApiKey: config.apiKey,
+              globalBaseUrl: config.baseUrl,
+              globalModel: config.model,
+              globalCreationPrompt: config.globalCreationPrompt,
+              maxRetries: config.maxRetries,
+              userPrompt: characterUserPrompt,
+              activeChapter: activeChapter,
+              contextLength: activePreset?.contextLength || 4000,
+              selectedRefs: {
+                worldviewSetId: selectedWorldviewSetId, worldviewIndices: selectedWorldviewIndices,
+                characterSetId: selectedCharacterSetId, characterIndices: selectedCharacterIndices,
+                inspirationSetId: selectedInspirationSetId, inspirationIndices: selectedInspirationIndices,
+                outlineSetId: selectedOutlineSetId, outlineIndices: selectedOutlineIndices
+              },
+              onNovelsUpdate: novelData.setNovels,
+              onError: (msg: string) => setDialog({ isOpen: true, type: 'alert', title: '错误', message: msg, onConfirm: closeDialog }),
+              onSuccess: () => { if (characterUserPrompt) setCharacterUserPrompt(''); },
+              characterAbortControllerRef
+            }),
+            onStopGeneration: () => characterAbortControllerRef.current?.abort(),
+            onSendToModule: handleSendToModule,
+            onReturnToMainWithContent: handleReturnToMainWithContent
+          }}
+          worldviewProps={{
+            ...novelData,
+            ...aiGenerators,
+            ...generators,
+            userPrompt: worldviewUserPrompt,
+            setUserPrompt: setWorldviewUserPrompt,
+            onShowSettings: () => { setGeneratorSettingsType('worldview'); setShowGeneratorSettingsModal(true); },
+            
+            // Reference Selectors Props
+            // Reference Selectors Props
+            selectedWorldviewSetId, selectedWorldviewIndices,
+            onSelectWorldviewSet: (id: string | null) => { setSelectedWorldviewSetId(id); setSelectedWorldviewIndices([]); },
+            onToggleWorldviewItem: (setId: string, idx: number) => handleToggleItem('worldview', setId, idx),
+            showWorldviewSelector, onToggleWorldviewSelector: setShowWorldviewSelector,
+
+            selectedCharacterSetId, selectedCharacterIndices,
+            onSelectCharacterSet: (id: string | null) => { setSelectedCharacterSetId(id); setSelectedCharacterIndices([]); },
+            onToggleCharacterItem: (setId: string, idx: number) => handleToggleItem('character', setId, idx),
+            showCharacterSelector, onToggleCharacterSelector: setShowCharacterSelector,
+
+            selectedInspirationSetId, selectedInspirationIndices,
+            onSelectInspirationSet: (id: string | null) => { setSelectedInspirationSetId(id); setSelectedInspirationIndices([]); },
+            onToggleInspirationItem: (setId: string, idx: number) => handleToggleItem('inspiration', setId, idx),
+            showInspirationSelector, onToggleInspirationSelector: setShowInspirationSelector,
+
+            selectedOutlineSetId, selectedOutlineIndices,
+            onSelectOutlineSet: (id: string | null) => { setSelectedOutlineSetId(id); setSelectedOutlineIndices([]); },
+            onToggleOutlineItem: (setId: string, idx: number) => handleToggleItem('outline', setId, idx),
+            showOutlineSelector, onToggleOutlineSelector: setShowOutlineSelector,
+
+            selectedReferenceType, selectedReferenceIndices,
+            onSelectReferenceSet: (id: string | null) => { setSelectedReferenceType(id); setSelectedReferenceIndices([]); },
+            onToggleReferenceItem: (setId: string, idx: number) => handleToggleItem('reference', setId, idx),
+            showReferenceSelector, onToggleReferenceSelector: setShowReferenceSelector,
+
+            onGenerateWorldview: (mode: 'generate' | 'chat' = 'generate') => aiGenerators.handleGenerateWorldview({
+              mode,
+              source: 'module',
+              activeNovel: novelData.activeNovel || undefined,
+              activeWorldviewSetId: novelData.activeWorldviewSetId,
+              activeWorldviewPresetId: generators.activeWorldviewPresetId,
+              lastNonChatWorldviewPresetId: generators.lastNonChatWorldviewPresetId,
+              worldviewPresets: generators.worldviewPresets,
+              worldviewModel: config.worldviewModel,
+              globalApiKey: config.apiKey,
+              globalBaseUrl: config.baseUrl,
+              globalModel: config.model,
+              globalCreationPrompt: config.globalCreationPrompt,
+              maxRetries: config.maxRetries,
+              userPrompt: worldviewUserPrompt,
+              activeChapter: activeChapter,
+              contextLength: activePreset?.contextLength || 4000,
+              selectedRefs: {
+                worldviewSetId: selectedWorldviewSetId, worldviewIndices: selectedWorldviewIndices,
+                characterSetId: selectedCharacterSetId, characterIndices: selectedCharacterIndices,
+                inspirationSetId: selectedInspirationSetId, inspirationIndices: selectedInspirationIndices,
+                outlineSetId: selectedOutlineSetId, outlineIndices: selectedOutlineIndices
+              },
+              onNovelsUpdate: novelData.setNovels,
+              onError: (msg: string) => setDialog({ isOpen: true, type: 'alert', title: '错误', message: msg, onConfirm: closeDialog }),
+              onSuccess: () => { if (worldviewUserPrompt) setWorldviewUserPrompt(''); },
+              worldviewAbortControllerRef
+            }),
+            onStopGeneration: () => worldviewAbortControllerRef.current?.abort(),
+            onSendToModule: handleSendToModule,
+            onReturnToMainWithContent: handleReturnToMainWithContent
+          }}
+          outlineProps={{
+            ...novelData,
+            ...aiGenerators,
+            ...generators,
+            ...autoWrite,
+            userPrompt: outlineUserPrompt,
+            setUserPrompt: setOutlineUserPrompt,
+            onShowSettings: () => { setGeneratorSettingsType('outline'); setShowGeneratorSettingsModal(true); },
+            
+            // Reference Selectors Props
+            // Reference Selectors Props
+            selectedWorldviewSetId, selectedWorldviewIndices,
+            onSelectWorldviewSet: (id: string | null) => { setSelectedWorldviewSetId(id); setSelectedWorldviewIndices([]); },
+            onToggleWorldviewItem: (setId: string, idx: number) => handleToggleItem('worldview', setId, idx),
+            showWorldviewSelector, onToggleWorldviewSelector: setShowWorldviewSelector,
+
+            selectedCharacterSetId, selectedCharacterIndices,
+            onSelectCharacterSet: (id: string | null) => { setSelectedCharacterSetId(id); setSelectedCharacterIndices([]); },
+            onToggleCharacterItem: (setId: string, idx: number) => handleToggleItem('character', setId, idx),
+            showCharacterSelector, onToggleCharacterSelector: setShowCharacterSelector,
+
+            selectedInspirationSetId, selectedInspirationIndices,
+            onSelectInspirationSet: (id: string | null) => { setSelectedInspirationSetId(id); setSelectedInspirationIndices([]); },
+            onToggleInspirationItem: (setId: string, idx: number) => handleToggleItem('inspiration', setId, idx),
+            showInspirationSelector, onToggleInspirationSelector: setShowInspirationSelector,
+
+            selectedOutlineSetId, selectedOutlineIndices,
+            onSelectOutlineSet: (id: string | null) => { setSelectedOutlineSetId(id); setSelectedOutlineIndices([]); },
+            onToggleOutlineItem: (setId: string, idx: number) => handleToggleItem('outline', setId, idx),
+            showOutlineSelector, onToggleOutlineSelector: setShowOutlineSelector,
+
+            selectedReferenceType, selectedReferenceIndices,
+            onSelectReferenceSet: (id: string | null) => { setSelectedReferenceType(id); setSelectedReferenceIndices([]); },
+            onToggleReferenceItem: (setId: string, idx: number) => handleToggleItem('reference', setId, idx),
+            showReferenceSelector, onToggleReferenceSelector: setShowReferenceSelector,
+
+            onGenerateOutline: (mode: 'append' | 'replace' | 'chat' = 'append') => aiGenerators.handleGenerateOutline({
+              mode,
+              source: 'module',
+              activeNovel: novelData.activeNovel || undefined,
+              activeOutlineSetId: novelData.activeOutlineSetId,
+              activeOutlinePresetId: generators.activeOutlinePresetId,
+              lastNonChatOutlinePresetId: generators.lastNonChatOutlinePresetId,
+              outlinePresets: generators.outlinePresets,
+              outlineModel: config.outlineModel,
+              globalApiKey: config.apiKey,
+              globalBaseUrl: config.baseUrl,
+              globalModel: config.model,
+              globalCreationPrompt: config.globalCreationPrompt,
+              maxRetries: config.maxRetries,
+              userPrompt: outlineUserPrompt,
+              activeChapter: activeChapter,
+              contextLength: activePreset?.contextLength || 4000,
+              selectedRefs: {
+                worldviewSetId: selectedWorldviewSetId, worldviewIndices: selectedWorldviewIndices,
+                characterSetId: selectedCharacterSetId, characterIndices: selectedCharacterIndices,
+                inspirationSetId: selectedInspirationSetId, inspirationIndices: selectedInspirationIndices,
+                outlineSetId: selectedOutlineSetId, outlineIndices: selectedOutlineIndices
+              },
+              onNovelsUpdate: novelData.setNovels,
+              onError: (msg: string) => setDialog({ isOpen: true, type: 'alert', title: '错误', message: msg, onConfirm: closeDialog }),
+              onSuccess: () => { if (outlineUserPrompt) setOutlineUserPrompt(''); },
+              outlineAbortControllerRef,
+              onStatusUpdate: () => {}
+            }),
+            onStopGeneration: () => outlineAbortControllerRef.current?.abort(),
+            onReturnToMainWithContent: handleReturnToMainWithContent
+          }}
+          plotOutlineProps={{
+            ...novelData,
+            ...aiGenerators,
+            ...generators,
+            userPrompt: plotOutlineUserPrompt,
+            setUserPrompt: setPlotOutlineUserPrompt,
+            onShowSettings: () => { setGeneratorSettingsType('plotOutline'); setShowGeneratorSettingsModal(true); },
+            
+            // Reference Selectors Props
+            selectedWorldviewSetId, selectedWorldviewIndices,
+            onSelectWorldviewSet: (id: string | null) => { setSelectedWorldviewSetId(id); setSelectedWorldviewIndices([]); },
+            onToggleWorldviewItem: (setId: string, idx: number) => handleToggleItem('worldview', setId, idx),
+            showWorldviewSelector, onToggleWorldviewSelector: setShowWorldviewSelector,
+
+            selectedCharacterSetId, selectedCharacterIndices,
+            onSelectCharacterSet: (id: string | null) => { setSelectedCharacterSetId(id); setSelectedCharacterIndices([]); },
+            onToggleCharacterItem: (setId: string, idx: number) => handleToggleItem('character', setId, idx),
+            showCharacterSelector, onToggleCharacterSelector: setShowCharacterSelector,
+
+            selectedInspirationSetId, selectedInspirationIndices,
+            onSelectInspirationSet: (id: string | null) => { setSelectedInspirationSetId(id); setSelectedInspirationIndices([]); },
+            onToggleInspirationItem: (setId: string, idx: number) => handleToggleItem('inspiration', setId, idx),
+            showInspirationSelector, onToggleInspirationSelector: setShowInspirationSelector,
+
+            selectedOutlineSetId, selectedOutlineIndices,
+            onSelectOutlineSet: (id: string | null) => { setSelectedOutlineSetId(id); setSelectedOutlineIndices([]); },
+            onToggleOutlineItem: (setId: string, idx: number) => handleToggleItem('outline', setId, idx),
+            showOutlineSelector, onToggleOutlineSelector: setShowOutlineSelector,
+
+            selectedReferenceType, selectedReferenceIndices,
+            onSelectReferenceSet: (id: string | null) => { setSelectedReferenceType(id); setSelectedReferenceIndices([]); },
+            onToggleReferenceItem: (setId: string, idx: number) => handleToggleItem('reference', setId, idx),
+            showReferenceSelector, onToggleReferenceSelector: setShowReferenceSelector,
+
+            onGeneratePlotOutline: (mode: 'generate' | 'chat' = 'generate') => aiGenerators.handleGeneratePlotOutline({
+              mode,
+              source: 'module',
+              activeNovel: novelData.activeNovel || undefined,
+              activePlotOutlineSetId: novelData.activePlotOutlineSetId,
+              activePlotOutlinePresetId: generators.activePlotOutlinePresetId,
+              lastNonChatPlotOutlinePresetId: generators.lastNonChatPlotOutlinePresetId,
+              plotOutlinePresets: generators.plotOutlinePresets,
+              plotOutlineModel: config.plotOutlineModel,
+              globalApiKey: config.apiKey,
+              globalBaseUrl: config.baseUrl,
+              globalModel: config.model,
+              globalCreationPrompt: config.globalCreationPrompt,
+              maxRetries: config.maxRetries,
+              userPrompt: plotOutlineUserPrompt,
+              selectedRefs: {
+                worldviewSetId: selectedWorldviewSetId, worldviewIndices: selectedWorldviewIndices,
+                characterSetId: selectedCharacterSetId, characterIndices: selectedCharacterIndices,
+                inspirationSetId: selectedInspirationSetId, inspirationIndices: selectedInspirationIndices,
+                outlineSetId: selectedOutlineSetId, outlineIndices: selectedOutlineIndices
+              },
+              onNovelsUpdate: novelData.setNovels,
+              onError: (msg: string) => setDialog({ isOpen: true, type: 'alert', title: '错误', message: msg, onConfirm: closeDialog }),
+              onSuccess: () => { if (plotOutlineUserPrompt) setPlotOutlineUserPrompt(''); },
+              generateAbortControllerRef: plotOutlineAbortControllerRef
+            }),
+            onStopGeneration: () => plotOutlineAbortControllerRef.current?.abort(),
+            onSendToModule: handleSendToModule,
+            onReturnToMainWithContent: handleReturnToMainWithContent
+          }}
           referenceProps={{ ...novelData }}
         />
       ) : (

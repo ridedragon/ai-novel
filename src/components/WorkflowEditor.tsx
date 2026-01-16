@@ -75,7 +75,8 @@ const NodePropertiesModal = ({
   addEntry,
   removeEntry,
   updateEntryTitle,
-  updateEntryContent
+  updateEntryContent,
+  consolidatedModelList
 }: {
   node: WorkflowNode;
   onClose: () => void;
@@ -85,6 +86,7 @@ const NodePropertiesModal = ({
   allPresets: Record<string, GeneratorPreset[]>;
   pendingFolders: string[];
   globalConfig: any;
+  consolidatedModelList: string[];
   addEntry: () => void;
   removeEntry: (entryId: string) => void;
   updateEntryTitle: (entryId: string, title: string) => void;
@@ -103,11 +105,6 @@ const NodePropertiesModal = ({
     setLocalInstruction(node.data.instruction);
     setLocalVolumeContent(node.data.volumeContent || '');
   }, [node.id, node.data.volumeContent]);
-
-  // 使用从 Engine 传入的整合模型列表
-  const consolidatedModelList = useMemo(() => {
-    return (globalConfig as any)?.getConsolidatedModelList?.() || [];
-  }, [globalConfig]);
 
   const debouncedUpdate = (updates: Partial<WorkflowNodeData>) => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -910,7 +907,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     runWorkflow,
     stopWorkflow,
     resumeWorkflow,
-    resetWorkflowStatus
+    resetWorkflowStatus,
+    getConsolidatedModelList
   } = useWorkflowEngine({
     activeNovel,
     globalConfig,
@@ -955,6 +953,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   }, [workflows]);
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
+
+  const consolidatedModelList = useMemo(() => getConsolidatedModelList(), [getConsolidatedModelList]);
 
   // 获取工作流中所有“初始化目录”节点定义的文件夹名（即便尚未运行创建）
   const pendingFolders = nodes
@@ -1640,6 +1640,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             allPresets={allPresets}
             pendingFolders={pendingFolders}
             globalConfig={globalConfig}
+            consolidatedModelList={consolidatedModelList}
             addEntry={addEntry}
             removeEntry={removeEntry}
             updateEntryTitle={updateEntryTitle}

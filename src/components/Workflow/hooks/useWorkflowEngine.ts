@@ -452,19 +452,25 @@ export const useWorkflowEngine = (options: {
             }
 
             try {
-              if (isMobile) {
-                console.groupCollapsed(
-                  `[Mobile Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}${
-                    volRetryCount > 0 ? ` (重试 ${volRetryCount})` : ''
-                  }`,
-                );
-                console.log('Messages:', planningMessages);
-                console.log('Config:', {
-                  model: planningModel,
-                  temperature: node.data.temperature ?? 0.7,
-                });
-                console.groupEnd();
-              }
+              console.groupCollapsed(
+                `[Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}${
+                  volRetryCount > 0 ? ` (重试 ${volRetryCount})` : ''
+                }`,
+              );
+              console.log('Messages:', planningMessages);
+              console.log('Config:', {
+                model: planningModel,
+                temperature: node.data.temperature ?? 0.7,
+              });
+              console.groupEnd();
+
+              terminal.log(`
+>> AI REQUEST [工作流: 分卷规划]
+>> -----------------------------------------------------------
+>> Model:       ${planningModel}
+>> Temperature: ${node.data.temperature ?? 0.7}
+>> -----------------------------------------------------------
+`);
 
               const volCompletion = await volOpenai.chat.completions.create(
                 {
@@ -769,16 +775,39 @@ export const useWorkflowEngine = (options: {
               await new Promise(res => setTimeout(res, 2000));
             }
             try {
+              const genModel =
+                node.data.overrideAiConfig && node.data.model
+                  ? node.data.model
+                  : genPreset?.apiConfig?.model || globalConfig.model;
+              const genTemp =
+                node.data.overrideAiConfig && node.data.temperature !== undefined
+                  ? node.data.temperature
+                  : genPreset?.temperature ?? 0.7;
+
+              console.groupCollapsed(
+                `[Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}${
+                  genRetryCount > 0 ? ` (重试 ${genRetryCount})` : ''
+                }`,
+              );
+              console.log('Messages:', generatorMessages);
+              console.log('Config:', {
+                model: genModel,
+                temperature: genTemp,
+              });
+              console.groupEnd();
+
+              terminal.log(`
+>> AI REQUEST [工作流: 架构生成]
+>> -----------------------------------------------------------
+>> Model:       ${genModel}
+>> Temperature: ${genTemp}
+>> -----------------------------------------------------------
+`);
+
               const genCompletion = await genOpenai.chat.completions.create({
-                model:
-                  node.data.overrideAiConfig && node.data.model
-                    ? node.data.model
-                    : genPreset?.apiConfig?.model || globalConfig.model,
+                model: genModel,
                 messages: generatorMessages,
-                temperature:
-                  node.data.overrideAiConfig && node.data.temperature !== undefined
-                    ? node.data.temperature
-                    : genPreset?.temperature ?? 0.7,
+                temperature: genTemp,
               });
               aiResponse = genCompletion.choices[0]?.message?.content || '';
             } catch (err) {
@@ -1126,22 +1155,30 @@ export const useWorkflowEngine = (options: {
             await new Promise(res => setTimeout(res, 1500 * Math.pow(2, retry - 1)));
           }
           try {
-            if (isMobile) {
-              console.groupCollapsed(
-                `[Mobile Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}${
-                  retry > 0 ? ` (重试 ${retry})` : ''
-                }${iter > 0 ? ` (续写 ${iter})` : ''}`,
-              );
-              console.log('Messages:', currMsgs);
-              console.log('Config:', {
-                model: fModel,
-                temperature: fTemp,
-                topP: fTopP,
-                topK: fTopK,
-                maxTokens: fMaxT,
-              });
-              console.groupEnd();
-            }
+            console.groupCollapsed(
+              `[Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}${retry > 0 ? ` (重试 ${retry})` : ''}${
+                iter > 0 ? ` (续写 ${iter})` : ''
+              }`,
+            );
+            console.log('Messages:', currMsgs);
+            console.log('Config:', {
+              model: fModel,
+              temperature: fTemp,
+              topP: fTopP,
+              topK: fTopK,
+              maxTokens: fMaxT,
+            });
+            console.groupEnd();
+
+            terminal.log(`
+>> AI REQUEST [工作流: ${node.data.typeLabel}]
+>> -----------------------------------------------------------
+>> Model:       ${fModel}
+>> Temperature: ${fTemp}
+>> Top P:       ${fTopP}
+>> Top K:       ${fTopK}
+>> -----------------------------------------------------------
+`);
 
             const completion = await openai.chat.completions.create(
               {

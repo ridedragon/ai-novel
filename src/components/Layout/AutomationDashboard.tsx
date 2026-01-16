@@ -1,8 +1,10 @@
 import {
   Book,
   Bot,
+  FileText,
   GitBranch,
   Globe,
+  Home,
   LayoutList,
   Lightbulb,
   Users,
@@ -120,25 +122,54 @@ export const AutomationDashboard: React.FC<AutomationDashboardProps> = ({
 
         <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-gray-900 text-gray-400">加载中...</div>}>
           {creationModule === 'inspiration' && activeNovel && (
-            <InspirationManager {...inspirationProps} />
+            <InspirationManager novel={activeNovel} {...inspirationProps} />
           )}
           {creationModule === 'characters' && activeNovel && (
-            <CharacterManager {...characterProps} />
+            <CharacterManager novel={activeNovel} {...characterProps} />
           )}
           {creationModule === 'worldview' && activeNovel && (
-            <WorldviewManager {...worldviewProps} />
+            <WorldviewManager novel={activeNovel} {...worldviewProps} />
           )}
           {creationModule === 'outline' && activeNovel && (
-            <OutlineManager {...outlineProps} />
+            <OutlineManager novel={activeNovel} {...outlineProps} />
           )}
           {creationModule === 'plotOutline' && activeNovel && (
-            <PlotOutlineManager {...plotOutlineProps} />
+            <PlotOutlineManager novel={activeNovel} {...plotOutlineProps} />
           )}
           {creationModule === 'reference' && activeNovel && (
-            <ReferenceManager {...referenceProps} />
+            <ReferenceManager novel={activeNovel} {...referenceProps} />
           )}
         </Suspense>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      {creationModule !== 'menu' && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-[#12151e] border-t border-slate-200 dark:border-gray-800 z-[60] flex items-center justify-between px-2 py-2 pb-safe safe-area-inset-bottom shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+          {[
+            { id: 'menu', icon: <Home className="w-5 h-5" />, label: '菜单' },
+            { id: 'inspiration', icon: <Lightbulb className="w-5 h-5" />, label: '灵感' },
+            { id: 'worldview', icon: <Globe className="w-5 h-5" />, label: '世界' },
+            { id: 'characters', icon: <Users className="w-5 h-5" />, label: '角色' },
+            { id: 'plotOutline', icon: <LayoutList className="w-5 h-5" />, label: '粗纲' },
+            { id: 'outline', icon: <Book className="w-5 h-5" />, label: '章节' },
+            { id: 'reference', icon: <FileText className="w-5 h-5" />, label: '资料' },
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={() => handleSwitchModule(item.id as any)}
+              className={`flex flex-col items-center justify-center gap-0.5 p-1 rounded-lg transition-all ${
+                creationModule === item.id
+                  ? 'text-[var(--theme-color)]'
+                  : 'text-gray-400'
+              }`}
+              style={{ width: `${100 / 7}%` }}
+            >
+              {item.icon}
+              <span className="text-[9px] font-medium leading-none">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

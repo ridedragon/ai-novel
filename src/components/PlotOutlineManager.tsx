@@ -201,6 +201,9 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = React.memo(
     onToggleReferenceSelector
   } = props
 
+  // Safety check
+  if (!novel) return <div className="flex-1 flex items-center justify-center text-gray-500">数据加载中...</div>
+
   const [showChat, setShowChat] = useState(false)
   const [newSetName, setNewSetName] = useState('')
   const [editingSetId, setEditingSetId] = useState<string | null>(null)
@@ -403,7 +406,7 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = React.memo(
             <LayoutList className="w-5 h-5 text-[var(--theme-color)]" />
             <span>剧情粗纲列表</span>
             <span className="md:hidden text-xs text-gray-500 font-normal ml-2">
-              ({novel.plotOutlineSets?.length || 0})
+              ({novel?.plotOutlineSets?.length || 0})
             </span>
           </h3>
           <div className="md:hidden text-gray-400">
@@ -413,8 +416,8 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = React.memo(
 
         <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isMobileListOpen ? 'max-h-[50vh] opacity-100' : 'max-h-0 opacity-0 md:max-h-none md:opacity-100'}`}>
           <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-            {novel.plotOutlineSets?.map(set => (
-              <div 
+            {novel?.plotOutlineSets?.map(set => (
+              <div
                 key={set.id}
                 onClick={() => {
                   onSetActivePlotOutlineSetId(set.id)
@@ -454,7 +457,7 @@ export const PlotOutlineManager: React.FC<PlotOutlineManagerProps> = React.memo(
                 )}
               </div>
             ))}
-            {(!novel.plotOutlineSets || novel.plotOutlineSets.length === 0) && (
+            {(!novel?.plotOutlineSets || novel.plotOutlineSets.length === 0) && (
               <div className="text-center py-8 text-gray-500 text-xs italic">
                 暂无剧情粗纲文件，请新建
               </div>

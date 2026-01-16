@@ -30,6 +30,9 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
   sidebarHeader,
   onBack
 }) => {
+  // Safety check
+  if (!novel) return <div className="flex-1 flex items-center justify-center text-gray-500">数据加载中...</div>
+
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
   const [isUploading, setIsLoading] = useState(false)
@@ -39,23 +42,23 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
   const [folderNameInput, setFolderNameInput] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string, type: 'file' | 'folder' } | null>(null)
 
-  const activeFile = novel.referenceFiles?.find(f => f.id === selectedFileId)
+  const activeFile = novel?.referenceFiles?.find(f => f.id === selectedFileId)
 
   // 筛选当前文件夹下的文件和子文件夹
   const currentFiles = useMemo(() => {
-    return (novel.referenceFiles || []).filter(f => (f.parentId || null) === currentFolderId)
-  }, [novel.referenceFiles, currentFolderId])
+    return (novel?.referenceFiles || []).filter(f => (f.parentId || null) === currentFolderId)
+  }, [novel?.referenceFiles, currentFolderId])
 
   const currentSubFolders = useMemo(() => {
-    return (novel.referenceFolders || []).filter(f => (f.parentId || null) === currentFolderId)
-  }, [novel.referenceFolders, currentFolderId])
+    return (novel?.referenceFolders || []).filter(f => (f.parentId || null) === currentFolderId)
+  }, [novel?.referenceFolders, currentFolderId])
 
   // 面包屑导航
   const breadcrumbs = useMemo(() => {
     const path: ReferenceFolder[] = []
     let currId = currentFolderId
     while (currId) {
-      const folder = novel.referenceFolders?.find(f => f.id === currId)
+      const folder = novel?.referenceFolders?.find(f => f.id === currId)
       if (folder) {
         path.unshift(folder)
         currId = folder.parentId || null
@@ -64,7 +67,7 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
       }
     }
     return path
-  }, [novel.referenceFolders, currentFolderId])
+  }, [novel?.referenceFolders, currentFolderId])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
