@@ -222,36 +222,14 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
 
               {/* Filter Panel - Adaptive: Dropdown on Desktop, Bottom Sheet on Mobile */}
               {showFilterPanel && (
-                <>
-                  {/* Mobile Overlay */}
-                  <div className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] transition-opacity" onClick={() => setShowFilterPanel(false)} />
-                  
-                  <div className={`
-                    z-[101]
-                    md:absolute md:right-0 md:mt-3 md:w-80 md:rounded-2xl md:top-full
-                    fixed bottom-0 left-0 right-0 rounded-t-3xl
-                    bg-white/90 dark:bg-[#18181b]/95 backdrop-blur-xl border border-slate-200 dark:border-slate-700
-                    p-6 shadow-2xl animate-in slide-in-from-bottom-10 md:slide-in-from-top-2 duration-200
-                    safe-area-bottom
-                  `}>
-                    {/* Mobile Handle */}
-                    <div className="md:hidden w-12 h-1.5 bg-slate-200 dark:bg-white/20 rounded-full mx-auto mb-6" />
-                    
-                    <div className="flex items-center justify-between mb-6 md:hidden">
-                      <h2 className="text-xl font-bold text-slate-900 dark:text-white">筛选与排序</h2>
-                      <button
-                        onClick={() => {
-                          setSelectedCategory('全部');
-                          setSelectedStatus('全部');
-                          setSortBy('updated');
-                        }}
-                        className="text-slate-400 text-sm"
-                      >
-                        重置
-                      </button>
-                    </div>
-
-                    <div className="flex flex-col gap-6 max-h-[60vh] overflow-y-auto">
+                <div className={`
+                  hidden md:block
+                  z-[101]
+                  absolute right-0 mt-3 w-80 rounded-2xl top-full
+                  bg-white/90 dark:bg-[#18181b]/95 backdrop-blur-xl border border-slate-200 dark:border-slate-700
+                  p-6 shadow-2xl animate-in slide-in-from-top-2 duration-200
+                `}>
+                  <div className="flex flex-col gap-6">
                       {/* Categories */}
                       <div>
                         <div className="flex items-center gap-2 mb-3 text-slate-400">
@@ -356,18 +334,9 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                       </div>
                     </div>
                     
-                    {/* Mobile Apply Button */}
-                    <div className="mt-8 md:hidden">
-                      <button
-                        onClick={() => setShowFilterPanel(false)}
-                        className="w-full py-4 bg-[var(--theme-color)] text-white font-bold rounded-2xl shadow-xl shadow-[var(--theme-color)]/20 active:scale-[0.98] transition-all"
-                      >
-                        应用筛选
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
+                </div>
+              </div>
+            )}
             </div>
 
             {/* Create Button (Desktop) */}
@@ -545,6 +514,133 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
       >
         <Bot className="w-7 h-7 group-hover:rotate-12 transition-transform" />
       </button>
+
+      {/* Mobile Filter Panel - Rendered outside header context to fix positioning */}
+      {showFilterPanel && (
+        <>
+          <div className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] transition-opacity" onClick={() => setShowFilterPanel(false)} />
+          <div className={`
+            md:hidden
+            z-[101]
+            fixed bottom-0 left-0 right-0 rounded-t-3xl
+            bg-white/90 dark:bg-[#18181b]/95 backdrop-blur-xl border border-slate-200 dark:border-slate-700
+            p-6 shadow-2xl animate-in slide-in-from-bottom-10 duration-200
+            safe-area-bottom
+          `}>
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-200 dark:bg-white/20 rounded-full mx-auto mb-6" />
+            
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">筛选与排序</h2>
+              <button
+                onClick={() => {
+                  setSelectedCategory('全部');
+                  setSelectedStatus('全部');
+                  setSortBy('updated');
+                }}
+                className="text-slate-400 text-sm"
+              >
+                重置
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-6 max-h-[60vh] overflow-y-auto">
+              {/* Categories */}
+              <div>
+                <div className="flex items-center gap-2 mb-3 text-slate-400">
+                  <Layers className="w-5 h-5" />
+                  <span className="text-xs font-bold uppercase tracking-wider">作品题材</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {availableCategories.map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`px-4 py-2 text-sm font-medium rounded-xl border transition-all ${
+                        selectedCategory === cat
+                          ? 'bg-[var(--theme-color)]/20 border-[var(--theme-color)] text-[var(--theme-color)] shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                          : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status */}
+              <div>
+                <div className="flex items-center gap-2 mb-3 text-slate-400">
+                  <Activity className="w-5 h-5" />
+                  <span className="text-xs font-bold uppercase tracking-wider">创作状态</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setSelectedStatus('连载中')}
+                    className={`flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-xl border transition-all ${
+                      selectedStatus === '连载中'
+                        ? 'bg-[var(--theme-color)]/20 border-[var(--theme-color)] text-[var(--theme-color)] shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                        : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-[var(--theme-color)] animate-pulse"></span>
+                    连载中
+                  </button>
+                  <button
+                    onClick={() => setSelectedStatus('已完结')}
+                    className={`flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-xl border transition-all ${
+                      selectedStatus === '已完结'
+                        ? 'bg-[var(--theme-color)]/20 border-[var(--theme-color)] text-[var(--theme-color)] shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                        : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                    已完结
+                  </button>
+                </div>
+              </div>
+
+              {/* Sort */}
+              <div>
+                <div className="flex items-center gap-2 mb-3 text-slate-400">
+                  <ArrowUpDown className="w-5 h-5" />
+                  <span className="text-xs font-bold uppercase tracking-wider">排序方式</span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {[
+                    { id: 'updated', label: '最后更新时间' },
+                    { id: 'words', label: '字数总计' },
+                    { id: 'created', label: '创建日期' }
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setSortBy(opt.id as any)}
+                      className={`flex items-center justify-between w-full px-4 py-3 text-sm rounded-xl transition-colors group border ${
+                        sortBy === opt.id
+                          ? 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/5 text-slate-900 dark:text-white font-medium'
+                          : 'bg-transparent border-transparent text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'
+                      }`}
+                    >
+                      <span>{opt.label}</span>
+                      {sortBy === opt.id && <CheckCircle className="w-4 h-4 text-[var(--theme-color)]" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Apply Button */}
+            <div className="mt-8">
+              <button
+                onClick={() => setShowFilterPanel(false)}
+                className="w-full py-4 bg-[var(--theme-color)] text-white font-bold rounded-2xl shadow-xl shadow-[var(--theme-color)]/20 active:scale-[0.98] transition-all"
+              >
+                应用筛选
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Edit Novel Modal */}
       {editingNovel && (
