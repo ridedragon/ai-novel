@@ -774,15 +774,32 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
         />
       )}
 
-      {/* 预览预览 */}
+      {/* 预览与编辑 */}
       {previewEntry && (
         <div className="fixed inset-0 bg-gray-900 z-[200] flex flex-col animate-in fade-in duration-200">
           <div className="p-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between sticky top-0 z-10">
-            <div className="flex items-center gap-3 overflow-hidden">
+            <div className="flex items-center gap-3 overflow-hidden flex-1">
               <FileText className="w-5 h-5 text-indigo-400 shrink-0" />
-              <h3 className="font-bold text-gray-100 truncate pr-4">{previewEntry.title}</h3>
+              <input
+                type="text"
+                value={previewEntry.title}
+                onChange={e => {
+                  const newTitle = e.target.value;
+                  setPreviewEntry({ ...previewEntry, title: newTitle });
+                  if (editingNodeId) {
+                    const node = nodes.find(n => n.id === editingNodeId);
+                    if (node) {
+                      const newEntries = (node.data.outputEntries || []).map(ent =>
+                        ent.id === previewEntry.id ? { ...ent, title: newTitle } : ent,
+                      );
+                      updateNodeData(editingNodeId, { outputEntries: newEntries });
+                    }
+                  }
+                }}
+                className="bg-transparent border-none outline-none font-bold text-gray-100 truncate w-full focus:ring-1 focus:ring-indigo-500/30 rounded px-1"
+              />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => {
                   const chapterId = parseInt(previewEntry.id.replace('chapter-', ''), 10);
@@ -802,8 +819,25 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
               </button>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-6 whitespace-pre-wrap text-gray-300 leading-relaxed font-mono text-sm">
-            {previewEntry.content}
+          <div className="flex-1 overflow-hidden flex flex-col bg-[#0f111a]">
+            <textarea
+              value={previewEntry.content}
+              onChange={e => {
+                const newContent = e.target.value;
+                setPreviewEntry({ ...previewEntry, content: newContent });
+                if (editingNodeId) {
+                  const node = nodes.find(n => n.id === editingNodeId);
+                  if (node) {
+                    const newEntries = (node.data.outputEntries || []).map(ent =>
+                      ent.id === previewEntry.id ? { ...ent, content: newContent } : ent,
+                    );
+                    updateNodeData(editingNodeId, { outputEntries: newEntries });
+                  }
+                }
+              }}
+              className="flex-1 w-full bg-transparent p-6 text-gray-300 leading-relaxed font-mono text-sm outline-none resize-none"
+              placeholder="输入内容..."
+            />
           </div>
           <div className="p-6 bg-gray-800 border-t border-gray-700 flex gap-4">
             <button

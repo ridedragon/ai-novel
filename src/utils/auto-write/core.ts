@@ -170,15 +170,26 @@ export const getChapterContext = (
 
       // --- 1. 确定当前 Scope 的起始边界 ---
       let scopeStartNum = 1;
-      if (!isAllScope && (filterVolumeId || filterUncategorized)) {
-        const firstInScope = storyChapters.find(c => (filterVolumeId ? c.volumeId === filterVolumeId : !c.volumeId));
+      if (!isAllScope) {
+        // 核心修复：更严谨的分卷匹配逻辑，处理 ID 可能存在的各种假值情况
+        const targetVolIdStr = filterVolumeId ? String(filterVolumeId) : '';
+        const firstInScope = storyChapters.find(c => {
+          const cVolIdStr = c.volumeId ? String(c.volumeId) : '';
+          if (filterUncategorized) return cVolIdStr === '';
+          return cVolIdStr === targetVolIdStr;
+        });
+
         if (firstInScope) {
           scopeStartNum = storyChapters.indexOf(firstInScope) + 1;
+        } else if (filterVolumeId || filterUncategorized) {
+          // 如果在该分卷没找到任何章节（比如正在创建该卷第一章），起点设为当前章位置以触发熔断
+          scopeStartNum = currentNum;
         }
       }
 
-      // --- 核心修复：新卷第一章熔断 ---
-      if (currentNum === scopeStartNum) {
+      // --- 核心修复：新分卷第一章绝对熔断 ---
+      // 在本卷模式下，如果处于该卷的第一章，彻底切断上下文，确保 AI 看不到任何上一卷遗留的正文或总结
+      if (currentNum <= scopeStartNum) {
         return '';
       }
 
@@ -204,7 +215,10 @@ export const getChapterContext = (
         .filter(c => (c.subtype === 'big_summary' || c.subtype === 'small_summary') && c.summaryRange)
         .filter(s => {
           if (isAllScope) return true;
-          // 核心修复：总结（尤其是跨卷的大总结）应当作为全局背景，不受“本卷”作用域限制
+          // 本卷模式下，总结必须属于同一卷，不再发送跨卷大总结
+          if (isVolumeScope) {
+            return s.volumeId === targetChapter.volumeId;
+          }
           return true;
         })
         .filter(s => parseRange(s.summaryRange!).end < currentNum);
@@ -256,8 +270,9 @@ export const getChapterContext = (
         const isSmall = s.subtype === 'small_summary' || (typeof s.title === 'string' && s.title.includes('小总结'));
         if (isSmall) {
           const end = parseRange(s.summaryRange!).end;
-          // 修复：允许总结在大总结之后，且在当前章节之前
-          if (end > bigSumEnd && end < currentNum) {
+          // 核心修复：在本卷模式下，不再过滤掉大总结覆盖范围内的小总结，确保本卷内细节参考不丢失
+          const isVolMode = config.contextScope === 'volume';
+          if ((isVolMode || end > bigSumEnd) && end < currentNum) {
             itemsToSend.push({ type: 'small_summary', end, data: s });
           }
         }
@@ -282,10 +297,11 @@ export const getChapterContext = (
 
       // 生成 Context Content
       itemsToSend.forEach(item => {
+        const isVolMode = config.contextScope === 'volume';
         if (item.type === 'story') {
           contextContent += `### [前文回顾] ${item.data.title}\n${getEffectiveChapterContent(item.data)}\n\n`;
         } else if (item.type === 'big_summary') {
-          contextContent += `【阶段剧情大纲 (${item.data.title})】：\n${item.data.content}\n\n`;
+          contextContent += `【${isVolMode ? '本卷' : '阶段'}剧情回顾大纲 (${item.data.title})】：\n${item.data.content}\n\n`;
         } else {
           contextContent += `【剧情概要 (${item.data.title})】：\n${item.data.content}\n\n`;
         }
@@ -353,15 +369,26 @@ export const getChapterContextMessages = (
 
       // --- 1. 确定当前 Scope 的起始边界 ---
       let scopeStartNum = 1;
-      if (!isAllScope && (filterVolumeId || filterUncategorized)) {
-        const firstInScope = storyChapters.find(c => (filterVolumeId ? c.volumeId === filterVolumeId : !c.volumeId));
+      if (!isAllScope) {
+        // 核心修复：更严谨的分卷匹配逻辑，处理 ID 可能存在的各种假值情况
+        const targetVolIdStr = filterVolumeId ? String(filterVolumeId) : '';
+        const firstInScope = storyChapters.find(c => {
+          const cVolIdStr = c.volumeId ? String(c.volumeId) : '';
+          if (filterUncategorized) return cVolIdStr === '';
+          return cVolIdStr === targetVolIdStr;
+        });
+
         if (firstInScope) {
           scopeStartNum = storyChapters.indexOf(firstInScope) + 1;
+        } else if (filterVolumeId || filterUncategorized) {
+          // 如果在该分卷没找到任何章节（比如正在创建该卷第一章），起点设为当前章位置以触发熔断
+          scopeStartNum = currentNum;
         }
       }
 
-      // --- 核心修复：新卷第一章熔断 ---
-      if (currentNum === scopeStartNum) {
+      // --- 核心修复：新分卷第一章绝对熔断 ---
+      // 在本卷模式下，如果处于该卷的第一章，彻底切断上下文，确保 AI 看不到任何上一卷遗留的正文或总结
+      if (currentNum <= scopeStartNum) {
         return [];
       }
 
@@ -408,11 +435,10 @@ export const getChapterContextMessages = (
         })
         .filter(s => {
           if (isAllScope) return true;
-          // 新增：本卷模式下，总结必须属于同一卷
+          // 本卷模式下，总结必须属于同一卷，不再发送跨卷大总结
           if (isVolumeScope) {
             return s.volumeId === targetChapter.volumeId;
           }
-          // 核心修复：总结（尤其是跨卷的大总结）应当作为全局背景，不受“本卷”作用域限制
           return true;
         })
         .filter(s => s.summaryRange && parseRange(s.summaryRange).end < currentNum);
@@ -463,8 +489,9 @@ export const getChapterContextMessages = (
         const isSmall = s.subtype === 'small_summary' || (typeof s.title === 'string' && s.title.includes('小总结'));
         if (isSmall) {
           const end = parseRange(s.summaryRange!).end;
-          // 修复：允许总结在大总结之后，且在当前章节之前
-          if (end > bigSumEnd && end < currentNum) {
+          // 核心修复：在本卷模式下，不再过滤掉大总结覆盖范围内的小总结，确保本卷内细节参考不丢失
+          const isVolMode = config.contextScope === 'volume';
+          if ((isVolMode || end > bigSumEnd) && end < currentNum) {
             itemsToSend.push({ type: 'small_summary', end, data: s });
           }
         }
@@ -494,9 +521,10 @@ export const getChapterContextMessages = (
             content: `【前文回顾细节 - ${item.data.title}】：\n${getEffectiveChapterContent(item.data)}`,
           });
         } else if (item.type === 'big_summary') {
+          const isVolMode = config.contextScope === 'volume';
           messages.push({
             role: 'system',
-            content: `【全书剧情回顾大纲 (${item.data.title})】：\n${item.data.content}`,
+            content: `【${isVolMode ? '本卷' : '全书'}剧情回顾大纲 (${item.data.title})】：\n${item.data.content}`,
           });
         } else {
           messages.push({

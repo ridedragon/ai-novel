@@ -131,14 +131,21 @@ export class AutoWriteEngine {
             if (beforeResult.newVolumeId) {
               // --- 核心增强：分卷结束时的强制总结 ---
               // 如果发生了分卷切换，说明上一个分卷结束了，触发一次强制总结
-              if (targetVolumeId && targetVolumeId !== beforeResult.newVolumeId) {
+              // 修复：归一化 volumeId 比较，确保“未分类”到“具体分卷”的切换也能触发
+              const currentVolId = targetVolumeId || '';
+              const nextVolId = beforeResult.newVolumeId || '';
+
+              if (currentVolId !== nextVolId) {
                 const lastChapterOfPrevVol = (this.novel.chapters || [])
-                  .filter(c => c.volumeId === targetVolumeId && (!c.subtype || c.subtype === 'story'))
+                  .filter(c => {
+                    const cVolId = c.volumeId || '';
+                    return cVolId === currentVolId && (!c.subtype || c.subtype === 'story');
+                  })
                   .pop();
 
                 if (lastChapterOfPrevVol) {
                   terminal.log(
-                    `[AutoWrite] Volume boundary detected. Triggering final summary for previous volume: ${targetVolumeId}`,
+                    `[AutoWrite] Volume boundary detected (${currentVolId || 'Uncategorized'} -> ${nextVolId}). Triggering final summary for previous volume.`,
                   );
                   const resultNovel = await onChapterComplete(
                     lastChapterOfPrevVol.id,
@@ -204,7 +211,7 @@ export class AutoWriteEngine {
         batchItems.push({
           item,
           idx: currIdx,
-          id: existingChapter ? existingChapter.id : Date.now() + Math.floor(Math.random() * 100000),
+          id: existingChapter ? existingChapter.id : Date.now() + Math.floor(Math.random() * 1000000) + i,
           volumeId: targetVolumeId, // 锁定每一章所属的分卷 ID，防止批量生成时的分卷偏移
         });
       }
@@ -249,19 +256,10 @@ export class AutoWriteEngine {
             if (lastIndexInVol !== -1) {
               newChapters.splice(lastIndexInVol + 1, 0, newChapter);
             } else {
-              // 如果该分卷目前还是空的，则插入到全书最近一个有分卷章节的后面
-              let lastAnyVolIndex = -1;
-              for (let k = newChapters.length - 1; k >= 0; k--) {
-                if (newChapters[k].volumeId) {
-                  lastAnyVolIndex = k;
-                  break;
-                }
-              }
-              if (lastAnyVolIndex !== -1) {
-                newChapters.splice(lastAnyVolIndex + 1, 0, newChapter);
-              } else {
-                newChapters.push(newChapter);
-              }
+              // 核心修复：优化新分卷插入逻辑
+              // 如果该分卷目前是空的，且当前创作顺序明确，则应追加到全书末尾
+              // 这样可以确保新分卷在物理顺序上位于所有已有章节（包括未分类章）之后
+              newChapters.push(newChapter);
             }
           } else {
             newChapters.push(newChapter);

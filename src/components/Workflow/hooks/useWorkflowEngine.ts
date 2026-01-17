@@ -224,6 +224,19 @@ export const useWorkflowEngine = (options: {
         const dynamicContextMessages: any[] = [];
         let dynamicFolder = '';
 
+        // 本卷模式支持：寻找当前上下文的作用域
+        // 如果开启了本卷模式，我们将寻找最近的文件夹节点作为隔离边界
+        let boundaryIndex = 0;
+        if (globalConfig.contextScope === 'volume') {
+          for (let j = currentIndex - 1; j >= 0; j--) {
+            const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
+            if (pNode.data.typeKey === 'createFolder' || pNode.data.typeKey === 'reuseDirectory') {
+              boundaryIndex = j;
+              break;
+            }
+          }
+        }
+
         // 遍历当前节点之前的所有节点
         for (let j = 0; j < currentIndex; j++) {
           // 注意：必须从 nodesRef 获取最新状态，因为 sortedNodes 可能包含过时数据
@@ -239,6 +252,11 @@ export const useWorkflowEngine = (options: {
           }
 
           if (pNode.data.outputEntries && pNode.data.outputEntries.length > 0) {
+            // 本卷模式修复：如果开启了本卷模式，过滤掉隔离边界之前的节点输出
+            if (globalConfig.contextScope === 'volume' && j < boundaryIndex) {
+              continue;
+            }
+
             // 修复：不再只取最后一条，而是合并所有非空条目内容，确保角色/大纲等信息完整
             const typeKey = pNode.data.typeKey;
             const validEntries = pNode.data.outputEntries.filter(e => e.content && e.content.trim());
@@ -1160,14 +1178,22 @@ export const useWorkflowEngine = (options: {
                     map.set(dc.id, dc);
                   }
                 });
-                localNovel = { ...localNovel, chapters: Array.from(map.values()) };
+                // 核心修复：同时合并章节和分卷列表，防止新创建的分卷被旧快照覆盖丢失
+                localNovel = {
+                  ...localNovel,
+                  chapters: Array.from(map.values()),
+                  volumes:
+                    up.volumes && up.volumes.length > (localNovel.volumes?.length || 0)
+                      ? up.volumes
+                      : localNovel.volumes,
+                };
                 updateLocalAndGlobal(localNovel);
               },
-              async (cid, cont, up) => {
+              async (cid, cont, up, force) => {
                 if (!checkActive()) return;
                 if (up) localNovel = up;
                 if (globalConfig.onChapterComplete) {
-                  const res = await (globalConfig.onChapterComplete as any)(cid, cont, localNovel, false, startRunId);
+                  const res = await (globalConfig.onChapterComplete as any)(cid, cont, localNovel, force, startRunId);
                   if (res?.chapters) localNovel = res;
                 }
                 return localNovel;

@@ -38,9 +38,17 @@ export const OutputList = ({ data, onUpdate, onPreview, isMobile = false }: Outp
   if (isMobile) {
     return (
       <div className="space-y-4 pt-6 border-t border-gray-800">
-        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-          产出 ({(data.outputEntries || []).length})
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+            产出 ({(data.outputEntries || []).length})
+          </label>
+          <button
+            onClick={handleAddEntry}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/20 text-indigo-400 rounded-xl text-[10px] font-bold"
+          >
+            <Plus className="w-3.5 h-3.5" /> 新增
+          </button>
+        </div>
         <div className="space-y-3">
           {data.outputEntries?.map((entry, idx) => {
             const isFirst = idx === 0;
