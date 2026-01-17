@@ -129,6 +129,35 @@ export class AutoWriteEngine {
               this.novel = beforeResult.updatedNovel;
             }
             if (beforeResult.newVolumeId) {
+              // --- 核心增强：分卷结束时的强制总结 ---
+              // 如果发生了分卷切换，说明上一个分卷结束了，触发一次强制总结
+              if (targetVolumeId && targetVolumeId !== beforeResult.newVolumeId) {
+                const lastChapterOfPrevVol = (this.novel.chapters || [])
+                  .filter(c => c.volumeId === targetVolumeId && (!c.subtype || c.subtype === 'story'))
+                  .pop();
+
+                if (lastChapterOfPrevVol) {
+                  terminal.log(
+                    `[AutoWrite] Volume boundary detected. Triggering final summary for previous volume: ${targetVolumeId}`,
+                  );
+                  const resultNovel = await onChapterComplete(
+                    lastChapterOfPrevVol.id,
+                    lastChapterOfPrevVol.content,
+                    this.novel,
+                    true,
+                  );
+                  // 同步由于总结产生的新小说状态
+                  if (
+                    checkActive() &&
+                    resultNovel &&
+                    typeof resultNovel === 'object' &&
+                    (resultNovel as Novel).chapters
+                  ) {
+                    this.novel = resultNovel as Novel;
+                  }
+                }
+              }
+
               // 立即切换当前及后续章节的目标分卷
               targetVolumeId = beforeResult.newVolumeId;
               terminal.log(`[AutoWriteEngine] Switched targetVolumeId to ${targetVolumeId} for chapter: ${item.title}`);

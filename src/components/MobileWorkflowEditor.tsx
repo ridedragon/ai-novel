@@ -532,12 +532,8 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
           {isRunning ? (
             <button
               onClick={() => {
-                if (confirm('是否强制停止当前任务？\n如果任务长时间卡在“准备中”，请点击确定。')) {
+                if (confirm('是否强制停止当前任务？')) {
                   stopWorkflow();
-                  // 强制兜底重置状态，防止 stopWorkflow 因异常未完全执行
-                  setTimeout(() => {
-                    workflowManager.stop();
-                  }, 200);
                 }
               }}
               className="flex flex-col items-center justify-center bg-red-600/20 text-red-500 p-1.5 rounded-lg border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-pulse"

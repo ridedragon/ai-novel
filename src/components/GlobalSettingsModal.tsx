@@ -402,6 +402,7 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                         {[
                           { value: 'all', label: '整本书 (全书剧情回顾)' },
                           { value: 'currentVolume', label: '当前卷 (仅本卷剧情)' },
+                          { value: 'volume', label: '本卷模式 (上下文严格隔离)' },
                         ].map(option => (
                           <button
                             key={option.value}

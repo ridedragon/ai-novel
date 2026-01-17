@@ -239,13 +239,12 @@ export const useWorkflowEngine = (options: {
           }
 
           if (pNode.data.outputEntries && pNode.data.outputEntries.length > 0) {
-            // 关键：始终只取最新的 OutputEntry
-            const latestEntry = pNode.data.outputEntries[pNode.data.outputEntries.length - 1];
-            if (latestEntry && latestEntry.content) {
-              // 用户需求：每个节点产生的内容是单独的system发送，且使用标准标题
-              const typeKey = pNode.data.typeKey;
-              let title = '';
+            // 修复：不再只取最后一条，而是合并所有非空条目内容，确保角色/大纲等信息完整
+            const typeKey = pNode.data.typeKey;
+            const validEntries = pNode.data.outputEntries.filter(e => e.content && e.content.trim());
 
+            if (validEntries.length > 0) {
+              let title = '';
               switch (typeKey) {
                 case 'worldview':
                   title = '小说世界观设定';
@@ -272,9 +271,19 @@ export const useWorkflowEngine = (options: {
                   title = (pNode.data.typeLabel || pNode.data.label || typeKey || '节点') + '输出';
               }
 
+              // 合并内容，如果是角色或设定类，使用换行分隔
+              const combinedContent = validEntries
+                .map(e => {
+                  if (typeKey === 'characters' || typeKey === 'worldview' || typeKey === 'outline') {
+                    return `· ${e.title}: ${e.content}`;
+                  }
+                  return e.content;
+                })
+                .join('\n');
+
               dynamicContextMessages.push({
                 role: 'system',
-                content: `【${title}】：\n${latestEntry.content}`,
+                content: `【${title}】：\n${combinedContent}`,
               });
             }
           }
@@ -1025,13 +1034,30 @@ export const useWorkflowEngine = (options: {
         let summaryContextMessages: any[] = [];
         // 只有当存在章节时才尝试获取总结上下文，且排除大纲生成节点（避免大纲生成时看到太多正文细节）
         if (localNovel.chapters && localNovel.chapters.length > 0 && !isOutlineGen) {
+          // --- 核心增强：节点感知的卷上下文 ---
+          // 如果是本卷模式，尝试寻找该节点关联的卷或最后一个章节所属的卷
+          let effectiveVolumeId: string | undefined = undefined;
+
+          if (globalConfig.contextScope === 'volume') {
+            // 优先级：节点显式指定的卷 > 工作流当前定位的卷 > 最后一章的卷
+            effectiveVolumeId = (node.data.targetVolumeId as string) || workflowManager.getActiveVolumeAnchor() || '';
+            if (!effectiveVolumeId) {
+              const lastWithVol = [...localNovel.chapters].reverse().find(c => c.volumeId);
+              effectiveVolumeId = lastWithVol?.volumeId;
+            }
+          }
+
           const lastChapter = localNovel.chapters[localNovel.chapters.length - 1];
-          // 使用默认配置获取上下文
-          summaryContextMessages = getChapterContextMessages(localNovel, lastChapter, {
-            longTextMode: true,
-            contextScope: 'all', // 获取全局总结
-            contextChapterCount: 1, // 默认带一章正文回顾
-          });
+          // 使用节点感知的卷 ID 过滤总结
+          summaryContextMessages = getChapterContextMessages(
+            localNovel,
+            { ...lastChapter, volumeId: effectiveVolumeId || lastChapter.volumeId },
+            {
+              longTextMode: true,
+              contextScope: globalConfig.contextScope || 'all',
+              contextChapterCount: globalConfig.contextChapterCount || 1,
+            },
+          );
         }
 
         const formatMulti = (text: string) => {
@@ -1173,7 +1199,8 @@ export const useWorkflowEngine = (options: {
               abortControllerRef.current?.signal,
               startRunId,
               // 核心修复：传递结构化的工作流上下文消息数组
-              dynamicContextMessages,
+              // 移除冗余的“小说大纲”条目，因为 AutoWriteEngine 内部会自带更智能的“待创作章节大纲参考”
+              dynamicContextMessages.filter(m => !m.content.startsWith('【小说大纲】：')),
             );
           }
           if (checkActive())
@@ -1468,7 +1495,8 @@ export const useWorkflowEngine = (options: {
         }
       }
 
-      if (!stopRequestedRef.current) {
+      // 只有当前实例仍是活跃 RunID 时，才执行自动完成逻辑 (防止被 pause/abort 的实例错误触发 stop)
+      if (!stopRequestedRef.current && workflowManager.isRunActive(startRunId)) {
         workflowManager.stop();
         setEdges(eds => eds.map(e => ({ ...e, animated: false })));
         keepAliveManager.disable();

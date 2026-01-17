@@ -146,8 +146,9 @@ export const getChapterContext = (
     let filterVolumeId: string | null = null;
     let filterUncategorized = false;
     const isAllScope = config.contextScope === 'all';
+    const isVolumeScope = config.contextScope === 'volume';
 
-    if (config.contextScope === 'current') {
+    if (config.contextScope === 'current' || isVolumeScope) {
       if (targetChapter.volumeId) {
         filterVolumeId = targetChapter.volumeId;
       } else {
@@ -203,9 +204,8 @@ export const getChapterContext = (
         .filter(c => (c.subtype === 'big_summary' || c.subtype === 'small_summary') && c.summaryRange)
         .filter(s => {
           if (isAllScope) return true;
-          if (filterVolumeId) return s.volumeId === filterVolumeId;
-          if (filterUncategorized) return !s.volumeId;
-          return false;
+          // 核心修复：总结（尤其是跨卷的大总结）应当作为全局背景，不受“本卷”作用域限制
+          return true;
         })
         .filter(s => parseRange(s.summaryRange!).end < currentNum);
 
@@ -224,7 +224,8 @@ export const getChapterContext = (
 
       // 计算正文回看起点
       // 规则：最近一次大总结结束位置 - 上下文参考章节数 + 1
-      let contextStartNum = Math.max(scopeStartNum, currentNum - contextChapterCount);
+      // 核心修复：如果没有大总结，则发送本 Scope 内的所有章节（满足用户“发送全部章节”需求）
+      let contextStartNum = scopeStartNum;
       if (latestBigSummary) {
         const bigSumEnd = parseRange(latestBigSummary.summaryRange!).end;
         // 如果有大总结，起点设为大总结结束前 N 章 (Context Depth)，确保包含大总结之后的所有章节
@@ -328,8 +329,9 @@ export const getChapterContextMessages = (
     let filterVolumeId: string | null = null;
     let filterUncategorized = false;
     const isAllScope = config.contextScope === 'all';
+    const isVolumeScope = config.contextScope === 'volume';
 
-    if (config.contextScope === 'current') {
+    if (config.contextScope === 'current' || isVolumeScope) {
       if (targetChapter.volumeId) {
         filterVolumeId = targetChapter.volumeId;
       } else {
@@ -387,15 +389,33 @@ export const getChapterContextMessages = (
             c.subtype === 'big_summary' ||
             c.subtype === 'small_summary' ||
             (typeof c.title === 'string' && (c.title.includes('总结') || c.title.includes('摘要')));
-          return isSum && !!c.summaryRange;
+
+          // 宽松检查：如果有 summaryRange 则通过，否则尝试从标题解析
+          if (c.summaryRange) return isSum;
+          if (isSum && typeof c.title === 'string' && /\d+-\d+/.test(c.title)) return true;
+
+          return false;
+        })
+        .map(c => {
+          // 归一化：如果没有 summaryRange，尝试从标题提取
+          if (!c.summaryRange && typeof c.title === 'string') {
+            const match = c.title.match(/(\d+)-(\d+)/);
+            if (match) {
+              return { ...c, summaryRange: `${match[1]}-${match[2]}` };
+            }
+          }
+          return c;
         })
         .filter(s => {
           if (isAllScope) return true;
-          if (filterVolumeId) return s.volumeId === filterVolumeId;
-          if (filterUncategorized) return !s.volumeId;
-          return false;
+          // 新增：本卷模式下，总结必须属于同一卷
+          if (isVolumeScope) {
+            return s.volumeId === targetChapter.volumeId;
+          }
+          // 核心修复：总结（尤其是跨卷的大总结）应当作为全局背景，不受“本卷”作用域限制
+          return true;
         })
-        .filter(s => parseRange(s.summaryRange!).end < currentNum);
+        .filter(s => s.summaryRange && parseRange(s.summaryRange).end < currentNum);
 
       // 去重
       const rangeMap = new Map<string, Chapter>();
@@ -412,7 +432,8 @@ export const getChapterContextMessages = (
 
       // 计算正文回看起点
       // 规则：最近一次大总结结束位置 - 上下文参考章节数 + 1
-      let contextStartNum = Math.max(scopeStartNum, currentNum - contextChapterCount);
+      // 核心修复：如果没有大总结，则发送本 Scope 内的所有章节（满足用户“发送全部章节”需求）
+      let contextStartNum = scopeStartNum;
       if (latestBigSummary) {
         const bigSumEnd = parseRange(latestBigSummary.summaryRange!).end;
         // 如果有大总结，起点设为大总结结束前 N 章 (Context Depth)，确保包含大总结之后的所有章节

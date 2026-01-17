@@ -56,14 +56,8 @@ export const buildWorldInfoMessages = (
   }
 
   const characterSets = novel.characterSets || [];
-  // 优先尝试匹配特定集合，如果未匹配到或未指定，则发送所有启用的集合
-  let relevantCharacters = activeOutlineSetId
-    ? characterSets.filter(s => s.id === activeOutlineSetId || (targetName && s.name === targetName))
-    : characterSets;
-
-  if (relevantCharacters.length === 0) {
-    relevantCharacters = characterSets;
-  }
+  // 修复：不再根据 activeOutlineSetId 过滤角色，始终发送所有集合，确保全局主角不丢失
+  let relevantCharacters = characterSets;
 
   if (relevantCharacters.length > 0) {
     let context = '【当前小说角色档案】：\n';
@@ -508,15 +502,37 @@ export const getChapterContextMessages = (
         }
       }
 
+      // 3. 收集总结 (兼容识别逻辑)
       const allSummaries = chapters
-        .filter(c => (c.subtype === 'big_summary' || c.subtype === 'small_summary') && c.summaryRange)
+        .filter(c => {
+          const isSum =
+            c.subtype === 'big_summary' ||
+            c.subtype === 'small_summary' ||
+            (typeof c.title === 'string' && (c.title.includes('总结') || c.title.includes('摘要')));
+
+          if (c.summaryRange) return isSum;
+          if (isSum && typeof c.title === 'string' && /\d+-\d+/.test(c.title)) return true;
+
+          return false;
+        })
+        .map(c => {
+          if (!c.summaryRange && typeof c.title === 'string') {
+            const match = c.title.match(/(\d+)-(\d+)/);
+            if (match) {
+              return { ...c, summaryRange: `${match[1]}-${match[2]}` };
+            }
+          }
+          return c;
+        })
         .filter(s => {
           if (config.contextScope === 'all') return true;
           if (filterVolumeId) return s.volumeId === filterVolumeId;
           if (filterUncategorized) return !s.volumeId;
           return false;
         })
-        .filter(s => parseRange(s.summaryRange!).end < currentNum);
+        .filter(s => s.summaryRange && parseRange(s.summaryRange).end < currentNum);
+
+      terminal.log(`[Context] Ch:${currentNum} Summaries:${allSummaries.length}`);
 
       const rangeMap = new Map<string, Chapter>();
       allSummaries.forEach(s => {
@@ -529,6 +545,10 @@ export const getChapterContextMessages = (
       const latestBigSummary = uniqueSummaries
         .filter(s => s.subtype === 'big_summary' || (typeof s.title === 'string' && s.title.includes('大总结')))
         .sort((a, b) => parseRange(b.summaryRange!).end - parseRange(a.summaryRange!).end)[0];
+
+      if (latestBigSummary) {
+        terminal.log(`[Context] Picked Big Summary: ${latestBigSummary.title}`);
+      }
 
       // 计算正文回看起点
       // 规则：最近一次大总结结束位置 - 上下文参考章节数 + 1
@@ -575,10 +595,11 @@ export const getChapterContextMessages = (
         }
       });
 
-      // 排序：按结束位置 -> 类型 (Small < Big < Story)
+      // 排序：按结束位置 -> 类型 (Story < Small < Big)
       itemsToSend.sort((a, b) => {
         if (a.end !== b.end) return a.end - b.end;
-        const typeOrder = { small_summary: 0, big_summary: 1, story: 2 };
+        // 修正优先级：Story < Small < Big，确保 Summary 在同位置 Story 之后（作为总结）
+        const typeOrder = { story: 0, small_summary: 1, big_summary: 2 };
         return typeOrder[a.type] - typeOrder[b.type];
       });
 
