@@ -1,8 +1,10 @@
 import OpenAI from 'openai';
 import terminal from 'virtual:terminal';
-import { ChapterVersion, Novel, OutlineItem, PromptItem, RegexScript } from '../../types';
+import { ChapterVersion, ChatMessage, Novel, OutlineItem, PromptItem, RegexScript } from '../../types';
 import { buildWorldInfoMessages, getChapterContextMessages, processTextWithRegex } from './core';
 import { AutoWriteConfig } from './types';
+
+export { buildWorldInfoMessages, getChapterContextMessages, processTextWithRegex } from './core';
 
 export class AutoWriteEngine {
   private config: AutoWriteConfig;
@@ -46,6 +48,7 @@ export class AutoWriteEngine {
     outlineSetId: string | null = null,
     signal?: AbortSignal,
     runId?: string | null,
+    workflowContext?: string | ChatMessage[],
   ) {
     // 核心增强 (Bug 1 反馈加固)：引擎级分卷继承机制
     // 如果外部未传入目标分卷（由于快照丢失或重启），自动回溯现有章节的最后一章所属的分卷
@@ -302,17 +305,35 @@ export class AutoWriteEngine {
           // 0. 基础系统提示词 (System)
           messages.push({ role: 'system', content: this.config.systemPrompt });
 
+          // 核心功能：接收工作流上下文
+          if (workflowContext) {
+            if (typeof workflowContext === 'string') {
+              // 兼容旧的字符串模式：转换为独立 System 消息，不再合并到 System Prompt
+              if (workflowContext.trim()) {
+                messages.push({
+                  role: 'system',
+                  content: workflowContext,
+                });
+              }
+            } else if (Array.isArray(workflowContext)) {
+              // 新增：支持直接插入消息数组，满足用户“单独system发送”的需求
+              messages.push(...workflowContext);
+            }
+          }
+
           // 1. 注入世界观和角色信息 (System)
           messages.push(...worldInfoMessages);
 
           // 核心修复 (Bug 3)：调整待创作大纲顺序，紧跟在【角色档案】之后，并确保 system 角色
           if (includeFullOutline) {
             // 过滤已完成章节的大纲，只发送未写的和当前批次的大纲
+            // 增强：忽略标题首尾空格，提高匹配准确性
             const filteredOutline = outline.filter(item => {
+              const cleanItemTitle = item.title.trim();
               const isCompleted = (this.novel.chapters || []).some(
-                c => c.title === item.title && c.content && c.content.trim().length > 10,
+                c => (c.title?.trim() || '') === cleanItemTitle && c.content && c.content.trim().length > 10,
               );
-              const isCurrentBatch = batchItems.some(b => b.item.title === item.title);
+              const isCurrentBatch = batchItems.some(b => b.item.title.trim() === cleanItemTitle);
               return !isCompleted || isCurrentBatch;
             });
 

@@ -3,7 +3,7 @@ import OpenAI from 'openai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
 import { GeneratorPreset, GeneratorPrompt, LoopInstruction, Novel } from '../../../types';
-import { AutoWriteEngine } from '../../../utils/auto-write';
+import { AutoWriteEngine, getChapterContextMessages } from '../../../utils/auto-write';
 import { keepAliveManager } from '../../../utils/KeepAliveManager';
 import { storage } from '../../../utils/storage';
 import { workflowManager } from '../../../utils/WorkflowManager';
@@ -218,17 +218,77 @@ export const useWorkflowEngine = (options: {
 
       sortedNodes = sortedNodes.map((sn, idx) => (idx >= startIndex ? resetNodeData(sn) : sn));
 
-      let accumContext = '';
-      let lastNodeOutput = '';
-      let currentWorkflowFolder = '';
+      // 核心重构：动态构建上下文函数
+      // 解决“循环中只使用最新内容”和“节点信息传递”的问题
+      const buildDynamicContext = (currentIndex: number) => {
+        const dynamicContextMessages: any[] = [];
+        let dynamicFolder = '';
 
+        // 遍历当前节点之前的所有节点
+        for (let j = 0; j < currentIndex; j++) {
+          // 注意：必须从 nodesRef 获取最新状态，因为 sortedNodes 可能包含过时数据
+          const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
+
+          if (pNode.data.typeKey === 'createFolder' || pNode.data.typeKey === 'reuseDirectory') {
+            dynamicFolder = pNode.data.folderName || dynamicFolder;
+          } else if (pNode.data.typeKey === 'userInput') {
+            dynamicContextMessages.push({
+              role: 'user',
+              content: `【用户全局输入】：\n${pNode.data.instruction}`,
+            });
+          }
+
+          if (pNode.data.outputEntries && pNode.data.outputEntries.length > 0) {
+            // 关键：始终只取最新的 OutputEntry
+            const latestEntry = pNode.data.outputEntries[pNode.data.outputEntries.length - 1];
+            if (latestEntry && latestEntry.content) {
+              // 用户需求：每个节点产生的内容是单独的system发送，且使用标准标题
+              const typeKey = pNode.data.typeKey;
+              let title = '';
+
+              switch (typeKey) {
+                case 'worldview':
+                  title = '小说世界观设定';
+                  break;
+                case 'characters':
+                  title = '小说角色档案';
+                  break;
+                case 'plotOutline':
+                  title = '小说粗纲';
+                  break;
+                case 'outline':
+                  title = '小说大纲';
+                  break;
+                case 'inspiration':
+                  title = '小说灵感集';
+                  break;
+                case 'aiChat':
+                  title = '小说聊天节点内容';
+                  break;
+                case 'saveToVolume':
+                  title = '小说分卷';
+                  break;
+                default:
+                  title = (pNode.data.typeLabel || pNode.data.label || typeKey || '节点') + '输出';
+              }
+
+              dynamicContextMessages.push({
+                role: 'system',
+                content: `【${title}】：\n${latestEntry.content}`,
+              });
+            }
+          }
+        }
+        return { dynamicContextMessages, dynamicFolder };
+      };
+
+      // 恢复状态：如果是从中间开始，需要先恢复 workflowManager 的一些状态（如 activeVolume）
+      let currentWorkflowFolder = '';
       if (startIndex > 0) {
         for (let j = 0; j < startIndex; j++) {
-          const prevNode = sortedNodes[j];
+          const prevNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
           if (prevNode.data.typeKey === 'createFolder' || prevNode.data.typeKey === 'reuseDirectory') {
             currentWorkflowFolder = prevNode.data.folderName || currentWorkflowFolder;
-          } else if (prevNode.data.typeKey === 'userInput') {
-            accumContext += `【全局输入】：\n${prevNode.data.instruction}\n\n`;
           } else if (prevNode.data.typeKey === 'saveToVolume') {
             if (prevNode.data.splitRules && (prevNode.data.splitRules as any[]).length > 0) {
               workflowManager.setPendingSplits(prevNode.data.splitRules as any[]);
@@ -237,23 +297,14 @@ export const useWorkflowEngine = (options: {
               workflowManager.setActiveVolumeAnchor(prevNode.data.targetVolumeId as string);
             }
           }
-
-          if (!workflowManager.getActiveVolumeAnchor() && localNovel.chapters && localNovel.chapters.length > 0) {
-            for (let k = localNovel.chapters.length - 1; k >= 0; k--) {
-              const chap = localNovel.chapters[k];
-              if (chap.volumeId) {
-                workflowManager.setActiveVolumeAnchor(chap.volumeId);
-                break;
-              }
+        }
+        if (!workflowManager.getActiveVolumeAnchor() && localNovel.chapters && localNovel.chapters.length > 0) {
+          for (let k = localNovel.chapters.length - 1; k >= 0; k--) {
+            const chap = localNovel.chapters[k];
+            if (chap.volumeId) {
+              workflowManager.setActiveVolumeAnchor(chap.volumeId);
+              break;
             }
-          }
-
-          if (prevNode.data.outputEntries && prevNode.data.outputEntries.length > 0) {
-            const allHistory = [...prevNode.data.outputEntries]
-              .reverse()
-              .map(e => e.content)
-              .join('\n\n---\n\n');
-            lastNodeOutput += `【${prevNode.data.typeLabel}输出历史】：\n${allHistory}\n\n`;
           }
         }
       }
@@ -276,6 +327,13 @@ export const useWorkflowEngine = (options: {
           stopRequestedRef.current = true;
           return;
         }
+
+        // 动态构建当前节点的上下文
+        const { dynamicContextMessages, dynamicFolder } = buildDynamicContext(i);
+        // 如果当前节点没有指定文件夹，且上下文中有文件夹，更新 currentWorkflowFolder
+        if (!currentWorkflowFolder && dynamicFolder) currentWorkflowFolder = dynamicFolder;
+        // 如果动态扫描到了更新的文件夹，覆盖它
+        if (dynamicFolder) currentWorkflowFolder = dynamicFolder;
 
         // --- Save To Volume Node ---
         if (node.data.typeKey === 'saveToVolume') {
@@ -387,10 +445,7 @@ export const useWorkflowEngine = (options: {
             }
           });
 
-          const planningFinalContextStr = `${planningRefContext}${accumContext}${
-            lastNodeOutput ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''
-          }`;
-
+          // 格式化附件函数
           const formatAtts = (text: string) => {
             if (planningAttachments.length === 0) return text;
             const content: any[] = [{ type: 'text', text }];
@@ -407,32 +462,48 @@ export const useWorkflowEngine = (options: {
 
           const nodePromptItems = (node.data.promptItems as GeneratorPrompt[]) || [];
           let planningMessages: any[] = [];
+
+          // 1. 构建 System 和自定义 Prompt
           if (nodePromptItems.length > 0) {
-            let hasContextPlaceholder = false;
-            planningMessages = nodePromptItems
+            // 过滤出自定义的 Prompts
+            const customPrompts = nodePromptItems
               .filter(p => p.enabled !== false)
               .map(p => {
-                if (p.content.includes('{{context}}')) hasContextPlaceholder = true;
-                const content = workflowManager.interpolate(p.content.replace('{{context}}', planningFinalContextStr));
+                // 如果有 {{context}} 占位符，这里简单替换为空，因为我们会单独注入 Context 消息
+                // 或者我们可以保留它，但这比较复杂。现在的逻辑是将 Context 放在 System 之后。
+                const content = workflowManager.interpolate(p.content.replace('{{context}}', ''));
                 return { role: p.role, content: p.role === 'user' ? formatAtts(content) : content };
               });
-            if (!hasContextPlaceholder && planningFinalContextStr.trim()) {
-              planningMessages.unshift({
-                role: 'user',
-                content: formatAtts(`【参考背景与全局输入】：\n${planningFinalContextStr}`),
-              });
-            }
+            planningMessages.push(...customPrompts);
           } else {
-            planningMessages = [
-              { role: 'system', content: '你是一名拥有丰富经验特的长篇小说架构师。' },
-              {
-                role: 'user',
-                content: formatAtts(`请根据以下参考资料和全局要求规划分卷大纲：\n\n${planningFinalContextStr}`),
-              },
-            ];
+            planningMessages.push({ role: 'system', content: '你是一名拥有丰富经验特的长篇小说架构师。' });
           }
-          if (node.data.instruction)
-            planningMessages.push({ role: 'user', content: workflowManager.interpolate(node.data.instruction) });
+
+          // 2. 插入前序节点上下文 (System/User Messages)
+          // 必须放在基础设定之后，具体指令之前
+          planningMessages.push(...dynamicContextMessages);
+
+          // 3. 插入参考资料 (Worldview, Files etc) - 仍作为文本参考
+          if (planningRefContext.trim()) {
+            planningMessages.push({
+              role: 'system',
+              content: `【小说知识库和参考】：\n${planningRefContext}`,
+            });
+          }
+
+          // 4. 插入本节点指令
+          if (node.data.instruction) {
+            planningMessages.push({
+              role: 'user',
+              content: formatAtts(workflowManager.interpolate(node.data.instruction)),
+            });
+          } else if (planningMessages.length === 0 || planningMessages[planningMessages.length - 1].role !== 'user') {
+            // 确保最后有一条 User 消息
+            planningMessages.push({
+              role: 'user',
+              content: formatAtts('请根据以上信息进行规划。'),
+            });
+          }
 
           let aiResponse = '';
           let volRetryCount = 0;
@@ -528,7 +599,7 @@ export const useWorkflowEngine = (options: {
             throw new Error('无法从 AI 返回的内容中解析出分卷规划。');
           }
 
-          lastNodeOutput += `【分卷规划内容】：\n${node.data.volumeContent || aiResponse}\n\n`;
+          // lastNodeOutput += ... (已移除，改用动态构建)
           setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
           continue;
         }
@@ -714,7 +785,6 @@ export const useWorkflowEngine = (options: {
 
         if (node.data.typeKey === 'userInput') {
           const interpolatedInput = workflowManager.interpolate(node.data.instruction);
-          accumContext += `【全局输入】：\n${interpolatedInput}\n\n`;
           if (node.data.variableBinding?.length)
             workflowManager.processVariableBindings(node.data.variableBinding, interpolatedInput);
           await syncNodeStatus(node.id, { status: 'completed' }, i);
@@ -782,7 +852,7 @@ export const useWorkflowEngine = (options: {
               const genTemp =
                 node.data.overrideAiConfig && node.data.temperature !== undefined
                   ? node.data.temperature
-                  : genPreset?.temperature ?? 0.7;
+                  : (genPreset?.temperature ?? 0.7);
 
               console.groupCollapsed(
                 `[Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}${
@@ -870,10 +940,43 @@ export const useWorkflowEngine = (options: {
             id?.startsWith?.('pending:') ? s?.find(x => x.name === id.replace('pending:', ''))?.id || id : id,
           );
 
-        const sW = resolvePending([...(node.data.selectedWorldviewSets || [])], localNovel.worldviewSets);
-        const sC = resolvePending([...(node.data.selectedCharacterSets || [])], localNovel.characterSets);
-        const sO = resolvePending([...(node.data.selectedOutlineSets || [])], localNovel.outlineSets);
-        const sI = resolvePending([...(node.data.selectedInspirationSets || [])], localNovel.inspirationSets);
+        const isLoopNode = workflowManager.getContextVar('loop_index');
+
+        // 核心修复 (Bug 6): 动态集合注入
+        // 在循环模式下，如果用户未显式选择集合，或者存在动态创建的集合（如“第一卷角色”），
+        // 尝试自动注入当前 localNovel 中所有相关的集合，防止循环中信息丢失。
+        // 特别是对于“大纲生成”类节点，需要过滤掉粗纲和大纲本身（避免递归引用），只保留设定类信息。
+        const isOutlineGen = node.data.typeKey === 'outline' || node.data.typeKey === 'plotOutline';
+
+        const autoInject = (selectedIds: string[], allSets: any[] | undefined) => {
+          // 如果已手动选择，则仅解析手动选择的
+          if (selectedIds && selectedIds.length > 0) {
+            return resolvePending([...selectedIds], allSets);
+          }
+          // 如果是循环模式且未手动选择，默认全选 (除了大纲生成时的大纲引用)
+          if (isLoopNode && allSets) {
+            return allSets.map(s => s.id);
+          }
+          return [];
+        };
+
+        const sW = autoInject(node.data.selectedWorldviewSets || [], localNovel.worldviewSets);
+        const sC = autoInject(node.data.selectedCharacterSets || [], localNovel.characterSets);
+
+        // 大纲和灵感保持原样，或者仅在大纲生成时不自动注入大纲
+        let sO = resolvePending([...(node.data.selectedOutlineSets || [])], localNovel.outlineSets);
+        if (
+          isLoopNode &&
+          !isOutlineGen &&
+          (!node.data.selectedOutlineSets || node.data.selectedOutlineSets.length === 0)
+        ) {
+          sO = (localNovel.outlineSets || []).map(s => s.id);
+        }
+
+        let sI = resolvePending([...(node.data.selectedInspirationSets || [])], localNovel.inspirationSets);
+        if (isLoopNode && (!node.data.selectedInspirationSets || node.data.selectedInspirationSets.length === 0)) {
+          sI = (localNovel.inspirationSets || []).map(s => s.id);
+        }
 
         sW.forEach(id => {
           const s = localNovel.worldviewSets?.find(x => x.id === id);
@@ -915,10 +1018,21 @@ export const useWorkflowEngine = (options: {
               });
         });
 
-        const isDup = lastNodeOutput && refContext.includes(lastNodeOutput.substring(0, 100));
-        const finalContext = `${refContext}${accumContext}${
-          !isDup && lastNodeOutput ? `【前序节点累积产出】：\n${lastNodeOutput}\n\n` : ''
-        }`;
+        // 重构 Standard AI Call 的 Context 构建
+        // 核心修复 (Bug 6): 增强 Context 构建，注入总结信息
+        // 引入 getChapterContextMessages 获取“最新大总结 + 后续章节 + 小总结”
+
+        let summaryContextMessages: any[] = [];
+        // 只有当存在章节时才尝试获取总结上下文，且排除大纲生成节点（避免大纲生成时看到太多正文细节）
+        if (localNovel.chapters && localNovel.chapters.length > 0 && !isOutlineGen) {
+          const lastChapter = localNovel.chapters[localNovel.chapters.length - 1];
+          // 使用默认配置获取上下文
+          summaryContextMessages = getChapterContextMessages(localNovel, lastChapter, {
+            longTextMode: true,
+            contextScope: 'all', // 获取全局总结
+            contextChapterCount: 1, // 默认带一章正文回顾
+          });
+        }
 
         const formatMulti = (text: string) => {
           if (!attachments.length) return text;
@@ -970,7 +1084,7 @@ export const useWorkflowEngine = (options: {
             temperature:
               node.data.overrideAiConfig && node.data.temperature !== undefined
                 ? node.data.temperature
-                : (preset as any)?.temperature ?? globalConfig.temperature,
+                : ((preset as any)?.temperature ?? globalConfig.temperature),
             systemPrompt:
               (node.data.overrideAiConfig
                 ? node.data.promptItems
@@ -1058,6 +1172,8 @@ export const useWorkflowEngine = (options: {
               outlineSetId,
               abortControllerRef.current?.signal,
               startRunId,
+              // 核心修复：传递结构化的工作流上下文消息数组
+              dynamicContextMessages,
             );
           }
           if (checkActive())
@@ -1068,30 +1184,48 @@ export const useWorkflowEngine = (options: {
 
         // --- Standard AI Messages ---
         let messages: any[] = [];
+
+        // 1. 获取预设或自定义 Prompts
+        let basePrompts: any[] = [];
         if (node.data.overrideAiConfig && node.data.promptItems?.length) {
-          let hasCtx = false;
-          messages = node.data.promptItems
-            .filter((p: any) => p.enabled !== false)
-            .map((p: any) => {
-              if (p.content.includes('{{context}}')) hasCtx = true;
-              const c = workflowManager.interpolate(p.content.replace('{{context}}', finalContext));
-              return { role: p.role, content: p.role === 'user' ? formatMulti(c) : c };
-            });
-          if (!hasCtx && finalContext.trim())
-            messages.unshift({ role: 'user', content: formatMulti(`【参考背景与全局输入】：\n${finalContext}`) });
-          if (node.data.instruction)
-            messages.push({ role: 'user', content: formatMulti(workflowManager.interpolate(node.data.instruction)) });
+          basePrompts = node.data.promptItems.filter((p: any) => p.enabled !== false);
         } else {
-          const prompts = (preset as any)?.prompts || [];
-          messages = prompts
-            .filter((p: any) => p.enabled || p.active)
-            .map((p: any) => {
-              const c = workflowManager.interpolate(p.content.replace('{{context}}', finalContext));
-              return { role: p.role, content: p.role === 'user' ? formatMulti(c) : c };
-            });
-          if (node.data.instruction)
-            messages.push({ role: 'user', content: formatMulti(workflowManager.interpolate(node.data.instruction)) });
-          else if (!messages.length) messages.push({ role: 'user', content: '请生成内容' });
+          basePrompts = (preset as any)?.prompts?.filter((p: any) => p.enabled || p.active) || [];
+        }
+
+        // 2. 处理 Prompts (替换 {{context}} 为空，因为我们有独立消息)
+        basePrompts.forEach((p: any) => {
+          const c = workflowManager.interpolate(p.content.replace('{{context}}', '')); // Context 单独注入
+          messages.push({ role: p.role, content: p.role === 'user' ? formatMulti(c) : c });
+        });
+
+        // 3. 注入参考资料 (Worldview, Files etc) - 这里的 refContext 仍是字符串
+        if (refContext.trim()) {
+          // 找个合适的位置插入，通常在 System 之后
+          messages.splice(1, 0, { role: 'system', content: `【小说知识库和参考】：\n${refContext}` });
+        }
+
+        // 4. 注入前序节点上下文 (Messages)
+        // 插入到消息列表中部，紧跟 System/Reference 之后，User Instruction 之前
+        // 简单的做法是：如果有 system 消息，插在最后一个 system 后面。如果没有，插在最前面。
+        let lastSystemIdx = -1;
+        for (let k = messages.length - 1; k >= 0; k--) {
+          if (messages[k].role === 'system') {
+            lastSystemIdx = k;
+            break;
+          }
+        }
+        // 核心修复：同时插入 dynamicContextMessages (节点输出) 和 summaryContextMessages (剧情总结)
+        messages.splice(lastSystemIdx + 1, 0, ...summaryContextMessages, ...dynamicContextMessages);
+
+        // 5. 注入本节点 User Instruction
+        if (node.data.instruction) {
+          messages.push({
+            role: 'user',
+            content: formatMulti(workflowManager.interpolate(node.data.instruction)),
+          });
+        } else if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
+          messages.push({ role: 'user', content: '请生成内容' });
         }
         if (specificInstruction)
           messages.push({
@@ -1114,15 +1248,15 @@ export const useWorkflowEngine = (options: {
         const fTemp =
           node.data.overrideAiConfig && node.data.temperature !== undefined
             ? node.data.temperature
-            : preset?.temperature ?? globalConfig.temperature;
+            : (preset?.temperature ?? globalConfig.temperature);
         const fTopP =
           node.data.overrideAiConfig && node.data.topP !== undefined
             ? node.data.topP
-            : preset?.topP ?? globalConfig.topP;
+            : (preset?.topP ?? globalConfig.topP);
         const fTopK =
           node.data.overrideAiConfig && node.data.topK !== undefined
             ? node.data.topK
-            : (preset as any)?.topK ?? globalConfig.topK;
+            : ((preset as any)?.topK ?? globalConfig.topK);
         const fMaxT =
           node.data.overrideAiConfig && node.data.maxTokens
             ? node.data.maxTokens
@@ -1281,12 +1415,12 @@ export const useWorkflowEngine = (options: {
                 type === 'worldview'
                   ? 'setting'
                   : type === 'character'
-                  ? 'bio'
-                  : type === 'plotOutline'
-                  ? 'description'
-                  : type === 'inspiration'
-                  ? 'content'
-                  : 'summary';
+                    ? 'bio'
+                    : type === 'plotOutline'
+                      ? 'description'
+                      : type === 'inspiration'
+                        ? 'content'
+                        : 'summary';
               const idx = news.findIndex((ni: any) => ni[tk] === e.title);
               const ni = { [tk]: e.title, [ck]: e.content };
               if (type === 'plotOutline' && idx === -1) (ni as any).id = `plot_${Date.now()}`;
@@ -1316,7 +1450,7 @@ export const useWorkflowEngine = (options: {
           if (changed) await updateLocalAndGlobal(upNovel);
         }
 
-        lastNodeOutput += `【${node.data.typeLabel}输出】：\n${aiRes}\n\n`;
+        // lastNodeOutput += ... (已移除，改用动态构建)
         setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
 
         // Auto Loop Back Check

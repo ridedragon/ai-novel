@@ -76,11 +76,11 @@ src/components/Workflow/
 
 ## 5. 执行计划
 
-1. [ ] 创建目录结构并移动常量/工具函数。
-2. [ ] 实现 `useWorkflowLayout` 并同步到两端。
-3. [ ] 实现 `useWorkflowStorage`。
-4. [ ] **核心攻坚**：抽取 `useWorkflowEngine`，确保执行逻辑在两端行为一致。
-5. [ ] 最终清理两端的 `.tsx` 主文件。
+1. [x] 创建目录结构并移动常量/工具函数。
+2. [x] 实现 `useWorkflowLayout` 并同步到两端。
+3. [x] 实现 `useWorkflowStorage`。
+4. [x] **核心攻坚**：抽取 `useWorkflowEngine`，确保执行逻辑在两端行为一致。
+5. [x] 最终清理两端的 `.tsx` 主文件。
 
 ---
 *注：本计划书已明确 PC/手机端逻辑共用原则。*
