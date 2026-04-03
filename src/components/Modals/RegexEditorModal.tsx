@@ -1,6 +1,7 @@
 import { Bot, X } from 'lucide-react'
-import React from 'react'
+import React, { useState } from 'react'
 import { RegexScript } from '../../types'
+import { validateRegexSafety } from '../../utils/aiHelpers'
 
 interface RegexEditorModalProps {
   isOpen: boolean
@@ -17,7 +18,36 @@ export const RegexEditorModal: React.FC<RegexEditorModalProps> = ({
   setEditingRegexScript,
   onSave
 }) => {
-  if (!isOpen || !editingRegexScript) return null
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  if (!isOpen || !editingRegexScript) return null;
+
+  const handleRegexChange = (newRegex: string) => {
+    const safety = validateRegexSafety(newRegex, editingRegexScript.replaceString);
+    if (!safety.valid) {
+      setValidationError(safety.error || '正则表达式不安全');
+    } else {
+      setValidationError(null);
+    }
+    setEditingRegexScript({...editingRegexScript, findRegex: newRegex});
+  };
+
+  const handleReplaceChange = (newReplace: string) => {
+    const safety = validateRegexSafety(editingRegexScript.findRegex, newReplace);
+    if (!safety.valid) {
+      setValidationError(safety.error || '替换字符串不安全');
+    } else {
+      setValidationError(null);
+    }
+    setEditingRegexScript({...editingRegexScript, replaceString: newReplace});
+  };
+
+  const handleSave = () => {
+    if (validationError) {
+      return;
+    }
+    onSave();
+  };
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
@@ -45,20 +75,23 @@ export const RegexEditorModal: React.FC<RegexEditorModalProps> = ({
 
             <div className="space-y-1">
                <label className="text-sm font-medium text-gray-400">查找正则表达式</label>
-               <input 
-                  type="text" 
+               <input
+                  type="text"
                   value={editingRegexScript.findRegex}
-                  onChange={(e) => setEditingRegexScript({...editingRegexScript, findRegex: e.target.value})}
+                  onChange={(e) => handleRegexChange(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none font-mono"
                   placeholder="/(.*)/s"
                />
+               {validationError && (
+                 <p className="text-xs text-red-400 mt-1">{validationError}</p>
+               )}
             </div>
 
             <div className="space-y-1">
                <label className="text-sm font-medium text-gray-400">替换为</label>
-               <textarea 
+               <textarea
                   value={editingRegexScript.replaceString}
-                  onChange={(e) => setEditingRegexScript({...editingRegexScript, replaceString: e.target.value})}
+                  onChange={(e) => handleReplaceChange(e.target.value)}
                   className="w-full h-24 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none font-mono"
                />
             </div>
@@ -136,7 +169,7 @@ export const RegexEditorModal: React.FC<RegexEditorModalProps> = ({
 
          <div className="p-4 bg-gray-900 border-t border-gray-700 flex justify-end gap-3">
              <button onClick={onClose} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-sm transition-colors border border-gray-600">取消</button>
-             <button onClick={onSave} className="px-6 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-sm rounded transition-colors shadow">保存</button>
+             <button onClick={handleSave} disabled={!!validationError} className="px-6 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] text-white text-sm rounded transition-colors shadow disabled:opacity-50 disabled:cursor-not-allowed">保存</button>
          </div>
       </div>
     </div>

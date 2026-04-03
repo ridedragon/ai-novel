@@ -65,7 +65,13 @@ app.get('/api/storage/:key', async (req, res) => {
 app.post('/api/storage/:key', async (req, res) => {
   try {
     const key = req.params.key;
-    const value = req.body;
+    let value = req.body;
+
+    // 解包 __wrapped_value__（如果存在）
+    if (value && typeof value === 'object' && '__wrapped_value__' in value) {
+      value = value.__wrapped_value__;
+    }
+
     const filePath = path.join(DATA_DIR, getKeyFilename(key));
 
     // 写入文件
@@ -73,7 +79,7 @@ app.post('/api/storage/:key', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error(`Error writing key ${req.params.key}:`, err);
+    console.error(`[STORAGE] Error writing key ${req.params.key}:`, err);
     res.status(500).json({ error: 'Failed to write data' });
   }
 });
@@ -104,4 +110,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🔗 Endpoint: http://0.0.0.0:${PORT}/api/storage`);
   console.log(`📂 Data Dir: ${DATA_DIR}\n`);
   console.log(`💡 Note: If accessing from a phone, use the PC's IP address instead of localhost.\n`);
+});
+
+// 健康检查端点
+app.head('/api/storage/__health', (req, res) => {
+  res.status(200).end();
 });

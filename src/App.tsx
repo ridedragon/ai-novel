@@ -1,5 +1,6 @@
 import { BookOpen, Download, GitBranch, Home, Menu, Network, Settings, Zap } from 'lucide-react';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import terminal from 'virtual:terminal';
 
 // 导入重构后的 Hooks
 import { useAIGenerators } from './hooks/useAIGenerators';
@@ -265,8 +266,10 @@ function App() {
     forceFinal?: boolean,
     runId?: string | null,
   ) => {
+    terminal.log(`[Summary Debug] handleChapterComplete called: chapterId=${chapterId}, longTextMode=${config.longTextMode}, activeNovelId=${novelData.activeNovelId}, forceFinal=${forceFinal}`);
     if (config.longTextMode && novelData.activeNovelId) {
-      return await checkAndGenerateSummary(
+      terminal.log(`[Summary Debug] Calling checkAndGenerateSummary for chapter ${chapterId}`);
+      const result = await checkAndGenerateSummary(
         chapterId,
         content,
         novelData.activeNovelId,
@@ -289,6 +292,10 @@ function App() {
         undefined,
         forceFinal,
       );
+      terminal.log(`[Summary Debug] checkAndGenerateSummary returned: ${result ? 'has result' : 'null'}`);
+      return result;
+    } else {
+      terminal.warn(`[Summary Debug] Skipped: longTextMode=${config.longTextMode}, activeNovelId=${novelData.activeNovelId}`);
     }
   };
 

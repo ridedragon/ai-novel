@@ -36,19 +36,55 @@ let lastSavedNovelsJson = '';
 // 引入序列化锁，确保工作流保存操作按顺序执行，防止异步写入竞态导致的旧数据覆盖新数据
 let workflowSaveQueue: Promise<void> = Promise.resolve();
 
-// 后端 API 地址 - 动态获取当前主机名，适配手机 Termux 或局域网访问
+// 后端 API 地址 - 优先使用固定配置的环境变量或固定地址，适配多设备同步
 const getApiBaseUrl = () => {
-  // 优先尝试从 URL 参数中获取远程存储地址（用于调试或特殊部署场景）
   const params = new URLSearchParams(window.location.search);
   const override = params.get('api_url');
   if (override) return override;
 
-  // 默认逻辑：跟随当前页面主机名
   const hostname = window.location.hostname || 'localhost';
-  return `${window.location.protocol}//${hostname}:3001/api/storage`;
+  const port = '3001';
+
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return `${window.location.protocol}//${hostname}:${port}/api/storage`;
+  }
+
+  return `${window.location.protocol}//${hostname}:${port}/api/storage`;
 };
 
 const API_BASE_URL = getApiBaseUrl();
+
+let serverConnectionStatus: 'unknown' | 'connected' | 'disconnected' = 'unknown';
+let serverConnectionCheckPromise: Promise<'connected' | 'disconnected'> | null = null;
+
+export const checkServerConnection = async (): Promise<'connected' | 'disconnected'> => {
+  if (serverConnectionStatus === 'connected') return 'connected';
+  if (serverConnectionCheckPromise) return serverConnectionCheckPromise;
+
+  serverConnectionCheckPromise = (async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const response = await fetch(`${API_BASE_URL}/__health`, {
+        method: 'HEAD',
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      serverConnectionStatus = response.ok ? 'connected' : 'disconnected';
+      return serverConnectionStatus;
+    } catch {
+      serverConnectionStatus = 'disconnected';
+      return 'disconnected';
+    } finally {
+      serverConnectionCheckPromise = null;
+    }
+  })();
+
+  return serverConnectionCheckPromise;
+};
+
+export const getServerConnectionStatus = () => serverConnectionStatus;
+
 console.log(`[STORAGE] API Base URL initialized as: ${API_BASE_URL}`);
 
 // 辅助 API 请求函数
@@ -200,10 +236,21 @@ export const storage = {
       // 再拉取远程数据进行合并
       if (remoteNovels && remoteNovels.length > 0) {
         remoteNovels.forEach(rn => {
-          if (!mergedMap.has(rn.id)) {
+          const existing = mergedMap.get(rn.id);
+          if (!existing) {
             // 发现远程有本地没有的书籍
             mergedMap.set(rn.id, rn);
             needsLocalSave = true;
+          } else {
+            // 两者都有，需要基于时间戳进行冲突解决
+            const localTime = existing.updatedAt || existing.createdAt || 0;
+            const remoteTime = rn.updatedAt || rn.createdAt || 0;
+            if (remoteTime > localTime) {
+              // 远程更新，使用远程版本
+              mergedMap.set(rn.id, rn);
+              needsLocalSave = true;
+              terminal.log(`[STORAGE] 书籍《${rn.title}》发现远程更新，使用远程版本`);
+            }
           }
         });
 
@@ -237,7 +284,6 @@ export const storage = {
 
         if (needsRemoteSave) {
           terminal.log(`[STORAGE] 书籍列表已同步：远程发现缺失，正在上报本地书籍...`);
-          // 异步推送，不阻塞 UI 加载
           this._pushAllToRemote(novels).catch(e => console.error('[STORAGE] 远程上报失败', e));
         }
       }
@@ -371,29 +417,69 @@ export const storage = {
       }
     }
 
-    if (metadata) {
-      Object.assign(novel, metadata);
-
-      // --- 双轨兼容逻辑：如果新 Key 有值则优先使用，否则沿用 Metadata 里的旧值 (实现无损平滑迁移) ---
-      if (wv) novel.worldviewSets = wv;
-      if (char) novel.characterSets = char;
-      if (out) novel.outlineSets = out;
-      if (plot) novel.plotOutlineSets = plot;
-      if (ref) {
-        novel.referenceFiles = ref.f;
-        novel.referenceFolders = ref.d;
+    // 如果 metadata 缺失，尝试从远程获取，否则使用传入的章节数据
+    if (!metadata) {
+      terminal.log(`[STORAGE] 本地未找到《${novel.title}》的元数据，尝试从远程获取...`);
+      metadata = await fetchFromApi<any>(`${METADATA_PREFIX}${novel.id}`);
+      if (metadata) {
+        await set(`${METADATA_PREFIX}${novel.id}`, metadata);
+        terminal.log(`[STORAGE] 已从远程恢复《${novel.title}》的元数据`);
       }
-      if (insp) novel.inspirationSets = insp;
-
-      // 初始化所有脏检查缓存，防止首次保存时触发误判
-      lastSavedMetadataCache.set(novel.id, this._getNovelMetadataJson(novel));
-      lastSavedWorldviewCache.set(novel.id, this._getWorldviewJson(novel));
-      lastSavedCharactersCache.set(novel.id, this._getCharactersJson(novel));
-      lastSavedOutlineCache.set(novel.id, this._getOutlineJson(novel));
-      lastSavedPlotOutlineCache.set(novel.id, this._getPlotOutlineJson(novel));
-      lastSavedReferenceCache.set(novel.id, this._getReferenceJson(novel));
-      lastSavedInspirationCache.set(novel.id, this._getInspirationJson(novel));
     }
+
+    // 核心修复：如果 metadata 不存在，需要初始化基础结构
+    if (!metadata) {
+      terminal.warn(`[STORAGE] 《${novel.title}》元数据完全缺失，使用初始结构`);
+      metadata = {
+        chapters: novel.chapters || [],
+        volumes: novel.volumes || [],
+      };
+    }
+
+    // 安全合并：只更新存在的字段，保留目标对象的现有属性
+    const safeMerge = (target: any, source: any) => {
+      if (!source || typeof source !== 'object') return;
+      Object.keys(source).forEach(key => {
+        if (source[key] !== undefined) {
+          target[key] = source[key];
+        }
+      });
+    };
+
+    // 保存原始章节数据用于后续加载
+    const originalChapters = novel.chapters || [];
+    const originalVolumes = novel.volumes || [];
+
+    // 应用元数据到小说对象（安全合并）
+    safeMerge(novel, metadata);
+
+    // 恢复原始数据（防止 metadata 覆盖了正在使用的章节数据）
+    if (originalChapters.length > 0 && !novel.chapters?.length) {
+      novel.chapters = originalChapters;
+    }
+    if (originalVolumes.length > 0 && !novel.volumes?.length) {
+      novel.volumes = originalVolumes;
+    }
+
+    // --- 双轨兼容逻辑：如果新 Key 有值则优先使用，否则沿用 Metadata 里的旧值 (实现无损平滑迁移) ---
+    if (wv) novel.worldviewSets = wv;
+    if (char) novel.characterSets = char;
+    if (out) novel.outlineSets = out;
+    if (plot) novel.plotOutlineSets = plot;
+    if (ref) {
+      novel.referenceFiles = ref.f;
+      novel.referenceFolders = ref.d;
+    }
+    if (insp) novel.inspirationSets = insp;
+
+    // 初始化所有脏检查缓存，防止首次保存时触发误判
+    lastSavedMetadataCache.set(novel.id, this._getNovelMetadataJson(novel));
+    lastSavedWorldviewCache.set(novel.id, this._getWorldviewJson(novel));
+    lastSavedCharactersCache.set(novel.id, this._getCharactersJson(novel));
+    lastSavedOutlineCache.set(novel.id, this._getOutlineJson(novel));
+    lastSavedPlotOutlineCache.set(novel.id, this._getPlotOutlineJson(novel));
+    lastSavedReferenceCache.set(novel.id, this._getReferenceJson(novel));
+    lastSavedInspirationCache.set(novel.id, this._getInspirationJson(novel));
 
     // 2. 加载章节正文 (保持并行，增加远程回退)
     const contentPromises = (novel.chapters || []).map(async chapter => {

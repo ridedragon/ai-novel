@@ -21,6 +21,7 @@ export const useWorkflowStorage = (
   useEffect(() => {
     activeNovelRef.current = activeNovel;
   }, [activeNovel]);
+
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const workflowsRef = useRef<WorkflowData[]>([]);
 

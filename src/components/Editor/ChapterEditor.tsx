@@ -68,12 +68,17 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const [localContent, setLocalContent] = useState('');
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
     const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isDirtyRef = useRef(false);
 
     // 当章节切换或进入编辑模式时，初始化本地状态
     useEffect(() => {
       if (activeChapter) {
         setLocalContent(activeChapter.content || '');
+        isDirtyRef.current = false;
+        setHasUnsavedChanges(false);
       }
 
       if (contentScrollRef.current) {
@@ -84,16 +89,34 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       }
     }, [activeChapterId, isEditingChapter]);
 
+    // 添加 beforeunload 事件，防止意外关闭丢失数据
+    useEffect(() => {
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        if (isDirtyRef.current) {
+          e.preventDefault();
+          e.returnValue = '您有未保存的更改，确定要离开吗？';
+          return e.returnValue;
+        }
+      };
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, []);
+
     // 处理输入：仅更新本地状态，解除全局渲染锁定
     const handleLocalChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newValue = e.target.value;
       setLocalContent(newValue);
+      isDirtyRef.current = true;
+      setHasUnsavedChanges(true);
 
       // 采用 500ms 防抖同步回全局状态，保证后台保存
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       syncTimeoutRef.current = setTimeout(() => {
         terminal.log(`[EDITOR] 正在同步内容到全局状态: ${activeChapter?.title} (字数: ${newValue.length})`);
         onChapterContentChange(e);
+        isDirtyRef.current = false;
+        setHasUnsavedChanges(false);
+        setLastSavedTime(new Date());
       }, 500);
     };
 
@@ -129,6 +152,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                 onClick={onPrevVersion}
                 disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
                 className="px-1 h-full text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-20"
+                title="回退到更早版本"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
@@ -146,7 +170,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                     return '编辑';
                   })()}
                 </span>
-                <span className="text-slate-400 dark:text-slate-600 font-mono text-[8px] scale-90">
+                <span className="text-slate-400 dark:text-slate-600 font-mono text-[8px] scale-90" title="版本序号/总版本数">
                   {(() => {
                     const versions = activeChapter.versions || [];
                     const idx = versions.findIndex(v => v.id === activeChapter.activeVersionId);
@@ -158,6 +182,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                 onClick={onNextVersion}
                 disabled={!activeChapter.versions || activeChapter.versions.length <= 1}
                 className="px-1 h-full text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-20"
+                title="前进到更新版本"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
@@ -286,6 +311,14 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                 <span className="text-[9px] md:text-[11px] font-mono uppercase tracking-[0.2em] md:tracking-[0.3em]">
                   {activeChapter.content ? activeChapter.content.length : 0} Words
                 </span>
+                {hasUnsavedChanges && (
+                  <span className="text-[9px] text-amber-500 font-medium animate-pulse">保存中...</span>
+                )}
+                {!hasUnsavedChanges && lastSavedTime && (
+                  <span className="text-[9px] text-green-500/60 font-medium" title={`最后保存: ${lastSavedTime.toLocaleTimeString()}`}>
+                    已保存
+                  </span>
+                )}
                 <div className="h-[1px] w-8 md:w-16 bg-slate-200 dark:bg-[#1e2433]"></div>
               </div>
             </div>

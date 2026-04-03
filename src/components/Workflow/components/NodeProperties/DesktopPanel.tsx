@@ -289,7 +289,7 @@ export const DesktopPanel = ({
         <div className="p-5 border-t border-gray-700/50 bg-[#1a1d29]">
           <button
             onClick={() => {
-              handleUpdate({ _deleted: true } as any);
+              handleUpdate({ _deleted: true });
               onClose();
             }}
             className="w-full py-3 bg-red-900/10 hover:bg-red-900/20 text-red-400 hover:text-red-300 rounded-lg border border-red-900/30 text-sm font-semibold transition-all flex items-center justify-center gap-2 active:scale-[0.98]"

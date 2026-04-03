@@ -375,6 +375,84 @@ export const parseAnyNumber = (text: string): number | null => {
 };
 
 /**
+ * 验证正则表达式的安全性（防止ReDoS攻击）
+ * 返回 { valid: boolean, error?: string }
+ */
+export const validateRegexSafety = (pattern: string, replaceStr: string = ''): { valid: boolean; error?: string } => {
+  try {
+    const regexParts = pattern.match(/^\/(.*?)\/([a-z]*)$/);
+    const regex = regexParts ? new RegExp(regexParts[1], regexParts[2]) : new RegExp(pattern);
+
+    // 检查正则复杂度指标
+    const patternStr = regexParts ? regexParts[1] : pattern;
+
+    // 危险模式检测
+    const dangerousPatterns = [
+      /\(\?[^)]+\+[^)]*\)\*/i,   // (?:x+)* 类型的嵌套量词
+      /\(\[[^\]]+\]\+\)\*/i,     // ([abc]+)* 类型
+      /\.\*\.\*/i,              // 连续.*容易导致回溯
+      /\([^)]*\{[^}]+\}\)\*/i,   // 嵌套量词
+    ];
+
+    for (const dangerous of dangerousPatterns) {
+      if (dangerous.test(patternStr)) {
+        return { valid: false, error: '检测到潜在危险的正则模式，可能导致性能问题' };
+      }
+    }
+
+    // 检查替换字符串长度，防止内存溢出
+    if (replaceStr.length > 10000) {
+      return { valid: false, error: '替换字符串过长，可能导致内存溢出' };
+    }
+
+    // 检查是否使用了过于贪婪的匹配
+    if ((patternStr.match(/\.\*/g) || []).length > 5) {
+      return { valid: false, error: '使用了过多通配符，可能导致严重的性能问题' };
+    }
+
+    return { valid: true };
+  } catch (e: any) {
+    return { valid: false, error: `正则表达式无效: ${e.message}` };
+  }
+};
+
+/**
+ * 安全执行正则替换（带超时保护）
+ */
+export const safeRegexReplace = (
+  text: string,
+  regex: RegExp,
+  replaceStr: string,
+  timeoutMs: number = 1000
+): { result: string; timedOut: boolean } => {
+  const startTime = Date.now();
+  let result = text;
+  let timedOut = false;
+
+  try {
+    // 使用带有长度限制的replace回调
+    result = text.replace(regex, (...args) => {
+      if (Date.now() - startTime > timeoutMs) {
+        timedOut = true;
+        return args[0]; // 返回原匹配，保持文本完整
+      }
+      return replaceStr;
+    });
+
+    // 如果超时，回退到原文本
+    if (timedOut) {
+      terminal.warn(`[REGEX] 正则执行超时(${timeoutMs}ms)，跳过该脚本`);
+      return { result: text, timedOut: true };
+    }
+  } catch (e) {
+    terminal.error(`[REGEX] 正则执行出错: ${e}`);
+    return { result: text, timedOut: false };
+  }
+
+  return { result, timedOut };
+};
+
+/**
  * 将正则脚本应用到文本
  */
 export const applyRegexToText = async (text: string, scripts: RegexScript[], label: string = 'unknown') => {
@@ -382,18 +460,36 @@ export const applyRegexToText = async (text: string, scripts: RegexScript[], lab
 
   let processed = text;
   const startTime = Date.now();
+  const SCRIPT_TIMEOUT = 500; // 单个脚本超时500ms
+  const TOTAL_TIMEOUT = 5000; // 总超时5秒
+
   terminal.log(`[PERF DEBUG] App.applyRegexToText [${label}] 开始: 长度=${text.length}, 脚本数=${scripts.length}`);
 
   for (const script of scripts) {
+    // 总时间超时检查
+    if (Date.now() - startTime > TOTAL_TIMEOUT) {
+      terminal.warn(`[REGEX] 正则处理总时间超时(${TOTAL_TIMEOUT}ms)，停止执行剩余脚本`);
+      break;
+    }
+
     const scriptStartTime = Date.now();
+
+    // 每执行几个脚本就让出一次主线程，避免阻塞
     if (Date.now() - startTime > 30) {
       await new Promise(resolve => setTimeout(resolve, 0));
     }
 
     try {
+      // 验证正则安全性
+      const safetyCheck = validateRegexSafety(script.findRegex, script.replaceString);
+      if (!safetyCheck.valid) {
+        terminal.warn(`[REGEX] 跳过不安全脚本 [${script.scriptName}]: ${safetyCheck.error}`);
+        continue;
+      }
+
       if (script.trimStrings && script.trimStrings.length > 0) {
         for (const trimStr of script.trimStrings) {
-          if (trimStr) {
+          if (trimStr && trimStr.length < 100) { // 限制trim字符串长度
             processed = processed.split(trimStr).join('');
           }
         }
@@ -402,7 +498,14 @@ export const applyRegexToText = async (text: string, scripts: RegexScript[], lab
       const regexParts = script.findRegex.match(/^\/(.*?)\/([a-z]*)$/);
       const regex = regexParts ? new RegExp(regexParts[1], regexParts[2]) : new RegExp(script.findRegex, 'g');
 
-      processed = processed.replace(regex, script.replaceString);
+      // 使用安全的替换方法
+      const { result, timedOut } = safeRegexReplace(processed, regex, script.replaceString, SCRIPT_TIMEOUT);
+      processed = result;
+
+      if (timedOut) {
+        terminal.warn(`[REGEX] 脚本 [${script.scriptName}] 执行超时，跳过`);
+        continue;
+      }
 
       const scriptDuration = Date.now() - scriptStartTime;
       if (scriptDuration > 100) {
@@ -477,7 +580,7 @@ export const getChapterContextMessages = (
     let filterVolumeId: string | null = null;
     let filterUncategorized = false;
 
-    if (config.contextScope === 'current') {
+    if (config.contextScope === 'current' || config.contextScope === 'currentVolume' || config.contextScope === 'volume') {
       if (targetChapter.volumeId) filterVolumeId = targetChapter.volumeId;
       else filterUncategorized = true;
     } else if (config.contextScope !== 'all') {

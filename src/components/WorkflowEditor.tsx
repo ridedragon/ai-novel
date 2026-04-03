@@ -75,8 +75,11 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const [isEditingWorkflowName, setIsEditingWorkflowName] = useState(false);
   const [newWorkflowName, setNewWorkflowName] = useState('');
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
   const [edgeToDelete, setEdgeToDelete] = useState<Edge | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OutputEntry | null>(null);
+  const lastClickTimeRef = useRef<number>(0);
 
   const nodesRef = useRef<WorkflowNode[]>([]);
   const workflowsRef = useRef<WorkflowData[]>([]);
@@ -106,7 +109,8 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     exportWorkflow,
     importWorkflowData,
     setWorkflows,
-    healWorkflowData
+    healWorkflowData,
+    isInitialLoad,
   } = useWorkflowStorage(isOpen, activeWorkflowId, setActiveWorkflowId, activeNovel);
 
   // 2. 布局逻辑
@@ -192,9 +196,13 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     setAllPresets(loaded);
   }, [isOpen]);
 
+  // 核心修复：工作流加载逻辑 - 使用单独的标志位避免依赖冲突
+  const loadStartedRef = useRef(false);
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !loadStartedRef.current) {
+      loadStartedRef.current = true;
       refreshWorkflows().then(({ loadedWorkflows, finalId }) => {
+        loadStartedRef.current = false;
         const wf = loadedWorkflows.find(w => w.id === finalId);
         if (wf) {
           const globalIsRunning = workflowManager.getState().isRunning;
@@ -206,7 +214,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         }
       });
     }
-  }, [isOpen]);
+  }, [isOpen, refreshWorkflows, healWorkflowData, activeNovel]);
 
   useEffect(() => {
     autoSave(nodes, edges, currentNodeIndex);
@@ -364,7 +372,24 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   }, [setNodes, nodes, activeNovel, screenToFlowPosition]);
 
   const onNodeClick = useCallback((_: any, node: Node) => {
+    const now = Date.now();
+    const timeSinceLastClick = now - lastClickTimeRef.current;
+
+    if (timeSinceLastClick < 300 && selectedNodeId === node.id) {
+      setEditingNodeId(node.id);
+    } else {
+      setSelectedNodeId(node.id);
+    }
+    lastClickTimeRef.current = now;
+    setContextMenu(null);
+  }, [selectedNodeId]);
+
+  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedNodeId(node.id);
     setEditingNodeId(node.id);
+    setContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY });
   }, []);
 
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
@@ -766,7 +791,9 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
+            onNodeContextMenu={onNodeContextMenu}
             onEdgeClick={onEdgeClick}
+            onPaneClick={() => { setSelectedNodeId(null); setContextMenu(null); }}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
@@ -844,7 +871,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             node={editingNode}
             onClose={() => setEditingNodeId(null)}
             updateNodeData={(id, updates) => {
-              if ((updates as any)._deleted) {
+              if (updates._deleted) {
                 setNodes((nds) => nds.filter(n => n.id !== id));
               } else {
                 updateNodeData(id, updates);
@@ -857,6 +884,40 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             globalConfig={globalConfig}
             consolidatedModelList={consolidatedModelList}
           />
+        )}
+
+        {/* --- 右键菜单 --- */}
+        {contextMenu && (
+          <>
+            <div className="fixed inset-0 z-[150]" onClick={() => setContextMenu(null)} />
+            <div
+              className="fixed z-[160] bg-gray-800 border border-gray-700 rounded-lg shadow-2xl py-1 min-w-[160px] animate-in fade-in slide-in-from-top-1 duration-150"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+            >
+              <button
+                onClick={() => {
+                  const node = nodes.find(n => n.id === contextMenu.nodeId);
+                  if (node) {
+                    setSelectedNodeId(node.id);
+                    setEditingNodeId(node.id);
+                  }
+                  setContextMenu(null);
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-2"
+              >
+                <Edit2 className="w-4 h-4" /> 编辑节点
+              </button>
+              <button
+                onClick={() => {
+                  setNodes((nds) => nds.filter(n => n.id !== contextMenu.nodeId));
+                  setContextMenu(null);
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-700 flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" /> 删除节点
+              </button>
+            </div>
+          </>
         )}
 
         {/* --- 章节正文预览弹窗 --- */}

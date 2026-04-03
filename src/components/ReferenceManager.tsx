@@ -73,12 +73,70 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
     const files = e.target.files
     if (!files || files.length === 0) return
 
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
+    const ALLOWED_TYPES = [
+      'text/plain', 'text/markdown', 'text/html',
+      'application/pdf',
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    const ALLOWED_EXTENSIONS = ['.txt', '.md', '.html', '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.docx'];
+
+    // Validate all files first
+    const invalidFiles: string[] = [];
+    const oversizedFiles: string[] = [];
+    let totalSize = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      totalSize += file.size;
+
+      if (file.size > MAX_FILE_SIZE) {
+        oversizedFiles.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+        continue;
+      }
+
+      const hasValidType = ALLOWED_TYPES.includes(file.type);
+      const hasValidExtension = ALLOWED_EXTENSIONS.some(ext => file.name.toLowerCase().endsWith(ext));
+
+      if (!hasValidType && !hasValidExtension) {
+        invalidFiles.push(file.name);
+      }
+    }
+
+    // Show error messages
+    if (oversizedFiles.length > 0) {
+      alert(`以下文件超过大小限制 (10MB)：\n${oversizedFiles.join('\n')}`);
+      e.target.value = '';
+      return;
+    }
+
+    if (invalidFiles.length > 0) {
+      alert(`以下文件类型不支持：\n${invalidFiles.join('\n')}\n支持的类型：txt, md, html, pdf, jpg, png, gif, webp, docx`);
+      e.target.value = '';
+      return;
+    }
+
+    // Total size warning (50MB total)
+    if (totalSize > 50 * 1024 * 1024) {
+      if (!confirm(`即将上传的文件总大小为 ${(totalSize / 1024 / 1024).toFixed(2)}MB，可能影响性能。是否继续？`)) {
+        e.target.value = '';
+        return;
+      }
+    }
+
     setIsLoading(true)
     const newFiles: ReferenceFile[] = [...(novel.referenceFiles || [])]
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
       try {
+        // Double check size before processing
+        if (file.size > MAX_FILE_SIZE) {
+          terminal.warn(`[REFERENCE] 跳过过大文件: ${file.name}`);
+          continue;
+        }
+
         let content = ''
         const isImage = file.type.startsWith('image/')
         const isPdf = file.type === 'application/pdf'

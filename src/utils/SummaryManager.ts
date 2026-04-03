@@ -145,21 +145,9 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
     const oldRange = chapter.summaryRange || '1-1';
     const [oldS, oldE] = oldRange.split('-').map(Number);
     const span = Math.max(1, (oldE || 1) - (oldS || 1) + 1);
-
-    // 校准逻辑：计算新的起始点，但如果是分卷模式，严禁跨越分卷起始章
-    let newStart = Math.max(1, currentEnd - span + 1);
-
-    // 获取该分卷的第一章全局索引
-    const volumeStories = storyChapters.filter(s => s.volumeId === anchor!.volumeId);
-    const firstInVol = volumeStories[0];
-    if (firstInVol) {
-      const volStartIdx = idToGlobalIdx.get(firstInVol.id) || 1;
-      if (newStart < volStartIdx) {
-        newStart = volStartIdx;
-      }
-    }
-
+    const newStart = Math.max(1, currentEnd - span + 1);
     const newRange = `${newStart}-${currentEnd}`;
+
     const hasChanged = newRange !== chapter.summaryRange || chapter.volumeId !== anchor.volumeId;
 
     if (hasChanged) {
@@ -247,45 +235,22 @@ export const checkAndGenerateSummary = async (
   const currentNovel = novels?.find(n => n.id === targetNovelId);
   if (!currentNovel) return undefined;
 
-  // 1. 构建全书章节快照（包含当前正文更新）
-  const allChapters = (currentNovel.chapters || []).map(c => {
+  let currentChaptersSnapshot = (currentNovel.chapters || []).map(c => {
     if (c.id === targetChapterId) return { ...c, content: currentContent };
     return c;
   });
-
-  // 2. 核心修复：分卷数据物理隔离
-  // 如果处于本卷模式，我们将后续所有操作的“世界”裁切为仅包含当前分卷
-  const isVolMode = config.contextScope === 'volume';
-  const targetChapForVol = allChapters.find(c => c.id === targetChapterId);
-  const targetVolumeId = targetChapForVol?.volumeId;
-
-  let currentChaptersSnapshot = allChapters;
-  if (isVolMode) {
-    currentChaptersSnapshot = allChapters.filter(c => {
-      // 统一 ID 比较逻辑
-      const cVolId = c.volumeId ? String(c.volumeId) : '';
-      const tVolId = targetVolumeId ? String(targetVolumeId) : '';
-      return cVolId === tVolId;
-    });
-    terminal.log(
-      `[SummaryManager] 本卷模式启用，已裁切快照，当前数据源仅包含本卷 (${currentChaptersSnapshot.length}个章节)`,
-    );
-  }
 
   const getSnapshotStoryChapters = () =>
     (currentChaptersSnapshot || []).filter(c => !c.subtype || c.subtype === 'story');
 
   const storyChapters = getSnapshotStoryChapters();
   const globalIndex = storyChapters.findIndex(c => c.id === targetChapterId);
-  if (globalIndex === -1) {
-    // 只有在非本卷模式且由于某种原因找不到章节时才退出。
-    // 在本卷模式下，如果裁切后仍找不到，说明逻辑有误。
-    return;
-  }
+  if (globalIndex === -1) return;
 
   const targetChapterObj = storyChapters[globalIndex];
+  const targetVolumeId = targetChapterObj.volumeId;
 
-  const volumeStoryChapters = storyChapters; // 在裁切后的快照中，storyChapters 就是本卷章节
+  const volumeStoryChapters = storyChapters.filter(c => c.volumeId === targetChapterObj.volumeId);
   const indexInVolume = volumeStoryChapters.findIndex(c => c.id === targetChapterId);
   const currentCountInVolume = indexInVolume + 1;
 
@@ -314,7 +279,7 @@ export const checkAndGenerateSummary = async (
         .filter(c => {
           if (c.subtype !== 'small_summary' || !c.summaryRange) return false;
           // 本卷模式下，参与大总结构建的小总结必须属于同一卷
-          if (contextScope === 'volume' && c.volumeId !== targetVolumeId) return false;
+          if ((contextScope === 'volume' || contextScope === 'currentVolume') && c.volumeId !== targetVolumeId) return false;
           const [s, e] = c.summaryRange.split('-').map(Number);
           return s >= start && e <= end;
         })
@@ -328,7 +293,7 @@ export const checkAndGenerateSummary = async (
         .filter(c => {
           if (c.subtype !== 'big_summary' || !c.summaryRange) return false;
           // 本卷模式下，作为参考基准的历史大总结必须属于同一卷
-          if (contextScope === 'volume' && c.volumeId !== targetVolumeId) return false;
+          if ((contextScope === 'volume' || contextScope === 'currentVolume') && c.volumeId !== targetVolumeId) return false;
           const [s, e] = c.summaryRange.split('-').map(Number);
           return s === start && e < end;
         })
@@ -381,23 +346,10 @@ export const checkAndGenerateSummary = async (
       let prompt = type === 'small' ? smallSummaryPrompt : bigSummaryPrompt;
 
       // 在本卷模式下，通过系统指令强力约束 AI 的总结范围
-      if (isVolMode) {
-        if (type === 'big') {
-          prompt = `【分卷大总结专项指令】：当前正在进行“分卷创作模式”，你必须仅针对下方提供的本卷内容进行大总结。严禁提及或猜测任何不属于下方内容的剧情。你的总结范围应严格限定在本卷内。\n\n${prompt}`;
-        } else {
-          prompt = `【分卷小总结专项指令】：你必须仅针对下方提供的本卷片段进行概要总结。严禁提及本卷以外的内容。\n\n${prompt}`;
-        }
+      const isVolMode = contextScope === 'volume' || contextScope === 'currentVolume';
+      if (isVolMode && type === 'big') {
+        prompt = `【分卷总结专项指令】：当前正在进行“分卷创作模式”，你必须仅针对下方提供的本卷内容进行大总结。严禁提及或猜测任何不属于下方内容的剧情。\n\n${prompt}`;
       }
-
-      console.group(
-        `%c[Summary AI Request] %c${type === 'small' ? '🔹小总结' : '🔸大总结'} (${rangeStr})`,
-        'color: #1a73e8; font-weight: bold;',
-        'color: #333;',
-      );
-      console.log('%c[Context Scope]:', 'color: #666; font-weight: bold;', contextScope);
-      console.log('%c[Source Text]:', 'color: #666; font-weight: bold;', sourceText);
-      console.log('%c[Prompt]:', 'color: #666; font-weight: bold;', prompt);
-      console.groupEnd();
 
       const completion = await openai.chat.completions.create(
         {
@@ -454,19 +406,8 @@ export const checkAndGenerateSummary = async (
   for (let i = sInterval; i <= currentCountInVolume; i += sInterval) {
     const batchChapters = volumeStoryChapters.slice(i - sInterval, i);
     if (batchChapters.length > 0) {
-      // 修正：即便物理隔离了数据，我们仍需要获取该章在全书中的真实物理索引用于标题显示
-      const allStoryChapters = allChapters.filter(c => !c.subtype || c.subtype === 'story');
-      let globalStart = allStoryChapters.findIndex(c => c.id === batchChapters[0].id) + 1;
-      const globalEnd = allStoryChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1;
-
-      // 如果是本卷模式，且该 batch 跨越了卷边界（理论上 slice 不会，但如果是基于 volumeStoryChapters 产生的 i 可能会有偏离）
-      // 确保 globalStart 不会早于本卷第一章
-      if (contextScope === 'volume') {
-        const firstStoryInVol = volumeStoryChapters[0];
-        const volStartIdx = allStoryChapters.findIndex(c => c.id === firstStoryInVol.id) + 1;
-        if (globalStart < volStartIdx) globalStart = volStartIdx;
-      }
-
+      const globalStart = storyChapters.findIndex(c => c.id === batchChapters[0].id) + 1;
+      const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1;
       const rangeStr = `${globalStart}-${globalEnd}`;
       const lockKey = `${targetNovelId}_small_${rangeStr}`;
       if (
@@ -486,14 +427,12 @@ export const checkAndGenerateSummary = async (
   for (let i = bInterval; i <= currentCountInVolume; i += bInterval) {
     const batchChapters = volumeStoryChapters.slice(i - bInterval, i);
     if (batchChapters.length > 0) {
-      // 修正大总结起始位置计算
-      const allStoryChapters = allChapters.filter(c => !c.subtype || c.subtype === 'story');
       let globalStart = 1;
       if (contextScope !== 'all') {
         const firstInVol = volumeStoryChapters[0];
-        if (firstInVol) globalStart = allStoryChapters.findIndex(c => c.id === firstInVol.id) + 1;
+        if (firstInVol) globalStart = storyChapters.findIndex(c => c.id === firstInVol.id) + 1;
       }
-      const globalEnd = allStoryChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1;
+      const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1;
       const rangeStr = `${globalStart}-${globalEnd}`;
       const lockKey = `${targetNovelId}_big_${rangeStr}`;
       if (
@@ -519,10 +458,6 @@ export const checkAndGenerateSummary = async (
       c => c.subtype === 'small_summary' && (targetVolumeId ? c.volumeId === targetVolumeId : !c.volumeId),
     );
 
-    const allStoryChapters = allChapters.filter(c => !c.subtype || c.subtype === 'story');
-    const firstStoryInVol = volumeStoryChapters[0];
-    const firstGlobalIdxInVol = firstStoryInVol ? allStoryChapters.findIndex(c => c.id === firstStoryInVol.id) + 1 : 1;
-
     let lastSmallEnd = 0;
     existingSmallSummaries.forEach(s => {
       const range = s.summaryRange?.split('-').map(Number);
@@ -531,18 +466,12 @@ export const checkAndGenerateSummary = async (
       }
     });
 
-    // 如果是本卷模式且没有任何小总结，起始点应从本卷第一章开始，而不是从第1章开始
-    if (lastSmallEnd === 0 && contextScope === 'volume' && firstGlobalIdxInVol > 1) {
-      lastSmallEnd = firstGlobalIdxInVol - 1;
-    }
-
     // 如果分卷内最后一章还没被小总结覆盖
     const lastStoryChapterInVol = volumeStoryChapters[volumeStoryChapters.length - 1];
     if (lastStoryChapterInVol) {
-      const lastGlobalIdx = allStoryChapters.findIndex(c => c.id === lastStoryChapterInVol.id) + 1;
+      const lastGlobalIdx = storyChapters.findIndex(c => c.id === lastStoryChapterInVol.id) + 1;
 
       if (lastSmallEnd < lastGlobalIdx) {
-        // 避免产生只有 0 节跨度的小总结 (除非是强制首章)
         const start = lastSmallEnd + 1;
         const end = lastGlobalIdx;
         const rangeStr = `${start}-${end}`;
@@ -573,26 +502,13 @@ export const checkAndGenerateSummary = async (
     });
 
     if (lastStoryChapterInVol) {
-      const lastGlobalIdx = allStoryChapters.findIndex(c => c.id === lastStoryChapterInVol.id) + 1;
-
+      const lastGlobalIdx = storyChapters.findIndex(c => c.id === lastStoryChapterInVol.id) + 1;
       if (lastBigEnd < lastGlobalIdx) {
         let globalStart = 1;
         if (contextScope !== 'all') {
           const firstInVol = volumeStoryChapters[0];
-          if (firstInVol) globalStart = allStoryChapters.findIndex(c => c.id === firstInVol.id) + 1;
+          if (firstInVol) globalStart = storyChapters.findIndex(c => c.id === firstInVol.id) + 1;
         }
-
-        // 修复：如果当前是大总结的起始章（分卷第一章），且并未达到总结间隔，不应强行生成大总结
-        // 除非是 forceFinal 且当前章节数确实有增长
-        const isFirstChapterInVol = lastGlobalIdx === globalStart;
-        if (isFirstChapterInVol && !forceFinal) return;
-
-        // 如果是分卷第一章就触发 forceFinal，且之前没总结过，通常是逻辑错误或章节太少，跳过
-        if (isFirstChapterInVol && lastBigEnd === 0) {
-          terminal.log(`[Summary] 跳过分卷首章的大总结生成: ${lastGlobalIdx}`);
-          return;
-        }
-
         const rangeStr = `${globalStart}-${lastGlobalIdx}`;
         const lockKey = `${targetNovelId}_final_big_${rangeStr}`;
 

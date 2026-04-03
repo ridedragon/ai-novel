@@ -30,9 +30,11 @@ export const CreateNovelModal: React.FC<CreateNovelModalProps> = ({
         
         <div className="p-6 space-y-4">
            <div className="space-y-2">
-             <label className="text-sm font-medium text-gray-300">小说名称</label>
-             <input 
-               type="text" 
+             <label className="text-sm font-medium text-gray-300">
+               小说名称 <span className="text-red-400">*</span>
+             </label>
+             <input
+               type="text"
                value={newNovelTitle}
                onChange={(e) => setNewNovelTitle(e.target.value)}
                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:border-[var(--theme-color)] outline-none"
@@ -43,6 +45,9 @@ export const CreateNovelModal: React.FC<CreateNovelModalProps> = ({
                   if (e.key === 'Escape') onClose()
                }}
              />
+             {!newNovelTitle.trim() && newNovelTitle !== '' && (
+               <p className="text-xs text-red-400">名称不能为空</p>
+             )}
            </div>
            <div className="space-y-2">
              <label className="text-sm font-medium text-gray-300">开始卷名称 (可选)</label>

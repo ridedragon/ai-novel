@@ -457,9 +457,15 @@ class WorkflowManager {
 
     // 1. 优先检查新规则列表
     if (context.pendingSplits && context.pendingSplits.length > 0) {
-      const rule = context.pendingSplits.find(r => !r.processed && isMatch(r.chapterTitle));
-      if (rule) {
-        return { chapterTitle: currentChapterTitle, nextVolumeName: rule.nextVolumeName };
+      const unprocessedRules = context.pendingSplits.filter(r => !r.processed);
+      terminal.log(`[WorkflowManager] Checking split: ${unprocessedRules.length} rules for "${currentChapterTitle}" (norm: ${normalizedCurrent})`);
+      for (const rule of unprocessedRules) {
+        const ruleNorm = this.normalizeChapterToken(rule.chapterTitle);
+        const matched = isMatch(rule.chapterTitle);
+        terminal.log(`[WorkflowManager]   Rule: "${rule.chapterTitle}" (norm: ${ruleNorm}) -> match=${matched}`);
+        if (matched) {
+          return { chapterTitle: currentChapterTitle, nextVolumeName: rule.nextVolumeName };
+        }
       }
     }
 

@@ -227,7 +227,7 @@ export const useWorkflowEngine = (options: {
         // 本卷模式支持：寻找当前上下文的作用域
         // 如果开启了本卷模式，我们将寻找最近的文件夹节点作为隔离边界
         let boundaryIndex = 0;
-        if (globalConfig.contextScope === 'volume') {
+        if (globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume') {
           for (let j = currentIndex - 1; j >= 0; j--) {
             const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
             if (pNode.data.typeKey === 'createFolder' || pNode.data.typeKey === 'reuseDirectory') {
@@ -253,7 +253,7 @@ export const useWorkflowEngine = (options: {
 
           if (pNode.data.outputEntries && pNode.data.outputEntries.length > 0) {
             // 本卷模式修复：如果开启了本卷模式，过滤掉隔离边界之前的节点输出
-            if (globalConfig.contextScope === 'volume' && j < boundaryIndex) {
+            if ((globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume') && j < boundaryIndex) {
               continue;
             }
 
@@ -1056,7 +1056,7 @@ export const useWorkflowEngine = (options: {
           // 如果是本卷模式，尝试寻找该节点关联的卷或最后一个章节所属的卷
           let effectiveVolumeId: string | undefined = undefined;
 
-          if (globalConfig.contextScope === 'volume') {
+          if (globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume') {
             // 优先级：节点显式指定的卷 > 工作流当前定位的卷 > 最后一章的卷
             effectiveVolumeId = (node.data.targetVolumeId as string) || workflowManager.getActiveVolumeAnchor() || '';
             if (!effectiveVolumeId) {

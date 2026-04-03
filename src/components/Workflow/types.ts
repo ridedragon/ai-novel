@@ -19,6 +19,7 @@ export interface OutputEntry {
 }
 
 export interface WorkflowNodeData extends Record<string, unknown> {
+  _deleted?: boolean; // Special marker for node deletion
   label: string;
   typeLabel: string;
   color: string;
@@ -37,9 +38,9 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   status?: 'pending' | 'executing' | 'completed' | 'failed';
   targetVolumeId?: string;
   targetVolumeName?: string;
-  splitChapterTitle?: string; // 到达特定章节后分卷 (Legacy)
-  nextVolumeName?: string; // 分卷后的命名 (Legacy)
-  splitRules?: { id: string; chapterTitle: string; nextVolumeName: string }[]; // 多次分卷规则
+  splitChapterTitle?: string;
+  nextVolumeName?: string;
+  splitRules?: { id: string; chapterTitle: string; nextVolumeName: string }[];
 
   // Workflow V2 Logic
   loopInstructions?: LoopInstruction[];

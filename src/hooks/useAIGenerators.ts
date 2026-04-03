@@ -1398,7 +1398,8 @@ export function useAIGenerators() {
                 newGeneratedContent += content;
 
                 const now = Date.now();
-                if (now - lastUpdateTime > 150) {
+                // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
+                if (now - lastUpdateTime > 50) {
                   lastUpdateTime = now;
                   const fullRawContent = currentContent + newGeneratedContent;
                   params.setChapters(prev =>
