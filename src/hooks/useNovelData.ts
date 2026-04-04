@@ -20,6 +20,9 @@ export function useNovelData() {
   // 【BUG 修复】：章节复活黑名单
   const deletedChapterIdsRef = useRef<Set<number>>(new Set());
 
+  // 自动保存的防抖定时器
+  const saveDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // 活跃状态
   const [activeNovelId, setActiveNovelId] = useState<string | null>(null);
   const activeNovelIdRef = useRef(activeNovelId);
@@ -68,13 +71,28 @@ export function useNovelData() {
     storage.getNovels().then(loaded => setNovels(loaded));
   }, [setNovels]);
 
-  // 自动保存逻辑
+  // 自动保存逻辑（添加防抖）
   useEffect(() => {
     if (novels.length > 0) {
-      storage.saveNovels(novels).catch(e => {
-        terminal.error(`[STORAGE] 自动保存失败: ${e.message}`);
-      });
+      // 清除之前的定时器
+      if (saveDebounceTimerRef.current) {
+        clearTimeout(saveDebounceTimerRef.current);
+      }
+
+      // 设置新的防抖定时器（500ms 延迟保存）
+      saveDebounceTimerRef.current = setTimeout(() => {
+        storage.saveNovels(novels).catch(e => {
+          terminal.error(`[STORAGE] 自动保存失败: ${e.message}`);
+        });
+      }, 500);
     }
+
+    // 组件卸载时清除定时器
+    return () => {
+      if (saveDebounceTimerRef.current) {
+        clearTimeout(saveDebounceTimerRef.current);
+      }
+    };
   }, [novels]);
 
   // 派生状态 (提前定义以供 Effect 使用)
@@ -385,7 +403,14 @@ export function useNovelData() {
   );
 
   const addNovel = useCallback(
-    (title: string, volumeName?: string) => {
+    (
+      title: string,
+      volumeName?: string,
+      coverUrl?: string,
+      category?: string,
+      status?: '连载中' | '已完结',
+      description?: string
+    ) => {
       const volumeId =
         typeof crypto.randomUUID === 'function'
           ? crypto.randomUUID()
@@ -406,6 +431,10 @@ export function useNovelData() {
         volumes: initialVolumes,
         systemPrompt: '你是一个专业的小说家。请根据用户的要求创作小说，文笔要优美，情节要跌宕起伏。',
         createdAt: Date.now(),
+        coverUrl: coverUrl || undefined,
+        category: category || undefined,
+        status: status || '连载中',
+        description: description || undefined,
       };
 
       setNovels(prev => [newNovel, ...prev]);

@@ -117,7 +117,7 @@ export const useWorkflowStorage = (
 
   // 自动保存逻辑
   const autoSave = useCallback(
-    (nodes: WorkflowNode[], edges: Edge[], currentNodeIndex: number) => {
+    (nodes: WorkflowNode[], edges: Edge[], currentNodeIndex: number, isRunning?: boolean) => {
       // 核心修复：如果是正在加载中，禁止触发保存
       if (isLoading || isInitialLoadRef.current) return;
 
@@ -126,6 +126,9 @@ export const useWorkflowStorage = (
       if (!isOpen || workflowsRef.current.length === 0) return;
 
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+      // 运行时延长保存间隔，减少频繁保存导致的抽搐
+      const saveDelay = isRunning ? 15000 : 5000;
 
       saveTimeoutRef.current = setTimeout(async () => {
         const startTime = Date.now();
@@ -151,7 +154,7 @@ export const useWorkflowStorage = (
         } catch (e) {
           terminal.error(`[WORKFLOW] 自动保存失败: ${e}`);
         }
-      }, 5000);
+      }, saveDelay);
     },
     [isOpen, activeWorkflowId, isLoading],
   );

@@ -280,16 +280,16 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
       return (
         <div className="flex flex-col items-center justify-center py-20">
           <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-400">正在解析文档...</p>
+          <p className="text-slate-500 dark:text-gray-400">正在解析文档...</p>
         </div>
       )
     }
 
     if (error) {
       return (
-        <div className="flex flex-col items-center justify-center py-20 bg-gray-800/30 border border-gray-700/50 rounded-xl">
+        <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-[#12151e]/40 border border-slate-200 dark:border-[#1e2433] rounded-xl">
           <FileText className="w-16 h-16 text-red-500/40 mb-4" />
-          <p className="text-gray-400 mb-6">{error}</p>
+          <p className="text-slate-500 dark:text-gray-400 mb-6">{error}</p>
           <a href={file.content} download={file.name} className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all">
             <FileDown className="w-4 h-4" />
             <span>下载查看</span>
@@ -324,7 +324,7 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
       
       return (
         <div className="flex flex-col gap-4">
-          <div className="w-full h-[80vh] bg-gray-800 rounded-lg overflow-hidden border border-gray-700">
+          <div className="w-full h-[80vh] bg-white dark:bg-[#12151e]/40 rounded-lg overflow-hidden border border-slate-200 dark:border-[#1e2433]">
             <object
               data={pdfUrl}
               type="application/pdf"
@@ -340,7 +340,7 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
               </div>
             </object>
           </div>
-          <a href={pdfUrl} download={file.name} className="flex items-center justify-center gap-2 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors border border-gray-700">
+          <a href={pdfUrl} download={file.name} className="flex items-center justify-center gap-2 py-2 bg-white dark:bg-[#12151e]/40 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-600 dark:text-gray-300 rounded-lg transition-colors border border-slate-200 dark:border-[#1e2433]">
             <FileDown className="w-4 h-4" />
             <span>下载 PDF 文件</span>
           </a>
@@ -354,8 +354,8 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
 
     // Default text preview (TXT, MD)
     return (
-      <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-6 shadow-inner min-h-full">
-        <pre className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap font-mono break-words">
+      <div className="bg-white dark:bg-[#12151e]/40 border border-slate-200 dark:border-[#1e2433] rounded-xl p-6 shadow-inner min-h-full">
+        <pre className="text-slate-700 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap font-mono break-words">
           {file.content}
         </pre>
       </div>
@@ -363,24 +363,24 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
   }
 
   return (
-    <div className="w-full flex flex-col md:flex-row h-full bg-gray-900 text-gray-100 overflow-hidden">
+    <div className="w-full flex flex-col md:flex-row h-full bg-white dark:bg-[#09090b] text-gray-100 overflow-hidden">
       {/* Sidebar: File List */}
-      <div className="w-full md:w-64 bg-gray-800 border-r border-gray-700 flex flex-col shrink-0">
+      <div className="w-full md:w-64 bg-slate-50 dark:bg-[#0f131e] border-r border-slate-200 dark:border-[#1e2433] flex flex-col shrink-0">
         {sidebarHeader && (
-          <div className="p-3 md:p-4 border-b border-gray-700 shrink-0">
+          <div className="p-3 md:p-4 border-b border-slate-200 dark:border-[#1e2433] shrink-0">
             {sidebarHeader}
           </div>
         )}
 
-        <div className="p-3 md:p-4 border-b border-gray-700 flex flex-col gap-2 shrink-0">
+        <div className="p-3 md:p-4 border-b border-slate-200 dark:border-[#1e2433] flex flex-col gap-2 shrink-0">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold flex items-center gap-2 text-gray-200">
+            <h3 className="font-bold flex items-center gap-2 text-slate-900 dark:text-gray-200">
               <FileText className="w-5 h-5 text-blue-400" />
               <span>参考资料库</span>
             </h3>
             <button
               onClick={() => setShowFolderModal(true)}
-              className="p-1.5 hover:bg-gray-700 rounded-md text-gray-400 hover:text-blue-400 transition-colors"
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-white/10 rounded-md text-slate-500 dark:text-gray-400 hover:text-blue-400 transition-colors"
               title="新建文件夹"
             >
               <FolderPlus className="w-4 h-4" />
@@ -388,7 +388,7 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
           </div>
           
           {/* Breadcrumbs */}
-          <div className="flex items-center gap-1 text-[10px] text-gray-500 overflow-hidden">
+          <div className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-gray-500 overflow-hidden">
             <span
               className={`cursor-pointer hover:text-blue-400 truncate ${!currentFolderId ? 'text-blue-400' : ''}`}
               onClick={() => {
@@ -437,7 +437,7 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
                 setCurrentFolderId(folder.id)
                 setSelectedFileId(null)
               }}
-              className="group flex items-center justify-between px-3 py-2.5 text-gray-400 hover:bg-gray-700 hover:text-gray-200 rounded-lg cursor-pointer transition-all"
+              className="group flex items-center justify-between px-3 py-2.5 text-slate-500 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-gray-200 rounded-lg cursor-pointer transition-all"
             >
               <div className="flex items-center gap-3 overflow-hidden">
                 <Folder className="w-4 h-4 shrink-0 text-yellow-500/70" />
@@ -459,7 +459,7 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
               className={`group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
                 selectedFileId === file.id
                   ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                  : 'text-slate-500 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-gray-200'
               }`}
             >
               <div className="flex items-center gap-3 overflow-hidden">
@@ -482,7 +482,7 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
           )}
         </div>
 
-        <div className="p-3 border-t border-gray-700 bg-gray-800 shrink-0">
+        <div className="p-3 border-t border-slate-200 dark:border-[#1e2433] bg-slate-50 dark:bg-[#0f131e] shrink-0">
           <label className="flex items-center justify-center gap-2 w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg cursor-pointer transition-colors shadow-lg shadow-blue-900/20">
             <Upload className="w-4 h-4" />
             <span className="text-sm font-medium">上传资料</span>
@@ -499,19 +499,19 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
       </div>
 
       {/* Main Content: File Viewer */}
-      <div className="flex-1 flex flex-col bg-gray-900 min-w-0 h-full overflow-hidden relative">
+      <div className="flex-1 flex flex-col bg-white dark:bg-[#09090b] min-w-0 h-full overflow-hidden relative">
         {activeFile ? (
           <>
-            <div className="p-3 md:p-4 border-b border-gray-700 bg-gray-800/50 flex items-center justify-between shrink-0 z-10 backdrop-blur-sm sticky top-0">
+            <div className="p-3 md:p-4 border-b border-slate-200 dark:border-[#1e2433] bg-slate-50 dark:bg-[#0f131e]/50 flex items-center justify-between shrink-0 z-10 backdrop-blur-sm sticky top-0">
               <div className="flex items-center gap-3 overflow-hidden">
-                <h2 className="text-lg md:text-xl font-bold text-gray-100 truncate">{activeFile.name}</h2>
-                <span className="bg-gray-700 text-gray-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full shrink-0">
+                <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-gray-100 truncate">{activeFile.name}</h2>
+                <span className="bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-gray-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full shrink-0">
                   {(activeFile.size / 1024).toFixed(1)} KB
                 </span>
               </div>
               <button
                 onClick={() => setSelectedFileId(null)}
-                className="p-2 hover:bg-gray-700 rounded-full text-gray-400 transition-colors"
+                className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full text-slate-500 dark:text-gray-400 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -524,12 +524,12 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-500 bg-gray-900/50">
-            <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mb-6 text-blue-500/30">
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-500 dark:text-gray-500 bg-slate-50 dark:bg-[#0a0c12]/50">
+            <div className="w-20 h-20 bg-white dark:bg-[#12151e]/40 rounded-full flex items-center justify-center mb-6 text-blue-500/30">
               <Upload className="w-10 h-10" />
             </div>
-            <h2 className="text-xl font-bold text-gray-400 mb-2">资料库</h2>
-            <p className="text-sm max-w-xs text-center leading-relaxed">
+            <h2 className="text-xl font-bold text-slate-600 dark:text-gray-400 mb-2">资料库</h2>
+            <p className="text-sm max-w-xs text-center leading-relaxed text-slate-500 dark:text-gray-400">
               在此处上传背景资料、大纲草稿或设定笔记。上传后，点击左侧列表即可查看内容。
             </p>
             <div className="mt-8 flex gap-4">

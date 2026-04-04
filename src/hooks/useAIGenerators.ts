@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { useCallback, useState } from 'react';
+import terminal from 'virtual:terminal';
 import { Chapter, GeneratorPreset, Novel, PlotOutlineItem, PresetApiConfig, PromptItem, RegexScript } from '../types';
 import {
   buildReferenceContext,
@@ -15,6 +16,8 @@ import { getChapterContextMessages } from '../utils/auto-write/core';
 import { ensureChapterVersions } from '../utils/chapterUtils';
 import { safeParseJSONArray } from '../utils/jsonUtils';
 import { workflowManager } from '../utils/WorkflowManager';
+import { processSkillsForAI, getSkillsMetadataForSystemPrompt } from '../skills';
+import type { SkillContext } from '../skills/types';
 
 export function useAIGenerators() {
   const [isLoading, setIsLoading] = useState(false);
@@ -25,6 +28,7 @@ export function useAIGenerators() {
   const [isGeneratingInspiration, setIsGeneratingInspiration] = useState(false);
   const [isGeneratingPlotOutline, setIsGeneratingPlotOutline] = useState(false);
   const [regeneratingOutlineItemIndices, setRegeneratingOutlineItemIndices] = useState<Set<number>>(new Set());
+  const [lastTriggeredSkills, setLastTriggeredSkills] = useState<string[]>([]);
 
   const getApiConfig = (
     presetConfig: any,
@@ -184,15 +188,34 @@ export function useAIGenerators() {
           if (!messages.some(m => m.role === 'user'))
             messages.push({ role: 'user', content: params.userPrompt || '请生成新的大纲章节。' });
 
-          const completion = await openai.chat.completions.create(
-            {
-              model: apiConfig.model,
-              messages,
-              temperature: activePreset.temperature ?? 1.0,
-              top_p: activePreset.topP ?? 1.0,
-            } as any,
-            { signal: outlineAbortControllerRef.current.signal },
-          );
+          let requestParams: any = {
+            model: apiConfig.model,
+            messages,
+            temperature: activePreset.temperature ?? 1.0,
+            top_p: activePreset.topP ?? 1.0,
+          };
+          if (activePreset.topK && activePreset.topK > 0) {
+            requestParams.top_k = activePreset.topK;
+          }
+          
+          let completion;
+          try {
+            completion = await openai.chat.completions.create(
+              requestParams,
+              { signal: outlineAbortControllerRef.current.signal },
+            );
+          } catch (apiError: any) {
+            if (apiError.status === 400 && requestParams.top_k) {
+              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+              delete requestParams.top_k;
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: outlineAbortControllerRef.current.signal },
+              );
+            } else {
+              throw apiError;
+            }
+          }
 
           const content = completion.choices[0]?.message?.content || '';
           if (!content) throw new Error('Empty response');
@@ -368,12 +391,28 @@ export function useAIGenerators() {
           content: `请重新生成第 ${index + 1} 章的大纲内容。只需返回 JSON 数组格式。`,
         });
 
-        const completion = await openai.chat.completions.create({
+        let requestParams: any = {
           model: apiConfig.model,
           messages,
           temperature: activePreset.temperature ?? 1.0,
           top_p: activePreset.topP ?? 1.0,
-        } as any);
+        };
+        if (activePreset.topK && activePreset.topK > 0) {
+          requestParams.top_k = activePreset.topK;
+        }
+        
+        let completion;
+        try {
+          completion = await openai.chat.completions.create(requestParams);
+        } catch (apiError: any) {
+          if (apiError.status === 400 && requestParams.top_k) {
+            terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+            delete requestParams.top_k;
+            completion = await openai.chat.completions.create(requestParams);
+          } else {
+            throw apiError;
+          }
+        }
 
         const content = completion.choices[0]?.message?.content || '';
         const rawData = safeParseJSONArray(content);
@@ -531,15 +570,34 @@ export function useAIGenerators() {
           if (!messages.some(m => m.role === 'user'))
             messages.push({ role: 'user', content: params.userPrompt || '请生成新的角色卡。' });
 
-          const completion = await openai.chat.completions.create(
-            {
-              model: apiConfig.model,
-              messages,
-              temperature: activePreset.temperature ?? 1.0,
-              top_p: activePreset.topP ?? 1.0,
-            } as any,
-            { signal: characterAbortControllerRef.current.signal },
-          );
+          let requestParams: any = {
+            model: apiConfig.model,
+            messages,
+            temperature: activePreset.temperature ?? 1.0,
+            top_p: activePreset.topP ?? 1.0,
+          };
+          if (activePreset.topK && activePreset.topK > 0) {
+            requestParams.top_k = activePreset.topK;
+          }
+          
+          let completion;
+          try {
+            completion = await openai.chat.completions.create(
+              requestParams,
+              { signal: characterAbortControllerRef.current.signal },
+            );
+          } catch (apiError: any) {
+            if (apiError.status === 400 && requestParams.top_k) {
+              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+              delete requestParams.top_k;
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: characterAbortControllerRef.current.signal },
+              );
+            } else {
+              throw apiError;
+            }
+          }
 
           const content = completion.choices[0]?.message?.content || '';
           if (!content) throw new Error('Empty response');
@@ -732,15 +790,34 @@ export function useAIGenerators() {
           if (!messages.some(m => m.role === 'user'))
             messages.push({ role: 'user', content: params.userPrompt || '请生成新的世界观设定。' });
 
-          const completion = await openai.chat.completions.create(
-            {
-              model: apiConfig.model,
-              messages,
-              temperature: activePreset.temperature ?? 1.0,
-              top_p: activePreset.topP ?? 1.0,
-            } as any,
-            { signal: worldviewAbortControllerRef.current.signal },
-          );
+          let requestParams: any = {
+            model: apiConfig.model,
+            messages,
+            temperature: activePreset.temperature ?? 1.0,
+            top_p: activePreset.topP ?? 1.0,
+          };
+          if (activePreset.topK && activePreset.topK > 0) {
+            requestParams.top_k = activePreset.topK;
+          }
+          
+          let completion;
+          try {
+            completion = await openai.chat.completions.create(
+              requestParams,
+              { signal: worldviewAbortControllerRef.current.signal },
+            );
+          } catch (apiError: any) {
+            if (apiError.status === 400 && requestParams.top_k) {
+              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+              delete requestParams.top_k;
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: worldviewAbortControllerRef.current.signal },
+              );
+            } else {
+              throw apiError;
+            }
+          }
 
           const content = completion.choices[0]?.message?.content || '';
           if (!content) throw new Error('Empty response');
@@ -934,15 +1011,34 @@ export function useAIGenerators() {
           if (!messages.some(m => m.role === 'user'))
             messages.push({ role: 'user', content: params.userPrompt || '请生成新的灵感。' });
 
-          const completion = await openai.chat.completions.create(
-            {
-              model: apiConfig.model,
-              messages,
-              temperature: activePreset.temperature ?? 1.0,
-              top_p: activePreset.topP ?? 1.0,
-            } as any,
-            { signal: inspirationAbortControllerRef.current.signal },
-          );
+          let requestParams: any = {
+            model: apiConfig.model,
+            messages,
+            temperature: activePreset.temperature ?? 1.0,
+            top_p: activePreset.topP ?? 1.0,
+          };
+          if (activePreset.topK && activePreset.topK > 0) {
+            requestParams.top_k = activePreset.topK;
+          }
+          
+          let completion;
+          try {
+            completion = await openai.chat.completions.create(
+              requestParams,
+              { signal: inspirationAbortControllerRef.current.signal },
+            );
+          } catch (apiError: any) {
+            if (apiError.status === 400 && requestParams.top_k) {
+              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+              delete requestParams.top_k;
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: inspirationAbortControllerRef.current.signal },
+              );
+            } else {
+              throw apiError;
+            }
+          }
 
           const content = completion.choices[0]?.message?.content || '';
           if (!content) throw new Error('Empty response');
@@ -1120,15 +1216,34 @@ export function useAIGenerators() {
           if (!messages.some(m => m.role === 'user'))
             messages.push({ role: 'user', content: params.userPrompt || '请生成剧情粗纲。' });
 
-          const completion = await openai.chat.completions.create(
-            {
-              model: apiConfig.model,
-              messages,
-              temperature: activePreset.temperature ?? 1.0,
-              top_p: activePreset.topP ?? 1.0,
-            } as any,
-            { signal: generateAbortControllerRef.current.signal },
-          );
+          let requestParams: any = {
+            model: apiConfig.model,
+            messages,
+            temperature: activePreset.temperature ?? 1.0,
+            top_p: activePreset.topP ?? 1.0,
+          };
+          if (activePreset.topK && activePreset.topK > 0) {
+            requestParams.top_k = activePreset.topK;
+          }
+          
+          let completion;
+          try {
+            completion = await openai.chat.completions.create(
+              requestParams,
+              { signal: generateAbortControllerRef.current.signal },
+            );
+          } catch (apiError: any) {
+            if (apiError.status === 400 && requestParams.top_k) {
+              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+              delete requestParams.top_k;
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: generateAbortControllerRef.current.signal },
+              );
+            } else {
+              throw apiError;
+            }
+          }
 
           const content = completion.choices[0]?.message?.content || '';
           if (!content) throw new Error('Empty response');
@@ -1322,6 +1437,20 @@ export function useAIGenerators() {
 
             const referenceLibraryStr = buildReferenceContext(activeNovel, null, [], null, [], null, [], null, []);
 
+            const skillContext: SkillContext = {
+              novelId: activeNovel?.id,
+              currentChapter: activeChapter?.id,
+              workflowNode: 'chapter-generation',
+              userMessage: params.userPrompt,
+            };
+
+            const skillResult = await processSkillsForAI(params.userPrompt, skillContext);
+            setLastTriggeredSkills(skillResult.triggeredSkills);
+            if (skillResult.triggeredSkills.length > 0) {
+              terminal.log(`[Skills] 触发技能: ${skillResult.triggeredSkills.join(', ')}`);
+            }
+            const skillsMetadataPrompt = getSkillsMetadataForSystemPrompt();
+
             let outlineContent = '';
             if (params.activeOutlineSetId) {
               const currentOutlineSet = activeNovel?.outlineSets?.find(s => s.id === params.activeOutlineSetId);
@@ -1343,6 +1472,12 @@ export function useAIGenerators() {
             }
 
             const messages: any[] = [{ role: 'system', content: params.systemPrompt }];
+            if (skillsMetadataPrompt) {
+              messages.push({ role: 'system', content: skillsMetadataPrompt });
+            }
+            if (skillResult.skillSystemPrompt) {
+              messages.push({ role: 'system', content: skillResult.skillSystemPrompt });
+            }
             messages.push(...worldInfoMessages);
             if (referenceLibraryStr)
               messages.push({ role: 'system', content: `【写作参考资料】：\n${referenceLibraryStr}` });
@@ -1363,28 +1498,48 @@ export function useAIGenerators() {
               });
             }
 
-            const processedUserPrompt = await processTextWithRegex(params.userPrompt, scripts, 'input');
+            const processedUserPrompt = await processTextWithRegex(skillResult.enhancedMessage, scripts, 'input');
             messages.push({
               role: 'user',
               content: processedUserPrompt || '请根据大纲和前文，继续撰写后续正文。文笔要生动流畅，保持风格一致。',
             });
 
-            const response = (await openai.chat.completions.create(
-              {
-                model: config.model,
-                messages,
-                stream: params.stream,
-                temperature: params.temperature,
-                top_p: params.topP,
-                top_k: params.topK > 0 ? params.topK : 200,
-                presence_penalty: params.presencePenalty,
-                frequency_penalty: params.frequencyPenalty,
-                max_tokens: params.maxReplyLength,
-              } as any,
-              {
-                signal: generateAbortControllerRef.current.signal,
-              },
-            )) as any;
+            let requestParams: any = {
+              model: config.model,
+              messages,
+              stream: params.stream,
+              temperature: params.temperature,
+              top_p: params.topP,
+              presence_penalty: params.presencePenalty,
+              frequency_penalty: params.frequencyPenalty,
+              max_tokens: params.maxReplyLength,
+            };
+            if (params.topK && params.topK > 0) {
+              requestParams.top_k = params.topK;
+            }
+            
+            let response;
+            try {
+              response = (await openai.chat.completions.create(
+                requestParams,
+                {
+                  signal: generateAbortControllerRef.current.signal,
+                },
+              )) as any;
+            } catch (apiError: any) {
+              if (apiError.status === 400 && requestParams.top_k) {
+                terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+                delete requestParams.top_k;
+                response = (await openai.chat.completions.create(
+                  requestParams,
+                  {
+                    signal: generateAbortControllerRef.current.signal,
+                  },
+                )) as any;
+              } else {
+                throw apiError;
+              }
+            }
 
             let newGeneratedContent = '';
             let hasReceivedContent = false;
@@ -1486,5 +1641,7 @@ export function useAIGenerators() {
     setIsGeneratingOutline,
     setOutlineStatus,
     setRegeneratingOutlineItemIndices,
+    lastTriggeredSkills,
+    setLastTriggeredSkills,
   };
 }

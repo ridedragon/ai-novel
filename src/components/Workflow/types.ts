@@ -67,6 +67,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   // 工作流生成节点特定设置
   autoFillContent?: boolean; // AI 是否自动填写生成的节点内容
   volumeContent?: string; // AI 生成的分卷规划原始内容
+  triggeredSkills?: string[]; // 本次执行触发的 Skills
 }
 
 export type WorkflowNode = Node<WorkflowNodeData>;

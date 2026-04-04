@@ -68,6 +68,16 @@ export const WorkflowNode = ({ data, selected }: NodeProps<WorkflowNodeType>) =>
             <span>引用了 {refCount} 个资料集</span>
           </div>
         )}
+        {data.triggeredSkills && data.triggeredSkills.length > 0 && (
+          <div className="flex items-center gap-1 flex-wrap">
+            <span className="text-[10px] text-gray-500">技能:</span>
+            {data.triggeredSkills.map((skill, idx) => (
+              <span key={idx} className="px-1.5 py-0.5 bg-[var(--theme-color)]/20 text-[var(--theme-color)] text-[10px] rounded font-medium">
+                {skill}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <Handle
@@ -122,6 +132,18 @@ export const MobileWorkflowNode = ({ data, selected }: NodeProps<WorkflowNodeTyp
         <div className="mt-1.5 pt-1.5 border-t border-gray-700/50 flex items-center gap-1 text-[8px] text-emerald-400">
           <Library className="w-2.5 h-2.5" />
           <span>引用 {refCount} 个资料集</span>
+        </div>
+      )}
+      {data.triggeredSkills && data.triggeredSkills.length > 0 && (
+        <div className="mt-1 pt-1 border-t border-gray-700/50 flex items-center gap-1 flex-wrap">
+          {data.triggeredSkills.slice(0, 2).map((skill, idx) => (
+            <span key={idx} className="px-1 py-0.5 bg-[var(--theme-color)]/20 text-[var(--theme-color)] text-[8px] rounded font-medium">
+              {skill}
+            </span>
+          ))}
+          {data.triggeredSkills.length > 2 && (
+            <span className="text-[8px] text-gray-500">+{data.triggeredSkills.length - 2}</span>
+          )}
         </div>
       )}
 

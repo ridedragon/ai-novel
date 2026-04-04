@@ -112,6 +112,17 @@ export const useWorkflowEngine = (options: {
     [activeWorkflowId, nodesRef, workflowsRef, setNodes],
   );
 
+  // 节流函数：用于控制节点标签更新频率
+  const lastLabelUpdateRef = useRef<{ [nodeId: string]: number }>({});
+  const throttleLabelUpdate = useCallback((nodeId: string, label: string) => {
+    const now = Date.now();
+    const lastUpdate = lastLabelUpdateRef.current[nodeId] || 0;
+    // 节流：至少 500ms 更新一次标签
+    if (now - lastUpdate < 500) return false;
+    lastLabelUpdateRef.current[nodeId] = now;
+    return true;
+  }, []);
+
   // 执行引擎核心逻辑
   const runWorkflow = async (startIndex: number = 0) => {
     const logPrefix = isMobile ? '[Mobile Workflow]' : '[WORKFLOW]';
@@ -370,7 +381,7 @@ export const useWorkflowEngine = (options: {
             let targetVolumeId = node.data.targetVolumeId as string;
             if (targetVolumeId === 'NEW_VOLUME' && node.data.targetVolumeName) {
               const newVolume = {
-                id: `vol_${Date.now()}`,
+                id: `vol_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                 title: node.data.targetVolumeName as string,
                 collapsed: false,
               };
@@ -600,7 +611,7 @@ export const useWorkflowEngine = (options: {
               {
                 splitRules: parsedRules,
                 volumeContent: aiResponse,
-                outputEntries: [{ id: `vol_plan_${Date.now()}`, title: '分卷规划结果', content: aiResponse }],
+                outputEntries: [{ id: `vol_plan_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`, title: '分卷规划结果', content: aiResponse }],
                 status: 'completed',
               },
               i,
@@ -618,7 +629,7 @@ export const useWorkflowEngine = (options: {
                 status: 'failed',
                 volumeContent: aiResponse,
                 outputEntries: [
-                  { id: `vol_plan_fail_${Date.now()}`, title: '分卷规划 (解析失败)', content: aiResponse },
+                  { id: `vol_plan_fail_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`, title: '分卷规划 (解析失败)', content: aiResponse },
                 ],
               },
               i,
@@ -763,6 +774,20 @@ export const useWorkflowEngine = (options: {
             const existingVol = updatedNovel.volumes?.find(v => v.title === currentWorkflowFolder);
             if (existingVol) {
               volumeAnchorId = existingVol.id;
+              workflowManager.setActiveVolumeAnchor(volumeAnchorId);
+            } else {
+              // 创建新分卷
+              volumeAnchorId =
+                typeof crypto.randomUUID === 'function'
+                  ? crypto.randomUUID()
+                  : Date.now().toString(36) + Math.random().toString(36).substring(2);
+              const newVolume: any = {
+                id: volumeAnchorId,
+                title: currentWorkflowFolder,
+                collapsed: false,
+              };
+              updatedNovel.volumes = [...(updatedNovel.volumes || []), newVolume];
+              changed = true;
               workflowManager.setActiveVolumeAnchor(volumeAnchorId);
             }
 
@@ -1158,14 +1183,19 @@ export const useWorkflowEngine = (options: {
               wStart,
               globalConfig.prompts.filter((p: any) => p.active),
               () => [...(globalConfig.getActiveScripts() || []), ...((preset as any)?.regexScripts || [])],
-              s =>
-                setNodes(nds =>
-                  nds.map(n =>
-                    n.id === node.id
-                      ? { ...n, data: { ...n.data, label: s.match(/完成|失败|跳过|错误/) ? s : `创作中: ${s}` } }
-                      : n,
-                  ),
-                ),
+              s => {
+                // 只有当标签真正变化且超过节流时间时才更新
+                const shouldUpdate = !s.match(/完成|失败|跳过|错误/) ? throttleLabelUpdate(node.id, s) : true;
+                if (shouldUpdate) {
+                  setNodes(nds =>
+                    nds.map(n =>
+                      n.id === node.id
+                        ? { ...n, data: { ...n.data, label: s.match(/完成|失败|跳过|错误/) ? s : `创作中: ${s}` } }
+                        : n,
+                    ),
+                  );
+                }
+              },
               up => {
                 if (!checkActive()) return;
                 // 核心修复：支持增量更新合并，防止 localNovel 被 deltaChapters 覆盖而丢失历史章节
@@ -1367,17 +1397,34 @@ export const useWorkflowEngine = (options: {
 >> -----------------------------------------------------------
 `);
 
-            const completion = await openai.chat.completions.create(
-              {
-                model: fModel,
-                messages: currMsgs,
-                temperature: fTemp,
-                top_p: fTopP,
-                top_k: fTopK > 0 ? fTopK : undefined,
-                max_tokens: fMaxT,
-              } as any,
-              { signal: abortControllerRef.current?.signal },
-            );
+            let requestParams: any = {
+              model: fModel,
+              messages: currMsgs,
+              temperature: fTemp,
+              top_p: fTopP,
+              max_tokens: fMaxT,
+            };
+            if (fTopK && fTopK > 0) {
+              requestParams.top_k = fTopK;
+            }
+            
+            let completion;
+            try {
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: abortControllerRef.current?.signal },
+              );
+            } catch (apiError: any) {
+              // 如果遇到 400 错误并且请求包含 top_k，尝试移除 top_k 后重试
+              if (apiError.status === 400 && requestParams.top_k && retry < 2) {
+                terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+                delete requestParams.top_k;
+                retry++;
+                continue;
+              }
+              throw apiError;
+            }
+            
             aiRes = completion.choices[0]?.message?.content || '';
             if (!aiRes?.trim()) {
               if (retry < 2) {
@@ -1452,56 +1499,73 @@ export const useWorkflowEngine = (options: {
         await syncNodeStatus(node.id, { status: 'completed', outputEntries: [...finalHistory, ...unsaved] }, i);
 
         // Update Novel Sets
-        if (currentWorkflowFolder || node.data.folderName) {
-          const folder = node.data.folderName || currentWorkflowFolder;
-          let upNovel = { ...localNovel };
-          let changed = false;
-          const upSets = (sets: any[], type: string) => {
-            const target = sets?.find(s => s.name === folder);
-            if (!target) return sets;
-            const news = [
-              ...(type === 'worldview' ? target.entries : type === 'character' ? target.characters : target.items),
-            ];
-            accEntries.forEach(e => {
-              const tk = type === 'worldview' ? 'item' : type === 'character' ? 'name' : 'title';
-              const ck =
-                type === 'worldview'
-                  ? 'setting'
-                  : type === 'character'
-                    ? 'bio'
-                    : type === 'plotOutline'
-                      ? 'description'
-                      : type === 'inspiration'
-                        ? 'content'
-                        : 'summary';
-              const idx = news.findIndex((ni: any) => ni[tk] === e.title);
-              const ni = { [tk]: e.title, [ck]: e.content };
-              if (type === 'plotOutline' && idx === -1) (ni as any).id = `plot_${Date.now()}`;
-              if (idx !== -1) news[idx] = { ...news[idx], ...ni };
-              else news.push(ni);
-            });
-            if (type === 'outline')
-              news.sort((a: any, b: any) => (parseAnyNumber(a.title) || 0) - (parseAnyNumber(b.title) || 0));
-            changed = true;
-            return sets.map(s =>
-              s.id === target.id
-                ? { ...s, [type === 'worldview' ? 'entries' : type === 'character' ? 'characters' : 'items']: news }
-                : s,
-            );
-          };
+        let upNovel = { ...localNovel };
+        let changed = false;
+        const folder = node.data.folderName || currentWorkflowFolder;
+        
+        const upSets = (sets: any[] | undefined, type: string) => {
+          if (!sets) sets = [];
+          
+          // 找到目标集合：优先使用匹配文件夹名称的集合，如果没有则使用第一个集合，都没有则创建新的
+          let target = sets.find(s => s.name === folder);
+          if (!target && sets.length > 0) {
+            target = sets[0];
+          }
+          if (!target) {
+            // 创建新的集合
+            target = {
+              id: `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+              name: folder || '默认集合',
+              entries: [],
+              characters: [],
+              items: [],
+            };
+            sets = [...sets, target];
+          }
+          
+          const news = [
+            ...(type === 'worldview' ? target.entries : type === 'character' ? target.characters : target.items),
+          ];
+          accEntries.forEach(e => {
+            const tk = type === 'worldview' ? 'item' : type === 'character' ? 'name' : 'title';
+            const ck =
+              type === 'worldview'
+                ? 'setting'
+                : type === 'character'
+                  ? 'bio'
+                  : type === 'plotOutline'
+                    ? 'description'
+                    : type === 'inspiration'
+                      ? 'content'
+                      : 'summary';
+            const idx = news.findIndex((ni: any) => ni[tk] === e.title);
+            const ni = { [tk]: e.title, [ck]: e.content };
+            if (type === 'plotOutline' && idx === -1) (ni as any).id = `plot_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            if (idx !== -1) news[idx] = { ...news[idx], ...ni };
+            else news.push(ni);
+          });
+          if (type === 'outline')
+            news.sort((a: any, b: any) => (parseAnyNumber(a.title) || 0) - (parseAnyNumber(b.title) || 0));
+          changed = true;
+          return sets.map(s =>
+            s.id === target.id
+              ? { ...s, [type === 'worldview' ? 'entries' : type === 'character' ? 'characters' : 'items']: news }
+              : s,
+          );
+        };
 
-          if (node.data.typeKey === 'worldview')
-            upNovel.worldviewSets = upSets(upNovel.worldviewSets || [], 'worldview');
-          else if (node.data.typeKey === 'characters')
-            upNovel.characterSets = upSets(upNovel.characterSets || [], 'characters');
-          else if (node.data.typeKey === 'outline') upNovel.outlineSets = upSets(upNovel.outlineSets || [], 'outline');
-          else if (node.data.typeKey === 'inspiration')
-            upNovel.inspirationSets = upSets(upNovel.inspirationSets || [], 'inspiration');
-          else if (node.data.typeKey === 'plotOutline')
-            upNovel.plotOutlineSets = upSets(upNovel.plotOutlineSets || [], 'plotOutline');
+        if (node.data.typeKey === 'worldview')
+          upNovel.worldviewSets = upSets(upNovel.worldviewSets, 'worldview');
+        else if (node.data.typeKey === 'characters')
+          upNovel.characterSets = upSets(upNovel.characterSets, 'character');
+        else if (node.data.typeKey === 'outline') 
+          upNovel.outlineSets = upSets(upNovel.outlineSets, 'outline');
+        else if (node.data.typeKey === 'inspiration')
+          upNovel.inspirationSets = upSets(upNovel.inspirationSets, 'inspiration');
+        else if (node.data.typeKey === 'plotOutline')
+          upNovel.plotOutlineSets = upSets(upNovel.plotOutlineSets, 'plotOutline');
 
-          if (changed) await updateLocalAndGlobal(upNovel);
-        }
+        if (changed) await updateLocalAndGlobal(upNovel);
 
         // lastNodeOutput += ... (已移除，改用动态构建)
         setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));

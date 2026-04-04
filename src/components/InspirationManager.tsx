@@ -37,6 +37,7 @@ interface InspirationManagerProps {
   onShowSettings?: () => void
   modelName?: string
   sidebarHeader?: React.ReactNode
+  lastTriggeredSkills?: string[]
 
   // Navigation / Integration
   onSendToModule?: (module: 'worldview' | 'character' | 'outline', content: string) => void
@@ -95,6 +96,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
   onShowSettings,
   modelName,
   sidebarHeader,
+  lastTriggeredSkills,
   onSendToModule,
   onReturnToMainWithContent,
   activePresetId,
@@ -363,21 +365,21 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
   }
 
   return (
-    <div className="w-full flex flex-col md:flex-row h-full bg-gray-900 text-gray-100 overflow-hidden">
+    <div className="w-full flex flex-col md:flex-row h-full bg-white dark:bg-[#09090b] text-gray-100 overflow-hidden">
       {/* Sidebar: Set List */}
-      <div className={`w-full md:w-64 bg-gray-800 border-r border-gray-700 flex flex-col shrink-0 transition-all duration-300 ${isMobileListOpen ? 'h-auto max-h-[60vh]' : 'h-auto'} md:h-auto`}>
+      <div className={`w-full md:w-64 bg-slate-50 dark:bg-[#0f131e] border-r border-slate-200 dark:border-[#1e2433] flex flex-col shrink-0 transition-all duration-300 ${isMobileListOpen ? 'h-auto max-h-[60vh]' : 'h-auto'} md:h-auto`}>
         {sidebarHeader && (
-          <div className="p-3 md:p-4 border-b border-gray-700 shrink-0">
+          <div className="p-3 md:p-4 border-b border-slate-200 dark:border-[#1e2433] shrink-0">
             {sidebarHeader}
           </div>
         )}
 
         {/* Title / Mobile Toggle */}
         <div 
-          className="p-3 md:p-4 border-b border-gray-700 flex items-center justify-between shrink-0 cursor-pointer md:cursor-default hover:bg-gray-700/30 md:hover:bg-transparent transition-colors"
+          className="p-3 md:p-4 border-b border-slate-200 dark:border-[#1e2433] flex items-center justify-between shrink-0 cursor-pointer md:cursor-default hover:bg-slate-100 dark:hover:bg-white/10 md:hover:bg-transparent transition-colors"
           onClick={() => setIsMobileListOpen(!isMobileListOpen)}
         >
-          <h3 className="font-bold flex items-center gap-2 text-gray-200">
+          <h3 className="font-bold flex items-center gap-2 text-slate-900 dark:text-gray-200">
             <Lightbulb className="w-5 h-5 text-[var(--theme-color)]" />
             <span>灵感集列表</span>
             <span className="md:hidden text-xs text-gray-500 font-normal ml-2">
@@ -451,14 +453,14 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
               )}
            </div>
 
-           <div className="p-3 border-t border-gray-700 bg-gray-800 shrink-0">
+           <div className="p-3 border-t border-slate-200 dark:border-[#1e2433] bg-slate-50 dark:bg-[#0f131e] shrink-0">
               <div className="flex gap-2">
                  <input 
                     value={newSetName}
                     onChange={e => setNewSetName(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleAddSet()}
                     placeholder="新灵感集名称..."
-                    className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 text-sm focus:border-[var(--theme-color)] outline-none transition-colors"
+                    className="flex-1 bg-white dark:bg-[#09090b] border border-slate-200 dark:border-[#1e2433] rounded px-3 py-1.5 text-sm focus:border-[var(--theme-color)] outline-none transition-colors"
                  />
                  <button 
                     onClick={handleAddSet}
@@ -473,14 +475,14 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col bg-gray-900 min-w-0 h-full overflow-hidden relative">
+      <div className="flex-1 flex flex-col bg-white dark:bg-[#09090b] min-w-0 h-full overflow-hidden relative">
          {activeSet ? (
             <>
                {/* Toolbar */}
-               <div className="p-3 md:p-4 border-b border-gray-700 bg-gray-800/50 flex flex-wrap items-center justify-between gap-3 md:gap-4 shrink-0 z-10 backdrop-blur-sm sticky top-0">
+               <div className="p-3 md:p-4 border-b border-slate-200 dark:border-[#1e2433] bg-slate-50 dark:bg-[#0f131e]/50 flex flex-wrap items-center justify-between gap-3 md:gap-4 shrink-0 z-10 backdrop-blur-sm sticky top-0">
                   <div className="flex items-center gap-2 md:gap-3 overflow-hidden">
-                     <h2 className="text-lg md:text-xl font-bold text-gray-100 truncate">{activeSet.name}</h2>
-                     <span className="bg-gray-700 text-gray-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full shrink-0">
+                     <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-gray-100 truncate">{activeSet.name}</h2>
+                     <span className="bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-gray-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full shrink-0">
                         {activeSet.items.length} 条灵感
                      </span>
                   </div>
@@ -573,6 +575,16 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
                                     <span className="hidden md:inline">生成灵感</span>
                                     <span className="md:hidden">生成</span>
                                  </button>
+                              </div>
+                           )}
+                           {lastTriggeredSkills && lastTriggeredSkills.length > 0 && (
+                              <div className="flex items-center gap-1 mt-1">
+                                 <span className="text-[10px] text-gray-500">触发技能:</span>
+                                 {lastTriggeredSkills.map((skill, idx) => (
+                                    <span key={idx} className="px-1.5 py-0.5 bg-[var(--theme-color)]/20 text-[var(--theme-color)] text-[10px] rounded font-medium">
+                                       {skill}
+                                    </span>
+                                 ))}
                               </div>
                            )}
                         </div>

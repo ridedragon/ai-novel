@@ -63,6 +63,10 @@ import { handleExportNovel, handleExportVolume } from './utils/exportUtils';
 import { keepAliveManager } from './utils/KeepAliveManager';
 import { storage } from './utils/storage';
 import { checkAndGenerateSummary } from './utils/SummaryManager';
+import { initializeBuiltinSkills } from './skills/builtinSkills';
+import { skillRegistry } from './skills/SkillRegistry';
+import { SkillTriggerMatcher, SkillLoader } from './skills';
+import SkillManager from './components/SkillManager';
 
 function App() {
   // --- 1. 初始化核心 Hooks ---
@@ -105,6 +109,22 @@ function App() {
   const [showGeneratorApiConfig, setShowGeneratorApiConfig] = useState(false);
   const [editingGeneratorPromptIndex, setEditingGeneratorPromptIndex] = useState<number | null>(null);
   const [tempEditingPrompt, setTempEditingPrompt] = useState<GeneratorPrompt | null>(null);
+
+  const [showSkillManager, setShowSkillManager] = useState(false);
+  const [skillsCount, setSkillsCount] = useState(0);
+
+  useEffect(() => {
+    initializeBuiltinSkills();
+    setSkillsCount(skillRegistry.getEnabledSkillCount());
+
+    const unsubscribe = skillRegistry.onChange(() => {
+      setSkillsCount(skillRegistry.getEnabledSkillCount());
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   // 各模块的 User Prompt 状态
   const [inspirationUserPrompt, setInspirationUserPrompt] = useState('');
@@ -241,8 +261,21 @@ function App() {
     [novelData, generators, config, getActiveScripts, autoWrite],
   );
 
-  const [newNovelTitle, setNewNovelTitle] = useState('');
-  const [newNovelVolume, setNewNovelVolume] = useState('');
+  const [newNovelData, setNewNovelData] = useState<{
+    title: string;
+    volume: string;
+    coverUrl: string;
+    category: string;
+    status: '连载中' | '已完结';
+    description: string;
+  }>({
+    title: '',
+    volume: '',
+    coverUrl: '',
+    category: '',
+    status: '连载中',
+    description: '',
+  });
 
   // 版本切换辅助函数
   const handleVersionStep = useCallback(
@@ -330,8 +363,14 @@ function App() {
             novelData.setActiveChapterId(null);
           }}
           onCreateNovel={() => {
-            setNewNovelTitle('');
-            setNewNovelVolume('');
+            setNewNovelData({
+              title: '',
+              volume: '',
+              coverUrl: '',
+              category: '',
+              status: '连载中',
+              description: '',
+            });
             setShowCreateNovelModal(true);
           }}
           onDeleteNovel={novelData.deleteNovel}
@@ -354,13 +393,18 @@ function App() {
           isOpen={showCreateNovelModal}
           onClose={() => setShowCreateNovelModal(false)}
           onConfirm={() => {
-            novelData.addNovel(newNovelTitle, newNovelVolume);
+            novelData.addNovel(
+              newNovelData.title,
+              newNovelData.volume,
+              newNovelData.coverUrl,
+              newNovelData.category,
+              newNovelData.status,
+              newNovelData.description
+            );
             setShowCreateNovelModal(false);
           }}
-          newNovelTitle={newNovelTitle}
-          setNewNovelTitle={setNewNovelTitle}
-          newNovelVolume={newNovelVolume}
-          setNewNovelVolume={setNewNovelVolume}
+          newNovelData={newNovelData}
+          setNewNovelData={setNewNovelData}
         />
         <GlobalSettingsModal
           isOpen={showSettings}
@@ -420,6 +464,20 @@ function App() {
           </button>
           <button className="p-2 text-slate-500" onClick={() => setShowSettings(true)}>
             <Settings className="w-4 h-4" />
+          </button>
+          <button
+            className="p-2 text-slate-500 hover:text-[var(--theme-color)] transition-colors relative"
+            onClick={() => setShowSkillManager(true)}
+            title="Skills 管理"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            {skillsCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-[var(--theme-color)] text-white text-[8px] rounded-full flex items-center justify-center">
+                {skillsCount}
+              </span>
+            )}
           </button>
           <button
             className="bg-primary/10 text-primary px-4 py-1.5 rounded-lg text-xs font-semibold"
@@ -1264,26 +1322,153 @@ function App() {
             onClose={() => setShowGeneratorSettingsModal(false)}
             generatorSettingsType={generatorSettingsType}
             setGeneratorSettingsType={setGeneratorSettingsType}
-            getGeneratorPresets={() => generators.outlinePresets}
-            setGeneratorPresets={() => {}}
-            getActiveGeneratorPresetId={() => generators.activeOutlinePresetId}
-            setActiveGeneratorPresetId={() => {}}
-            handleAddNewGeneratorPreset={() => {}}
-            handleDeleteGeneratorPreset={() => {}}
-            handleExportGeneratorPreset={() => {}}
-            handleImportGeneratorPreset={() => {}}
+            getGeneratorPresets={() => {
+              switch (generatorSettingsType) {
+                case 'outline': return generators.outlinePresets;
+                case 'character': return generators.characterPresets;
+                case 'worldview': return generators.worldviewPresets;
+                case 'inspiration': return generators.inspirationPresets;
+                case 'plotOutline': return generators.plotOutlinePresets;
+                case 'optimize': return generators.optimizePresets;
+                case 'analysis': return generators.analysisPresets;
+                default: return generators.outlinePresets;
+              }
+            }}
+            setGeneratorPresets={(newPresets) => {
+              switch (generatorSettingsType) {
+                case 'outline': generators.setOutlinePresets(newPresets); break;
+                case 'character': generators.setCharacterPresets(newPresets); break;
+                case 'worldview': generators.setWorldviewPresets(newPresets); break;
+                case 'inspiration': generators.setInspirationPresets(newPresets); break;
+                case 'plotOutline': generators.setPlotOutlinePresets(newPresets); break;
+                case 'optimize': generators.setOptimizePresets(newPresets); break;
+                case 'analysis': generators.setAnalysisPresets(newPresets); break;
+              }
+            }}
+            getActiveGeneratorPresetId={() => {
+              switch (generatorSettingsType) {
+                case 'outline': return generators.activeOutlinePresetId;
+                case 'character': return generators.activeCharacterPresetId;
+                case 'worldview': return generators.activeWorldviewPresetId;
+                case 'inspiration': return generators.activeInspirationPresetId;
+                case 'plotOutline': return generators.activePlotOutlinePresetId;
+                case 'optimize': return generators.activeOptimizePresetId;
+                case 'analysis': return generators.activeAnalysisPresetId;
+                default: return generators.activeOutlinePresetId;
+              }
+            }}
+            setActiveGeneratorPresetId={(id) => {
+              switch (generatorSettingsType) {
+                case 'outline': generators.setActiveOutlinePresetId(id); break;
+                case 'character': generators.setActiveCharacterPresetId(id); break;
+                case 'worldview': generators.setActiveWorldviewPresetId(id); break;
+                case 'inspiration': generators.setActiveInspirationPresetId(id); break;
+                case 'plotOutline': generators.setActivePlotOutlinePresetId(id); break;
+                case 'optimize': generators.setActiveOptimizePresetId(id); break;
+                case 'analysis': generators.setActiveAnalysisPresetId(id); break;
+              }
+            }}
+            handleAddNewGeneratorPreset={() => {
+              generators.addGeneratorPreset(generatorSettingsType);
+            }}
+            handleDeleteGeneratorPreset={(id) => {
+              generators.deleteGeneratorPreset(generatorSettingsType, id);
+            }}
+            handleExportGeneratorPreset={(preset) => {
+              const dataStr = JSON.stringify(preset, null, 2);
+              const blob = new Blob([dataStr], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${preset.name}_preset.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            handleImportGeneratorPreset={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = '.json';
+              input.onchange = (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    try {
+                      const preset = JSON.parse(event.target?.result as string);
+                      const setter = 
+                        generatorSettingsType === 'outline' ? generators.setOutlinePresets :
+                        generatorSettingsType === 'character' ? generators.setCharacterPresets :
+                        generatorSettingsType === 'worldview' ? generators.setWorldviewPresets :
+                        generatorSettingsType === 'inspiration' ? generators.setInspirationPresets :
+                        generatorSettingsType === 'plotOutline' ? generators.setPlotOutlinePresets :
+                        generatorSettingsType === 'optimize' ? generators.setOptimizePresets :
+                        generators.setAnalysisPresets;
+                      setter(prev => [...prev, preset]);
+                    } catch (err) {
+                      console.error('Failed to import preset:', err);
+                    }
+                  };
+                  reader.readAsText(file);
+                }
+              };
+              input.click();
+            }}
             twoStepOptimization={config.twoStepOptimization}
             setTwoStepOptimization={config.setTwoStepOptimization}
             analysisResult=""
             showGeneratorApiConfig={showGeneratorApiConfig}
             setShowGeneratorApiConfig={setShowGeneratorApiConfig}
-            showGeneratorPromptEditModal={false}
-            setShowGeneratorPromptEditModal={() => {}}
+            showGeneratorPromptEditModal={showEditModal}
+            setShowGeneratorPromptEditModal={setShowEditModal}
             editingGeneratorPromptIndex={editingGeneratorPromptIndex}
             setEditingGeneratorPromptIndex={setEditingGeneratorPromptIndex}
             tempEditingPrompt={tempEditingPrompt}
             setTempEditingPrompt={setTempEditingPrompt}
-            handleSaveGeneratorPrompt={() => {}}
+            handleSaveGeneratorPrompt={() => {
+              if (editingGeneratorPromptIndex !== null && tempEditingPrompt) {
+                const currentPresets = (() => {
+                  switch (generatorSettingsType) {
+                    case 'outline': return generators.outlinePresets;
+                    case 'character': return generators.characterPresets;
+                    case 'worldview': return generators.worldviewPresets;
+                    case 'inspiration': return generators.inspirationPresets;
+                    case 'plotOutline': return generators.plotOutlinePresets;
+                    case 'optimize': return generators.optimizePresets;
+                    case 'analysis': return generators.analysisPresets;
+                    default: return generators.outlinePresets;
+                  }
+                })();
+                const activeId = (() => {
+                  switch (generatorSettingsType) {
+                    case 'outline': return generators.activeOutlinePresetId;
+                    case 'character': return generators.activeCharacterPresetId;
+                    case 'worldview': return generators.activeWorldviewPresetId;
+                    case 'inspiration': return generators.activeInspirationPresetId;
+                    case 'plotOutline': return generators.activePlotOutlinePresetId;
+                    case 'optimize': return generators.activeOptimizePresetId;
+                    case 'analysis': return generators.activeAnalysisPresetId;
+                    default: return generators.activeOutlinePresetId;
+                  }
+                })();
+                const currentPreset = currentPresets.find(p => p.id === activeId);
+                if (currentPreset) {
+                  const newPrompts = [...currentPreset.prompts];
+                  newPrompts[editingGeneratorPromptIndex] = tempEditingPrompt;
+                  const setter = 
+                    generatorSettingsType === 'outline' ? generators.setOutlinePresets :
+                    generatorSettingsType === 'character' ? generators.setCharacterPresets :
+                    generatorSettingsType === 'worldview' ? generators.setWorldviewPresets :
+                    generatorSettingsType === 'inspiration' ? generators.setInspirationPresets :
+                    generatorSettingsType === 'plotOutline' ? generators.setPlotOutlinePresets :
+                    generatorSettingsType === 'optimize' ? generators.setOptimizePresets :
+                    generators.setAnalysisPresets;
+                  setter(currentPresets.map(p => p.id === activeId ? { ...p, prompts: newPrompts } : p));
+                }
+                setShowEditModal(false);
+                setTempEditingPrompt(null);
+                setEditingGeneratorPromptIndex(null);
+              }
+            }}
             isDragEnabled={isDragEnabled}
             setIsDragEnabled={setIsDragEnabled}
             draggedPromptIndex={draggedPromptIndex}
@@ -1321,6 +1506,8 @@ function App() {
         )}
         <GlobalDialog isOpen={dialog.isOpen} {...dialog} onCancel={closeDialog} />
       </Suspense>
+
+      <SkillManager isOpen={showSkillManager} onClose={() => setShowSkillManager(false)} />
     </NovelEditorLayout>
   );
 }

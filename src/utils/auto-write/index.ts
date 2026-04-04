@@ -410,20 +410,40 @@ export class AutoWriteEngine {
               ? 128000
               : this.config.maxReplyLength * (batchItems.length > 1 ? 1.5 : 1);
 
-          const response = (await openai.chat.completions.create(
-            {
+          let requestParams: any = {
               model: this.config.model,
               messages: messages,
               stream: this.config.stream,
               temperature: this.config.temperature,
               top_p: this.config.topP,
-              top_k: this.config.topK && this.config.topK > 0 ? this.config.topK : undefined,
               max_tokens: Math.round(batchMaxTokens),
-            } as any,
-            {
-              signal: this.abortController?.signal,
-            },
-          )) as any;
+            };
+            if (this.config.topK && this.config.topK > 0) {
+              requestParams.top_k = this.config.topK;
+            }
+          
+          let response;
+          try {
+            response = (await openai.chat.completions.create(
+              requestParams,
+              {
+                signal: this.abortController?.signal,
+              },
+            )) as any;
+          } catch (apiError: any) {
+            if (apiError.status === 400 && requestParams.top_k) {
+              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+              delete requestParams.top_k;
+              response = (await openai.chat.completions.create(
+                requestParams,
+                {
+                  signal: this.abortController?.signal,
+                },
+              )) as any;
+            } else {
+              throw apiError;
+            }
+          }
 
           let fullGeneratedContent = '';
 
@@ -809,16 +829,34 @@ export class AutoWriteEngine {
 
           while (analysisAttempt <= maxAnalysisRetries && !analysisSuccess) {
             try {
-              const completion = await openai.chat.completions.create(
-                {
+              let requestParams: any = {
                   model: this.config.analysisModel || this.config.model,
                   messages: analysisMessages,
                   temperature: analysisPreset.temperature ?? 1.0,
                   top_p: analysisPreset.topP ?? 1.0,
-                  top_k: analysisPreset.topK && analysisPreset.topK > 0 ? analysisPreset.topK : 200,
-                } as any,
-                { signal: optimizationAbortController.signal },
-              );
+                };
+                if (analysisPreset.topK && analysisPreset.topK > 0) {
+                  requestParams.top_k = analysisPreset.topK;
+                }
+          
+              let completion;
+              try {
+                completion = await openai.chat.completions.create(
+                  requestParams,
+                  { signal: optimizationAbortController.signal },
+                );
+              } catch (apiError: any) {
+                if (apiError.status === 400 && requestParams.top_k) {
+                  terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+                  delete requestParams.top_k;
+                  completion = await openai.chat.completions.create(
+                    requestParams,
+                    { signal: optimizationAbortController.signal },
+                  );
+                } else {
+                  throw apiError;
+                }
+              }
 
               currentAnalysisResult = completion.choices[0]?.message?.content || '';
               if (currentAnalysisResult) analysisSuccess = true;
@@ -908,16 +946,34 @@ export class AutoWriteEngine {
 
       while (optAttempt <= maxOptRetries && !optSuccess) {
         try {
-          const completion = await openai.chat.completions.create(
-            {
+          let requestParams: any = {
               model: this.config.optimizeModel || this.config.model,
               messages: messages,
               temperature: activePreset.temperature ?? 1.0,
               top_p: activePreset.topP ?? 1.0,
-              top_k: activePreset.topK && activePreset.topK > 0 ? activePreset.topK : 200,
-            } as any,
-            { signal: optimizationAbortController.signal },
-          );
+            };
+            if (activePreset.topK && activePreset.topK > 0) {
+              requestParams.top_k = activePreset.topK;
+            }
+          
+          let completion;
+          try {
+            completion = await openai.chat.completions.create(
+              requestParams,
+              { signal: optimizationAbortController.signal },
+            );
+          } catch (apiError: any) {
+            if (apiError.status === 400 && requestParams.top_k) {
+              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+              delete requestParams.top_k;
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: optimizationAbortController.signal },
+              );
+            } else {
+              throw apiError;
+            }
+          }
 
           optimizedContent = completion.choices[0]?.message?.content || '';
           if (optimizedContent) optSuccess = true;

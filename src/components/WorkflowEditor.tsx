@@ -217,7 +217,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   }, [isOpen, refreshWorkflows, healWorkflowData, activeNovel]);
 
   useEffect(() => {
-    autoSave(nodes, edges, currentNodeIndex);
+    autoSave(nodes, edges, currentNodeIndex, isRunning);
   }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning]);
 
   const switchWorkflow = useCallback((id: string) => {

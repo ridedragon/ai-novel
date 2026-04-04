@@ -196,7 +196,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
   }, [isOpen]);
 
   useEffect(() => {
-    autoSave(nodes, edges, currentNodeIndex);
+    autoSave(nodes, edges, currentNodeIndex, isRunning);
   }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning]);
 
   const onConnect = useCallback(

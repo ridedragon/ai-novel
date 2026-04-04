@@ -1,4 +1,4 @@
-import { Edit2, MessageSquare, Plus, Trash2, Wand2, X } from 'lucide-react';
+import { Edit2, Expand, MessageSquare, Plus, Trash2, Wand2, X } from 'lucide-react';
 import { useState } from 'react';
 import { GeneratorPrompt } from '../../../../../types';
 import { WorkflowNodeData } from '../../../types';
@@ -11,6 +11,7 @@ interface PromptEditorProps {
 
 export const PromptEditor = ({ data, onUpdate, isMobile = false }: PromptEditorProps) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // 如果没有提示词条目，尝试使用 systemPrompt 或初始化为空
   const promptItems =
@@ -49,19 +50,34 @@ export const PromptEditor = ({ data, onUpdate, isMobile = false }: PromptEditorP
         >
           对话提示词 (Prompts)
         </label>
-        <button
-          onClick={e => {
-            e.stopPropagation();
-            setIsEditing(true);
-          }}
-          className={
-            isMobile
-              ? 'text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-bold p-2 -m-2'
-              : 'text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-bold'
-          }
-        >
-          <Edit2 className="w-3 h-3" /> {isMobile ? '编辑管理' : `编辑条目 (${promptItems.length})`}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              setIsEditing(true);
+            }}
+            className={
+              isMobile
+                ? 'text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-bold p-2 -m-2'
+                : 'text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-bold'
+            }
+          >
+            <Edit2 className="w-3 h-3" /> {isMobile ? '编辑管理' : `编辑条目 (${promptItems.length})`}
+          </button>
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              setIsExpanded(true);
+            }}
+            className={
+              isMobile
+                ? 'text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 font-bold p-2 -m-2'
+                : 'text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 font-bold'
+            }
+          >
+            <Expand className="w-3 h-3" /> {isMobile ? '放大' : '放大编辑'}
+          </button>
+        </div>
       </div>
       <div
         onClick={() => setIsEditing(true)}
@@ -240,10 +256,101 @@ export const PromptEditor = ({ data, onUpdate, isMobile = false }: PromptEditorP
     </div>
   );
 
+  // 放大全屏编辑视图
+  const renderExpandedModal = () => (
+    <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="absolute inset-0" onClick={() => setIsExpanded(false)} />
+
+      <div className="relative w-full max-w-[900px] h-[90vh] bg-[#1e2230] rounded-2xl shadow-2xl border border-gray-700 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="p-5 border-b border-gray-700/50 flex items-center justify-between bg-[#1a1d29] shrink-0">
+          <div className="flex items-center gap-3 text-amber-400">
+            <Expand className="w-6 h-6" />
+            <span className="font-bold text-gray-100 text-xl">放大编辑对话提示词</span>
+          </div>
+          <button
+            onClick={() => setIsExpanded(false)}
+            className="p-2 hover:bg-gray-700/50 rounded-lg text-gray-400 hover:text-white transition-all"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar bg-[#1e2230]">
+          {promptItems.length === 0 && (
+            <div className="text-center py-16 border-2 border-dashed border-gray-800 rounded-2xl">
+              <MessageSquare className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+              <p className="text-base text-gray-500">暂无自定义提示词条目</p>
+            </div>
+          )}
+
+          {promptItems.map((item, idx) => (
+            <div key={item.id || idx} className="bg-[#161922] border border-gray-700 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 bg-gray-800/50 border-b border-gray-700/50">
+                <div className="flex items-center gap-4">
+                  <select
+                    value={item.role}
+                    onChange={e => handleUpdateItem(idx, { role: e.target.value as any })}
+                    className="bg-indigo-500/10 text-indigo-400 text-sm font-bold uppercase tracking-widest border border-indigo-500/30 rounded-lg px-3 py-1.5 outline-none"
+                  >
+                    <option value="system">System</option>
+                    <option value="user">User</option>
+                    <option value="assistant">Assistant</option>
+                  </select>
+                  <label className="flex items-center gap-2 cursor-pointer active:opacity-70">
+                    <input
+                      type="checkbox"
+                      checked={item.enabled !== false}
+                      onChange={e => handleUpdateItem(idx, { enabled: e.target.checked })}
+                      className="w-4 h-4 rounded border-gray-700 bg-gray-900 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">启用</span>
+                  </label>
+                </div>
+                <button
+                  onClick={() => handleDeleteItem(idx)}
+                  className="p-2 text-gray-500 active:text-red-400 hover:text-red-400 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+              <textarea
+                value={item.content}
+                onChange={e => handleUpdateItem(idx, { content: e.target.value })}
+                placeholder="输入内容... 支持 {{context}} 变量"
+                className="w-full h-48 bg-transparent p-5 text-base text-gray-300 focus:text-white outline-none resize-none font-mono leading-relaxed"
+              />
+            </div>
+          ))}
+
+          <button
+            onClick={handleAddItem}
+            className="w-full py-5 border-2 border-dashed border-gray-700 rounded-xl text-gray-500 hover:text-indigo-400 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all flex items-center justify-center gap-2 font-bold text-base"
+          >
+            <Plus className="w-5 h-5" />
+            添加新的提示词条目
+          </button>
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-gray-700/50 bg-[#1a1d29] flex justify-end shrink-0">
+          <button
+            onClick={() => setIsExpanded(false)}
+            className="px-8 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-base font-bold shadow-lg shadow-amber-900/20 transition-all active:scale-95"
+          >
+            完成编辑
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       {renderPreview()}
       {isEditing && renderModal()}
+      {isExpanded && renderExpandedModal()}
     </>
   );
 };

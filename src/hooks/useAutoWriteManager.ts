@@ -251,15 +251,34 @@ export function useAutoWriteManager() {
             .map(p => ({ role: p.role, content: p.content.replace('{{content}}', sourceContentToUse!) }))
             .filter(m => m.content?.trim());
 
-          const completion = await openai.chat.completions.create(
-            {
-              model: anaModel,
-              messages,
-              temperature: analysisPreset.temperature ?? 1.0,
-              top_p: analysisPreset.topP ?? 1.0,
-            },
-            { signal: abortController.signal },
-          );
+          let requestParams: any = {
+            model: anaModel,
+            messages,
+            temperature: analysisPreset.temperature ?? 1.0,
+            top_p: analysisPreset.topP ?? 1.0,
+          };
+          if (analysisPreset.topK && analysisPreset.topK > 0) {
+            requestParams.top_k = analysisPreset.topK;
+          }
+          
+          let completion;
+          try {
+            completion = await openai.chat.completions.create(
+              requestParams,
+              { signal: abortController.signal },
+            );
+          } catch (apiError: any) {
+            if (apiError.status === 400 && requestParams.top_k) {
+              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+              delete requestParams.top_k;
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: abortController.signal },
+              );
+            } else {
+              throw apiError;
+            }
+          }
           currentAnalysisResult = completion.choices[0]?.message?.content || '';
           if (params.onAnalysisResult) params.onAnalysisResult(currentAnalysisResult);
           setChapters(prev => prev.map(c => (c.id === targetId ? { ...c, analysisResult: currentAnalysisResult } : c)));
@@ -295,16 +314,35 @@ export function useAutoWriteManager() {
           else messages.push({ role: 'user', content: `请基于以下建议优化正文：\n\n${currentAnalysisResult}` });
         }
 
-        const stream = await openai.chat.completions.create(
-          {
+        let requestParams: any = {
             model: finalModel,
             messages,
             temperature: activePreset.temperature ?? 1.0,
             top_p: activePreset.topP ?? 1.0,
             stream: true,
-          },
-          { signal: abortController.signal },
-        );
+          };
+          if (activePreset.topK && activePreset.topK > 0) {
+            requestParams.top_k = activePreset.topK;
+          }
+          
+          let stream;
+          try {
+            stream = await openai.chat.completions.create(
+              requestParams,
+              { signal: abortController.signal },
+            );
+          } catch (apiError: any) {
+            if (apiError.status === 400 && requestParams.top_k) {
+              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
+              delete requestParams.top_k;
+              stream = await openai.chat.completions.create(
+                requestParams,
+                { signal: abortController.signal },
+              );
+            } else {
+              throw apiError;
+            }
+          }
 
         let newContent = '';
         let lastUpdateTime = 0;

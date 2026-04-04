@@ -524,22 +524,51 @@ export const storage = {
   // 监控写入频率
   _lastSaveTime: 0,
   _saveCountInWindow: 0,
+  // 保存防抖定时器
+  _saveDebounceTimer: null as NodeJS.Timeout | null,
+  // 待保存的 novels 引用
+  _pendingNovels: null as Novel[] | null,
 
   async saveNovels(novels: Novel[]): Promise<void> {
     const startTime = Date.now();
 
-    // 验证假设：检测高频写入
+    // 如果有正在等待的保存，取消它
+    if (this._saveDebounceTimer) {
+      clearTimeout(this._saveDebounceTimer);
+    }
+
+    // 更新待保存的 novels
+    this._pendingNovels = novels;
+
+    // 验证假设：检测高频写入（仅记录，不阻塞）
     if (startTime - this._lastSaveTime < 500) {
       this._saveCountInWindow++;
-      if (this._saveCountInWindow > 5) {
+      if (this._saveCountInWindow > 5 && this._saveCountInWindow % 10 === 0) {
         terminal.warn(
-          `[FREQ ALERT] storage.saveNovels 触发频率过高: 500ms内达 ${this._saveCountInWindow} 次 (建议检查组件更新源)`,
+          `[FREQ ALERT] storage.saveNovels 触发频率过高: 500ms内达 ${this._saveCountInWindow} 次 (已启用防抖)`
         );
       }
     } else {
       this._saveCountInWindow = 0;
     }
     this._lastSaveTime = startTime;
+
+    // 使用 Promise 包装防抖逻辑，使调用者可以等待最终完成
+    return new Promise((resolve, reject) => {
+      this._saveDebounceTimer = setTimeout(async () => {
+        try {
+          await this._doSaveNovels(this._pendingNovels!);
+          resolve();
+        } catch (e) {
+          reject(e);
+        }
+      }, 300); // 300ms 防抖
+    });
+  },
+
+  // 实际执行保存的内部函数
+  async _doSaveNovels(novels: Novel[]): Promise<void> {
+    const startTime = Date.now();
 
     const tasks: Promise<any>[] = []; // 并行任务清单
 

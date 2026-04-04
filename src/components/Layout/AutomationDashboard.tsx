@@ -53,7 +53,7 @@ export const AutomationDashboard: React.FC<AutomationDashboardProps> = ({
   referenceProps,
 }) => {
   return (
-    <div className={`flex-1 bg-white dark:bg-[#0a0c12] flex flex-col custom-bg-transition ${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration' || creationModule === 'plotOutline' || creationModule === 'reference') ? 'p-0 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
+    <div className={`flex-1 bg-white dark:bg-[#09090b] flex flex-col custom-bg-transition ${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration' || creationModule === 'plotOutline' || creationModule === 'reference') ? 'p-0 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
       <div className={`${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration' || creationModule === 'plotOutline' || creationModule === 'reference') ? 'w-full h-full' : 'max-w-4xl mx-auto w-full space-y-6'}`}>
         {/* Dashboard Menu */}
         {creationModule === 'menu' && (
@@ -75,7 +75,7 @@ export const AutomationDashboard: React.FC<AutomationDashboardProps> = ({
                 <button
                   key={item.id}
                   onClick={() => handleSwitchModule(item.id as any)}
-                  className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center custom-input-bg"
+                  className="bg-slate-50 dark:bg-[#0f131e]/50 border border-slate-200 dark:border-[#1e2433] rounded-xl p-6 hover:border-[var(--theme-color)] hover:shadow-lg transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center custom-input-bg"
                 >
                   <div className={`p-4 bg-slate-100 dark:bg-gray-700/50 rounded-full group-hover:bg-[var(--theme-color)]/20 group-hover:text-[var(--theme-color)] transition-colors ${item.color}`}>
                     <item.icon className="w-10 h-10" />
@@ -89,7 +89,7 @@ export const AutomationDashboard: React.FC<AutomationDashboardProps> = ({
 
               <button
                 onClick={() => setShowWorkflowEditor(true)}
-                className="bg-indigo-50 dark:bg-indigo-900/20 border-2 border-indigo-200 dark:border-indigo-500/50 rounded-xl p-6 hover:border-indigo-400 hover:shadow-indigo-500/20 hover:shadow-xl transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center custom-input-bg"
+                className="bg-slate-50 dark:bg-[#0f131e]/50 border-2 border-indigo-200 dark:border-indigo-500/50 rounded-xl p-6 hover:border-indigo-400 hover:shadow-indigo-500/20 hover:shadow-xl transition-all flex flex-col items-center gap-4 group text-center h-64 justify-center custom-input-bg"
               >
                 <div className="p-4 bg-indigo-100 dark:bg-indigo-500/20 rounded-full group-hover:bg-indigo-200 dark:group-hover:bg-indigo-500/30 text-indigo-500 dark:text-indigo-400">
                   <GitBranch className="w-10 h-10" />
@@ -101,7 +101,7 @@ export const AutomationDashboard: React.FC<AutomationDashboardProps> = ({
               </button>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-xl p-6 custom-input-bg">
+            <div className="bg-slate-50 dark:bg-[#0f131e]/50 border border-slate-200 dark:border-[#1e2433] rounded-xl p-6 custom-input-bg">
               <div className="flex items-center gap-2 mb-3">
                 <Bot className="w-5 h-5 text-[var(--theme-color)]" />
                 <h3 className="text-lg font-bold text-slate-900 dark:text-gray-200">全局创作提示词</h3>
@@ -120,7 +120,7 @@ export const AutomationDashboard: React.FC<AutomationDashboardProps> = ({
           </div>
         )}
 
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-gray-900 text-gray-400">加载中...</div>}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-white dark:bg-[#09090b] text-slate-500 dark:text-gray-400">加载中...</div>}>
           {creationModule === 'inspiration' && activeNovel && (
             <InspirationManager novel={activeNovel} {...inspirationProps} />
           )}

@@ -1,5 +1,5 @@
-import { BookOpen, ChevronDown, Cpu, FileText, PauseCircle, Play, Trash2, Wand2 } from 'lucide-react';
-import { useRef } from 'react';
+import { BookOpen, ChevronDown, Cpu, Expand, FileText, PauseCircle, Play, Trash2, Wand2, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { GeneratorPreset, Novel } from '../../../../types';
 import { WorkflowNode, WorkflowNodeData } from '../../types';
 import { BasicNodeInfo, NodeHeader } from './Shared/BasicNodeInfo';
@@ -34,6 +34,7 @@ export const DesktopPanel = ({
   consolidatedModelList,
 }: DesktopPanelProps) => {
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isInstructionExpanded, setIsInstructionExpanded] = useState(false);
 
   // 防抖更新函数
   const debouncedUpdate = (updates: Partial<WorkflowNodeData>) => {
@@ -222,11 +223,19 @@ export const DesktopPanel = ({
           {node.data.typeKey !== 'pauseNode' && node.data.typeKey !== 'saveToVolume' && (
             <>
               <div className="space-y-3 pt-6 border-t border-gray-700/30">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                  {node.data.typeKey === 'workflowGenerator'
-                    ? '工作流需求描述 (Architecture Requirements)'
-                    : '额外指令 (USER PROMPT)'}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                    {node.data.typeKey === 'workflowGenerator'
+                      ? '工作流需求描述 (Architecture Requirements)'
+                      : '额外指令 (USER PROMPT)'}
+                  </label>
+                  <button
+                    onClick={() => setIsInstructionExpanded(true)}
+                    className="p-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-md transition-colors flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
+                  >
+                    <Expand className="w-3 h-3" /> 放大编辑
+                  </button>
+                </div>
                 <textarea
                   value={node.data.instruction}
                   onChange={e => handleUpdate({ instruction: e.target.value })}
@@ -298,6 +307,50 @@ export const DesktopPanel = ({
           </button>
         </div>
       </div>
+
+      {isInstructionExpanded && (
+        <div className="fixed inset-0 z-[170] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="absolute inset-0" onClick={() => setIsInstructionExpanded(false)} />
+          <div className="relative w-full max-w-[900px] h-[90vh] bg-[#1e2230] rounded-2xl shadow-2xl border border-gray-700 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-gray-700/50 flex items-center justify-between bg-[#1a1d29] shrink-0">
+              <div className="flex items-center gap-3 text-amber-400">
+                <Expand className="w-6 h-6" />
+                <span className="font-bold text-gray-100 text-xl">
+                  {node.data.typeKey === 'workflowGenerator'
+                    ? '放大编辑工作流需求描述'
+                    : '放大编辑额外指令 (USER PROMPT)'}
+                </span>
+              </div>
+              <button
+                onClick={() => setIsInstructionExpanded(false)}
+                className="p-2 hover:bg-gray-700/50 rounded-lg text-gray-400 hover:text-white transition-all"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-[#1e2230]">
+              <textarea
+                value={node.data.instruction}
+                onChange={e => handleUpdate({ instruction: e.target.value })}
+                placeholder={
+                  node.data.typeKey === 'workflowGenerator'
+                    ? '描述你想要的工作流结构，例如：先写灵感，再写世界观和角色，最后生成大纲和正文...'
+                    : '输入该步骤的特定要求或引导词...'
+                }
+                className="w-full h-full min-h-[60vh] bg-[#161922] border border-gray-700/80 rounded-lg p-5 text-base text-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none font-mono leading-relaxed transition-all"
+              />
+            </div>
+            <div className="p-5 border-t border-gray-700/50 bg-[#1a1d29] flex justify-end shrink-0">
+              <button
+                onClick={() => setIsInstructionExpanded(false)}
+                className="px-8 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-base font-bold shadow-lg shadow-amber-900/20 transition-all active:scale-95"
+              >
+                完成编辑
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
