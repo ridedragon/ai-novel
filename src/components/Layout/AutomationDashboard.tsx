@@ -151,7 +151,7 @@ export const AutomationDashboard: React.FC<AutomationDashboardProps> = ({
             { id: 'worldview', icon: <Globe className="w-5 h-5" />, label: '世界' },
             { id: 'characters', icon: <Users className="w-5 h-5" />, label: '角色' },
             { id: 'plotOutline', icon: <LayoutList className="w-5 h-5" />, label: '粗纲' },
-            { id: 'outline', icon: <Book className="w-5 h-5" />, label: '章节' },
+            { id: 'outline', icon: <Book className="w-5 h-5" />, label: '大纲' },
             { id: 'reference', icon: <FileText className="w-5 h-5" />, label: '资料' },
           ].map(item => (
             <button

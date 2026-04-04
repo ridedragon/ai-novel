@@ -24,7 +24,8 @@ export interface Chapter {
   logicScore?: number; // 逻辑评分 (0-100)，用于逻辑热力图展示
 
   subtype?: 'story' | 'small_summary' | 'big_summary';
-  summaryRange?: string;
+  summaryRange?: string; // 全书模式的范围编号
+  summaryRangeVolume?: string; // 本卷模式的范围编号（从1开始）
 }
 
 export interface NovelVolume {

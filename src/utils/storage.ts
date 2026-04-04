@@ -605,7 +605,7 @@ export const storage = {
           const data = {
             chapters: novel.chapters.map(({ versions, content, analysisResult, ...rest }) => ({
               ...rest,
-              analysisResult: analysisResult?.substring(0, 100),
+              analysisResult: analysisResult,
             })),
             volumes: novel.volumes || [],
           };

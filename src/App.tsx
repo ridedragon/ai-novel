@@ -420,6 +420,24 @@ function App() {
 
   return (
     <NovelEditorLayout
+      onNavigate={target => {
+        if (target === 'dashboard') {
+          novelData.setActiveNovelId(null);
+        } else if (target === 'workflow') {
+          setShowWorkflowEditor(true);
+        } else if (target === 'automation') {
+          setShowOutline(true);
+          setCreationModule('menu');
+        } else if (target === 'library') {
+          setShowOutline(true);
+          setCreationModule('reference');
+        }
+      }}
+      onOpenSettings={() => setShowSettings(true)}
+      showOutline={showOutline}
+      setShowOutline={setShowOutline}
+      creationModule={creationModule}
+      onSwitchModule={handleSwitchModule}
       headerLeft={
         <>
           <button className="md:hidden p-1.5 text-slate-500" onClick={() => setIsMobileSidebarOpen(true)}>
@@ -552,6 +570,7 @@ function App() {
             })
           }
           addNewChapter={novelData.addChapter}
+          contextScope={config.contextScope}
         />
       }
       sidebarRight={
@@ -592,6 +611,7 @@ function App() {
               setGeneratorSettingsType('inspiration');
               setShowGeneratorSettingsModal(true);
             },
+            onSetActiveInspirationSetId: novelData.setActiveInspirationSetId,
 
             // Reference Selectors Props
             // Reference Selectors Props
@@ -695,6 +715,7 @@ function App() {
               setGeneratorSettingsType('character');
               setShowGeneratorSettingsModal(true);
             },
+            onSetActiveCharacterSetId: novelData.setActiveCharacterSetId,
 
             // Reference Selectors Props
             // Reference Selectors Props
@@ -798,6 +819,7 @@ function App() {
               setGeneratorSettingsType('worldview');
               setShowGeneratorSettingsModal(true);
             },
+            onSetActiveWorldviewSetId: novelData.setActiveWorldviewSetId,
 
             // Reference Selectors Props
             // Reference Selectors Props
@@ -902,6 +924,7 @@ function App() {
               setGeneratorSettingsType('outline');
               setShowGeneratorSettingsModal(true);
             },
+            onSetActiveOutlineSetId: novelData.setActiveOutlineSetId,
 
             // Reference Selectors Props
             // Reference Selectors Props
@@ -1005,6 +1028,7 @@ function App() {
               setGeneratorSettingsType('plotOutline');
               setShowGeneratorSettingsModal(true);
             },
+            onSetActivePlotOutlineSetId: novelData.setActivePlotOutlineSetId,
 
             // Reference Selectors Props
             selectedWorldviewSetId,

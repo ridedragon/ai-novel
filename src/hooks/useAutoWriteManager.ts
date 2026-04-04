@@ -154,18 +154,31 @@ export function useAutoWriteManager() {
     }) => {
       const { targetId, activeNovelId, novelsRef, setChapters } = params;
 
+      terminal.log('[Optimize] handleOptimize called:', { targetId, activeNovelId });
+
       const activePreset =
         params.optimizePresets.find(p => p.id === params.activeOptimizePresetId) || params.optimizePresets[0];
       const finalApiKey = activePreset.apiConfig?.apiKey || params.apiKey;
       const finalBaseUrl = activePreset.apiConfig?.baseUrl || params.baseUrl;
       const finalModel = activePreset.apiConfig?.model || params.optimizeModel;
 
+      terminal.log('[Optimize] API Config:', { 
+        hasApiKey: !!finalApiKey, 
+        baseUrl: finalBaseUrl, 
+        model: finalModel,
+        presetId: activePreset?.id 
+      });
+
       if (!finalApiKey) {
+        terminal.error('[Optimize] No API Key configured');
         params.onError('请先配置 API Key');
         return;
       }
 
-      if (optimizingChapterIds.has(targetId)) return;
+      if (optimizingChapterIds.has(targetId)) {
+        terminal.warn('[Optimize] Chapter already being optimized:', targetId);
+        return;
+      }
 
       const currentNovel = novelsRef.current.find(n => n.id === activeNovelId);
       const latestChapter = currentNovel?.chapters?.find(c => c.id === targetId);
@@ -178,8 +191,11 @@ export function useAutoWriteManager() {
 
       if (!sourceContentToUse || !sourceContentToUse.trim()) {
         terminal.error('[Optimize] Error: No content found to optimize.');
+        params.onError('没有找到可优化的内容，请先输入章节正文');
         return;
       }
+
+      terminal.log('[Optimize] Starting optimization, content length:', sourceContentToUse.length);
 
       setOptimizingChapterIds(prev => new Set(prev).add(targetId));
       const abortController = new AbortController();
@@ -206,16 +222,6 @@ export function useAutoWriteManager() {
         } else if (!versions[originalIndex].content.trim() && sourceContentToUse?.trim()) {
           versions[originalIndex].content = sourceContentToUse;
           versions[originalIndex].timestamp = Date.now();
-        } else {
-          const activeVersion = versions.find(v => v.id === latestChapter?.activeVersionId);
-          if (sourceContentToUse && activeVersion && sourceContentToUse !== activeVersion.content) {
-            versions.push({
-              id: `v_${Date.now()}_manual`,
-              content: sourceContentToUse,
-              timestamp: Date.now() - 1,
-              type: 'user_edit',
-            });
-          }
         }
 
         const existingOptIndex = versions.findIndex(v => v.id === newVersionId);
@@ -245,11 +251,25 @@ export function useAutoWriteManager() {
           const anaApiKey = analysisPreset.apiConfig?.apiKey || params.apiKey;
           const anaBaseUrl = analysisPreset.apiConfig?.baseUrl || params.baseUrl;
 
+          terminal.log(`
+>> AI REQUEST [手动润色: 优化前分析]
+>> -----------------------------------------------------------
+>> Model:       ${anaModel}
+>> Temperature: ${analysisPreset.temperature ?? 1.0}
+>> Top P:       ${analysisPreset.topP ?? 1.0}
+>> Top K:       ${analysisPreset.topK ?? 200}
+>> -----------------------------------------------------------
+          `);
+
           const openai = new OpenAI({ apiKey: anaApiKey, baseURL: anaBaseUrl, dangerouslyAllowBrowser: true });
           const messages: any[] = analysisPreset.prompts
             .filter(p => p.enabled)
             .map(p => ({ role: p.role, content: p.content.replace('{{content}}', sourceContentToUse!) }))
             .filter(m => m.content?.trim());
+
+          console.group(`[AI REQUEST] 手动润色 - 优化前分析 - Chapter ${targetId}`);
+          console.log('Messages:', messages);
+          console.groupEnd();
 
           let requestParams: any = {
             model: anaModel,
@@ -257,7 +277,8 @@ export function useAutoWriteManager() {
             temperature: analysisPreset.temperature ?? 1.0,
             top_p: analysisPreset.topP ?? 1.0,
           };
-          if (analysisPreset.topK && analysisPreset.topK > 0) {
+          let fallbackMode = 0;
+          if (analysisPreset.topK && analysisPreset.topK > 0 && fallbackMode < 1) {
             requestParams.top_k = analysisPreset.topK;
           }
           
@@ -268,18 +289,42 @@ export function useAutoWriteManager() {
               { signal: abortController.signal },
             );
           } catch (apiError: any) {
-            if (apiError.status === 400 && requestParams.top_k) {
-              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
-              delete requestParams.top_k;
-              completion = await openai.chat.completions.create(
-                requestParams,
-                { signal: abortController.signal },
-              );
+            if (apiError.status === 400) {
+              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+              terminal.warn(`API 400 错误: ${errorBody}`);
+              
+              if (requestParams.top_k && fallbackMode < 1) {
+                terminal.warn('尝试移除 top_k 参数重试');
+                delete requestParams.top_k;
+                fallbackMode = 1;
+                completion = await openai.chat.completions.create(
+                  requestParams,
+                  { signal: abortController.signal },
+                );
+              } else if (fallbackMode < 2) {
+                terminal.warn('尝试简化参数重试 (移除 top_p)');
+                delete requestParams.top_p;
+                requestParams.temperature = 1.0;
+                fallbackMode = 2;
+                completion = await openai.chat.completions.create(
+                  requestParams,
+                  { signal: abortController.signal },
+                );
+              } else {
+                throw apiError;
+              }
             } else {
               throw apiError;
             }
           }
           currentAnalysisResult = completion.choices[0]?.message?.content || '';
+          
+          terminal.log(
+            `[Analysis Result] chapter ${targetId}:\n${currentAnalysisResult.slice(0, 500)}${
+              currentAnalysisResult.length > 500 ? '...' : ''
+            }`,
+          );
+          
           if (params.onAnalysisResult) params.onAnalysisResult(currentAnalysisResult);
           setChapters(prev => prev.map(c => (c.id === targetId ? { ...c, analysisResult: currentAnalysisResult } : c)));
         } catch (e: any) {
@@ -294,6 +339,16 @@ export function useAutoWriteManager() {
 
       // Phase 2: Actual Optimization
       try {
+        terminal.log(`
+>> AI REQUEST [手动润色: 正文优化]
+>> -----------------------------------------------------------
+>> Model:       ${finalModel}
+>> Temperature: ${activePreset.temperature ?? 1.0}
+>> Top P:       ${activePreset.topP ?? 1.0}
+>> Top K:       ${activePreset.topK ?? 200}
+>> -----------------------------------------------------------
+        `);
+
         const openai = new OpenAI({ apiKey: finalApiKey, baseURL: finalBaseUrl, dangerouslyAllowBrowser: true });
         let isAnalysisUsed = false;
         const messages: any[] = activePreset.prompts
@@ -314,6 +369,10 @@ export function useAutoWriteManager() {
           else messages.push({ role: 'user', content: `请基于以下建议优化正文：\n\n${currentAnalysisResult}` });
         }
 
+        console.group(`[AI REQUEST] 手动润色 - 正文优化 - Chapter ${targetId}`);
+        console.log('Messages:', messages);
+        console.groupEnd();
+
         let requestParams: any = {
             model: finalModel,
             messages,
@@ -321,7 +380,8 @@ export function useAutoWriteManager() {
             top_p: activePreset.topP ?? 1.0,
             stream: true,
           };
-          if (activePreset.topK && activePreset.topK > 0) {
+          let fallbackMode = 0;
+          if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
             requestParams.top_k = activePreset.topK;
           }
           
@@ -332,13 +392,30 @@ export function useAutoWriteManager() {
               { signal: abortController.signal },
             );
           } catch (apiError: any) {
-            if (apiError.status === 400 && requestParams.top_k) {
-              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
-              delete requestParams.top_k;
-              stream = await openai.chat.completions.create(
-                requestParams,
-                { signal: abortController.signal },
-              );
+            if (apiError.status === 400) {
+              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+              terminal.warn(`API 400 错误: ${errorBody}`);
+              
+              if (requestParams.top_k && fallbackMode < 1) {
+                terminal.warn('尝试移除 top_k 参数重试');
+                delete requestParams.top_k;
+                fallbackMode = 1;
+                stream = await openai.chat.completions.create(
+                  requestParams,
+                  { signal: abortController.signal },
+                );
+              } else if (fallbackMode < 2) {
+                terminal.warn('尝试简化参数重试 (移除 top_p)');
+                delete requestParams.top_p;
+                requestParams.temperature = 1.0;
+                fallbackMode = 2;
+                stream = await openai.chat.completions.create(
+                  requestParams,
+                  { signal: abortController.signal },
+                );
+              } else {
+                throw apiError;
+              }
             } else {
               throw apiError;
             }
@@ -373,6 +450,18 @@ export function useAutoWriteManager() {
 
         const scripts = params.getActiveScripts();
         const processed = await processTextWithRegex(newContent, scripts, 'output');
+        
+        terminal.log(
+          `[Optimization Result] chapter ${targetId} length: ${processed.length}${
+            processed.length > 0 ? `\n预览: ${processed.slice(0, 300)}...` : ''
+          }`,
+        );
+        
+        console.group(`[AI RESPONSE] 手动润色结果 - Chapter ${targetId}`);
+        console.log('Content Length:', processed.length);
+        console.log('Content Preview:', processed.slice(0, 500));
+        console.groupEnd();
+        
         setChapters(prev =>
           prev.map(c => {
             if (c.id === targetId) {

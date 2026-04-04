@@ -20,6 +20,25 @@ export class SkillLoader {
     }));
   }
 
+  static getSkillsMetadataForSystemPromptWithContent(): Array<{ name: string; description: string; content: string }> {
+    const enabledSkills = skillRegistry.getEnabledSkills();
+    return enabledSkills
+      .filter(skill => !skill.frontmatter['disable-model-invocation'])
+      .map(skill => ({
+        name: skill.name,
+        description: skill.description,
+        content: this.extractMarkdownBody(skill.content),
+      }));
+  }
+
+  private static extractMarkdownBody(content: string): string {
+    const frontmatterMatch = content.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/);
+    if (frontmatterMatch) {
+      return frontmatterMatch[1].trim();
+    }
+    return content;
+  }
+
   static async loadSkillForTrigger(triggerResult: SkillTriggerResult, context?: SkillContext): Promise<string> {
     const skill = triggerResult.skill;
 
@@ -99,9 +118,9 @@ export class SkillLoader {
     let prompt = '# 已激活的 Skills\n\n';
 
     if (loadedSkills.length > 0) {
-      prompt += '以下 Skills 已被激活并加载：\n\n';
+      prompt += '以下 Skills 已被激活并加载，请严格按照这些 Skills 的指令执行：\n\n';
       loadedSkills.forEach(skill => {
-        prompt += `## ${skill.name}\n\n`;
+        prompt += `## ${skill.name}\n\n${skill.content}\n\n`;
       });
     }
 

@@ -1,3 +1,4 @@
+import { Book, BookOpen, FileText, Globe, Home, Lightbulb, Menu, Users, Zap } from 'lucide-react';
 import React, { ReactNode } from 'react';
 import { useLayout } from '../../contexts/LayoutContext';
 
@@ -8,6 +9,12 @@ interface NovelEditorLayoutProps {
   sidebarRight?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  onNavigate?: (target: 'dashboard' | 'automation' | 'workflow' | 'library') => void;
+  onOpenSettings?: () => void;
+  showOutline?: boolean;
+  setShowOutline?: (show: boolean) => void;
+  creationModule?: 'menu' | 'outline' | 'plotOutline' | 'characters' | 'worldview' | 'inspiration' | 'reference';
+  onSwitchModule?: (module: 'menu' | 'outline' | 'plotOutline' | 'characters' | 'worldview' | 'inspiration' | 'reference') => void;
 }
 
 export const NovelEditorLayout: React.FC<NovelEditorLayoutProps> = ({
@@ -16,7 +23,13 @@ export const NovelEditorLayout: React.FC<NovelEditorLayoutProps> = ({
   sidebarLeft,
   sidebarRight,
   children,
-  footer
+  footer,
+  onNavigate,
+  onOpenSettings,
+  showOutline,
+  setShowOutline,
+  creationModule,
+  onSwitchModule,
 }) => {
   const { isMobileSidebarOpen, setIsMobileSidebarOpen } = useLayout();
 
@@ -70,6 +83,84 @@ export const NovelEditorLayout: React.FC<NovelEditorLayoutProps> = ({
           {sidebarRight}
         </aside>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-lg border-t border-slate-200 dark:border-white/5 flex items-center justify-around px-2 z-40 safe-area-bottom md:hidden">
+        <button 
+          className={`flex flex-col items-center gap-0.5 ${creationModule === 'menu' ? "text-[var(--theme-color)]" : "text-slate-400 dark:text-slate-500"}`}
+          onClick={() => {
+            setShowOutline?.(true);
+            onSwitchModule?.('menu');
+          }}
+          title="菜单"
+        >
+          <Menu className="w-5 h-5" />
+          <span className="text-[9px]">菜单</span>
+        </button>
+        <button 
+          className={`flex flex-col items-center gap-0.5 ${creationModule === 'inspiration' ? "text-[var(--theme-color)]" : "text-slate-400 dark:text-slate-500"}`}
+          onClick={() => {
+            setShowOutline?.(true);
+            onSwitchModule?.('inspiration');
+          }}
+          title="灵感"
+        >
+          <Lightbulb className="w-5 h-5" />
+          <span className="text-[9px]">灵感</span>
+        </button>
+        <button 
+          className={`flex flex-col items-center gap-0.5 ${creationModule === 'worldview' ? "text-[var(--theme-color)]" : "text-slate-400 dark:text-slate-500"}`}
+          onClick={() => {
+            setShowOutline?.(true);
+            onSwitchModule?.('worldview');
+          }}
+          title="世界"
+        >
+          <Globe className="w-5 h-5" />
+          <span className="text-[9px]">世界</span>
+        </button>
+        <button 
+          className={`flex flex-col items-center gap-0.5 ${creationModule === 'characters' ? "text-[var(--theme-color)]" : "text-slate-400 dark:text-slate-500"}`}
+          onClick={() => {
+            setShowOutline?.(true);
+            onSwitchModule?.('characters');
+          }}
+          title="角色"
+        >
+          <Users className="w-5 h-5" />
+          <span className="text-[9px]">角色</span>
+        </button>
+        <button 
+          className={`flex flex-col items-center gap-0.5 ${creationModule === 'plotOutline' ? "text-[var(--theme-color)]" : "text-slate-400 dark:text-slate-500"}`}
+          onClick={() => {
+            setShowOutline?.(true);
+            onSwitchModule?.('plotOutline');
+          }}
+          title="粗纲"
+        >
+          <Book className="w-5 h-5" />
+          <span className="text-[9px]">粗纲</span>
+        </button>
+        <button 
+          className={`flex flex-col items-center gap-0.5 ${creationModule === 'outline' ? "text-[var(--theme-color)]" : "text-slate-400 dark:text-slate-500"}`}
+          onClick={() => {
+            setShowOutline?.(true);
+            onSwitchModule?.('outline');
+          }}
+          title="大纲"
+        >
+          <BookOpen className="w-5 h-5" />
+          <span className="text-[9px]">大纲</span>
+        </button>
+        <button 
+          className={`flex flex-col items-center gap-0.5 ${!showOutline ? "text-[var(--theme-color)]" : "text-slate-400 dark:text-slate-500"}`}
+          onClick={() => setShowOutline?.(false)}
+          title="正文"
+        >
+          <FileText className="w-5 h-5" />
+          <span className="text-[9px]">正文</span>
+        </button>
+      </nav>
     </div>
   );
 };

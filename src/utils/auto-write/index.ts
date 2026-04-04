@@ -824,8 +824,9 @@ export class AutoWriteEngine {
           `);
 
           let analysisAttempt = 0;
-          const maxAnalysisRetries = 1;
+          const maxAnalysisRetries = 2;
           let analysisSuccess = false;
+          let analysisFallbackMode = 0;
 
           while (analysisAttempt <= maxAnalysisRetries && !analysisSuccess) {
             try {
@@ -835,7 +836,7 @@ export class AutoWriteEngine {
                   temperature: analysisPreset.temperature ?? 1.0,
                   top_p: analysisPreset.topP ?? 1.0,
                 };
-                if (analysisPreset.topK && analysisPreset.topK > 0) {
+                if (analysisPreset.topK && analysisPreset.topK > 0 && analysisFallbackMode < 1) {
                   requestParams.top_k = analysisPreset.topK;
                 }
           
@@ -846,13 +847,30 @@ export class AutoWriteEngine {
                   { signal: optimizationAbortController.signal },
                 );
               } catch (apiError: any) {
-                if (apiError.status === 400 && requestParams.top_k) {
-                  terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
-                  delete requestParams.top_k;
-                  completion = await openai.chat.completions.create(
-                    requestParams,
-                    { signal: optimizationAbortController.signal },
-                  );
+                if (apiError.status === 400) {
+                  const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+                  terminal.warn(`API 400 错误: ${errorBody}`);
+                  
+                  if (requestParams.top_k && analysisFallbackMode < 1) {
+                    terminal.warn('尝试移除 top_k 参数重试');
+                    delete requestParams.top_k;
+                    analysisFallbackMode = 1;
+                    completion = await openai.chat.completions.create(
+                      requestParams,
+                      { signal: optimizationAbortController.signal },
+                    );
+                  } else if (analysisFallbackMode < 2) {
+                    terminal.warn('尝试简化参数重试 (移除 top_p)');
+                    delete requestParams.top_p;
+                    requestParams.temperature = 1.0;
+                    analysisFallbackMode = 2;
+                    completion = await openai.chat.completions.create(
+                      requestParams,
+                      { signal: optimizationAbortController.signal },
+                    );
+                  } else {
+                    throw apiError;
+                  }
                 } else {
                   throw apiError;
                 }
@@ -863,8 +881,9 @@ export class AutoWriteEngine {
               else analysisAttempt++;
             } catch (anaErr: any) {
               if (anaErr.name === 'AbortError') throw anaErr;
-              if (analysisAttempt < maxAnalysisRetries) {
-                analysisAttempt++;
+              analysisAttempt++;
+              if (analysisAttempt <= maxAnalysisRetries) {
+                terminal.warn(`分析阶段重试 ${analysisAttempt}/${maxAnalysisRetries}...`);
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 continue;
               }
@@ -940,9 +959,10 @@ export class AutoWriteEngine {
       `);
 
       let optAttempt = 0;
-      const maxOptRetries = 2;
+      const maxOptRetries = 3;
       let optSuccess = false;
       let optimizedContent = '';
+      let fallbackMode = 0;
 
       while (optAttempt <= maxOptRetries && !optSuccess) {
         try {
@@ -952,7 +972,7 @@ export class AutoWriteEngine {
               temperature: activePreset.temperature ?? 1.0,
               top_p: activePreset.topP ?? 1.0,
             };
-            if (activePreset.topK && activePreset.topK > 0) {
+            if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
               requestParams.top_k = activePreset.topK;
             }
           
@@ -963,13 +983,30 @@ export class AutoWriteEngine {
               { signal: optimizationAbortController.signal },
             );
           } catch (apiError: any) {
-            if (apiError.status === 400 && requestParams.top_k) {
-              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
-              delete requestParams.top_k;
-              completion = await openai.chat.completions.create(
-                requestParams,
-                { signal: optimizationAbortController.signal },
-              );
+            if (apiError.status === 400) {
+              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+              terminal.warn(`API 400 错误: ${errorBody}`);
+              
+              if (requestParams.top_k && fallbackMode < 1) {
+                terminal.warn('尝试移除 top_k 参数重试');
+                delete requestParams.top_k;
+                fallbackMode = 1;
+                completion = await openai.chat.completions.create(
+                  requestParams,
+                  { signal: optimizationAbortController.signal },
+                );
+              } else if (fallbackMode < 2) {
+                terminal.warn('尝试简化参数重试 (移除 top_p)');
+                delete requestParams.top_p;
+                requestParams.temperature = 1.0;
+                fallbackMode = 2;
+                completion = await openai.chat.completions.create(
+                  requestParams,
+                  { signal: optimizationAbortController.signal },
+                );
+              } else {
+                throw apiError;
+              }
             } else {
               throw apiError;
             }
@@ -980,8 +1017,9 @@ export class AutoWriteEngine {
           else optAttempt++;
         } catch (optErr: any) {
           if (optErr.name === 'AbortError') throw optErr;
-          if (optAttempt < maxOptRetries) {
-            optAttempt++;
+          optAttempt++;
+          if (optAttempt <= maxOptRetries) {
+            terminal.warn(`正文优化重试 ${optAttempt}/${maxOptRetries}...`);
             await new Promise(resolve => setTimeout(resolve, 2000 * optAttempt));
             continue;
           }

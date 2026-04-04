@@ -1404,7 +1404,8 @@ export const useWorkflowEngine = (options: {
               top_p: fTopP,
               max_tokens: fMaxT,
             };
-            if (fTopK && fTopK > 0) {
+            let fallbackMode = 0;
+            if (fTopK && fTopK > 0 && fallbackMode < 1) {
               requestParams.top_k = fTopK;
             }
             
@@ -1415,14 +1416,36 @@ export const useWorkflowEngine = (options: {
                 { signal: abortControllerRef.current?.signal },
               );
             } catch (apiError: any) {
-              // 如果遇到 400 错误并且请求包含 top_k，尝试移除 top_k 后重试
-              if (apiError.status === 400 && requestParams.top_k && retry < 2) {
-                terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                retry++;
-                continue;
+              if (apiError.status === 400) {
+                const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+                terminal.warn(`API 400 错误: ${errorBody}`);
+                
+                if (requestParams.top_k && fallbackMode < 1) {
+                  terminal.warn('尝试移除 top_k 参数重试');
+                  delete requestParams.top_k;
+                  fallbackMode = 1;
+                  completion = await openai.chat.completions.create(
+                    requestParams,
+                    { signal: abortControllerRef.current?.signal },
+                  );
+                } else if (fallbackMode < 2) {
+                  terminal.warn('尝试简化参数重试 (移除 top_p)');
+                  delete requestParams.top_p;
+                  requestParams.temperature = 1.0;
+                  fallbackMode = 2;
+                  completion = await openai.chat.completions.create(
+                    requestParams,
+                    { signal: abortControllerRef.current?.signal },
+                  );
+                } else if (retry < 2) {
+                  retry++;
+                  continue;
+                } else {
+                  throw apiError;
+                }
+              } else {
+                throw apiError;
               }
-              throw apiError;
             }
             
             aiRes = completion.choices[0]?.message?.content || '';

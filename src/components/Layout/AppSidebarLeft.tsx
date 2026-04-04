@@ -26,6 +26,7 @@ interface AppSidebarLeftProps {
   handleRenameVolume: (volumeId: string, currentTitle: string) => void;
   handleDeleteVolume: (volumeId: string) => void;
   handleDeleteChapter: (chapterId: number) => void;
+  contextScope: string;
 }
 
 export const AppSidebarLeft: React.FC<AppSidebarLeftProps> = ({
@@ -42,7 +43,17 @@ export const AppSidebarLeft: React.FC<AppSidebarLeftProps> = ({
   handleRenameVolume,
   handleDeleteVolume,
   handleDeleteChapter,
+  contextScope,
 }) => {
+  const getDisplayTitle = (chapter: Chapter) => {
+    if (chapter.subtype === 'small_summary' || chapter.subtype === 'big_summary') {
+      const isVolumeMode = contextScope === 'currentVolume';
+      const targetRange = isVolumeMode ? (chapter.summaryRangeVolume || chapter.summaryRange) : chapter.summaryRange;
+      const prefix = chapter.subtype === 'small_summary' ? '🔹小总结' : '🔸大总结';
+      return `${prefix} (${targetRange})`;
+    }
+    return chapter.title;
+  };
   return (
     <>
       <div className="p-5 flex items-center justify-between shrink-0">
@@ -79,7 +90,7 @@ export const AppSidebarLeft: React.FC<AppSidebarLeftProps> = ({
                     className={`group px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-primary/10 dark:bg-primary/15 text-primary border-l-2 border-primary' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'}`}
                   >
                     <FileText className={`w-[14px] h-[14px] ${chapter.subtype === 'small_summary' ? 'text-primary' : chapter.subtype === 'big_summary' ? 'text-amber-500 dark:text-amber-400' : ''}`} />
-                    <span className="truncate flex-1">{chapter.title}</span>
+                    <span className="truncate flex-1">{getDisplayTitle(chapter)}</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chapter.id); }}
                       className="md:opacity-0 group-hover:opacity-100 p-1.5 md:p-1 text-slate-400 hover:text-red-500 transition-all"
@@ -102,7 +113,7 @@ export const AppSidebarLeft: React.FC<AppSidebarLeftProps> = ({
               className={`group px-4 py-2 flex items-center gap-3 cursor-pointer text-xs transition-colors rounded-r ${activeChapterId === chapter.id ? 'bg-primary/10 dark:bg-primary/15 text-primary border-l-2 border-primary' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'}`}
             >
               <FileText className="w-[14px] h-[14px]" />
-              <span className="truncate flex-1">{chapter.title}</span>
+              <span className="truncate flex-1">{getDisplayTitle(chapter)}</span>
               <button
                 onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chapter.id); }}
                 className="md:opacity-0 group-hover:opacity-100 p-1.5 md:p-1 text-slate-400 hover:text-red-500 transition-all"

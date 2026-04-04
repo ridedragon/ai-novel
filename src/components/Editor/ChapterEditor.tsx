@@ -304,7 +304,15 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
           <div className="max-w-4xl mx-auto">
             <div className="mb-8 md:mb-16 text-center">
               <h1 className="text-2xl md:text-5xl font-serif font-bold text-slate-900 dark:text-slate-100 tracking-wide mb-4 md:mb-6 px-4">
-                {activeChapter.title}
+                {(() => {
+                  if ((activeChapter.subtype === 'small_summary' || activeChapter.subtype === 'big_summary')) {
+                    const isVolumeMode = contextScope === 'currentVolume';
+                    const targetRange = isVolumeMode ? (activeChapter.summaryRangeVolume || activeChapter.summaryRange) : activeChapter.summaryRange;
+                    const prefix = activeChapter.subtype === 'small_summary' ? '🔹小总结' : '🔸大总结';
+                    return `${prefix} (${targetRange})`;
+                  }
+                  return activeChapter.title;
+                })()}
               </h1>
               <div className="flex items-center justify-center gap-2 md:gap-4 text-slate-300 dark:text-slate-500/60">
                 <div className="h-[1px] w-8 md:w-16 bg-slate-200 dark:bg-[#1e2433]"></div>

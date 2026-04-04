@@ -1,5 +1,5 @@
-import { ChevronDown, Cpu, FileText, PauseCircle, Trash2, Wand2 } from 'lucide-react';
-import React from 'react';
+import { ChevronDown, Cpu, Expand, FileText, PauseCircle, Trash2, Wand2, X } from 'lucide-react';
+import React, { useState } from 'react';
 import { GeneratorPreset, Novel } from '../../../../types';
 import { OutputEntry, WorkflowNode, WorkflowNodeData } from '../../types';
 import { SharedTextarea } from '../Shared/SharedInput';
@@ -37,7 +37,8 @@ export const MobilePanel = React.memo(
     onClose,
     onPreviewEntry,
   }: MobilePanelProps) => {
-    // 整合所有分类 API 模型并去重
+    const [isInstructionExpanded, setIsInstructionExpanded] = useState(false);
+
     const consolidatedModelList = React.useMemo(() => {
       const list = [...(globalConfig?.modelList || [])];
       if (globalConfig?.model) list.push(globalConfig.model);
@@ -192,9 +193,17 @@ export const MobilePanel = React.memo(
           {editingNode.data.typeKey !== 'pauseNode' && editingNode.data.typeKey !== 'saveToVolume' && (
             <>
               <div className="space-y-3">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                  {editingNode.data.typeKey === 'workflowGenerator' ? '工作流需求描述' : '创作指令 (User Prompt)'}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                    {editingNode.data.typeKey === 'workflowGenerator' ? '工作流需求描述' : '创作指令 (User Prompt)'}
+                  </label>
+                  <button
+                    onClick={() => setIsInstructionExpanded(true)}
+                    className="p-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-lg transition-colors flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
+                  >
+                    <Expand className="w-3 h-3" /> 放大编辑
+                  </button>
+                </div>
                 <SharedTextarea
                   value={editingNode.data.instruction}
                   onValueChange={(val: string) => handleUpdate({ instruction: val })}
@@ -279,6 +288,48 @@ export const MobilePanel = React.memo(
           </button>
         </div>
       </div>
-    );
-  },
+
+      {isInstructionExpanded && (
+        <div className="fixed inset-0 z-[160] flex flex-col bg-[#1e2230] animate-in slide-in-from-right duration-300">
+          <div className="p-4 bg-[#1a1d29] border-b border-gray-700/50 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2.5 text-amber-400">
+              <Expand className="w-5 h-5" />
+              <span className="font-bold text-gray-100 text-base">
+                {editingNode.data.typeKey === 'workflowGenerator'
+                  ? '放大编辑工作流需求描述'
+                  : '放大编辑创作指令 (USER PROMPT)'}
+              </span>
+            </div>
+            <button
+              onClick={() => setIsInstructionExpanded(false)}
+              className="flex flex-col items-center justify-center p-1.5 bg-gray-700 rounded-xl text-gray-400"
+            >
+              <X className="w-4 h-4" />
+              <span className="text-[8px] font-bold mt-0.5">返回</span>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-[#1e2230]">
+            <textarea
+              value={editingNode.data.instruction}
+              onChange={e => handleUpdate({ instruction: e.target.value })}
+              placeholder={
+                editingNode.data.typeKey === 'workflowGenerator'
+                  ? '描述你想要的工作流结构...'
+                  : '在此输入具体要求...'
+              }
+              className="w-full h-full min-h-[60vh] bg-gray-800 border border-gray-700 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed"
+            />
+          </div>
+          <div className="p-4 bg-[#1a1d29] border-t border-gray-700/50 shrink-0">
+            <button
+              onClick={() => setIsInstructionExpanded(false)}
+              className="w-full py-4 bg-amber-600 text-white rounded-2xl font-bold text-base shadow-lg shadow-amber-900/20 active:scale-95 transition-all"
+            >
+              完成编辑
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  ),
 );

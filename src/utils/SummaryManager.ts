@@ -118,6 +118,17 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
   const idToGlobalIdx = new Map<number, number>();
   storyChapters.forEach((c, i) => idToGlobalIdx.set(c.id, i + 1));
 
+  // 按分卷分组剧情章，用于计算本卷内的索引
+  const storiesByVolume = new Map<string | undefined, Chapter[]>();
+  storyChapters.forEach(c => {
+    if (!storiesByVolume.has(c.volumeId)) storiesByVolume.set(c.volumeId, []);
+    storiesByVolume.get(c.volumeId)!.push(c);
+  });
+  const idToVolumeIdx = new Map<number, number>();
+  storiesByVolume.forEach(stories => {
+    stories.forEach((c, i) => idToVolumeIdx.set(c.id, i + 1));
+  });
+
   // 2. 遍历校准
   return chapters.map((chapter, index) => {
     if (!isSummaryChapter(chapter)) return chapter;
@@ -136,25 +147,29 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
     if (!anchor) {
       const firstStory = storyChapters[0];
       if (firstStory) {
-        return { ...chapter, summaryRange: '1-1', volumeId: firstStory.volumeId };
+        return { ...chapter, summaryRange: '1-1', summaryRangeVolume: '1-1', volumeId: firstStory.volumeId };
       }
       return chapter;
     }
 
     const currentEnd = idToGlobalIdx.get(anchor.id) || 1;
+    const currentEndVolume = idToVolumeIdx.get(anchor.id) || 1;
     const oldRange = chapter.summaryRange || '1-1';
     const [oldS, oldE] = oldRange.split('-').map(Number);
     const span = Math.max(1, (oldE || 1) - (oldS || 1) + 1);
     const newStart = Math.max(1, currentEnd - span + 1);
+    const newStartVolume = Math.max(1, currentEndVolume - span + 1);
     const newRange = `${newStart}-${currentEnd}`;
+    const newRangeVolume = `${newStartVolume}-${currentEndVolume}`;
 
-    const hasChanged = newRange !== chapter.summaryRange || chapter.volumeId !== anchor.volumeId;
+    const hasChanged = newRange !== chapter.summaryRange || chapter.volumeId !== anchor.volumeId || newRangeVolume !== chapter.summaryRangeVolume;
 
     if (hasChanged) {
-      terminal.log(`[FIX] 校准章节: "${chapter.title}" 位置修正为分卷 [${anchor.volumeId}] 索引 [${newRange}]`);
+      terminal.log(`[FIX] 校准章节: "${chapter.title}" 位置修正为分卷 [${anchor.volumeId}] 索引 [${newRange}] 本卷索引 [${newRangeVolume}]`);
       return {
         ...chapter,
         summaryRange: newRange,
+        summaryRangeVolume: newRangeVolume,
         volumeId: anchor.volumeId, // 强制纠正分卷归属，防止 UI 渲染时的跨卷漂移
         title: chapter.title.replace(/\(\d+-\d+\)/, `(${newRange})`),
       };
@@ -260,8 +275,9 @@ export const checkAndGenerateSummary = async (
   let lastUpdatedNovel: Novel = { ...currentNovel, chapters: currentChaptersSnapshot };
   const pendingSummaries: Chapter[] = [];
 
-  const generate = async (type: 'small' | 'big', start: number, end: number, lastChapterId: number) => {
+  const generate = async (type: 'small' | 'big', start: number, end: number, lastChapterId: number, startVolume?: number, endVolume?: number) => {
     const rangeStr = `${start}-${end}`;
+    const rangeStrVolume = startVolume !== undefined && endVolume !== undefined ? `${startVolume}-${endVolume}` : rangeStr;
     const subtype = type === 'small' ? 'small_summary' : ('big_summary' as const);
 
     log(`[Summary] Checking ${type} summary for range ${rangeStr}...`);
@@ -381,6 +397,7 @@ export const checkAndGenerateSummary = async (
             content: summaryContent,
             subtype: subtype,
             summaryRange: rangeStr,
+            summaryRangeVolume: rangeStrVolume,
             volumeId: targetVolumeId || undefined,
           };
           const snapIdx = currentChaptersSnapshot.findIndex(c => c.id === lastChapterId);
@@ -408,6 +425,8 @@ export const checkAndGenerateSummary = async (
     if (batchChapters.length > 0) {
       const globalStart = storyChapters.findIndex(c => c.id === batchChapters[0].id) + 1;
       const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1;
+      const volumeStart = i - sInterval + 1;
+      const volumeEnd = i;
       const rangeStr = `${globalStart}-${globalEnd}`;
       const lockKey = `${targetNovelId}_small_${rangeStr}`;
       if (
@@ -416,7 +435,7 @@ export const checkAndGenerateSummary = async (
       ) {
         activeGenerations.add(lockKey);
         try {
-          await generate('small', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
+          await generate('small', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id, volumeStart, volumeEnd);
         } finally {
           activeGenerations.delete(lockKey);
         }
@@ -428,11 +447,13 @@ export const checkAndGenerateSummary = async (
     const batchChapters = volumeStoryChapters.slice(i - bInterval, i);
     if (batchChapters.length > 0) {
       let globalStart = 1;
+      let volumeStart = 1;
       if (contextScope !== 'all') {
         const firstInVol = volumeStoryChapters[0];
         if (firstInVol) globalStart = storyChapters.findIndex(c => c.id === firstInVol.id) + 1;
       }
       const globalEnd = storyChapters.findIndex(c => c.id === batchChapters[batchChapters.length - 1].id) + 1;
+      const volumeEnd = i;
       const rangeStr = `${globalStart}-${globalEnd}`;
       const lockKey = `${targetNovelId}_big_${rangeStr}`;
       if (
@@ -441,7 +462,7 @@ export const checkAndGenerateSummary = async (
       ) {
         activeGenerations.add(lockKey);
         try {
-          await generate('big', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id);
+          await generate('big', globalStart, globalEnd, batchChapters[batchChapters.length - 1].id, volumeStart, volumeEnd);
         } finally {
           activeGenerations.delete(lockKey);
         }
@@ -470,17 +491,33 @@ export const checkAndGenerateSummary = async (
     const lastStoryChapterInVol = volumeStoryChapters[volumeStoryChapters.length - 1];
     if (lastStoryChapterInVol) {
       const lastGlobalIdx = storyChapters.findIndex(c => c.id === lastStoryChapterInVol.id) + 1;
+      const lastVolumeIdx = volumeStoryChapters.length;
 
       if (lastSmallEnd < lastGlobalIdx) {
         const start = lastSmallEnd + 1;
         const end = lastGlobalIdx;
+        // 计算本卷内的起始编号
+        let volumeStart = 1;
+        if (lastSmallEnd > 0) {
+          // 找到上一个小总结在本卷中的结束位置
+          const lastSmallSummary = existingSmallSummaries[existingSmallSummaries.length - 1];
+          if (lastSmallSummary && lastSmallSummary.summaryRange) {
+            const [, lastSmallEndGlobal] = lastSmallSummary.summaryRange.split('-').map(Number);
+            const lastSmallEndInVol = volumeStoryChapters.findIndex(c => {
+              const globalIdx = storyChapters.findIndex(sc => sc.id === c.id) + 1;
+              return globalIdx === lastSmallEndGlobal;
+            });
+            volumeStart = lastSmallEndInVol !== -1 ? lastSmallEndInVol + 2 : 1;
+          }
+        }
+        const volumeEnd = lastVolumeIdx;
         const rangeStr = `${start}-${end}`;
         const lockKey = `${targetNovelId}_final_small_${rangeStr}`;
 
         if (!activeGenerations.has(lockKey)) {
           activeGenerations.add(lockKey);
           try {
-            await generate('small', start, end, lastStoryChapterInVol.id);
+            await generate('small', start, end, lastStoryChapterInVol.id, volumeStart, volumeEnd);
           } finally {
             activeGenerations.delete(lockKey);
           }
@@ -503,19 +540,22 @@ export const checkAndGenerateSummary = async (
 
     if (lastStoryChapterInVol) {
       const lastGlobalIdx = storyChapters.findIndex(c => c.id === lastStoryChapterInVol.id) + 1;
+      const lastVolumeIdx = volumeStoryChapters.length;
       if (lastBigEnd < lastGlobalIdx) {
         let globalStart = 1;
+        let volumeStart = 1;
         if (contextScope !== 'all') {
           const firstInVol = volumeStoryChapters[0];
           if (firstInVol) globalStart = storyChapters.findIndex(c => c.id === firstInVol.id) + 1;
         }
+        const volumeEnd = lastVolumeIdx;
         const rangeStr = `${globalStart}-${lastGlobalIdx}`;
         const lockKey = `${targetNovelId}_final_big_${rangeStr}`;
 
         if (!activeGenerations.has(lockKey)) {
           activeGenerations.add(lockKey);
           try {
-            await generate('big', globalStart, lastGlobalIdx, lastStoryChapterInVol.id);
+            await generate('big', globalStart, lastGlobalIdx, lastStoryChapterInVol.id, volumeStart, volumeEnd);
           } finally {
             activeGenerations.delete(lockKey);
           }

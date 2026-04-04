@@ -17,19 +17,6 @@ export async function processSkillsForAI(
     };
   }
 
-  const implicitTriggers = SkillTriggerMatcher.matchImplicitTrigger(userMessage, context);
-
-  if (implicitTriggers.length > 0) {
-    const topTriggers = implicitTriggers.slice(0, 3);
-    const loadedContext = await SkillLoader.loadMultipleSkills(topTriggers, context);
-
-    return {
-      enhancedMessage: userMessage,
-      skillSystemPrompt: loadedContext.systemPrompt,
-      triggeredSkills: topTriggers.map(t => t.skill.name),
-    };
-  }
-
   return {
     enhancedMessage: userMessage,
     skillSystemPrompt: '',
@@ -38,20 +25,18 @@ export async function processSkillsForAI(
 }
 
 export function getSkillsMetadataForSystemPrompt(): string {
-  const metadata = SkillLoader.getSkillsMetadataForSystemPrompt();
+  const metadata = SkillLoader.getSkillsMetadataForSystemPromptWithContent();
 
   if (metadata.length === 0) {
     return '';
   }
 
   let prompt = '## 可用的 Skills（技能包）\n\n';
-  prompt += '以下 Skills 已安装并可能在适当时自动触发：\n\n';
+  prompt += '你可以在适当的时候主动调用以下 Skills 来更好地完成用户的请求。请仔细阅读每个 Skill 的完整指令，根据当前任务判断是否需要调用以及调用哪个 Skill。\n\n';
 
   metadata.forEach(skill => {
-    prompt += `- **${skill.name}**: ${skill.description}\n`;
+    prompt += `### 【${skill.name}】\n${skill.content}\n\n---\n`;
   });
-
-  prompt += '\n当用户的请求与某个 Skill 的描述匹配时，请按照该 Skill 的指令执行。\n';
 
   return prompt;
 }
