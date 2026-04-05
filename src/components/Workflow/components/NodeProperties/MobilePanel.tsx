@@ -333,4 +333,5 @@ export const MobilePanel = React.memo(
       )}
     </>
   );
-}
+},
+);
