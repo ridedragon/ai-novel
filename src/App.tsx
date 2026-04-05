@@ -635,6 +635,10 @@ function App() {
             ...generators,
             userPrompt: inspirationUserPrompt,
             setUserPrompt: setInspirationUserPrompt,
+            onUpdateNovel: (updatedNovel: Novel) => {
+              if (!novelData.activeNovelId) return;
+              novelData.updateNovel(novelData.activeNovelId, updatedNovel);
+            },
             onShowSettings: () => {
               setGeneratorSettingsType('inspiration');
               setShowGeneratorSettingsModal(true);
@@ -739,6 +743,10 @@ function App() {
             ...generators,
             userPrompt: characterUserPrompt,
             setUserPrompt: setCharacterUserPrompt,
+            onUpdateNovel: (updatedNovel: Novel) => {
+              if (!novelData.activeNovelId) return;
+              novelData.updateNovel(novelData.activeNovelId, updatedNovel);
+            },
             onShowSettings: () => {
               setGeneratorSettingsType('character');
               setShowGeneratorSettingsModal(true);
@@ -843,6 +851,10 @@ function App() {
             ...generators,
             userPrompt: worldviewUserPrompt,
             setUserPrompt: setWorldviewUserPrompt,
+            onUpdateNovel: (updatedNovel: Novel) => {
+              if (!novelData.activeNovelId) return;
+              novelData.updateNovel(novelData.activeNovelId, updatedNovel);
+            },
             onShowSettings: () => {
               setGeneratorSettingsType('worldview');
               setShowGeneratorSettingsModal(true);
@@ -948,6 +960,10 @@ function App() {
             ...autoWrite,
             userPrompt: outlineUserPrompt,
             setUserPrompt: setOutlineUserPrompt,
+            onUpdateNovel: (updatedNovel: Novel) => {
+              if (!novelData.activeNovelId) return;
+              novelData.updateNovel(novelData.activeNovelId, updatedNovel);
+            },
             onShowSettings: () => {
               setGeneratorSettingsType('outline');
               setShowGeneratorSettingsModal(true);
@@ -1052,6 +1068,10 @@ function App() {
             ...generators,
             userPrompt: plotOutlineUserPrompt,
             setUserPrompt: setPlotOutlineUserPrompt,
+            onUpdateNovel: (updatedNovel: Novel) => {
+              if (!novelData.activeNovelId) return;
+              novelData.updateNovel(novelData.activeNovelId, updatedNovel);
+            },
             onShowSettings: () => {
               setGeneratorSettingsType('plotOutline');
               setShowGeneratorSettingsModal(true);
