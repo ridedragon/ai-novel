@@ -36,12 +36,16 @@ export class AutoWriteEngine {
     getActiveScripts: () => RegexScript[],
     onStatusUpdate: (status: string) => void,
     onNovelUpdate: (novel: Novel) => void,
-    onChapterComplete: (
+    onChapterComplete?: (
       chapterId: number,
       content: string,
       updatedNovel?: Novel,
       forceFinal?: boolean,
-    ) => Promise<Novel | void>,
+    ) => Promise<Novel | void | {
+      updatedNovel?: Novel;
+      shouldPauseForVolumeSwitch?: boolean;
+      nextVolumeIndex?: number;
+    }>,
     onBeforeChapter?: (title: string) => Promise<{ 
       updatedNovel?: Novel; 
       newVolumeId?: string;
@@ -161,12 +165,12 @@ export class AutoWriteEngine {
                   terminal.log(
                     `[AutoWrite] Volume boundary detected (${currentVolId || 'Uncategorized'} -> ${nextVolId}). Triggering final summary for previous volume.`,
                   );
-                  const resultNovel = await onChapterComplete(
+                  const resultNovel = onChapterComplete ? await onChapterComplete(
                     lastChapterOfPrevVol.id,
                     lastChapterOfPrevVol.content,
                     this.novel,
                     true,
-                  );
+                  ) : undefined;
                   // 同步由于总结产生的新小说状态
                   if (
                     checkActive() &&
@@ -211,7 +215,7 @@ export class AutoWriteEngine {
           if (!checkActive()) return;
 
           // 即使跳过已存在的章节，也触发一次完成回调，确保由于跳过导致的缺失总结能被补全
-          const resultNovel = await onChapterComplete(existingChapter.id, existingChapter.content, this.novel);
+          const resultNovel = onChapterComplete ? await onChapterComplete(existingChapter.id, existingChapter.content, this.novel) : undefined;
           if (checkActive() && resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
             this.novel = resultNovel as Novel;
           }
@@ -694,9 +698,15 @@ export class AutoWriteEngine {
             const chapterId = item.id;
             const content = finalContents[i];
 
-            const resultNovel = await onChapterComplete(chapterId, content, this.novel);
-            if (checkActive() && resultNovel && typeof resultNovel === 'object' && (resultNovel as Novel).chapters) {
-              this.novel = resultNovel as Novel;
+            const result = onChapterComplete ? await onChapterComplete(chapterId, content, this.novel) : undefined;
+            if (checkActive() && result && typeof result === 'object') {
+              if ('updatedNovel' in result && result.updatedNovel && typeof result.updatedNovel === 'object' && 'chapters' in result.updatedNovel) {
+                this.novel = result.updatedNovel as Novel;
+              }
+              if ('shouldPauseForVolumeSwitch' in result && result.shouldPauseForVolumeSwitch) {
+                terminal.log('[AutoWrite] Volume switch signal received, pausing...');
+                return;
+              }
             }
 
             // 联动“自动优化”按钮逻辑：如果配置开启，直接触发内部优化函数
@@ -754,7 +764,7 @@ export class AutoWriteEngine {
       );
       if (lastChapter) {
         terminal.log(`[AutoWrite] Triggering final summary completion for chapter: ${lastChapter.title}`);
-        await onChapterComplete(lastChapter.id, lastChapter.content, this.novel, true);
+        if (onChapterComplete) await onChapterComplete(lastChapter.id, lastChapter.content, this.novel, true);
       }
     }
 
