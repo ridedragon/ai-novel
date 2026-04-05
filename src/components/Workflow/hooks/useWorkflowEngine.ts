@@ -2109,13 +2109,80 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 const endChapterCheck = workflowManager.checkVolumeEndChapter(title, currentVolumeIndex);
                 if (endChapterCheck && endChapterCheck.shouldSwitchVolume) {
                   terminal.log(`[WORKFLOW] Volume end chapter reached: ${title}, switching to volume ${endChapterCheck.nextVolumeIndex}`);
+
+                  // 核心修复：清除前一卷的创作节点输出（世界观、粗纲、大纲等）
+                  // 这样切换到下一卷时，这些节点会重新生成对应分卷的内容
+                  const nextVolIdx = endChapterCheck.nextVolumeIndex;
+                  // 从 workflowManager 获取分卷配置（而非直接访问 volumeFolderConfigs，因为此回调不在 multiCreateFolder 作用域内）
+                  const volumePlans = workflowManager.getVolumePlans();
+                  const nextVolConfig = volumePlans[nextVolIdx];
+                  const nextFolderName = nextVolConfig?.folderName || nextVolConfig?.volumeName || '';
+
+                  nodesRef.current = nodesRef.current.map(n => {
+                    const typeKey = n.data.typeKey;
+                    // 清除创作类节点的输出，以便下一卷重新生成
+                    if (['worldview', 'plotOutline', 'outline'].includes(typeKey)) {
+                      return {
+                        ...n,
+                        data: { ...n.data, outputEntries: [] }
+                      };
+                    }
+                    // 为后续节点更新目标分卷信息
+                    if (typeKey === 'chapter' && nextFolderName) {
+                      return {
+                        ...n,
+                        data: {
+                          ...n.data,
+                          targetVolumeId: '',
+                          targetVolumeName: nextFolderName
+                        }
+                      };
+                    }
+                    return n;
+                  });
+                  setNodes([...nodesRef.current]);
+
+                  // 核心修复：创建下一卷的分卷和集合（如果尚未创建）
+                  const existingNextVol = localNovel.volumes?.find(v => v.title === nextFolderName);
+                  if (!existingNextVol && nextFolderName) {
+                    const newVolId = `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                    const newVolume = {
+                      id: newVolId,
+                      title: nextFolderName,
+                      collapsed: false,
+                    };
+                    localNovel = {
+                      ...localNovel,
+                      volumes: [...(localNovel.volumes || []), newVolume]
+                    };
+
+                    // 创建对应的集合
+                    const types = ['worldviewSets', 'characterSets', 'outlineSets', 'inspirationSets', 'plotOutlineSets'] as const;
+                    const prefix = ['wv', 'char', 'out', 'insp', 'plot'] as const;
+
+                    types.forEach((type, idx) => {
+                      const newSet = {
+                        id: `${prefix[idx]}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                        name: nextFolderName,
+                        entries: [],
+                        characters: [],
+                        items: [],
+                      };
+                      (localNovel as any)[type] = [...((localNovel as any)[type] || []), newSet];
+                    });
+                  }
+
                   // 标记需要切换到下一卷
-                  workflowManager.setCurrentVolumeIndex(endChapterCheck.nextVolumeIndex);
+                  workflowManager.setCurrentVolumeIndex(nextVolIdx);
+
+                  // 核心修复：设置正确的暂停状态，使 UI 能正确显示暂停信息
+                  workflowManager.pause(i);
+
                   // 返回信号让 AutoWriteEngine 知道需要暂停
-                  return { 
-                    updatedNovel: localNovel, 
+                  return {
+                    updatedNovel: localNovel,
                     shouldPauseForVolumeSwitch: true,
-                    nextVolumeIndex: endChapterCheck.nextVolumeIndex,
+                    nextVolumeIndex: nextVolIdx,
                   };
                 }
               },

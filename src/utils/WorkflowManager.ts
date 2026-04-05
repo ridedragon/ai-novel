@@ -367,6 +367,10 @@ class WorkflowManager {
     terminal.log(`[WorkflowManager] Volume Plans set: ${volumes.length} volumes`);
   }
 
+  public getVolumePlans() {
+    return this.state.globalContext.volumePlans || [];
+  }
+
   public getPendingSplits() {
     return this.state.globalContext.pendingSplits || [];
   }
