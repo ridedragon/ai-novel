@@ -100,6 +100,7 @@ export const MobilePanel = React.memo(
     };
 
     return (
+      <>
       <div className="fixed inset-0 bg-gray-900 z-[130] flex flex-col animate-in slide-in-from-bottom duration-300">
         <NodeHeader data={editingNode.data} onUpdate={handleUpdate} onClose={onClose} isMobile={true} />
 
@@ -330,6 +331,6 @@ export const MobilePanel = React.memo(
           </div>
         </div>
       )}
-    </div>
-  ),
-);
+    </>
+  );
+}
