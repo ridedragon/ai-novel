@@ -2158,11 +2158,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   // 清除创作类节点的输出，以便下一卷重新生成
                   nodesRef.current = nodesRef.current.map(n => {
                     const typeKey = n.data.typeKey;
-                    if (['worldview', 'plotOutline', 'outline'].includes(typeKey)) {
+                    if (['worldview', 'characters', 'plotOutline', 'outline'].includes(typeKey)) {
                       return { ...n, data: { ...n.data, outputEntries: [] } };
                     }
                     if (typeKey === 'chapter' && nextVolumeName) {
                       return { ...n, data: { ...n.data, targetVolumeId: '', targetVolumeName: nextVolumeName } };
+                    }
+                    if (typeKey === 'creationInfo') {
+                      return { ...n, data: { ...n.data, status: 'pending' } };
                     }
                     return n;
                   });
@@ -2219,11 +2222,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
                   nodesRef.current = nodesRef.current.map(n => {
                     const typeKey = n.data.typeKey;
-                    if (['worldview', 'plotOutline', 'outline'].includes(typeKey)) {
+                    if (['worldview', 'characters', 'plotOutline', 'outline'].includes(typeKey)) {
                       return { ...n, data: { ...n.data, outputEntries: [] } };
                     }
                     if (typeKey === 'chapter' && nextFolderName) {
                       return { ...n, data: { ...n.data, targetVolumeId: '', targetVolumeName: nextFolderName } };
+                    }
+                    if (typeKey === 'creationInfo') {
+                      return { ...n, data: { ...n.data, status: 'pending' } };
                     }
                     return n;
                   });
