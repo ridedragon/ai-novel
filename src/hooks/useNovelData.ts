@@ -12,6 +12,13 @@ import {
 } from '../types';
 import { storage } from '../utils/storage';
 import { recalibrateSummaries, sortChapters } from '../utils/SummaryManager';
+import {
+  calculateNewChapterNumbering,
+  generateChapterTitle,
+  initializeChapterNumbering,
+  recalibrateChapterNumbering,
+  switchNumberingMode,
+} from '../utils/chapterNumbering';
 
 export function useNovelData() {
   const [novels, _setNovels] = useState<Novel[]>([]);
@@ -288,25 +295,30 @@ export function useNovelData() {
     [setChapters],
   );
 
-  const moveChapter = useCallback(
-    (chapterId: number, volumeId: string | undefined) => {
-      setChapters(prev => prev.map(c => (c.id === chapterId ? { ...c, volumeId } : c)));
-    },
-    [setChapters],
-  );
-
   const addChapter = useCallback(
     (volumeId?: string) => {
       const newId = Date.now() + Math.floor(Math.random() * 1000);
       setChapters(prev => {
-        const storyChaptersCount = prev.filter(c => !c.subtype || c.subtype === 'story').length;
-        const nextIndex = storyChaptersCount + 1;
-        return [...prev, { id: newId, title: `第${nextIndex}章`, content: '', volumeId }];
+        const mode = activeNovel?.chapterNumberingMode || 'global';
+        const { globalIndex, volumeIndex } = calculateNewChapterNumbering(prev, volumeId);
+        const displayIndex = mode === 'perVolume' ? volumeIndex : globalIndex;
+        const title = generateChapterTitle(displayIndex);
+        
+        const newChapter: Chapter = {
+          id: newId,
+          title,
+          content: '',
+          volumeId,
+          globalIndex,
+          volumeIndex,
+        };
+        
+        return [...prev, newChapter];
       });
       setActiveChapterId(newId);
       return newId;
     },
-    [setChapters],
+    [setChapters, activeNovel],
   );
 
   const deleteChapter = useCallback(
@@ -336,7 +348,18 @@ export function useNovelData() {
         storage.deleteChapterVersions(id).catch(() => {});
       });
 
-      const newChapters = (novel.chapters || []).filter(c => !cascadeIds.has(c.id));
+      let newChapters = (novel.chapters || []).filter(c => !cascadeIds.has(c.id));
+      // 删除章节后重新校准编号
+      newChapters = recalibrateChapterNumbering(newChapters);
+      // 根据当前模式更新章节标题
+      const mode = novel.chapterNumberingMode || 'global';
+      newChapters = newChapters.map(c => {
+        if (!c.subtype || c.subtype === 'story') {
+          const displayIndex = mode === 'perVolume' ? c.volumeIndex : c.globalIndex;
+          return { ...c, title: generateChapterTitle(displayIndex || 1) };
+        }
+        return c;
+      });
       setChapters(newChapters);
 
       setActiveChapterId(prev => (prev === chapterId ? newChapters[0]?.id || null : prev));
@@ -409,7 +432,8 @@ export function useNovelData() {
       coverUrl?: string,
       category?: string,
       status?: '连载中' | '已完结',
-      description?: string
+      description?: string,
+      chapterNumberingMode?: 'global' | 'perVolume'
     ) => {
       const volumeId =
         typeof crypto.randomUUID === 'function'
@@ -435,6 +459,7 @@ export function useNovelData() {
         category: category || undefined,
         status: status || '连载中',
         description: description || undefined,
+        chapterNumberingMode: chapterNumberingMode || 'global',
       };
 
       setNovels(prev => [newNovel, ...prev]);
@@ -567,6 +592,42 @@ export function useNovelData() {
     [activeNovelId, setNovels],
   );
 
+  // 切换章节编号模式
+  const switchChapterNumberingMode = useCallback(
+    (newMode: 'global' | 'perVolume') => {
+      if (!activeNovelId) return;
+      setNovels(prev =>
+        prev.map(n => {
+          if (n.id === activeNovelId) {
+            return switchNumberingMode(n, newMode);
+          }
+          return n;
+        }),
+      );
+    },
+    [activeNovelId, setNovels],
+  );
+
+  // 移动章节到不同分卷时重新校准编号
+  const moveChapter = useCallback(
+    (chapterId: number, volumeId: string | undefined) => {
+      setChapters(prev => {
+        let updatedChapters = prev.map(c => (c.id === chapterId ? { ...c, volumeId } : c));
+        updatedChapters = recalibrateChapterNumbering(updatedChapters);
+        const mode = activeNovel?.chapterNumberingMode || 'global';
+        updatedChapters = updatedChapters.map(c => {
+          if (!c.subtype || c.subtype === 'story') {
+            const displayIndex = mode === 'perVolume' ? c.volumeIndex : c.globalIndex;
+            return { ...c, title: generateChapterTitle(displayIndex || 1) };
+          }
+          return c;
+        });
+        return updatedChapters;
+      });
+    },
+    [setChapters, activeNovel],
+  );
+
   return {
     novels,
     setNovels,
@@ -614,5 +675,6 @@ export function useNovelData() {
     addProjectSet,
     deleteSet,
     renameSet,
+    switchChapterNumberingMode,
   };
 }

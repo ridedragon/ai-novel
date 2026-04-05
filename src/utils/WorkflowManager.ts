@@ -1,5 +1,5 @@
 import terminal from 'virtual:terminal';
-import { VariableBinding, WorkflowContextSnapshot, WorkflowGlobalContext } from '../types';
+import { Chapter, VariableBinding, WorkflowContextSnapshot, WorkflowGlobalContext } from '../types';
 
 export type WorkflowStatus = 'idle' | 'running' | 'paused' | 'failed';
 
@@ -10,6 +10,7 @@ interface WorkflowState {
   activeWorkflowId: string | null;
   error: string | null;
   globalContext: WorkflowGlobalContext;
+  totalVolumes: number; // 计划的总分卷数
 }
 
 export interface NodeStatusUpdate {
@@ -33,6 +34,7 @@ class WorkflowManager {
     currentNodeIndex: -1,
     activeWorkflowId: null,
     error: null,
+    totalVolumes: 0,
     globalContext: {
       variables: {},
       executionStack: [],
@@ -97,6 +99,7 @@ class WorkflowManager {
         pendingSplitChapter: undefined,
         pendingNextVolumeName: undefined,
         pendingSplits: [],
+        volumePlans: [],
         volumeEndChapters: [],
       };
     } else if (startIndex > 0) {
@@ -116,6 +119,7 @@ class WorkflowManager {
           executionStack: [],
           activeVolumeAnchor: snapshot.activeVolumeAnchor,
           pendingSplits: snapshot.pendingSplits || [],
+          volumePlans: snapshot.volumePlans || [],
           volumeEndChapters: snapshot.volumeEndChapters || [],
         };
       } else {
@@ -356,6 +360,13 @@ class WorkflowManager {
     terminal.log(`[WorkflowManager] Pending Splits set: ${rules.length} rules`);
   }
 
+  public setVolumePlans(volumes: any[]) {
+    this.updateContext({
+      volumePlans: volumes.map(v => ({ ...v, processed: false })),
+    });
+    terminal.log(`[WorkflowManager] Volume Plans set: ${volumes.length} volumes`);
+  }
+
   public getPendingSplits() {
     return this.state.globalContext.pendingSplits || [];
   }
@@ -368,6 +379,7 @@ class WorkflowManager {
     return {
       activeVolumeAnchor: ctx.activeVolumeAnchor,
       pendingSplits: ctx.pendingSplits,
+      volumePlans: ctx.volumePlans,
       volumeEndChapters: ctx.volumeEndChapters,
       variables: ctx.variables,
     };
@@ -445,15 +457,27 @@ class WorkflowManager {
    * 支持 Legacy (单一触发) 和 V2 (多触发规则)
    * 增强匹配逻辑：支持“第一章”、“1”等多种格式的灵活匹配
    */
-  public checkTriggerSplit(currentChapterTitle: string): { chapterTitle: string; nextVolumeName: string } | null {
+  public checkTriggerSplit(
+    currentChapterTitle: string, 
+    currentChapterGlobalIndex?: number
+  ): { chapterTitle: string; nextVolumeName: string } | null {
     const context = this.state.globalContext;
     const normalizedCurrent = this.normalizeChapterToken(currentChapterTitle);
 
-    const isMatch = (targetTitle: string) => {
+    const isMatch = (targetTitle: string, targetStartChapter?: number) => {
       if (!targetTitle) return false;
-      // 1. 精确匹配
+      
+      // 1. 如果有全局索引，优先用全局索引匹配（最可靠，因为全局索引全书唯一）
+      if (currentChapterGlobalIndex !== undefined && targetStartChapter !== undefined) {
+        if (currentChapterGlobalIndex === targetStartChapter) {
+          return true;
+        }
+      }
+      
+      // 2. 精确匹配标题
       if (targetTitle === currentChapterTitle) return true;
-      // 2. 规范化匹配 (处理 "1" 匹配 "第一章")
+      
+      // 3. 规范化匹配 (处理 "1" 匹配 "第一章")
       const normalizedTarget = this.normalizeChapterToken(targetTitle);
       return normalizedTarget === normalizedCurrent;
     };
@@ -461,13 +485,26 @@ class WorkflowManager {
     // 1. 优先检查新规则列表
     if (context.pendingSplits && context.pendingSplits.length > 0) {
       const unprocessedRules = context.pendingSplits.filter(r => !r.processed);
-      terminal.log(`[WorkflowManager] Checking split: ${unprocessedRules.length} rules for "${currentChapterTitle}" (norm: ${normalizedCurrent})`);
+      terminal.log(`[WorkflowManager] Checking split: ${unprocessedRules.length} rules for "${currentChapterTitle}" (globalIndex: ${currentChapterGlobalIndex}, norm: ${normalizedCurrent})`);
       for (const rule of unprocessedRules) {
         const ruleNorm = this.normalizeChapterToken(rule.chapterTitle);
-        const matched = isMatch(rule.chapterTitle);
-        terminal.log(`[WorkflowManager]   Rule: "${rule.chapterTitle}" (norm: ${ruleNorm}) -> match=${matched}`);
+        const matched = isMatch(rule.chapterTitle, rule.startChapter);
+        terminal.log(`[WorkflowManager]   Rule: "${rule.chapterTitle}" (startChapter: ${rule.startChapter}, norm: ${ruleNorm}) -> match=${matched}`);
         if (matched) {
           return { chapterTitle: currentChapterTitle, nextVolumeName: rule.nextVolumeName };
+        }
+      }
+    }
+
+    // 【安全机制】：检查 volumePlans 中的分卷规划
+    // 如果当前全局索引已经超过了某个分卷的结束章节，即使标题不匹配也应该触发分卷
+    if (context.volumePlans && context.volumePlans.length > 1 && currentChapterGlobalIndex !== undefined) {
+      const unprocessedVolumes = context.volumePlans.filter((v: any, idx: number) => !v.processed && idx > 0);
+      for (const volume of unprocessedVolumes) {
+        // 如果该分卷有 endChapter，并且当前全局索引 >= endChapter + 1，就应该触发到这个分卷
+        if (volume.endChapter && currentChapterGlobalIndex >= volume.endChapter + 1) {
+          terminal.log(`[WorkflowManager] SAFETY TRIGGER: Reached end of volume, switching to "${volume.volumeName}" (globalIndex=${currentChapterGlobalIndex}, endChapter=${volume.endChapter})`);
+          return { chapterTitle: currentChapterTitle, nextVolumeName: volume.volumeName };
         }
       }
     }
@@ -486,7 +523,7 @@ class WorkflowManager {
   /**
    * 标记某个分卷规则已处理
    */
-  public markSplitProcessed(chapterTitle: string) {
+  public markSplitProcessed(chapterTitle: string, nextVolumeName?: string) {
     const context = this.state.globalContext;
     const normalizedCurrent = this.normalizeChapterToken(chapterTitle);
 
@@ -508,6 +545,14 @@ class WorkflowManager {
     if (context.pendingSplits) {
       const newSplits = context.pendingSplits.map(r => (isMatch(r.chapterTitle) ? { ...r, processed: true } : r));
       this.updateContext({ pendingSplits: newSplits });
+    }
+
+    // 标记 volumePlans 中对应的分卷为已处理
+    if (context.volumePlans && nextVolumeName) {
+      const newVolumePlans = context.volumePlans.map((v: any) => 
+        (v.volumeName === nextVolumeName ? { ...v, processed: true } : v)
+      );
+      this.updateContext({ volumePlans: newVolumePlans });
     }
   }
 
@@ -576,13 +621,32 @@ class WorkflowManager {
   }
 
   /**
+   * 设置总分卷数
+   */
+  public setTotalVolumes(total: number) {
+    this.state.totalVolumes = total;
+    terminal.log(`[WorkflowManager] Total volumes set to: ${total}`);
+  }
+
+  /**
+   * 获取总分卷数
+   */
+  public getTotalVolumes(): number {
+    return this.state.totalVolumes;
+  }
+
+  /**
    * 从 AI 返回的文本中解析分卷规划规则
    * 采用“深度分块模糊解析”算法，具备极强的格式兼容性
+   * 返回对象包含：
+   *   - splitRules: 分卷切换规则数组（用于向后兼容）
+   *   - volumes: 完整的分卷列表数组（包含第一卷）
    */
-  public parseVolumesFromAI(aiText: string): any[] {
-    if (!aiText) return [];
+  public parseVolumesFromAI(aiText: string): any {
+    if (!aiText) return { splitRules: [], volumes: [] };
 
     const rules: any[] = [];
+    const volumes: any[] = [];
     const timestamp = Date.now();
 
     // 策略 1：深度分块模糊解析 (首选，抗干扰强)
@@ -613,6 +677,17 @@ class WorkflowManager {
         const startNum = parseInt(this.normalizeChapterToken(startStr));
         const endNum = parseInt(this.normalizeChapterToken(endStr));
 
+        // 保存完整的分卷信息（包括第一卷）
+        volumes.push({
+          id: `vol_${timestamp}_${volumes.length}`,
+          volumeName: name,
+          folderName: name,
+          startChapter: isNaN(startNum) ? undefined : startNum,
+          endChapter: isNaN(endNum) ? undefined : endNum,
+          description: summary,
+          processed: false,
+        });
+
         // 关键修复：分卷应该在当前范围结束后的下一章触发
         // 例如：第一卷是1-5章，那么在第6章时才切换到第二卷
         const triggerChapterNum = isNaN(endNum) ? undefined : endNum + 1;
@@ -631,8 +706,8 @@ class WorkflowManager {
     }
 
     if (rules.length > 0) {
-      terminal.log(`[WorkflowManager] Successfully parsed ${rules.length} volume rules using Block Parser`);
-      return rules;
+      terminal.log(`[WorkflowManager] Successfully parsed ${rules.length} volume rules and ${volumes.length} volumes using Block Parser`);
+      return { splitRules: rules, volumes };
     }
 
     // 策略 2：JSON 解析 (针对少数强制 JSON 的模型)
@@ -647,6 +722,18 @@ class WorkflowManager {
           const sNum = parseInt(this.normalizeChapterToken(sStr));
           const eStr = String(item.endChapter || item.end || '');
           const eNum = parseInt(this.normalizeChapterToken(eStr));
+          const name = item.title || item.name || '新分卷';
+          
+          // 保存完整的分卷信息
+          volumes.push({
+            id: `vol_${timestamp}_${volumes.length}`,
+            volumeName: name,
+            folderName: name,
+            startChapter: isNaN(sNum) ? undefined : sNum,
+            endChapter: isNaN(eNum) ? undefined : eNum,
+            description: item.summary || item.description || '',
+            processed: false,
+          });
           
           // 同样修复：使用结束章+1作为触发点
           const triggerChapterNum = isNaN(eNum) ? undefined : eNum + 1;
@@ -655,7 +742,7 @@ class WorkflowManager {
           rules.push({
             id: `vol_rule_json_${timestamp}_${idx}`,
             chapterTitle: `第${triggerChapterStr}章`,
-            nextVolumeName: item.title || item.name || '新分卷',
+            nextVolumeName: name,
             description: item.summary || item.description || '',
             startChapter: isNaN(sNum) ? undefined : sNum,
             endChapter: isNaN(eNum) ? undefined : eNum,
@@ -678,10 +765,22 @@ class WorkflowManager {
               .replace(fuzzy[0], '')
               .replace(/[0-9.．:：、\s()（）分卷第章]/g, '')
               .trim() || `第${fuzzy[1]}章起`;
-          
-          // 同样修复：使用结束章+1作为触发点
+          const startNum = parseInt(this.normalizeChapterToken(fuzzy[1]));
           const endStr = fuzzy[2];
           const endNum = parseInt(this.normalizeChapterToken(endStr));
+          
+          // 保存完整的分卷信息
+          volumes.push({
+            id: `vol_${timestamp}_${volumes.length}`,
+            volumeName: name,
+            folderName: name,
+            startChapter: startNum,
+            endChapter: endNum,
+            description: '自动提取',
+            processed: false,
+          });
+          
+          // 同样修复：使用结束章+1作为触发点
           const triggerChapterNum = isNaN(endNum) ? undefined : endNum + 1;
           const triggerChapterStr = triggerChapterNum ? triggerChapterNum.toString() : fuzzy[1];
           
@@ -690,7 +789,7 @@ class WorkflowManager {
             chapterTitle: `第${triggerChapterStr}章`,
             nextVolumeName: name,
             description: '自动提取',
-            startChapter: parseInt(this.normalizeChapterToken(fuzzy[1])),
+            startChapter: startNum,
             endChapter: endNum,
             processed: false,
           });
@@ -698,8 +797,8 @@ class WorkflowManager {
       });
     }
 
-    terminal.log(`[WorkflowManager] Final parsing result: ${rules.length} volume rules found`);
-    return rules;
+    terminal.log(`[WorkflowManager] Final parsing result: ${rules.length} volume rules, ${volumes.length} volumes found`);
+    return { splitRules: rules, volumes };
   }
 
   public pause(index: number) {
@@ -721,6 +820,7 @@ class WorkflowManager {
       isRunning: false,
       isPaused: false,
       currentNodeIndex: -1,
+      totalVolumes: 0,
       globalContext: {
         variables: {
           loop_index: 1,
@@ -731,6 +831,7 @@ class WorkflowManager {
         pendingSplitChapter: undefined,
         pendingNextVolumeName: undefined,
         pendingSplits: [],
+        volumePlans: [],
         volumeEndChapters: undefined,
       },
     };

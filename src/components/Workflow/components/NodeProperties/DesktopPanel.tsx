@@ -1,8 +1,10 @@
 import { BookOpen, ChevronDown, Cpu, Expand, FileText, PauseCircle, Play, Trash2, Wand2, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { GeneratorPreset, Novel } from '../../../../types';
+import { workflowManager } from '../../../../utils/WorkflowManager';
 import { WorkflowNode, WorkflowNodeData } from '../../types';
 import { BasicNodeInfo, NodeHeader } from './Shared/BasicNodeInfo';
+import { CreationInfoPanel } from './Shared/CreationInfoPanel';
 import { LoopConfigPanel, LoopInstructionsPanel } from './Shared/LoopConfigPanel';
 import { LoopConfiguratorPanel } from './Shared/LoopConfiguratorPanel';
 import { ModelConfigPanel } from './Shared/ModelConfigPanel';
@@ -37,6 +39,31 @@ export const DesktopPanel = ({
 }: DesktopPanelProps) => {
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isInstructionExpanded, setIsInstructionExpanded] = useState(false);
+
+  const creationInfoVolumeInfo = useMemo(() => {
+    const activeVolumeId = workflowManager.getActiveVolumeAnchor();
+    const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
+    // 优先使用 workflowManager 中存储的总分卷数，否则使用已创建的分卷数
+    const totalVolumes = workflowManager.getTotalVolumes() || activeNovel?.volumes?.length || 0;
+    
+    let currentVolumeName = '';
+    if (activeVolumeId && activeNovel?.volumes) {
+      const activeVolume = activeNovel.volumes.find(v => v.id === activeVolumeId);
+      if (activeVolume) {
+        currentVolumeName = activeVolume.title;
+      }
+    }
+    
+    if (!currentVolumeName && activeNovel?.volumes && currentVolumeIndex < totalVolumes) {
+      currentVolumeName = activeNovel.volumes[currentVolumeIndex]?.title || '';
+    }
+    
+    return {
+      currentVolumeName,
+      volumeIndex: currentVolumeIndex,
+      totalVolumes,
+    };
+  }, [activeNovel, node.id]);
 
   // 防抖更新函数
   const debouncedUpdate = (updates: Partial<WorkflowNodeData>) => {
@@ -224,11 +251,16 @@ export const DesktopPanel = ({
             />
           )}
 
+          {node.data.typeKey === 'creationInfo' && (
+            <CreationInfoPanel data={node.data} onUpdate={handleUpdate} volumeInfo={creationInfoVolumeInfo} />
+          )}
+
           {node.data.typeKey !== 'userInput' &&
             node.data.typeKey !== 'pauseNode' &&
             node.data.typeKey !== 'saveToVolume' &&
             node.data.typeKey !== 'multiCreateFolder' &&
             node.data.typeKey !== 'loopConfigurator' &&
+            node.data.typeKey !== 'creationInfo' &&
             activeNovel && (
               <ReferenceSelector
                 data={node.data}
@@ -238,7 +270,9 @@ export const DesktopPanel = ({
               />
             )}
 
-          {node.data.typeKey !== 'pauseNode' && node.data.typeKey !== 'saveToVolume' && (
+          {node.data.typeKey !== 'pauseNode' && 
+            node.data.typeKey !== 'saveToVolume' && 
+            node.data.typeKey !== 'creationInfo' && (
             <>
               <div className="space-y-3 pt-6 border-t border-gray-700/30">
                 <div className="flex items-center justify-between">
@@ -309,7 +343,8 @@ export const DesktopPanel = ({
             </div>
           ) : (
             node.data.typeKey !== 'pauseNode' &&
-            node.data.typeKey !== 'saveToVolume' && <OutputList data={node.data} onUpdate={handleUpdate} />
+            node.data.typeKey !== 'saveToVolume' &&
+            node.data.typeKey !== 'creationInfo' && <OutputList data={node.data} onUpdate={handleUpdate} />
           )}
         </div>
 

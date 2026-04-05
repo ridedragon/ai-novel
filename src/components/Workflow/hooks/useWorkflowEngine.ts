@@ -88,6 +88,16 @@ export const useWorkflowEngine = (options: {
       nodesRef.current = latestNodes;
       setNodes(latestNodes);
 
+      // 调试：确认 volumes 数据是否正确保存
+      if (updates.volumes) {
+        const volCount = (updates.volumes as any[]).length;
+        terminal.log(`[syncNodeStatus] 保存 volumes 到节点 ${nodeId}, 数量: ${volCount}`);
+        // 立即验证 nodesRef.current 中的数据
+        const savedNode = nodesRef.current.find(n => n.id === nodeId);
+        const savedVolCount = (savedNode?.data.volumes as any[])?.length || 0;
+        terminal.log(`[syncNodeStatus] 验证 nodesRef.current: 节点${nodeId} volumes数量=${savedVolCount}`);
+      }
+
       workflowManager.broadcastNodeUpdate(nodeId, updates);
 
       const currentWfs = workflowsRef.current.map(w => {
@@ -122,6 +132,27 @@ export const useWorkflowEngine = (options: {
     lastLabelUpdateRef.current[nodeId] = now;
     return true;
   }, []);
+
+  // 统一的连线动画管理函数
+  // 解决动画延迟、消失或一直存在的问题
+  const setEdgeAnimation = useCallback((nodeId: string, animated: boolean) => {
+    // 使用 requestAnimationFrame 确保动画在下一帧渲染，避免延迟
+    requestAnimationFrame(() => {
+      setEdges(eds => eds.map(e => {
+        if (e.target === nodeId) {
+          return { ...e, animated };
+        }
+        return e;
+      }));
+    });
+  }, [setEdges]);
+
+  // 清除所有连线动画
+  const clearAllEdgeAnimations = useCallback(() => {
+    requestAnimationFrame(() => {
+      setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+    });
+  }, [setEdges]);
 
   // 执行引擎核心逻辑
   const runWorkflow = async (startIndex: number = 0) => {
@@ -224,12 +255,8 @@ export const useWorkflowEngine = (options: {
       nodesRef.current = initialResetNodes;
       setNodes(initialResetNodes);
 
-      setEdges(eds =>
-        eds.map(e => {
-          const targetInSorted = sortedNodes.findIndex(sn => sn.id === e.target);
-          return targetInSorted >= startIndex ? { ...e, animated: false } : e;
-        }),
-      );
+      // 初始化时清除所有连线动画
+      clearAllEdgeAnimations();
 
       sortedNodes = sortedNodes.map((sn, idx) => (idx >= startIndex ? resetNodeData(sn) : sn));
 
@@ -240,16 +267,59 @@ export const useWorkflowEngine = (options: {
         let dynamicFolder = '';
 
         // 本卷模式支持：寻找当前上下文的作用域
-        // 如果开启了本卷模式，我们将寻找最近的文件夹节点作为隔离边界
+        // 如果开启了本卷模式，我们将根据当前分卷索引找到对应的文件夹节点作为隔离边界
         let boundaryIndex = 0;
+        let currentVolumeConfig: any = null;
+        let totalVolumesFromConfig = 0;
+        
         if (globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume') {
+          // 获取当前分卷索引
+          const currentVolIdx = workflowManager.getCurrentVolumeIndex();
+          
+          // 遍历找到当前分卷对应的文件夹节点
           for (let j = currentIndex - 1; j >= 0; j--) {
             const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
+            
+            // 如果是文件夹类型节点
             if (pNode.data.typeKey === 'createFolder' || 
                 pNode.data.typeKey === 'reuseDirectory' ||
                 pNode.data.typeKey === 'multiCreateFolder') {
-              boundaryIndex = j;
-              break;
+              
+              // 如果是 multiCreateFolder，获取它的配置
+              if (pNode.data.typeKey === 'multiCreateFolder' && pNode.data.volumeFolderConfigs) {
+                const configs = pNode.data.volumeFolderConfigs as any[];
+                totalVolumesFromConfig = configs.length;
+                
+                // 找到当前分卷对应的配置
+                if (configs[currentVolIdx]) {
+                  currentVolumeConfig = configs[currentVolIdx];
+                  boundaryIndex = j;
+                  break;
+                }
+              } else {
+                // 普通文件夹节点，检查 folderName 是否匹配当前分卷
+                const folderName = pNode.data.folderName || '';
+                if (localNovel.volumes) {
+                  const currentVol = localNovel.volumes[currentVolIdx];
+                  if (currentVol && (currentVol.title === folderName || folderName.includes(currentVol.title))) {
+                    boundaryIndex = j;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          
+          // 如果没找到匹配的文件夹，尝试使用最近的文件夹作为边界
+          if (boundaryIndex === 0) {
+            for (let j = currentIndex - 1; j >= 0; j--) {
+              const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
+              if (pNode.data.typeKey === 'createFolder' || 
+                  pNode.data.typeKey === 'reuseDirectory' ||
+                  pNode.data.typeKey === 'multiCreateFolder') {
+                boundaryIndex = j;
+                break;
+              }
             }
           }
         }
@@ -267,6 +337,35 @@ export const useWorkflowEngine = (options: {
             dynamicContextMessages.push({
               role: 'user',
               content: `【用户全局输入】：\n${pNode.data.instruction}`,
+            });
+          } else if (pNode.data.typeKey === 'creationInfo') {
+            const activeVolumeId = workflowManager.getActiveVolumeAnchor();
+            const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
+            const loopIndex = workflowManager.getContextVar('loop_index') || 1;
+            
+            // 优先使用分卷配置中的总数，否则使用已创建的分卷数
+            const totalVolumes = totalVolumesFromConfig > 0 ? totalVolumesFromConfig : (localNovel.volumes?.length || 0);
+            
+            let volumeInfoContent = '';
+            if (activeVolumeId && localNovel.volumes) {
+              const activeVolume = localNovel.volumes.find(v => v.id === activeVolumeId);
+              if (activeVolume) {
+                volumeInfoContent += `当前分卷：${activeVolume.title}\n`;
+              }
+            }
+            if (totalVolumes > 0) {
+              volumeInfoContent += `分卷进度：第 ${currentVolumeIndex + 1} 卷 / 共 ${totalVolumes} 卷\n`;
+            }
+            volumeInfoContent += `当前循环轮次：第 ${loopIndex} 轮`;
+            
+            let fullContent = volumeInfoContent;
+            if (pNode.data.instruction) {
+              fullContent += `\n\n用户自定义指令：\n${pNode.data.instruction}`;
+            }
+            
+            dynamicContextMessages.push({
+              role: 'user',
+              content: `【创作信息】：\n${fullContent}`,
             });
           }
 
@@ -378,7 +477,7 @@ export const useWorkflowEngine = (options: {
         // --- Pause Node ---
         if (node.data.typeKey === 'pauseNode') {
           await syncNodeStatus(node.id, { status: 'completed' }, i);
-          setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+          setEdgeAnimation(node.id, false);
           workflowManager.pause(i + 1);
           stopRequestedRef.current = true;
           return;
@@ -412,7 +511,7 @@ export const useWorkflowEngine = (options: {
             const rules = (node.data.splitRules as any[]) || [];
             if (rules.length > 0) workflowManager.setPendingSplits(rules);
             await syncNodeStatus(node.id, { status: 'completed' }, i);
-            setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+            setEdgeAnimation(node.id, false);
             continue;
           }
 
@@ -622,20 +721,27 @@ export const useWorkflowEngine = (options: {
             }
           }
 
-          const parsedRules = workflowManager.parseVolumesFromAI(aiResponse);
-          if (parsedRules.length > 0) {
+          const parsedResult = workflowManager.parseVolumesFromAI(aiResponse);
+          const { splitRules, volumes } = parsedResult;
+          if (splitRules.length > 0 || volumes.length > 0) {
             await syncNodeStatus(
               node.id,
               {
-                splitRules: parsedRules,
+                splitRules: splitRules,
+                volumes: volumes, // 保存完整的分卷列表
                 volumeContent: aiResponse,
                 outputEntries: [{ id: `vol_plan_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`, title: '分卷规划结果', content: aiResponse }],
                 status: 'completed',
               },
               i,
             );
-            workflowManager.setPendingSplits(parsedRules);
-            const firstVolName = parsedRules[0].nextVolumeName;
+            workflowManager.setPendingSplits(splitRules);
+            // 保存完整的分卷规划信息，用于安全检查
+            if (volumes.length > 0) {
+              workflowManager.setVolumePlans(volumes);
+            }
+            // 使用第一个分卷的名称（而不是第一个切换规则的名称）
+            const firstVolName = volumes.length > 0 ? volumes[0].volumeName : (splitRules[0]?.nextVolumeName);
             if (firstVolName) {
               const existingVol = localNovel.volumes?.find(v => v.title === firstVolName);
               if (existingVol) workflowManager.setActiveVolumeAnchor(existingVol.id);
@@ -656,7 +762,7 @@ export const useWorkflowEngine = (options: {
           }
 
           // lastNodeOutput += ... (已移除，改用动态构建)
-          setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+          setEdgeAnimation(node.id, false);
           continue;
         }
 
@@ -674,7 +780,7 @@ export const useWorkflowEngine = (options: {
             i,
           );
 
-          setEdges(eds => eds.map(e => ({ ...e, animated: e.target === node.id })));
+          setEdgeAnimation(node.id, true);
           await new Promise(resolve => setTimeout(resolve, 600));
 
           if (currentLoopIndex < loopConfig.count) {
@@ -740,7 +846,7 @@ export const useWorkflowEngine = (options: {
             });
             if (maxTailIndex > i) i = maxTailIndex;
           }
-          setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+          setEdgeAnimation(node.id, false);
           continue;
         }
 
@@ -750,12 +856,12 @@ export const useWorkflowEngine = (options: {
           );
           nodesRef.current = skippedNodes;
           setNodes(skippedNodes);
-          setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+          setEdgeAnimation(node.id, false);
           continue;
         }
 
         await syncNodeStatus(node.id, { status: 'executing' }, i);
-        setEdges(eds => eds.map(e => ({ ...e, animated: e.target === node.id })));
+        setEdgeAnimation(node.id, true);
         await new Promise(resolve => setTimeout(resolve, 50));
 
         if (['userInput', 'createFolder', 'reuseDirectory'].includes(node.data.typeKey as string)) {
@@ -849,7 +955,7 @@ export const useWorkflowEngine = (options: {
             setNodes(nextNodesAfterFolder);
           }
           await syncNodeStatus(node.id, { status: 'completed' }, i);
-          setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+          setEdgeAnimation(node.id, false);
           continue;
         }
 
@@ -858,38 +964,119 @@ export const useWorkflowEngine = (options: {
           await syncNodeStatus(node.id, { status: 'executing' }, i);
           
           let volumeFolderConfigs = (node.data.volumeFolderConfigs || []) as any[];
-          const currentVolumeIndex = (node.data.currentVolumeIndex || 0) as number;
           
           // 如果节点配置为空，尝试从前置 saveToVolume 节点获取分卷配置
           if (volumeFolderConfigs.length === 0) {
-            const pendingSplits = workflowManager.getPendingSplits();
-            if (pendingSplits.length > 0) {
-              volumeFolderConfigs = pendingSplits.map((split: any, idx: number) => ({
-                id: split.id || `vol_${idx}`,
-                volumeName: split.nextVolumeName || `第${idx + 1}卷`,
-                folderName: split.nextVolumeName || `第${idx + 1}卷`,
-                startChapter: split.startChapter || (idx === 0 ? 1 : undefined),
-                endChapter: split.endChapter,
-                processed: split.processed || false,
+            // 优先尝试从前面的 saveToVolume 节点中获取已保存的 volumes 信息
+            let foundVolumes: any[] = [];
+            for (let j = 0; j < i; j++) {
+              const prevNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
+              if (prevNode.data.typeKey === 'saveToVolume' && prevNode.data.volumes) {
+                foundVolumes = Array.isArray(prevNode.data.volumes) ? prevNode.data.volumes : [];
+                break;
+              }
+            }
+            
+            if (foundVolumes.length > 0) {
+              // 使用从 saveToVolume 节点获取的完整分卷列表
+              volumeFolderConfigs = foundVolumes.map((vol: any, idx: number) => ({
+                id: vol.id || `vol_${idx}`,
+                volumeName: vol.volumeName || vol.folderName || `第${idx + 1}卷`,
+                folderName: vol.folderName || vol.volumeName || `第${idx + 1}卷`,
+                startChapter: vol.startChapter,
+                endChapter: vol.endChapter,
+                description: vol.description,
+                processed: vol.processed || false,
               }));
-              terminal.log(`[MultiCreateFolder] Initialized ${volumeFolderConfigs.length} volume configs from pendingSplits`);
-              
-              // Bug 1 修复：将初始化后的配置同步回节点数据，确保UI正确显示
+              terminal.log(`[MultiCreateFolder] Initialized ${volumeFolderConfigs.length} volume configs from previous saveToVolume volumes`);
+            } else {
+              // 兜底：从 pendingSplits 重建
+              const pendingSplits = workflowManager.getPendingSplits();
+              if (pendingSplits.length > 0) {
+                // pendingSplits 只包含分卷切换规则（从第2卷开始），需要手动添加第一卷
+                volumeFolderConfigs = [];
+                
+                // 第一卷：起始章节1，结束章节是第一个规则的起始章节减1
+                const firstSplit = pendingSplits[0];
+                volumeFolderConfigs.push({
+                  id: `vol_0`,
+                  volumeName: '第一卷',
+                  folderName: '第一卷',
+                  startChapter: 1,
+                  endChapter: firstSplit.startChapter ? firstSplit.startChapter - 1 : undefined,
+                  processed: false,
+                });
+                
+                // 添加后续分卷（从pendingSplits中获取）
+                pendingSplits.forEach((split: any, idx: number) => {
+                  volumeFolderConfigs.push({
+                    id: split.id || `vol_${idx + 1}`,
+                    volumeName: split.nextVolumeName || `第${idx + 2}卷`,
+                    folderName: split.nextVolumeName || `第${idx + 2}卷`,
+                    startChapter: split.startChapter,
+                    endChapter: split.endChapter,
+                    processed: split.processed || false,
+                  });
+                });
+                
+                terminal.log(`[MultiCreateFolder] Initialized ${volumeFolderConfigs.length} volume configs from pendingSplits (including first volume)`);
+              }
+            }
+            
+            // 将初始化后的配置同步回节点数据，确保UI正确显示
+            if (volumeFolderConfigs.length > 0) {
               await syncNodeStatus(node.id, { volumeFolderConfigs }, i);
             }
           }
           
           if (volumeFolderConfigs.length === 0) {
             await syncNodeStatus(node.id, { status: 'completed' }, i);
-            setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+            setEdgeAnimation(node.id, false);
             continue;
           }
+
+          // 核心修复：根据当前进度确定应该处理哪个分卷
+          // 优先使用 workflowManager 中的索引，然后根据当前章节数进行校准
+          let currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
+          
+          // 如果工作流是从中间恢复的，需要根据当前章节数校准分卷索引
+          const currentChapterCount = (localNovel.chapters || []).filter(
+            c => !c.subtype || c.subtype === 'story'
+          ).length;
+          
+          if (currentChapterCount > 0) {
+            // 根据当前章节数找到应该所在的分卷
+            for (let vIdx = 0; vIdx < volumeFolderConfigs.length; vIdx++) {
+              const cfg = volumeFolderConfigs[vIdx];
+              const startChapter = cfg.startChapter || 1;
+              const endChapter = cfg.endChapter || Infinity;
+              
+              if (currentChapterCount >= startChapter && currentChapterCount <= endChapter) {
+                currentVolumeIndex = vIdx;
+                break;
+              }
+              // 如果当前章节超过了这个分卷的结束章节，继续检查下一个分卷
+              if (currentChapterCount > endChapter && vIdx === volumeFolderConfigs.length - 1) {
+                currentVolumeIndex = vIdx;
+              }
+            }
+          }
+          
+          // 确保 currentVolumeIndex 在有效范围内
+          currentVolumeIndex = Math.min(currentVolumeIndex, volumeFolderConfigs.length - 1);
+          currentVolumeIndex = Math.max(currentVolumeIndex, 0);
+          
+          // 更新 workflowManager 和节点数据
+          workflowManager.setCurrentVolumeIndex(currentVolumeIndex);
+          workflowManager.setTotalVolumes(volumeFolderConfigs.length);
+          
+          terminal.log(`[MultiCreateFolder] Current volume index: ${currentVolumeIndex}, chapter count: ${currentChapterCount}, total volumes: ${volumeFolderConfigs.length}`);
 
           // 获取当前要处理的分卷配置
           const currentConfig = volumeFolderConfigs[currentVolumeIndex];
           if (!currentConfig) {
             await syncNodeStatus(node.id, { status: 'completed' }, i);
-            setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+            setEdgeAnimation(node.id, false);
             continue;
           }
 
@@ -992,8 +1179,13 @@ export const useWorkflowEngine = (options: {
           nodesRef.current = nextNodesAfterFolder;
           setNodes(nextNodesAfterFolder);
 
-          await syncNodeStatus(node.id, { status: 'completed' }, i);
-          setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+          // 更新节点的 currentVolumeIndex 以便下次执行时使用
+          await syncNodeStatus(node.id, { 
+            status: 'completed', 
+            currentVolumeIndex,
+            volumeFolderConfigs 
+          }, i);
+          setEdgeAnimation(node.id, false);
           continue;
         }
 
@@ -1060,21 +1252,55 @@ export const useWorkflowEngine = (options: {
             let volumePlanningInfo = '';
             let volumeConfigs: { name: string; chapters: string }[] = [];
             
+            // 调试：打印所有前置节点的类型
+            terminal.log(`[循环配置器] 开始收集分卷信息，当前节点索引: ${i}, sortedNodes数量: ${sortedNodes.length}`);
+            terminal.log(`[循环配置器] nodesRef.current数量: ${nodesRef.current.length}`);
+            
+            for (let j = 0; j < i; j++) {
+              const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id);
+              const sNode = sortedNodes[j];
+              terminal.log(`[循环配置器] 节点${j}: ${sNode.data.label}, typeKey: ${sNode.data.typeKey}, nodesRef中有: ${!!pNode}`);
+              if (pNode) {
+                terminal.log(`[循环配置器]   nodesRef中数据 - volumes: ${(pNode.data.volumes as any[])?.length || 0}, splitRules: ${(pNode.data.splitRules as any[])?.length || 0}`);
+              }
+            }
+            
             // 1. 从 saveToVolume 节点收集分卷规则
             for (let j = 0; j < i; j++) {
               const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
               if (pNode.data.typeKey === 'saveToVolume') {
+                // 核心修复：优先使用完整的 volumes 数组（包含所有分卷信息）
+                const volumes = (pNode.data.volumes as any[]) || [];
                 const splitRules = (pNode.data.splitRules as any[]) || [];
-                if (splitRules.length > 0) {
+                
+                if (volumes.length > 0) {
+                  // 使用完整的分卷列表（包含第一卷）
                   volumePlanningInfo += `\n### 分卷规划节点: ${pNode.data.label}\n`;
+                  volumePlanningInfo += `共 ${volumes.length} 个分卷:\n`;
+                  volumes.forEach((vol, idx) => {
+                    const chapterRange = vol.startChapter 
+                      ? (vol.endChapter ? `第${vol.startChapter}-${vol.endChapter}章` : `第${vol.startChapter}章起`)
+                      : '未指定章节范围';
+                    volumePlanningInfo += `${idx + 1}. ${vol.volumeName || vol.folderName || `第${idx + 1}卷`} (${chapterRange})\n`;
+                    volumeConfigs.push({ 
+                      name: vol.volumeName || vol.folderName || `第${idx + 1}卷`, 
+                      chapters: chapterRange 
+                    });
+                  });
+                  terminal.log(`[循环配置器] 从 volumes 获取到 ${volumes.length} 个分卷信息`);
+                } else if (splitRules.length > 0) {
+                  // 兜底：使用 splitRules（注意：这只包含从第2卷开始的规则）
+                  volumePlanningInfo += `\n### 分卷规划节点: ${pNode.data.label}\n`;
+                  volumePlanningInfo += `注意：以下仅包含分卷切换规则（缺少第一卷信息）:\n`;
                   splitRules.forEach((rule) => {
                     volumePlanningInfo += `- 触发章节: ${rule.chapterTitle} → 新分卷: ${rule.nextVolumeName}\n`;
                     volumeConfigs.push({ name: rule.nextVolumeName, chapters: rule.chapterTitle });
                   });
+                  terminal.warn(`[循环配置器] splitRules 不包含第一卷信息，可能导致循环指令数量不匹配`);
                 }
                 // 也收集 AI 生成的分卷内容
                 if (pNode.data.volumeContent) {
-                  volumePlanningInfo += `\n分卷规划详情:\n${pNode.data.volumeContent.substring(0, 1000)}\n`;
+                  volumePlanningInfo += `\n分卷规划详情:\n${pNode.data.volumeContent.substring(0, 1500)}\n`;
                 }
               }
             }
@@ -1388,7 +1614,61 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           }
 
           await syncNodeStatus(node.id, { status: 'completed' }, i);
-          setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+          setEdgeAnimation(node.id, false);
+          continue;
+        }
+
+        if (node.data.typeKey === 'creationInfo') {
+          const interpolatedInput = workflowManager.interpolate(node.data.instruction);
+          
+          const activeVolumeId = workflowManager.getActiveVolumeAnchor();
+          const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
+          
+          // 从 multiCreateFolder 节点获取分卷配置
+          let totalVolumesFromMultiFolder = 0;
+          let currentVolumeConfigFromMulti: any = null;
+          for (let j = 0; j < i; j++) {
+            const prevNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
+            if (prevNode.data.typeKey === 'multiCreateFolder' && prevNode.data.volumeFolderConfigs) {
+              const configs = prevNode.data.volumeFolderConfigs as any[];
+              totalVolumesFromMultiFolder = configs.length;
+              if (configs[currentVolumeIndex]) {
+                currentVolumeConfigFromMulti = configs[currentVolumeIndex];
+              }
+              break;
+            }
+          }
+          
+          // 优先使用分卷配置中的总数
+          const totalVolumes = totalVolumesFromMultiFolder > 0 ? totalVolumesFromMultiFolder : (localNovel.volumes?.length || 0);
+          
+          let volumeInfoMessage = '';
+          if (activeVolumeId && localNovel.volumes) {
+            const activeVolume = localNovel.volumes.find(v => v.id === activeVolumeId);
+            if (activeVolume) {
+              volumeInfoMessage = `\n当前分卷：${activeVolume.title}`;
+            }
+          }
+          
+          if (totalVolumes > 0) {
+            volumeInfoMessage += `\n分卷进度：第 ${currentVolumeIndex + 1} 卷 / 共 ${totalVolumes} 卷`;
+          }
+          
+          const loopIndex = workflowManager.getContextVar('loop_index') || 1;
+          volumeInfoMessage += `\n当前循环轮次：第 ${loopIndex} 轮`;
+          
+          if (node.data.variableBinding?.length)
+            workflowManager.processVariableBindings(node.data.variableBinding, interpolatedInput);
+          
+          await syncNodeStatus(node.id, { 
+            status: 'completed',
+            outputEntries: [{
+              id: `creation_info_${Date.now()}`,
+              title: '创作信息',
+              content: `${volumeInfoMessage}${interpolatedInput ? '\n\n用户指令：' + interpolatedInput : ''}`
+            }]
+          }, i);
+          setEdgeAnimation(node.id, false);
           continue;
         }
 
@@ -1397,7 +1677,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           if (node.data.variableBinding?.length)
             workflowManager.processVariableBindings(node.data.variableBinding, interpolatedInput);
           await syncNodeStatus(node.id, { status: 'completed' }, i);
-          setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+          setEdgeAnimation(node.id, false);
           continue;
         }
 
@@ -1786,7 +2066,13 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 return localNovel;
               },
               async title => {
-                const trg = workflowManager.checkTriggerSplit(title);
+                // 计算即将创建的下一个章节的全局索引
+                const storyChaptersCount = (localNovel.chapters || []).filter(
+                  c => !c.subtype || c.subtype === 'story'
+                ).length;
+                const nextGlobalIndex = storyChaptersCount + 1;
+                
+                const trg = workflowManager.checkTriggerSplit(title, nextGlobalIndex);
                 if (trg) {
                   const name = trg.nextVolumeName || '新分卷';
                   const ex = localNovel.volumes?.find(v => v.title === name);
@@ -1802,7 +2088,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   }
                   await updateLocalAndGlobal(localNovel);
                   workflowManager.setActiveVolumeAnchor(tid);
-                  workflowManager.markSplitProcessed(trg.chapterTitle);
+                  workflowManager.markSplitProcessed(trg.chapterTitle, name);
                   return { updatedNovel: localNovel, newVolumeId: tid };
                 }
                 
@@ -1833,7 +2119,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           }
           if (checkActive())
             await syncNodeStatus(node.id, { label: NODE_CONFIGS.chapter.defaultLabel, status: 'completed' }, i);
-          setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+          setEdgeAnimation(node.id, false);
           continue;
         }
 
@@ -2163,7 +2449,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         if (changed) await updateLocalAndGlobal(upNovel);
 
         // lastNodeOutput += ... (已移除，改用动态构建)
-        setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+        setEdgeAnimation(node.id, false);
 
         // Auto Loop Back Check
         const outEdges = (workflowsRef.current.find(w => w.id === activeWorkflowId)?.edges || []).filter(
@@ -2183,7 +2469,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
       // 只有当前实例仍是活跃 RunID 时，才执行自动完成逻辑 (防止被 pause/abort 的实例错误触发 stop)
       if (!stopRequestedRef.current && workflowManager.isRunActive(startRunId)) {
         workflowManager.stop();
-        setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+        clearAllEdgeAnimations();
         keepAliveManager.disable();
       }
     } catch (e: any) {
@@ -2201,7 +2487,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             nds.map(n => (n.id === failedNode.id ? { ...n, data: { ...n.data, status: 'failed' as const } } : n)),
           );
       }
-      setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+      clearAllEdgeAnimations();
     }
   };
 
@@ -2230,7 +2516,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         data: { ...n.data, status: n.data.status === 'executing' ? 'pending' : (n.data.status as any) },
       })),
     );
-    setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+    clearAllEdgeAnimations();
     keepAliveManager.disable();
   };
 
@@ -2279,7 +2565,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
       setCurrentNodeIndex(-1);
       setIsPaused(false);
       setError(null);
-      setEdges(eds => eds.map(e => ({ ...e, animated: false })));
+      clearAllEdgeAnimations();
 
       workflowManager.stop();
 

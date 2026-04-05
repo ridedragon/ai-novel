@@ -278,6 +278,7 @@ function App() {
     category: string;
     status: '连载中' | '已完结';
     description: string;
+    chapterNumberingMode: 'global' | 'perVolume';
   }>({
     title: '',
     volume: '',
@@ -285,6 +286,7 @@ function App() {
     category: '',
     status: '连载中',
     description: '',
+    chapterNumberingMode: 'global',
   });
 
   // 版本切换辅助函数
@@ -380,6 +382,7 @@ function App() {
               category: '',
               status: '连载中',
               description: '',
+              chapterNumberingMode: 'global',
             });
             setShowCreateNovelModal(true);
           }}
@@ -409,7 +412,8 @@ function App() {
               newNovelData.coverUrl,
               newNovelData.category,
               newNovelData.status,
-              newNovelData.description
+              newNovelData.description,
+              newNovelData.chapterNumberingMode
             );
             setShowCreateNovelModal(false);
           }}
@@ -581,6 +585,8 @@ function App() {
           }
           addNewChapter={novelData.addChapter}
           contextScope={config.contextScope}
+          chapterNumberingMode={novelData.activeNovel?.chapterNumberingMode || 'global'}
+          onChapterNumberingModeChange={novelData.switchChapterNumberingMode}
         />
       }
       sidebarRight={

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import React from 'react';
 import { Chapter, NovelVolume } from '../../types';
+import { ChapterNumberingModeSwitch } from '../ChapterNumberingModeSwitch';
 
 interface AppSidebarLeftProps {
   chapters: Chapter[];
@@ -27,6 +28,8 @@ interface AppSidebarLeftProps {
   handleDeleteVolume: (volumeId: string) => void;
   handleDeleteChapter: (chapterId: number) => void;
   contextScope: string;
+  chapterNumberingMode?: 'global' | 'perVolume';
+  onChapterNumberingModeChange?: (mode: 'global' | 'perVolume') => void;
 }
 
 export const AppSidebarLeft: React.FC<AppSidebarLeftProps> = ({
@@ -44,6 +47,8 @@ export const AppSidebarLeft: React.FC<AppSidebarLeftProps> = ({
   handleDeleteVolume,
   handleDeleteChapter,
   contextScope,
+  chapterNumberingMode,
+  onChapterNumberingModeChange,
 }) => {
   const getDisplayTitle = (chapter: Chapter) => {
     if (chapter.subtype === 'small_summary' || chapter.subtype === 'big_summary') {
@@ -134,6 +139,12 @@ export const AppSidebarLeft: React.FC<AppSidebarLeftProps> = ({
           <span>添加新章节</span>
         </button>
       </div>
+      {chapterNumberingMode && onChapterNumberingModeChange && (
+        <ChapterNumberingModeSwitch
+          currentMode={chapterNumberingMode}
+          onModeChange={onChapterNumberingModeChange}
+        />
+      )}
     </>
   );
 };

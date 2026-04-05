@@ -1,9 +1,11 @@
 import { ChevronDown, Cpu, Expand, FileText, PauseCircle, Trash2, Wand2, X } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { GeneratorPreset, Novel } from '../../../../types';
+import { workflowManager } from '../../../../utils/WorkflowManager';
 import { OutputEntry, WorkflowNode, WorkflowNodeData } from '../../types';
 import { SharedTextarea } from '../Shared/SharedInput';
 import { BasicNodeInfo, NodeHeader } from './Shared/BasicNodeInfo';
+import { CreationInfoPanel } from './Shared/CreationInfoPanel';
 import { LoopConfigPanel, LoopInstructionsPanel } from './Shared/LoopConfigPanel';
 import { LoopConfiguratorPanel } from './Shared/LoopConfiguratorPanel';
 import { ModelConfigPanel } from './Shared/ModelConfigPanel';
@@ -78,6 +80,31 @@ export const MobilePanel = React.memo(
 
       return Array.from(new Set(list.filter(Boolean)));
     }, [globalConfig, allPresets]);
+
+    const creationInfoVolumeInfo = useMemo(() => {
+      const activeVolumeId = workflowManager.getActiveVolumeAnchor();
+      const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
+      // 优先使用 workflowManager 中存储的总分卷数，否则使用已创建的分卷数
+      const totalVolumes = workflowManager.getTotalVolumes() || activeNovel?.volumes?.length || 0;
+      
+      let currentVolumeName = '';
+      if (activeVolumeId && activeNovel?.volumes) {
+        const activeVolume = activeNovel.volumes.find(v => v.id === activeVolumeId);
+        if (activeVolume) {
+          currentVolumeName = activeVolume.title;
+        }
+      }
+      
+      if (!currentVolumeName && activeNovel?.volumes && currentVolumeIndex < totalVolumes) {
+        currentVolumeName = activeNovel.volumes[currentVolumeIndex]?.title || '';
+      }
+      
+      return {
+        currentVolumeName,
+        volumeIndex: currentVolumeIndex,
+        totalVolumes,
+      };
+    }, [activeNovel, editingNode.id]);
 
     const handleUpdate = (updates: Partial<WorkflowNodeData>) => {
       onUpdateNodeData(editingNode.id, updates);
@@ -208,10 +235,15 @@ export const MobilePanel = React.memo(
             />
           )}
 
+          {editingNode.data.typeKey === 'creationInfo' && (
+            <CreationInfoPanel data={editingNode.data} onUpdate={handleUpdate} isMobile={true} volumeInfo={creationInfoVolumeInfo} />
+          )}
+
           {editingNode.data.typeKey !== 'pauseNode' &&
             editingNode.data.typeKey !== 'saveToVolume' &&
             editingNode.data.typeKey !== 'multiCreateFolder' &&
-            editingNode.data.typeKey !== 'loopConfigurator' && (
+            editingNode.data.typeKey !== 'loopConfigurator' &&
+            editingNode.data.typeKey !== 'creationInfo' && (
             <>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -266,6 +298,7 @@ export const MobilePanel = React.memo(
             editingNode.data.typeKey !== 'saveToVolume' &&
             editingNode.data.typeKey !== 'multiCreateFolder' &&
             editingNode.data.typeKey !== 'loopConfigurator' &&
+            editingNode.data.typeKey !== 'creationInfo' &&
             activeNovel && (
               <ReferenceSelector
                 data={editingNode.data}
@@ -290,7 +323,8 @@ export const MobilePanel = React.memo(
             editingNode.data.typeKey !== 'pauseNode' &&
             editingNode.data.typeKey !== 'saveToVolume' &&
             editingNode.data.typeKey !== 'multiCreateFolder' &&
-            editingNode.data.typeKey !== 'loopConfigurator' && (
+            editingNode.data.typeKey !== 'loopConfigurator' &&
+            editingNode.data.typeKey !== 'creationInfo' && (
               <OutputList data={editingNode.data} onUpdate={handleUpdate} onPreview={onPreviewEntry} isMobile={true} />
             )
           )}

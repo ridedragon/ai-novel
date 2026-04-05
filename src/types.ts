@@ -26,6 +26,10 @@ export interface Chapter {
   subtype?: 'story' | 'small_summary' | 'big_summary';
   summaryRange?: string; // 全书模式的范围编号
   summaryRangeVolume?: string; // 本卷模式的范围编号（从1开始）
+
+  // 新增：双编号系统支持
+  globalIndex?: number; // 全书索引（从1开始），用于 'global' 模式
+  volumeIndex?: number; // 分卷内索引（从1开始），用于 'perVolume' 模式
 }
 
 export interface NovelVolume {
@@ -166,11 +170,25 @@ export interface Novel {
   plotOutlineSets?: PlotOutlineSet[];
   referenceFiles?: ReferenceFile[];
   referenceFolders?: ReferenceFolder[];
+
+  // 新增：章节编号模式
+  chapterNumberingMode?: 'global' | 'perVolume'; // 'global' = 全书连续编号 | 'perVolume' = 分卷内独立编号
+}
+
+export interface VolumePlan {
+  id: string;
+  volumeName: string;
+  folderName?: string;
+  startChapter?: number;
+  endChapter?: number;
+  description?: string;
+  processed?: boolean;
 }
 
 export interface WorkflowContextSnapshot {
   activeVolumeAnchor?: string;
   pendingSplits?: WorkflowSplitRule[];
+  volumePlans?: VolumePlan[];
   volumeEndChapters?: VolumeEndChapter[];
   variables: Record<string, any>;
 }
@@ -290,6 +308,7 @@ export interface WorkflowGlobalContext {
   pendingSplitChapter?: string; // 待触发分卷的章节标题 (Legacy)
   pendingNextVolumeName?: string; // 自动分卷后的新名称 (Legacy)
   pendingSplits?: WorkflowSplitRule[]; // 多次分卷规则列表
+  volumePlans?: VolumePlan[]; // 完整的分卷规划信息
   volumeEndChapters?: VolumeEndChapter[]; // 分卷终止章配置
   executionStack: any[]; // For nested loops (future use)
 }

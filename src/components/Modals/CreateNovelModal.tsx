@@ -11,6 +11,7 @@ interface CreateNovelModalProps {
     category: string;
     status: '连载中' | '已完结';
     description: string;
+    chapterNumberingMode: 'global' | 'perVolume';
   };
   setNewNovelData: (data: CreateNovelModalProps['newNovelData']) => void;
   onConfirm: () => void;
@@ -155,6 +156,58 @@ export const CreateNovelModal: React.FC<CreateNovelModalProps> = ({
               className="w-full h-32 px-4 py-2 bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--theme-color)] focus:border-transparent outline-none transition-all resize-none"
               placeholder="请输入作品简介..."
             />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">章节编号模式</label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition-all ${
+                newNovelData.chapterNumberingMode === 'global'
+                  ? 'border-[var(--theme-color)] bg-[var(--theme-color)]/10'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+              }`}>
+                <input
+                  type="radio"
+                  name="numberingMode"
+                  value="global"
+                  checked={newNovelData.chapterNumberingMode === 'global'}
+                  onChange={() => handleFieldChange('chapterNumberingMode', 'global')}
+                  className="sr-only"
+                />
+                <div className="flex-1">
+                  <div className="font-medium text-slate-800 dark:text-white">全书连续编号</div>
+                  <div className="text-xs text-slate-500">第1章、第2章、...、第10章</div>
+                </div>
+                {newNovelData.chapterNumberingMode === 'global' && (
+                  <div className="w-5 h-5 rounded-full bg-[var(--theme-color)] flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-white" />
+                  </div>
+                )}
+              </label>
+              <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition-all ${
+                newNovelData.chapterNumberingMode === 'perVolume'
+                  ? 'border-[var(--theme-color)] bg-[var(--theme-color)]/10'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+              }`}>
+                <input
+                  type="radio"
+                  name="numberingMode"
+                  value="perVolume"
+                  checked={newNovelData.chapterNumberingMode === 'perVolume'}
+                  onChange={() => handleFieldChange('chapterNumberingMode', 'perVolume')}
+                  className="sr-only"
+                />
+                <div className="flex-1">
+                  <div className="font-medium text-slate-800 dark:text-white">分卷内独立编号</div>
+                  <div className="text-xs text-slate-500">每卷都从第1章开始</div>
+                </div>
+                {newNovelData.chapterNumberingMode === 'perVolume' && (
+                  <div className="w-5 h-5 rounded-full bg-[var(--theme-color)] flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-white" />
+                  </div>
+                )}
+              </label>
+            </div>
           </div>
 
           <div className="space-y-2">

@@ -56,7 +56,16 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   targetVolumeName?: string;
   splitChapterTitle?: string;
   nextVolumeName?: string;
-  splitRules?: { id: string; chapterTitle: string; nextVolumeName: string }[];
+  splitRules?: { id: string; chapterTitle: string; nextVolumeName: string; startChapter?: number; endChapter?: number; description?: string }[];
+  volumes?: { 
+    id: string; 
+    volumeName: string; 
+    folderName?: string;
+    startChapter?: number; 
+    endChapter?: number; 
+    description?: string;
+    processed?: boolean;
+  }[]; // 完整的分卷列表（包含所有分卷信息）
 
   // Workflow V2 Logic
   loopInstructions?: LoopInstruction[];
@@ -122,6 +131,7 @@ export type NodeTypeKey =
   | 'reuseDirectory'
   | 'saveToVolume'
   | 'userInput'
+  | 'creationInfo'
   | 'aiChat'
   | 'inspiration'
   | 'worldview'

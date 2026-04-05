@@ -23,15 +23,21 @@ export const WorkflowNode = ({ data, selected }: NodeProps<WorkflowNodeType>) =>
 
   const getStatusColor = () => {
     switch (data.status) {
-      case 'executing': return 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] animate-pulse';
-      case 'completed': return data.skipped ? 'border-gray-500 opacity-60' : 'border-green-600/50 shadow-none';
+      case 'executing': return 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]';
+      case 'completed': return data.skipped ? 'border-gray-500 opacity-60' : 'border-green-600/50';
       case 'failed': return 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]';
       default: return selected ? 'border-[var(--theme-color)] ring-2 ring-[var(--theme-color)]/20 shadow-[var(--theme-color)]/10' : 'border-gray-700';
     }
   };
 
   return (
-    <div className={`relative px-4 py-3 shadow-xl rounded-lg border-2 bg-gray-800 transition-all ${getStatusColor()}`} style={{ width: '280px' }}>
+    <div 
+      className={`relative px-4 py-3 shadow-xl rounded-lg border-2 bg-gray-800 transition-all duration-300 ${getStatusColor()}`} 
+      style={{ width: '280px' }}
+    >
+      {data.status === 'executing' && (
+        <div className="absolute inset-0 rounded-lg border-2 border-blue-400/30 animate-pulse pointer-events-none" />
+      )}
       <Handle
         type="target"
         position={Position.Left}
@@ -104,7 +110,7 @@ export const MobileWorkflowNode = ({ data, selected }: NodeProps<WorkflowNodeTyp
 
   const getStatusColor = () => {
     switch (data.status) {
-      case 'executing': return 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] animate-pulse';
+      case 'executing': return 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]';
       case 'completed': return 'border-green-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]';
       case 'failed': return 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]';
       default: return selected ? 'border-[var(--theme-color)] ring-2 ring-[var(--theme-color)]/20 shadow-[var(--theme-color)]/10' : 'border-gray-700';
@@ -112,7 +118,13 @@ export const MobileWorkflowNode = ({ data, selected }: NodeProps<WorkflowNodeTyp
   };
 
   return (
-    <div className={`px-3 py-2 shadow-xl rounded-lg border-2 bg-gray-800 transition-all ${getStatusColor()}`} style={{ width: '180px' }}>
+    <div 
+      className={`px-3 py-2 shadow-xl rounded-lg border-2 bg-gray-800 transition-all duration-300 ${getStatusColor()}`} 
+      style={{ width: '180px' }}
+    >
+      {data.status === 'executing' && (
+        <div className="absolute inset-0 rounded-lg border-2 border-blue-400/30 animate-pulse pointer-events-none" />
+      )}
       <Handle type="target" position={Position.Left} className="w-3 h-3 bg-gray-600 border-2 border-gray-800" isConnectable={true} />
       <div className="flex items-center gap-2">
         <div className="p-1.5 rounded-md shrink-0" style={{ backgroundColor: `${color}20`, color: color }}>
