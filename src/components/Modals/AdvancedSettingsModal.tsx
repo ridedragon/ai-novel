@@ -373,8 +373,8 @@ export const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = (prop
             <span>总字符数: -</span>
           </div>
           
-          <div className="flex items-center gap-2 relative">
-            <div className="relative flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-0">
               <button 
                 onClick={() => setViewMode(viewMode === 'settings' ? 'list' : 'settings')}
                 className="w-full flex items-center justify-between bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm hover:border-gray-500 transition-colors"
@@ -387,28 +387,28 @@ export const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = (prop
               </button>
             </div>
 
-            <button 
-              onClick={handleDeletePrompt}
-              disabled={selectedPrompt.isFixed}
-              className="p-2 bg-gray-900 border border-gray-700 rounded text-red-400 hover:text-red-300 hover:border-red-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title={selectedPrompt.isFixed ? "固定条目不可删除" : "删除当前条目"}
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <button 
+                onClick={handleDeletePrompt}
+                disabled={selectedPrompt.isFixed}
+                className="p-2 bg-gray-900 border border-gray-700 rounded text-red-400 hover:text-red-300 hover:border-red-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                title={selectedPrompt.isFixed ? "固定条目不可删除" : "删除当前条目"}
+              >
+                <X className="w-4 h-4" />
+              </button>
 
-            <button onClick={handleImportPrompt} className="p-2 bg-gray-900 border border-gray-700 rounded text-gray-400 hover:text-white transition-colors" title="导入"><Upload className="w-4 h-4" /></button>
-            <button onClick={handleExportPreset} className="p-2 bg-gray-900 border border-gray-700 rounded text-gray-400 hover:text-white transition-colors" title="导出"><Download className="w-4 h-4" /></button>
-            <button onClick={handleResetPreset} className="p-2 bg-gray-900 border border-gray-700 rounded text-gray-400 hover:text-white transition-colors" title="重置为默认值"><RotateCcw className="w-4 h-4" /></button>
-            <button onClick={handleAddNewPrompt} className="p-2 bg-gray-900 border border-gray-700 rounded text-gray-400 hover:text-white transition-colors" title="添加新提示词条目"><Plus className="w-4 h-4" /></button>
-            
-             <button 
-              onClick={() => handleEditClick()}
-              className="absolute right-0 bottom-12 p-1.5 bg-gray-700 hover:bg-gray-600 rounded-full shadow text-white transition-colors"
-              style={{ right: '-0.5rem', top: '-2.5rem' }}
-              title={selectedPrompt.isFixed ? "查看详情" : "编辑详情"}
-            >
-              {selectedPrompt.isFixed ? <Eye className="w-3 h-3" /> : <Edit2 className="w-3 h-3" />}
-            </button>
+              <button onClick={handleImportPrompt} className="p-2 bg-gray-900 border border-gray-700 rounded text-gray-400 hover:text-white transition-colors" title="导入"><Upload className="w-4 h-4" /></button>
+              <button onClick={handleExportPreset} className="p-2 bg-gray-900 border border-gray-700 rounded text-gray-400 hover:text-white transition-colors" title="导出"><Download className="w-4 h-4" /></button>
+              <button onClick={handleResetPreset} className="p-2 bg-gray-900 border border-gray-700 rounded text-gray-400 hover:text-white transition-colors" title="重置为默认值"><RotateCcw className="w-4 h-4" /></button>
+              <button onClick={handleAddNewPrompt} className="p-2 bg-gray-900 border border-gray-700 rounded text-gray-400 hover:text-white transition-colors" title="添加新提示词条目"><Plus className="w-4 h-4" /></button>
+              <button 
+                onClick={() => handleEditClick()}
+                className="p-2 bg-gray-900 border border-gray-700 rounded text-gray-400 hover:text-white transition-colors"
+                title={selectedPrompt.isFixed ? "查看详情" : "编辑详情"}
+              >
+                {selectedPrompt.isFixed ? <Eye className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
         </div>
 
