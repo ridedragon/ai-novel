@@ -26,6 +26,7 @@ interface MobilePanelProps {
   onDeleteOutputEntry: (nodeId: string, entryId: string) => void;
   onClose: () => void;
   onPreviewEntry: (entry: OutputEntry) => void;
+  nodes?: WorkflowNode[];
 }
 
 export const MobilePanel = React.memo(
@@ -40,6 +41,7 @@ export const MobilePanel = React.memo(
     onDeleteOutputEntry,
     onClose,
     onPreviewEntry,
+    nodes,
   }: MobilePanelProps) => {
     const [isInstructionExpanded, setIsInstructionExpanded] = useState(false);
 
@@ -104,7 +106,7 @@ export const MobilePanel = React.memo(
         volumeIndex: currentVolumeIndex,
         totalVolumes,
       };
-    }, [activeNovel, editingNode.id]);
+    }, [activeNovel, editingNode.id, nodes]);
 
     const handleUpdate = (updates: Partial<WorkflowNodeData>) => {
       onUpdateNodeData(editingNode.id, updates);

@@ -816,6 +816,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
           onDeleteOutputEntry={deleteOutputEntry}
           onClose={() => setEditingNodeId(null)}
           onPreviewEntry={setPreviewEntry}
+          nodes={nodes}
         />
       )}
 

@@ -2078,24 +2078,49 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 
                 const currentChapter = localNovel.chapters?.find(c => c.id === cid);
                 const currentTitle = currentChapter?.title || '';
+                const currentChapterNum = parseInt(currentTitle.replace(/[^0-9]/g, '')) || 0;
                 
                 const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
-                const endChapterCheck = workflowManager.checkVolumeEndChapter(currentTitle, currentVolumeIndex);
+                const volumePlans = workflowManager.getVolumePlans();
+                const pendingSplits = workflowManager.getPendingSplits();
                 
-                if (endChapterCheck && endChapterCheck.shouldSwitchVolume) {
-                  terminal.log(`[WORKFLOW] Chapter "${currentTitle}" completed as end chapter, immediately creating next volume`);
+                terminal.log(`[WORKFLOW] Chapter "${currentTitle}" (${currentChapterNum}) completed, checking volume switch at volume index ${currentVolumeIndex}`);
+                
+                // 优先检查 pendingSplits 中的分卷切换规则
+                let shouldSwitch = false;
+                let nextVolumeName = '';
+                
+                for (const split of pendingSplits) {
+                  if (split.processed) continue;
+                  const splitChapterNum = parseInt(split.chapterTitle.replace(/[^0-9]/g, '')) || 0;
+                  if (currentChapterNum >= splitChapterNum) {
+                    shouldSwitch = true;
+                    nextVolumeName = split.nextVolumeName || '';
+                    terminal.log(`[WORKFLOW] Pending split matched: "${split.chapterTitle}", switching to "${nextVolumeName}"`);
+                    break;
+                  }
+                }
+                
+                // 如果 pendingSplits 没有匹配，检查 volumeEndChapters
+                if (!shouldSwitch) {
+                  const endChapterCheck = workflowManager.checkVolumeEndChapter(currentTitle, currentVolumeIndex);
+                  if (endChapterCheck && endChapterCheck.shouldSwitchVolume) {
+                    shouldSwitch = true;
+                    const nextVolConfig = volumePlans[endChapterCheck.nextVolumeIndex];
+                    nextVolumeName = nextVolConfig?.folderName || nextVolConfig?.volumeName || '';
+                    terminal.log(`[WORKFLOW] Volume end chapter matched: nextVolumeIndex=${endChapterCheck.nextVolumeIndex}, name="${nextVolumeName}"`);
+                  }
+                }
+                
+                if (shouldSwitch && nextVolumeName) {
+                  terminal.log(`[WORKFLOW] Creating next volume: ${nextVolumeName}`);
                   
-                  const nextVolIdx = endChapterCheck.nextVolumeIndex;
-                  const volumePlans = workflowManager.getVolumePlans();
-                  const nextVolConfig = volumePlans[nextVolIdx];
-                  const nextFolderName = nextVolConfig?.folderName || nextVolConfig?.volumeName || '';
-                  
-                  const existingNextVol = localNovel.volumes?.find(v => v.title === nextFolderName);
-                  if (!existingNextVol && nextFolderName) {
+                  const existingNextVol = localNovel.volumes?.find(v => v.title === nextVolumeName);
+                  if (!existingNextVol) {
                     const newVolId = `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
                     const newVolume = {
                       id: newVolId,
-                      title: nextFolderName,
+                      title: nextVolumeName,
                       collapsed: false,
                     };
                     localNovel = {
@@ -2109,7 +2134,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     types.forEach((type, idx) => {
                       const newSet = {
                         id: `${prefix[idx]}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                        name: nextFolderName,
+                        name: nextVolumeName,
                         entries: [],
                         characters: [],
                         items: [],
@@ -2117,19 +2142,27 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                       (localNovel as any)[type] = [...((localNovel as any)[type] || []), newSet];
                     });
                     
-                    terminal.log(`[WORKFLOW] Immediately created next volume: ${nextFolderName}`);
+                    terminal.log(`[WORKFLOW] Immediately created next volume: ${nextVolumeName}`);
                   }
                   
-                  workflowManager.setCurrentVolumeIndex(nextVolIdx);
-                  workflowManager.setActiveVolumeAnchor(existingNextVol?.id || localNovel.volumes?.find(v => v.title === nextFolderName)?.id || '');
+                  // 更新分卷索引
+                  const nextVolIdx = volumePlans.findIndex(v => v.volumeName === nextVolumeName || v.folderName === nextVolumeName);
+                  if (nextVolIdx >= 0) {
+                    workflowManager.setCurrentVolumeIndex(nextVolIdx);
+                  }
+                  workflowManager.setActiveVolumeAnchor(existingNextVol?.id || localNovel.volumes?.find(v => v.title === nextVolumeName)?.id || '');
                   
+                  // 标记 pendingSplit 为已处理
+                  workflowManager.markSplitProcessed(currentTitle, nextVolumeName);
+                  
+                  // 清除创作类节点的输出，以便下一卷重新生成
                   nodesRef.current = nodesRef.current.map(n => {
                     const typeKey = n.data.typeKey;
                     if (['worldview', 'plotOutline', 'outline'].includes(typeKey)) {
                       return { ...n, data: { ...n.data, outputEntries: [] } };
                     }
-                    if (typeKey === 'chapter' && nextFolderName) {
-                      return { ...n, data: { ...n.data, targetVolumeId: '', targetVolumeName: nextFolderName } };
+                    if (typeKey === 'chapter' && nextVolumeName) {
+                      return { ...n, data: { ...n.data, targetVolumeId: '', targetVolumeName: nextVolumeName } };
                     }
                     return n;
                   });
@@ -2140,7 +2173,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   return {
                     updatedNovel: localNovel,
                     shouldPauseForVolumeSwitch: true,
-                    nextVolumeIndex: nextVolIdx,
+                    nextVolumeIndex: nextVolIdx >= 0 ? nextVolIdx : currentVolumeIndex + 1,
                   };
                 }
                 

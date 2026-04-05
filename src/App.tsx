@@ -386,7 +386,19 @@ function App() {
             });
             setShowCreateNovelModal(true);
           }}
-          onDeleteNovel={novelData.deleteNovel}
+          onDeleteNovel={(id) => {
+            const novel = novelData.novels.find(n => n.id === id);
+            setDialog({
+              isOpen: true,
+              type: 'confirm',
+              title: '删除书籍',
+              message: novel ? `确定删除"${novel.title}"吗？此操作不可恢复。` : '确定删除这本书吗？此操作不可恢复。',
+              onConfirm: () => {
+                novelData.deleteNovel(id);
+                closeDialog();
+              },
+            });
+          }}
           onUpdateNovel={(id, updates) => novelData.updateNovel(id, updates)}
           onExportNovel={handleExportNovel}
           onOpenSettings={() => setShowSettings(true)}

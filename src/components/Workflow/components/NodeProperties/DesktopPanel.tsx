@@ -24,6 +24,7 @@ interface DesktopPanelProps {
   pendingFolders: string[];
   globalConfig: any;
   consolidatedModelList: string[];
+  nodes?: WorkflowNode[];
 }
 
 export const DesktopPanel = ({
@@ -36,6 +37,7 @@ export const DesktopPanel = ({
   pendingFolders,
   globalConfig,
   consolidatedModelList,
+  nodes,
 }: DesktopPanelProps) => {
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isInstructionExpanded, setIsInstructionExpanded] = useState(false);
@@ -63,7 +65,7 @@ export const DesktopPanel = ({
       volumeIndex: currentVolumeIndex,
       totalVolumes,
     };
-  }, [activeNovel, node.id]);
+  }, [activeNovel, node.id, nodes]);
 
   // 防抖更新函数
   const debouncedUpdate = (updates: Partial<WorkflowNodeData>) => {

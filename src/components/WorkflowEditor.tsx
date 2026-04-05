@@ -929,6 +929,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
             pendingFolders={pendingFolders}
             globalConfig={globalConfig}
             consolidatedModelList={consolidatedModelList}
+            nodes={nodes}
           />
         )}
 

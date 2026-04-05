@@ -745,7 +745,6 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                 onClick={() => {
                   if (editingNovel) {
                     onDeleteNovel(editingNovel.id);
-                    setEditingNovel(null);
                   }
                 }}
                 className="px-4 py-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors flex items-center gap-2 text-sm font-bold border border-red-200 dark:border-red-500/20 order-2 md:order-1 w-full md:w-auto justify-center"
