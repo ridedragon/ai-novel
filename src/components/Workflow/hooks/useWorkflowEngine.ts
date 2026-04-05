@@ -136,22 +136,19 @@ export const useWorkflowEngine = (options: {
   // 统一的连线动画管理函数
   // 解决动画延迟、消失或一直存在的问题
   const setEdgeAnimation = useCallback((nodeId: string, animated: boolean) => {
-    // 使用 requestAnimationFrame 确保动画在下一帧渲染，避免延迟
-    requestAnimationFrame(() => {
-      setEdges(eds => eds.map(e => {
-        if (e.target === nodeId) {
-          return { ...e, animated };
-        }
-        return e;
-      }));
-    });
+    // 直接更新，不使用 requestAnimationFrame 延迟，确保状态同步
+    setEdges(eds => eds.map(e => {
+      if (e.target === nodeId) {
+        return { ...e, animated };
+      }
+      return e;
+    }));
   }, [setEdges]);
 
   // 清除所有连线动画
   const clearAllEdgeAnimations = useCallback(() => {
-    requestAnimationFrame(() => {
-      setEdges(eds => eds.map(e => ({ ...e, animated: false })));
-    });
+    // 直接更新，确保状态同步
+    setEdges(eds => eds.map(e => ({ ...e, animated: false })));
   }, [setEdges]);
 
   // 执行引擎核心逻辑
@@ -476,6 +473,9 @@ export const useWorkflowEngine = (options: {
 
         // --- Pause Node ---
         if (node.data.typeKey === 'pauseNode') {
+          await syncNodeStatus(node.id, { status: 'executing' }, i);
+          setEdgeAnimation(node.id, true);
+          await new Promise(resolve => setTimeout(resolve, 300));
           await syncNodeStatus(node.id, { status: 'completed' }, i);
           setEdgeAnimation(node.id, false);
           workflowManager.pause(i + 1);
@@ -493,6 +493,7 @@ export const useWorkflowEngine = (options: {
         // --- Save To Volume Node ---
         if (node.data.typeKey === 'saveToVolume') {
           await syncNodeStatus(node.id, { status: 'executing' }, i);
+          setEdgeAnimation(node.id, true);
 
           if (!node.data.overrideAiConfig) {
             let targetVolumeId = node.data.targetVolumeId as string;
@@ -962,6 +963,7 @@ export const useWorkflowEngine = (options: {
         // --- Multi Create Folder Node (多分卷目录初始化) ---
         if (node.data.typeKey === 'multiCreateFolder') {
           await syncNodeStatus(node.id, { status: 'executing' }, i);
+          setEdgeAnimation(node.id, true);
           
           let volumeFolderConfigs = (node.data.volumeFolderConfigs || []) as any[];
           
@@ -1192,6 +1194,7 @@ export const useWorkflowEngine = (options: {
         // --- Loop Configurator Node (循环配置器) ---
         if (node.data.typeKey === 'loopConfigurator') {
           await syncNodeStatus(node.id, { status: 'executing' }, i);
+          setEdgeAnimation(node.id, true);
           
           let globalLoopConfig = node.data.globalLoopConfig;
           let globalLoopInstructions = node.data.globalLoopInstructions;
@@ -1619,6 +1622,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         }
 
         if (node.data.typeKey === 'creationInfo') {
+          await syncNodeStatus(node.id, { status: 'executing' }, i);
+          setEdgeAnimation(node.id, true);
+          
           const interpolatedInput = workflowManager.interpolate(node.data.instruction);
           
           const activeVolumeId = workflowManager.getActiveVolumeAnchor();
@@ -1673,6 +1679,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         }
 
         if (node.data.typeKey === 'userInput') {
+          await syncNodeStatus(node.id, { status: 'executing' }, i);
+          setEdgeAnimation(node.id, true);
+          
           const interpolatedInput = workflowManager.interpolate(node.data.instruction);
           if (node.data.variableBinding?.length)
             workflowManager.processVariableBindings(node.data.variableBinding, interpolatedInput);
@@ -1683,6 +1692,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
         // --- Workflow Generator ---
         if (node.data.typeKey === 'workflowGenerator') {
+          await syncNodeStatus(node.id, { status: 'executing' }, i);
+          setEdgeAnimation(node.id, true);
+          
           if (nodesRef.current.length > 1) throw new Error('架构师节点必须在空画布上运行。');
           const genPresets = (allPresets as any).generator || [];
           const genPreset = genPresets.find((p: any) => p.id === node.data.presetId) || genPresets[0];

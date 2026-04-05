@@ -36,7 +36,7 @@ export const WorkflowNode = ({ data, selected }: NodeProps<WorkflowNodeType>) =>
       style={{ width: '280px' }}
     >
       {data.status === 'executing' && (
-        <div className="absolute inset-0 rounded-lg border-2 border-blue-400/30 animate-pulse pointer-events-none" />
+        <div className="absolute inset-0 rounded-lg border-2 border-blue-400 animate-pulse pointer-events-none" style={{ opacity: 0.8 }} />
       )}
       <Handle
         type="target"
@@ -123,7 +123,7 @@ export const MobileWorkflowNode = ({ data, selected }: NodeProps<WorkflowNodeTyp
       style={{ width: '180px' }}
     >
       {data.status === 'executing' && (
-        <div className="absolute inset-0 rounded-lg border-2 border-blue-400/30 animate-pulse pointer-events-none" />
+        <div className="absolute inset-0 rounded-lg border-2 border-blue-400 animate-pulse pointer-events-none" style={{ opacity: 0.8 }} />
       )}
       <Handle type="target" position={Position.Left} className="w-3 h-3 bg-gray-600 border-2 border-gray-800" isConnectable={true} />
       <div className="flex items-center gap-2">
