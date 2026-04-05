@@ -16,9 +16,16 @@ import {
   Upload,
   X
 } from 'lucide-react'
-import React from 'react'
+import React, { useState } from 'react'
 import { GeneratorPreset, GeneratorPrompt } from '../../types'
 import { GeneratorPromptEditModal } from './GeneratorPromptEditModal'
+
+interface ConfirmState {
+  isOpen: boolean
+  title: string
+  message: string
+  onConfirm: () => void
+}
 
 interface GeneratorSettingsModalProps {
   isOpen: boolean
@@ -69,6 +76,13 @@ export const GeneratorSettingsModal: React.FC<GeneratorSettingsModalProps> = (pr
     tempEditingPrompt, setTempEditingPrompt, handleSaveGeneratorPrompt,
     isDragEnabled, setIsDragEnabled, draggedPromptIndex, setDraggedPromptIndex
   } = props
+
+  const [confirmState, setConfirmState] = useState<ConfirmState>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  })
 
   if (!isOpen) return null
 
@@ -162,7 +176,18 @@ export const GeneratorSettingsModal: React.FC<GeneratorSettingsModalProps> = (pr
                                <Download className="w-3.5 h-3.5" />
                             </button>
                             <button 
-                               onClick={(e) => { e.stopPropagation(); handleDeleteGeneratorPreset(preset.id); }}
+                               onClick={(e) => { 
+                                 e.stopPropagation(); 
+                                 setConfirmState({
+                                   isOpen: true,
+                                   title: '删除预设',
+                                   message: `确定要删除预设「${preset.name}」吗？此操作无法撤销。`,
+                                   onConfirm: () => {
+                                     handleDeleteGeneratorPreset(preset.id);
+                                     setConfirmState(prev => ({ ...prev, isOpen: false }));
+                                   }
+                                 });
+                               }}
                                className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-600 rounded transition-colors"
                                title="删除"
                             >
@@ -491,6 +516,33 @@ export const GeneratorSettingsModal: React.FC<GeneratorSettingsModalProps> = (pr
         onSave={handleSaveGeneratorPrompt}
         onUpdatePrompt={(updates) => setTempEditingPrompt(tempEditingPrompt ? { ...tempEditingPrompt, ...updates } : null)}
       />
+
+      {confirmState.isOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-gray-800 w-full max-w-sm rounded-xl shadow-2xl border border-gray-600 flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-gray-700">
+              <h3 className="font-bold text-lg text-gray-100">{confirmState.title}</h3>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-300 text-sm leading-relaxed">{confirmState.message}</p>
+            </div>
+            <div className="p-5 border-t border-gray-700 flex justify-end gap-3 bg-gray-800 rounded-b-xl">
+              <button 
+                onClick={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors text-sm"
+              >
+                取消
+              </button>
+              <button 
+                onClick={confirmState.onConfirm}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg shadow-lg transition-all text-sm"
+              >
+                确定
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

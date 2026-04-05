@@ -106,6 +106,7 @@ function App() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [isDragEnabled, setIsDragEnabled] = useState(false);
   const [draggedPromptIndex, setDraggedPromptIndex] = useState<number | null>(null);
+  const [selectedPromptId, setSelectedPromptId] = useState<number>(0);
   const [showGeneratorApiConfig, setShowGeneratorApiConfig] = useState(false);
   const [editingGeneratorPromptIndex, setEditingGeneratorPromptIndex] = useState<number | null>(null);
   const [tempEditingPrompt, setTempEditingPrompt] = useState<GeneratorPrompt | null>(null);
@@ -203,6 +204,15 @@ function App() {
     () => completion.completionPresets.find(p => p.id === completion.activePresetId),
     [completion.completionPresets, completion.activePresetId],
   );
+
+  useEffect(() => {
+    if (completion.prompts.length > 0) {
+      const hasSelected = completion.prompts.some(p => p.id === selectedPromptId);
+      if (!hasSelected) {
+        setSelectedPromptId(completion.prompts[0].id);
+      }
+    }
+  }, [completion.prompts, selectedPromptId]);
 
   useEffect(() => {
     if (novelData.activeChapterId) {
@@ -1209,24 +1219,86 @@ function App() {
             {...completion}
             maxRetries={config.maxRetries}
             setMaxRetries={config.setMaxRetries}
-            selectedPromptId={1}
-            setSelectedPromptId={() => {}}
+            selectedPromptId={selectedPromptId}
+            setSelectedPromptId={setSelectedPromptId}
             viewMode={viewMode}
             setViewMode={setViewMode}
             isDragEnabled={isDragEnabled}
             setIsDragEnabled={setIsDragEnabled}
             draggedPromptIndex={draggedPromptIndex}
             setDraggedPromptIndex={setDraggedPromptIndex}
-            handleDragStart={() => {}}
-            handleDragOver={() => {}}
-            handleDragEnd={() => {}}
+            handleDragStart={(e: React.DragEvent, index: number) => {
+              e.dataTransfer.setData('text/plain', String(index));
+              setDraggedPromptIndex(index);
+            }}
+            handleDragOver={(e: React.DragEvent, index: number) => {
+              e.preventDefault();
+              if (draggedPromptIndex === null || draggedPromptIndex === index) return;
+              const newPrompts = [...completion.prompts];
+              const draggedItem = newPrompts[draggedPromptIndex];
+              newPrompts.splice(draggedPromptIndex, 1);
+              newPrompts.splice(index, 0, draggedItem);
+              completion.setPrompts(newPrompts);
+              setDraggedPromptIndex(index);
+            }}
+            handleDragEnd={() => {
+              setDraggedPromptIndex(null);
+              setIsDragEnabled(false);
+            }}
             handleEditClick={p => {
-              setEditingPrompt(p || null);
+              setEditingPrompt(p || completion.prompts.find(pr => pr.id === selectedPromptId) || null);
               setShowEditModal(true);
             }}
-            handleDeletePrompt={() => {}}
-            handleAddNewPrompt={() => {}}
-            handleImportPrompt={() => {}}
+            handleDeletePrompt={() => {
+              const prompt = completion.prompts.find(p => p.id === selectedPromptId);
+              if (prompt?.isFixed) return;
+              if (completion.prompts.length <= 1) return;
+              const newPrompts = completion.prompts.filter(p => p.id !== selectedPromptId);
+              completion.setPrompts(newPrompts);
+              setSelectedPromptId(newPrompts[0]?.id || 0);
+            }}
+            handleAddNewPrompt={() => {
+              const newId = Math.max(...completion.prompts.map(p => p.id), 0) + 1;
+              const newPrompt: PromptItem = {
+                id: newId,
+                name: '新提示词',
+                content: '',
+                role: 'system',
+                trigger: 'All types (default)',
+                position: 'relative',
+                active: true,
+                icon: '📝',
+              };
+              completion.setPrompts([...completion.prompts, newPrompt]);
+              setSelectedPromptId(newId);
+            }}
+            handleImportPrompt={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = '.json';
+              input.onchange = (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    try {
+                      const imported = JSON.parse(event.target?.result as string);
+                      const promptsToImport = Array.isArray(imported) ? imported : [imported];
+                      const maxId = Math.max(...completion.prompts.map(p => p.id), 0);
+                      const newPrompts = promptsToImport.map((p: PromptItem, i: number) => ({
+                        ...p,
+                        id: maxId + i + 1,
+                      }));
+                      completion.setPrompts([...completion.prompts, ...newPrompts]);
+                    } catch (err) {
+                      console.error('导入提示词失败:', err);
+                    }
+                  };
+                  reader.readAsText(file);
+                }
+              };
+              input.click();
+            }}
             showEditModal={showEditModal}
             setShowEditModal={setShowEditModal}
             editingPrompt={editingPrompt}
@@ -1242,8 +1314,42 @@ function App() {
               setShowPresetNameModal(true);
             }}
             handlePresetChange={completion.setActivePresetId}
-            handleImportPreset={() => {}}
-            handleExportPreset={() => {}}
+            handleImportPreset={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = '.json';
+              input.onchange = (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    try {
+                      const preset = JSON.parse(event.target?.result as string);
+                      const newId = `imported_${Date.now()}`;
+                      completion.setCompletionPresets(prev => [...prev, { ...preset, id: newId }]);
+                      completion.setActivePresetId(newId);
+                    } catch (err) {
+                      console.error('导入预设失败:', err);
+                    }
+                  };
+                  reader.readAsText(file);
+                }
+              };
+              input.click();
+            }}
+            handleExportPreset={() => {
+              const preset = completion.completionPresets.find(p => p.id === completion.activePresetId);
+              if (preset) {
+                const dataStr = JSON.stringify(preset, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${preset.name}_preset.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }
+            }}
             handleDeletePreset={() => completion.deletePreset(completion.activePresetId)}
             handleSavePreset={completion.saveCurrentPreset}
             handleResetPreset={completion.resetPreset}

@@ -146,7 +146,18 @@ export const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = (prop
             >
               {selectedPrompt.isFixed ? <Eye className="w-4 h-4 text-gray-400" /> : <Edit2 className="w-4 h-4 text-gray-400" />}
             </button>
-            <button className="p-1.5 hover:bg-gray-700 rounded transition-colors" title="复制"><Copy className="w-4 h-4 text-gray-400" /></button>
+            <button
+              className="p-1.5 hover:bg-gray-700 rounded transition-colors"
+              title="复制当前提示词"
+              onClick={() => {
+                const newId = Math.max(...prompts.map(p => p.id), 0) + 1;
+                const copiedPrompt = { ...selectedPrompt, id: newId, name: `${selectedPrompt.name} (副本)`, isFixed: false };
+                setPrompts([...prompts, copiedPrompt]);
+                setSelectedPromptId(newId);
+              }}
+            >
+              <Copy className="w-4 h-4 text-gray-400" />
+            </button>
             <button onClick={onClose} className="p-1.5 hover:bg-gray-700 rounded transition-colors text-red-400"><X className="w-4 h-4" /></button>
           </div>
         </div>
@@ -162,7 +173,13 @@ export const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = (prop
                    <div className="flex items-center justify-between">
                       <span className="font-semibold text-gray-200">对话补全预设</span>
                       <div className="flex items-center gap-1">
-                         <button className="p-1.5 hover:bg-gray-700 rounded text-gray-400" title="取消链接"><Unlink className="w-3.5 h-3.5" /></button>
+                         <button
+                           className="p-1.5 hover:bg-gray-700 rounded text-gray-400"
+                           title="重置为默认预设"
+                           onClick={handleResetPreset}
+                         >
+                           <Unlink className="w-3.5 h-3.5" />
+                         </button>
                          <button onClick={handleImportPreset} className="p-1.5 hover:bg-gray-700 rounded text-gray-400" title="导入"><Upload className="w-3.5 h-3.5" /></button>
                          <button onClick={handleExportPreset} className="p-1.5 hover:bg-gray-700 rounded text-gray-400" title="导出"><Download className="w-3.5 h-3.5" /></button>
                          <button onClick={handleDeletePreset} className="p-1.5 hover:bg-gray-700 rounded text-red-400" title="删除"><Trash2 className="w-3.5 h-3.5" /></button>
