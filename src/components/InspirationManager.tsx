@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
 import terminal from 'virtual:terminal'
-import { CharacterSet, InspirationItem, InspirationSet, Novel, OutlineSet, WorldviewSet } from '../types'
+import { CharacterSet, InspirationItem, InspirationSet, Novel, OutlineSet, PlotOutlineSet, WorldviewSet } from '../types'
 import { ReferenceSelector } from './ReferenceSelector'
 
 interface InspirationManagerProps {
@@ -220,7 +220,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
       items: []
     }
 
-    const newPlotOutlineSet = {
+    const newPlotOutlineSet: PlotOutlineSet = {
       id: newId,
       name: name,
       items: []

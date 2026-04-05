@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
 import terminal from 'virtual:terminal'
-import { CharacterItem, CharacterSet, InspirationSet, Novel, OutlineSet, WorldviewSet } from '../types'
+import { CharacterItem, CharacterSet, InspirationSet, Novel, OutlineSet, PlotOutlineSet, WorldviewSet } from '../types'
 import { ReferenceSelector } from './ReferenceSelector'
 
 interface CharacterManagerProps {
@@ -210,7 +210,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = React.memo(({
         items: []
     }
 
-    const newPlotOutlineSet = {
+    const newPlotOutlineSet: PlotOutlineSet = {
         id: newId,
         name: name,
         items: []

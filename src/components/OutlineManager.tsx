@@ -22,7 +22,7 @@ import {
   X
 } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
-import { CharacterSet, InspirationSet, Novel, OutlineItem, OutlineSet, WorldviewSet } from '../types'
+import { CharacterSet, InspirationSet, Novel, OutlineItem, OutlineSet, PlotOutlineSet, WorldviewSet } from '../types'
 import { ReferenceSelector } from './ReferenceSelector'
 
 interface OutlineManagerProps {
@@ -242,7 +242,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
         items: []
     }
 
-    const newPlotOutlineSet = {
+    const newPlotOutlineSet: PlotOutlineSet = {
         id: newId,
         name: name,
         items: []

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
 import terminal from 'virtual:terminal'
-import { CharacterSet, InspirationSet, Novel, OutlineSet, WorldviewItem, WorldviewSet } from '../types'
+import { CharacterSet, InspirationSet, Novel, OutlineSet, PlotOutlineSet, WorldviewItem, WorldviewSet } from '../types'
 import { ReferenceSelector } from './ReferenceSelector'
 
 interface WorldviewManagerProps {
@@ -210,7 +210,7 @@ export const WorldviewManager: React.FC<WorldviewManagerProps> = React.memo(({
         items: []
     }
 
-    const newPlotOutlineSet = {
+    const newPlotOutlineSet: PlotOutlineSet = {
         id: newId,
         name: name,
         items: []
