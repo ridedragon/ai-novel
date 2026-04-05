@@ -42,7 +42,12 @@ export class AutoWriteEngine {
       updatedNovel?: Novel,
       forceFinal?: boolean,
     ) => Promise<Novel | void>,
-    onBeforeChapter?: (title: string) => Promise<{ updatedNovel?: Novel; newVolumeId?: string } | void>,
+    onBeforeChapter?: (title: string) => Promise<{ 
+      updatedNovel?: Novel; 
+      newVolumeId?: string;
+      shouldPauseForVolumeSwitch?: boolean;
+      nextVolumeIndex?: number;
+    } | void>,
     targetVolumeId?: string,
     includeFullOutline: boolean = false,
     outlineSetId: string | null = null,
@@ -124,6 +129,15 @@ export class AutoWriteEngine {
         if (onBeforeChapter) {
           const beforeResult = await onBeforeChapter(item.title);
           if (beforeResult) {
+            // 分卷终止章检测：如果需要暂停切换分卷
+            if (beforeResult.shouldPauseForVolumeSwitch) {
+              terminal.log(`[AutoWriteEngine] Volume end chapter reached, pausing for volume switch to index ${beforeResult.nextVolumeIndex}`);
+              onStatusUpdate(`分卷终止章完成，等待切换到下一卷...`);
+              // 暂停当前执行，等待外部处理分卷切换
+              this.isRunning = false;
+              return;
+            }
+
             if (beforeResult.updatedNovel) {
               // 原子化同步：立即更新引擎内部的副本，防止旧快照覆盖 UI 新创建的分卷
               this.novel = beforeResult.updatedNovel;

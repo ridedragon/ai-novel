@@ -18,6 +18,22 @@ export interface OutputEntry {
   analysisResult?: string;
 }
 
+export interface VolumeFolderConfig {
+  id: string;
+  volumeName: string; // 分卷名称
+  startChapter: number; // 起始章节号
+  endChapter?: number; // 终止章节号（可选，用于自动切换）
+  folderName: string; // 对应的目录名称
+  processed?: boolean; // 是否已处理
+}
+
+export interface VolumeEndChapter {
+  volumeId: string;
+  volumeName: string;
+  endChapterTitle: string; // 终止章节标题
+  processed?: boolean;
+}
+
 export interface WorkflowNodeData extends Record<string, unknown> {
   _deleted?: boolean; // Special marker for node deletion
   label: string;
@@ -68,6 +84,17 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   autoFillContent?: boolean; // AI 是否自动填写生成的节点内容
   volumeContent?: string; // AI 生成的分卷规划原始内容
   triggeredSkills?: string[]; // 本次执行触发的 Skills
+
+  // 多初始化目录节点特定设置
+  volumeFolderConfigs?: VolumeFolderConfig[]; // 多分卷目录配置
+  currentVolumeIndex?: number; // 当前正在处理的分卷索引
+  volumeEndChapters?: VolumeEndChapter[]; // 分卷终止章配置
+
+  // 循环配置器节点特定设置
+  globalLoopConfig?: LoopConfig; // 全局循环配置
+  globalLoopInstructions?: LoopInstruction[]; // 全局循环指令
+  useAiGeneration?: boolean; // 是否使用AI生成循环配置
+  generatedLoopConfig?: string; // AI生成的循环配置原始内容
 }
 
 export type WorkflowNode = Node<WorkflowNodeData>;
@@ -91,6 +118,7 @@ export interface ExecutionNode {
 
 export type NodeTypeKey =
   | 'createFolder'
+  | 'multiCreateFolder'
   | 'reuseDirectory'
   | 'saveToVolume'
   | 'userInput'
@@ -103,6 +131,7 @@ export type NodeTypeKey =
   | 'chapter'
   | 'workflowGenerator'
   | 'loopNode'
+  | 'loopConfigurator'
   | 'pauseNode';
 
 export interface WorkflowEditorProps {

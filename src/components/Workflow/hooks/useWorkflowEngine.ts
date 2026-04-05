@@ -7,7 +7,7 @@ import { AutoWriteEngine, getChapterContextMessages } from '../../../utils/auto-
 import { keepAliveManager } from '../../../utils/KeepAliveManager';
 import { storage } from '../../../utils/storage';
 import { workflowManager } from '../../../utils/WorkflowManager';
-import { NODE_CONFIGS, WORKFLOW_DSL_PROMPT } from '../constants';
+import { LOOP_CONFIGURATOR_PROMPT, NODE_CONFIGS, WORKFLOW_DSL_PROMPT } from '../constants';
 import { NodeTypeKey, OutputEntry, WorkflowData, WorkflowNode, WorkflowNodeData } from '../types';
 import { cleanAndParseJSON, extractEntries, extractTargetEndChapter, parseAnyNumber } from '../utils/workflowHelpers';
 
@@ -203,12 +203,16 @@ export const useWorkflowEngine = (options: {
       };
 
       const resetNodeData = (n: WorkflowNode): WorkflowNode => {
-        const updates: any = { status: 'pending', outputEntries: [] };
+        const updates: any = { status: 'pending', outputEntries: [], loopInstructions: [] };
         if (n.data.typeKey === 'chapter') {
           updates.label = NODE_CONFIGS.chapter.defaultLabel;
         }
         if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {
           updates.loopConfig = { ...n.data.loopConfig, currentIndex: 0 };
+        }
+        if (n.data.typeKey === 'loopConfigurator') {
+          updates.globalLoopInstructions = [];
+          updates.generatedLoopConfig = '';
         }
         return { ...n, data: { ...n.data, ...updates } };
       };
@@ -241,7 +245,9 @@ export const useWorkflowEngine = (options: {
         if (globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume') {
           for (let j = currentIndex - 1; j >= 0; j--) {
             const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
-            if (pNode.data.typeKey === 'createFolder' || pNode.data.typeKey === 'reuseDirectory') {
+            if (pNode.data.typeKey === 'createFolder' || 
+                pNode.data.typeKey === 'reuseDirectory' ||
+                pNode.data.typeKey === 'multiCreateFolder') {
               boundaryIndex = j;
               break;
             }
@@ -253,7 +259,9 @@ export const useWorkflowEngine = (options: {
           // 注意：必须从 nodesRef 获取最新状态，因为 sortedNodes 可能包含过时数据
           const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
 
-          if (pNode.data.typeKey === 'createFolder' || pNode.data.typeKey === 'reuseDirectory') {
+          if (pNode.data.typeKey === 'createFolder' || 
+              pNode.data.typeKey === 'reuseDirectory' ||
+              pNode.data.typeKey === 'multiCreateFolder') {
             dynamicFolder = pNode.data.folderName || dynamicFolder;
           } else if (pNode.data.typeKey === 'userInput') {
             dynamicContextMessages.push({
@@ -325,7 +333,9 @@ export const useWorkflowEngine = (options: {
       if (startIndex > 0) {
         for (let j = 0; j < startIndex; j++) {
           const prevNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
-          if (prevNode.data.typeKey === 'createFolder' || prevNode.data.typeKey === 'reuseDirectory') {
+          if (prevNode.data.typeKey === 'createFolder' || 
+              prevNode.data.typeKey === 'reuseDirectory' ||
+              prevNode.data.typeKey === 'multiCreateFolder') {
             currentWorkflowFolder = prevNode.data.folderName || currentWorkflowFolder;
           } else if (prevNode.data.typeKey === 'saveToVolume') {
             if (prevNode.data.splitRules && (prevNode.data.splitRules as any[]).length > 0) {
@@ -333,6 +343,14 @@ export const useWorkflowEngine = (options: {
             }
             if (prevNode.data.targetVolumeId) {
               workflowManager.setActiveVolumeAnchor(prevNode.data.targetVolumeId as string);
+            }
+          } else if (prevNode.data.typeKey === 'loopConfigurator') {
+            // 恢复循环配置器的全局配置
+            if (prevNode.data.globalLoopConfig) {
+              workflowManager.setContextVar('global_loop_config', prevNode.data.globalLoopConfig);
+            }
+            if (prevNode.data.globalLoopInstructions) {
+              workflowManager.setContextVar('global_loop_instructions', prevNode.data.globalLoopInstructions);
             }
           }
         }
@@ -835,6 +853,545 @@ export const useWorkflowEngine = (options: {
           continue;
         }
 
+        // --- Multi Create Folder Node (多分卷目录初始化) ---
+        if (node.data.typeKey === 'multiCreateFolder') {
+          await syncNodeStatus(node.id, { status: 'executing' }, i);
+          
+          let volumeFolderConfigs = (node.data.volumeFolderConfigs || []) as any[];
+          const currentVolumeIndex = (node.data.currentVolumeIndex || 0) as number;
+          
+          // 如果节点配置为空，尝试从前置 saveToVolume 节点获取分卷配置
+          if (volumeFolderConfigs.length === 0) {
+            const pendingSplits = workflowManager.getPendingSplits();
+            if (pendingSplits.length > 0) {
+              volumeFolderConfigs = pendingSplits.map((split: any, idx: number) => ({
+                id: split.id || `vol_${idx}`,
+                volumeName: split.nextVolumeName || `第${idx + 1}卷`,
+                folderName: split.nextVolumeName || `第${idx + 1}卷`,
+                startChapter: split.startChapter || (idx === 0 ? 1 : undefined),
+                endChapter: split.endChapter,
+                processed: split.processed || false,
+              }));
+              terminal.log(`[MultiCreateFolder] Initialized ${volumeFolderConfigs.length} volume configs from pendingSplits`);
+              
+              // Bug 1 修复：将初始化后的配置同步回节点数据，确保UI正确显示
+              await syncNodeStatus(node.id, { volumeFolderConfigs }, i);
+            }
+          }
+          
+          if (volumeFolderConfigs.length === 0) {
+            await syncNodeStatus(node.id, { status: 'completed' }, i);
+            setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+            continue;
+          }
+
+          // 获取当前要处理的分卷配置
+          const currentConfig = volumeFolderConfigs[currentVolumeIndex];
+          if (!currentConfig) {
+            await syncNodeStatus(node.id, { status: 'completed' }, i);
+            setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+            continue;
+          }
+
+          const folderName = currentConfig.folderName || currentConfig.volumeName;
+          currentWorkflowFolder = folderName;
+
+          // 创建分卷和对应的集合
+          const createSetIfNotExist = (sets: any[] | undefined, name: string, creator: () => any) => {
+            const existing = sets?.find(s => (s.name || s.title) === name);
+            if (existing) return { id: existing.id, isNew: false, set: existing };
+            const newSet = creator();
+            return { id: newSet.id, isNew: true, set: newSet };
+          };
+
+          const updatedNovel = { ...localNovel };
+          let changed = false;
+          let volumeAnchorId = '';
+
+          const existingVol = updatedNovel.volumes?.find(v => v.title === folderName);
+          if (existingVol) {
+            volumeAnchorId = existingVol.id;
+            workflowManager.setActiveVolumeAnchor(volumeAnchorId);
+          } else {
+            volumeAnchorId =
+              typeof crypto.randomUUID === 'function'
+                ? crypto.randomUUID()
+                : Date.now().toString(36) + Math.random().toString(36).substring(2);
+            const newVolume: any = {
+              id: volumeAnchorId,
+              title: folderName,
+              collapsed: false,
+            };
+            updatedNovel.volumes = [...(updatedNovel.volumes || []), newVolume];
+            changed = true;
+            workflowManager.setActiveVolumeAnchor(volumeAnchorId);
+          }
+
+          const types = [
+            'worldviewSets',
+            'characterSets',
+            'outlineSets',
+            'inspirationSets',
+            'plotOutlineSets',
+          ] as const;
+          const prefix = ['wv', 'char', 'out', 'insp', 'plot'] as const;
+
+          types.forEach((type, idx) => {
+            const res = createSetIfNotExist(updatedNovel[type], folderName, () => ({
+              id: `${prefix[idx]}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+              name: folderName,
+              entries: [],
+              characters: [],
+              items: [],
+            }));
+            if (res.isNew) {
+              (updatedNovel as any)[type] = [...(updatedNovel[type] || []), res.set];
+              changed = true;
+            }
+          });
+
+          if (changed) await updateLocalAndGlobal(updatedNovel);
+
+          // Bug 2 修复：设置分卷终止章配置，使用 volumeEndChapters 机制
+          if (currentConfig.endChapter) {
+            const endChapterConfigs = volumeFolderConfigs
+              .filter((cfg: any) => cfg.endChapter)
+              .map((cfg: any, cfgIdx: number) => ({
+                volumeId: `vol_idx_${cfgIdx}`,
+                volumeName: cfg.volumeName || cfg.folderName,
+                endChapterTitle: `第${cfg.endChapter}章`,
+                processed: false,
+              }));
+            
+            if (endChapterConfigs.length > 0) {
+              workflowManager.setVolumeEndChapters(endChapterConfigs);
+              terminal.log(`[MultiCreateFolder] Set ${endChapterConfigs.length} volume end chapter configs`);
+            }
+            
+            // 同时设置当前分卷的终止章触发规则
+            const endChapterRule = {
+              id: `end_chapter_${Date.now()}`,
+              chapterTitle: `第${currentConfig.endChapter}章`,
+              nextVolumeName: volumeFolderConfigs[currentVolumeIndex + 1]?.volumeName || '',
+              processed: false,
+            };
+            workflowManager.setPendingSplits([endChapterRule]);
+          }
+
+          // 更新后续节点的目标分卷
+          const nextNodesAfterFolder = nodesRef.current.map(n => ({
+            ...n,
+            data: {
+              ...n.data,
+              targetVolumeId:
+                n.data.typeKey === 'chapter' && (!n.data.targetVolumeId || n.data.targetVolumeId === '')
+                  ? volumeAnchorId
+                  : n.data.targetVolumeId,
+            },
+          }));
+          nodesRef.current = nextNodesAfterFolder;
+          setNodes(nextNodesAfterFolder);
+
+          await syncNodeStatus(node.id, { status: 'completed' }, i);
+          setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+          continue;
+        }
+
+        // --- Loop Configurator Node (循环配置器) ---
+        if (node.data.typeKey === 'loopConfigurator') {
+          await syncNodeStatus(node.id, { status: 'executing' }, i);
+          
+          let globalLoopConfig = node.data.globalLoopConfig;
+          let globalLoopInstructions = node.data.globalLoopInstructions;
+
+          // 如果启用AI生成，则调用AI生成循环配置
+          if (node.data.useAiGeneration) {
+            // 收集前置节点产出（结构化：全局输入在第一个，其他按顺序）
+            let previousContext = '';
+            
+            // 1. 首先收集全局输入（userInput节点）
+            for (let j = 0; j < i; j++) {
+              const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
+              if (pNode.data.typeKey === 'userInput') {
+                previousContext += `\n## 📥 全局输入\n`;
+                previousContext += `**节点**: ${pNode.data.label}\n`;
+                if (pNode.data.instruction) {
+                  previousContext += `**用户指令**:\n${pNode.data.instruction}\n`;
+                }
+                if (pNode.data.outputEntries && (pNode.data.outputEntries as any[]).length > 0) {
+                  previousContext += `**输出内容**:\n`;
+                  (pNode.data.outputEntries as any[]).forEach((entry: any) => {
+                    previousContext += `- ${entry.title}: ${entry.content?.substring(0, 800)}\n`;
+                  });
+                }
+                break;
+              }
+            }
+            
+            // 2. 然后按顺序收集其他节点（排除userInput）
+            const otherNodes: string[] = [];
+            for (let j = 0; j < i; j++) {
+              const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
+              if (pNode.data.typeKey === 'userInput') continue;
+              if (pNode.data.typeKey === 'saveToVolume' || pNode.data.typeKey === 'multiCreateFolder') continue;
+              
+              if (pNode.data.outputEntries && (pNode.data.outputEntries as any[]).length > 0) {
+                let nodeContent = `\n### 📦 节点 ${j + 1}: ${pNode.data.label} (${pNode.data.typeLabel})\n`;
+                (pNode.data.outputEntries as any[]).forEach((entry: any) => {
+                  nodeContent += `**${entry.title}**:\n${entry.content?.substring(0, 800)}\n`;
+                });
+                otherNodes.push(nodeContent);
+              }
+            }
+            
+            if (otherNodes.length > 0) {
+              previousContext += `\n## 📚 前置节点产出（按执行顺序）\n`;
+              previousContext += otherNodes.join('');
+            }
+
+            // 收集后续节点列表
+            let subsequentNodes = '';
+            for (let j = i + 1; j < sortedNodes.length; j++) {
+              const sNode = sortedNodes[j];
+              subsequentNodes += `- ${sNode.data.label} (${sNode.data.typeLabel})\n`;
+            }
+
+            // 收集分卷规划信息（核心修复：解决循环指令与分卷不对应的问题）
+            let volumePlanningInfo = '';
+            let volumeConfigs: { name: string; chapters: string }[] = [];
+            
+            // 1. 从 saveToVolume 节点收集分卷规则
+            for (let j = 0; j < i; j++) {
+              const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
+              if (pNode.data.typeKey === 'saveToVolume') {
+                const splitRules = (pNode.data.splitRules as any[]) || [];
+                if (splitRules.length > 0) {
+                  volumePlanningInfo += `\n### 分卷规划节点: ${pNode.data.label}\n`;
+                  splitRules.forEach((rule) => {
+                    volumePlanningInfo += `- 触发章节: ${rule.chapterTitle} → 新分卷: ${rule.nextVolumeName}\n`;
+                    volumeConfigs.push({ name: rule.nextVolumeName, chapters: rule.chapterTitle });
+                  });
+                }
+                // 也收集 AI 生成的分卷内容
+                if (pNode.data.volumeContent) {
+                  volumePlanningInfo += `\n分卷规划详情:\n${pNode.data.volumeContent.substring(0, 1000)}\n`;
+                }
+              }
+            }
+            
+            // 2. 从 multiCreateFolder 节点收集多分卷配置
+            for (let j = 0; j < i; j++) {
+              const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
+              if (pNode.data.typeKey === 'multiCreateFolder') {
+                const volConfigs = (pNode.data.volumeFolderConfigs as any[]) || [];
+                if (volConfigs.length > 0) {
+                  volumePlanningInfo += `\n### 多分卷目录节点: ${pNode.data.label}\n`;
+                  volumePlanningInfo += `共 ${volConfigs.length} 个分卷:\n`;
+                  volConfigs.forEach((cfg, idx) => {
+                    const chapterRange = cfg.startChapter 
+                      ? (cfg.endChapter ? `第${cfg.startChapter}-${cfg.endChapter}章` : `第${cfg.startChapter}章起`)
+                      : '未指定章节范围';
+                    volumePlanningInfo += `${idx + 1}. ${cfg.volumeName || cfg.folderName} (${chapterRange})\n`;
+                    volumeConfigs.push({ 
+                      name: cfg.volumeName || cfg.folderName, 
+                      chapters: chapterRange 
+                    });
+                  });
+                }
+              }
+            }
+            
+            // 3. 从后续节点中检测循环执行器，推断循环结构
+            let loopStructureInfo = '';
+            let loopNodeCount = 0;
+            for (let j = i + 1; j < sortedNodes.length; j++) {
+              const sNode = sortedNodes[j];
+              if (sNode.data.typeKey === 'loopNode') {
+                loopNodeCount++;
+                const loopCount = sNode.data.loopConfig?.count || 1;
+                loopStructureInfo += `- 发现循环执行器: ${sNode.data.label} (计划循环 ${loopCount} 次)\n`;
+              }
+            }
+            if (loopNodeCount > 0) {
+              loopStructureInfo = `\n### 后续循环结构\n${loopStructureInfo}`;
+            }
+
+            // 获取AI配置
+            const aiApiKey = node.data.overrideAiConfig && node.data.apiKey ? node.data.apiKey : globalConfig.apiKey;
+            const aiBaseUrl = node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : globalConfig.baseUrl;
+            const aiModel = node.data.overrideAiConfig && node.data.model ? node.data.model : globalConfig.model;
+            const aiTemp = node.data.overrideAiConfig && node.data.temperature !== undefined ? node.data.temperature : 0.7;
+
+            const configuratorOpenai = new OpenAI({
+              apiKey: aiApiKey,
+              baseURL: aiBaseUrl,
+              dangerouslyAllowBrowser: true,
+            });
+
+            // 构建 AI 请求消息
+            const nodePromptItems = (node.data.promptItems as GeneratorPrompt[]) || [];
+            let configuratorMessages: any[] = [];
+
+            if (nodePromptItems.length > 0) {
+              // 使用自定义提示词条目
+              const customPrompts = nodePromptItems
+                .filter(p => p.enabled !== false)
+                .map(p => {
+                  let content = p.content
+                    .replace('{{previous_context}}', previousContext || '（无前置节点产出）')
+                    .replace('{{subsequent_nodes}}', subsequentNodes || '（无后续节点）')
+                    .replace('{{user_instruction}}', node.data.instruction || '请智能生成适合的循环配置')
+                    .replace('{{volume_planning}}', volumePlanningInfo || '（无分卷规划）')
+                    .replace('{{loop_structure}}', loopStructureInfo || '（无循环结构信息）');
+                  content = workflowManager.interpolate(content);
+                  return { role: p.role, content };
+                });
+              configuratorMessages.push(...customPrompts);
+            } else {
+              // 默认消息
+              configuratorMessages = [
+                { role: 'system', content: LOOP_CONFIGURATOR_PROMPT },
+                {
+                  role: 'user',
+                  content: `请根据以下信息生成循环配置：
+
+## 前置节点产出
+${previousContext || '（无前置节点产出）'}
+
+## 分卷规划信息
+${volumePlanningInfo || '（无分卷规划）'}
+
+## 后续循环结构
+${loopStructureInfo || '（无循环结构信息）'}
+
+## 后续节点列表
+${subsequentNodes || '（无后续节点）'}
+
+## 用户指令
+${node.data.instruction || '请智能生成适合的循环配置'}
+
+**重要提示**：
+- 如果存在分卷规划，请确保循环指令与分卷对应
+- 每个分卷的循环指令应体现该卷的核心剧情推进
+- 循环次数应与分卷数量或章节总数相匹配
+
+请生成循环配置JSON。`,
+                },
+              ];
+            }
+
+            let aiResponse = '';
+            let retryCount = 0;
+            const maxRetries = 2;
+            let success = false;
+            
+            // 计算分卷总数量（用于补足机制）
+            const totalVolumeCount = volumeConfigs.length;
+            let supplementAttempts = 0;
+            const maxSupplementAttempts = 2;
+
+            while (retryCount <= maxRetries && !success) {
+              if (retryCount > 0) {
+                setNodes(nds =>
+                  nds.map(n =>
+                    n.id === node.id
+                      ? { ...n, data: { ...n.data, label: `重试配置(${retryCount}/${maxRetries})...` } }
+                      : n,
+                  ),
+                );
+                await new Promise(res => setTimeout(res, 2000));
+              }
+
+              try {
+                console.groupCollapsed(
+                  `[Workflow AI Request] ${node.data.typeLabel} - ${node.data.label}${retryCount > 0 ? ` (重试 ${retryCount})` : ''}`,
+                );
+                console.log('Messages:', configuratorMessages);
+                console.log('Config:', { model: aiModel, temperature: aiTemp });
+                console.groupEnd();
+
+                terminal.log(`
+>> AI REQUEST [循环配置器]
+>> Model: ${aiModel}
+>> Temperature: ${aiTemp}
+>> -----------------------------------------------------------
+`);
+
+                const completion = await configuratorOpenai.chat.completions.create(
+                  { model: aiModel, messages: configuratorMessages, temperature: aiTemp } as any,
+                  { signal: abortControllerRef.current?.signal },
+                );
+
+                aiResponse = completion.choices[0]?.message?.content || '';
+                
+                if (aiResponse) {
+                  // 解析AI返回的JSON
+                  const cleanJson = aiResponse.replace(/```json\s*([\s\S]*?)```/gi, '$1').trim();
+                  const parsedConfig = JSON.parse(cleanJson);
+
+                  if (parsedConfig.loopConfig) {
+                    globalLoopConfig = parsedConfig.loopConfig;
+                  }
+                  if (parsedConfig.loopInstructions) {
+                    globalLoopInstructions = parsedConfig.loopInstructions;
+                  }
+
+                  // 核心修复：补足机制 - 检查循环指令数量是否与分卷数量匹配
+                  const instructionCount = (globalLoopInstructions as any[])?.length || 0;
+                  const loopCount = globalLoopConfig?.count || 1;
+                  
+                  if (totalVolumeCount > 0 && (instructionCount < totalVolumeCount || loopCount < totalVolumeCount)) {
+                    terminal.log(`[循环配置器] 检测到指令不足: 分卷${totalVolumeCount}个, 指令${instructionCount}条, 循环次数${loopCount}`);
+                    
+                    if (supplementAttempts < maxSupplementAttempts) {
+                      supplementAttempts++;
+                      setNodes(nds =>
+                        nds.map(n =>
+                          n.id === node.id
+                            ? { ...n, data: { ...n.data, label: `补足指令(${supplementAttempts}/${maxSupplementAttempts})...` } }
+                            : n,
+                        ),
+                      );
+                      
+                      // 构建补足请求
+                      const existingInstructions = (globalLoopInstructions as any[]) || [];
+                      const existingIndices = existingInstructions.map((inst: any) => inst.index);
+                      const missingIndices = [];
+                      for (let v = 1; v <= totalVolumeCount; v++) {
+                        if (!existingIndices.includes(v)) {
+                          missingIndices.push(v);
+                        }
+                      }
+                      
+                      const supplementMessage = {
+                        role: 'user' as const,
+                        content: `**重要：循环指令数量不足，需要补足**
+
+当前分卷总数：${totalVolumeCount} 个分卷
+已生成循环指令：${instructionCount} 条
+缺失的循环索引：${missingIndices.join(', ')}
+
+已生成的循环指令：
+${JSON.stringify(existingInstructions, null, 2)}
+
+分卷详情：
+${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\n')}
+
+请补足缺失的循环指令，确保：
+1. 循环次数 (loopConfig.count) 必须设置为 ${totalVolumeCount}
+2. 补足所有缺失索引的循环指令
+3. 每条指令应对应一个分卷的剧情推进
+
+请返回完整的JSON配置（包含已有的和新增的指令）。`,
+                      };
+                      
+                      // 添加补足请求到消息列表
+                      configuratorMessages.push(
+                        { role: 'assistant' as const, content: aiResponse },
+                        supplementMessage
+                      );
+                      
+                      terminal.log(`[循环配置器] 发起补足请求，缺失索引: ${missingIndices.join(', ')}`);
+                      continue; // 继续循环，让AI补足
+                    } else {
+                      terminal.warn(`[循环配置器] 补足尝试已达上限，使用当前配置`);
+                      // 自动补足：如果AI补足失败，手动创建占位指令
+                      const existingIndices = new Set((globalLoopInstructions as any[])?.map((inst: any) => inst.index) || []);
+                      for (let v = 1; v <= totalVolumeCount; v++) {
+                        if (!existingIndices.has(v)) {
+                          const volumeName = volumeConfigs[v - 1]?.name || `第${v}卷`;
+                          (globalLoopInstructions as any[]).push({
+                            index: v,
+                            content: `【${volumeName}】推进本卷核心剧情，完成角色成长和冲突发展。`,
+                          });
+                        }
+                      }
+                      // 更新循环次数
+                      if (!globalLoopConfig || globalLoopConfig.count < totalVolumeCount) {
+                        globalLoopConfig = { enabled: true, count: totalVolumeCount };
+                      }
+                      terminal.log(`[循环配置器] 自动补足完成: ${totalVolumeCount}条指令`);
+                    }
+                  }
+
+                  success = true;
+
+                  // 保存生成结果到节点
+                  const updatedNode = nodesRef.current.find(n => n.id === node.id);
+                  if (updatedNode) {
+                    updatedNode.data.globalLoopConfig = globalLoopConfig;
+                    updatedNode.data.globalLoopInstructions = globalLoopInstructions;
+                    updatedNode.data.generatedLoopConfig = aiResponse;
+                    setNodes([...nodesRef.current]);
+                  }
+
+                  terminal.log(`[循环配置器] AI生成完成: 循环${globalLoopConfig?.count || 1}次, ${(globalLoopInstructions as any[])?.length || 0}条指令`);
+                } else {
+                  retryCount++;
+                }
+              } catch (err: any) {
+                if (err.name === 'AbortError' || /aborted/i.test(err.message)) throw err;
+                if (retryCount < maxRetries) {
+                  retryCount++;
+                  terminal.error(`[循环配置器] 重试 ${retryCount}: ${err.message}`);
+                  continue;
+                }
+                terminal.error(`[循环配置器] AI生成失败: ${err}`);
+                // 使用默认配置
+                break;
+              }
+            }
+          }
+
+          // 将全局循环配置应用到后续的循环执行器节点
+          if (globalLoopConfig) {
+            const nextNodes = nodesRef.current.map(n => {
+              if (n.data.typeKey === 'loopNode') {
+                return {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    loopConfig: { ...n.data.loopConfig, ...globalLoopConfig },
+                  },
+                };
+              }
+              return n;
+            });
+            nodesRef.current = nextNodes;
+            setNodes(nextNodes);
+          }
+
+          // 将全局循环指令仅应用到粗纲节点和大纲节点
+          if (globalLoopInstructions && (globalLoopInstructions as any[]).length > 0) {
+            const nextNodes = nodesRef.current.map(n => {
+              if (n.data.typeKey === 'plotOutline' || n.data.typeKey === 'outline') {
+                const existingInstructions = (n.data.loopInstructions as any[]) || [];
+                const mergedInstructions = [...existingInstructions];
+                (globalLoopInstructions as any[]).forEach(gi => {
+                  const existingIdx = mergedInstructions.findIndex(ei => ei.index === gi.index);
+                  if (existingIdx === -1) {
+                    mergedInstructions.push(gi);
+                  }
+                });
+                return {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    loopInstructions: mergedInstructions,
+                  },
+                };
+              }
+              return n;
+            });
+            nodesRef.current = nextNodes;
+            setNodes(nextNodes);
+          }
+
+          await syncNodeStatus(node.id, { status: 'completed' }, i);
+          setEdges(eds => eds.map(e => (e.target === node.id ? { ...e, animated: false } : e)));
+          continue;
+        }
+
         if (node.data.typeKey === 'userInput') {
           const interpolatedInput = workflowManager.interpolate(node.data.instruction);
           if (node.data.variableBinding?.length)
@@ -1247,6 +1804,21 @@ export const useWorkflowEngine = (options: {
                   workflowManager.setActiveVolumeAnchor(tid);
                   workflowManager.markSplitProcessed(trg.chapterTitle);
                   return { updatedNovel: localNovel, newVolumeId: tid };
+                }
+                
+                // 分卷终止章检测：用于多分卷目录节点
+                const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
+                const endChapterCheck = workflowManager.checkVolumeEndChapter(title, currentVolumeIndex);
+                if (endChapterCheck && endChapterCheck.shouldSwitchVolume) {
+                  terminal.log(`[WORKFLOW] Volume end chapter reached: ${title}, switching to volume ${endChapterCheck.nextVolumeIndex}`);
+                  // 标记需要切换到下一卷
+                  workflowManager.setCurrentVolumeIndex(endChapterCheck.nextVolumeIndex);
+                  // 返回信号让 AutoWriteEngine 知道需要暂停
+                  return { 
+                    updatedNovel: localNovel, 
+                    shouldPauseForVolumeSwitch: true,
+                    nextVolumeIndex: endChapterCheck.nextVolumeIndex,
+                  };
                 }
               },
               fVolId,
@@ -1680,6 +2252,7 @@ export const useWorkflowEngine = (options: {
           status: 'pending' as const,
           outputEntries: [],
           label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label,
+          loopInstructions: [],
         };
 
         if (n.data.typeKey === 'chapter') {
@@ -1689,6 +2262,9 @@ export const useWorkflowEngine = (options: {
           updates.splitChapterTitle = '';
           updates.nextVolumeName = '';
           updates.volumeContent = '';
+        } else if (n.data.typeKey === 'loopConfigurator') {
+          updates.globalLoopInstructions = [];
+          updates.generatedLoopConfig = '';
         }
 
         if (n.data.typeKey === 'loopNode' && n.data.loopConfig) {

@@ -220,20 +220,23 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     autoSave(nodes, edges, currentNodeIndex, isRunning);
   }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning]);
 
-  const switchWorkflow = useCallback((id: string) => {
-    if (isRunning) {
+  const switchWorkflow = useCallback(async (id: string) => {
+    const globalIsRunning = workflowManager.getState().isRunning;
+    if (globalIsRunning) {
       alert('请先停止当前工作流再切换');
       return;
     }
+    await storage.setActiveWorkflowId(id);
+    workflowManager.setActiveWorkflowId(id);
     setActiveWorkflowId(id);
     const wf = workflows.find(w => w.id === id);
     if (wf) {
-      const healed = healWorkflowData(wf, isRunning, activeNovel);
+      const healed = healWorkflowData(wf, globalIsRunning, activeNovel);
       setNodes(healed.nodes);
       setEdges(healed.edges);
     }
     setShowWorkflowMenu(false);
-  }, [isRunning, workflows, healWorkflowData, activeNovel, setNodes, setEdges]);
+  }, [workflows, healWorkflowData, activeNovel, setNodes, setEdges]);
 
   const handleImportWorkflow = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

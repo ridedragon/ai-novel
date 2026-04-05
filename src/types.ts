@@ -171,6 +171,7 @@ export interface Novel {
 export interface WorkflowContextSnapshot {
   activeVolumeAnchor?: string;
   pendingSplits?: WorkflowSplitRule[];
+  volumeEndChapters?: VolumeEndChapter[];
   variables: Record<string, any>;
 }
 
@@ -276,11 +277,19 @@ export interface WorkflowSplitRule {
   endChapter?: number;
 }
 
+export interface VolumeEndChapter {
+  volumeId: string;
+  volumeName: string;
+  endChapterTitle: string; // 终止章节标题
+  processed?: boolean;
+}
+
 export interface WorkflowGlobalContext {
   variables: Record<string, any>;
   activeVolumeAnchor?: string; // ID of the volume currently being targeted
   pendingSplitChapter?: string; // 待触发分卷的章节标题 (Legacy)
   pendingNextVolumeName?: string; // 自动分卷后的新名称 (Legacy)
   pendingSplits?: WorkflowSplitRule[]; // 多次分卷规则列表
+  volumeEndChapters?: VolumeEndChapter[]; // 分卷终止章配置
   executionStack: any[]; // For nested loops (future use)
 }

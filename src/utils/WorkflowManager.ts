@@ -97,6 +97,7 @@ class WorkflowManager {
         pendingSplitChapter: undefined,
         pendingNextVolumeName: undefined,
         pendingSplits: [],
+        volumeEndChapters: [],
       };
     } else if (startIndex > 0) {
       // 2. 恢复执行逻辑
@@ -115,6 +116,7 @@ class WorkflowManager {
           executionStack: [],
           activeVolumeAnchor: snapshot.activeVolumeAnchor,
           pendingSplits: snapshot.pendingSplits || [],
+          volumeEndChapters: snapshot.volumeEndChapters || [],
         };
       } else {
         // 2c. 既无内存也无快照，维持现状
@@ -366,6 +368,7 @@ class WorkflowManager {
     return {
       activeVolumeAnchor: ctx.activeVolumeAnchor,
       pendingSplits: ctx.pendingSplits,
+      volumeEndChapters: ctx.volumeEndChapters,
       variables: ctx.variables,
     };
   }
@@ -509,6 +512,70 @@ class WorkflowManager {
   }
 
   /**
+   * 检查是否到达分卷终止章
+   * 用于多分卷目录节点，当创作完成终止章后自动切换到下一卷
+   */
+  public checkVolumeEndChapter(currentChapterTitle: string, currentVolumeIndex: number): { 
+    shouldSwitchVolume: boolean; 
+    nextVolumeIndex: number;
+    endChapterNum: number;
+  } | null {
+    const context = this.state.globalContext;
+    const normalizedCurrent = this.normalizeChapterToken(currentChapterTitle);
+    const currentChapterNum = parseInt(normalizedCurrent);
+
+    if (isNaN(currentChapterNum)) return null;
+
+    // 检查是否有分卷终止章配置
+    const volumeEndChapters = context.volumeEndChapters || [];
+    
+    for (const vec of volumeEndChapters) {
+      if (vec.volumeId === context.activeVolumeAnchor || 
+          (currentVolumeIndex >= 0 && vec.volumeId === `vol_idx_${currentVolumeIndex}`)) {
+        const endChapterNum = parseInt(this.normalizeChapterToken(vec.endChapterTitle));
+        
+        if (!isNaN(endChapterNum) && currentChapterNum >= endChapterNum) {
+          return {
+            shouldSwitchVolume: true,
+            nextVolumeIndex: currentVolumeIndex + 1,
+            endChapterNum,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 设置分卷终止章配置
+   */
+  public setVolumeEndChapters(configs: { volumeId: string; volumeName: string; endChapterTitle: string }[]) {
+    this.updateContext({
+      volumeEndChapters: configs.map(c => ({
+        ...c,
+        processed: false,
+      })),
+    });
+    terminal.log(`[WorkflowManager] Volume end chapters set: ${configs.length} configs`);
+  }
+
+  /**
+   * 获取当前分卷索引
+   */
+  public getCurrentVolumeIndex(): number {
+    return this.state.globalContext.variables['current_volume_index'] || 0;
+  }
+
+  /**
+   * 设置当前分卷索引
+   */
+  public setCurrentVolumeIndex(index: number) {
+    this.setContextVar('current_volume_index', index);
+    terminal.log(`[WorkflowManager] Current volume index set to: ${index}`);
+  }
+
+  /**
    * 从 AI 返回的文本中解析分卷规划规则
    * 采用“深度分块模糊解析”算法，具备极强的格式兼容性
    */
@@ -546,9 +613,14 @@ class WorkflowManager {
         const startNum = parseInt(this.normalizeChapterToken(startStr));
         const endNum = parseInt(this.normalizeChapterToken(endStr));
 
+        // 关键修复：分卷应该在当前范围结束后的下一章触发
+        // 例如：第一卷是1-5章，那么在第6章时才切换到第二卷
+        const triggerChapterNum = isNaN(endNum) ? undefined : endNum + 1;
+        const triggerChapterStr = triggerChapterNum ? triggerChapterNum.toString() : startStr;
+
         rules.push({
           id: `vol_rule_block_${timestamp}_${rules.length}`,
-          chapterTitle: `第${startStr}章`, // 使用触发章节作为锚点
+          chapterTitle: `第${triggerChapterStr}章`, // 使用下一章作为触发点
           nextVolumeName: name,
           description: summary,
           startChapter: isNaN(startNum) ? undefined : startNum,
@@ -573,11 +645,20 @@ class WorkflowManager {
         items.forEach((item: any, idx: number) => {
           const sStr = String(item.startChapter || item.start || '');
           const sNum = parseInt(this.normalizeChapterToken(sStr));
+          const eStr = String(item.endChapter || item.end || '');
+          const eNum = parseInt(this.normalizeChapterToken(eStr));
+          
+          // 同样修复：使用结束章+1作为触发点
+          const triggerChapterNum = isNaN(eNum) ? undefined : eNum + 1;
+          const triggerChapterStr = triggerChapterNum ? triggerChapterNum.toString() : sStr;
+          
           rules.push({
             id: `vol_rule_json_${timestamp}_${idx}`,
-            chapterTitle: `第${sStr || sNum}章`,
+            chapterTitle: `第${triggerChapterStr}章`,
             nextVolumeName: item.title || item.name || '新分卷',
             description: item.summary || item.description || '',
+            startChapter: isNaN(sNum) ? undefined : sNum,
+            endChapter: isNaN(eNum) ? undefined : eNum,
             processed: false,
           });
         });
@@ -597,11 +678,20 @@ class WorkflowManager {
               .replace(fuzzy[0], '')
               .replace(/[0-9.．:：、\s()（）分卷第章]/g, '')
               .trim() || `第${fuzzy[1]}章起`;
+          
+          // 同样修复：使用结束章+1作为触发点
+          const endStr = fuzzy[2];
+          const endNum = parseInt(this.normalizeChapterToken(endStr));
+          const triggerChapterNum = isNaN(endNum) ? undefined : endNum + 1;
+          const triggerChapterStr = triggerChapterNum ? triggerChapterNum.toString() : fuzzy[1];
+          
           rules.push({
             id: `vol_rule_fuzzy_${timestamp}_${idx}`,
-            chapterTitle: `第${fuzzy[1]}章`,
+            chapterTitle: `第${triggerChapterStr}章`,
             nextVolumeName: name,
             description: '自动提取',
+            startChapter: parseInt(this.normalizeChapterToken(fuzzy[1])),
+            endChapter: endNum,
             processed: false,
           });
         }
@@ -631,7 +721,18 @@ class WorkflowManager {
       isRunning: false,
       isPaused: false,
       currentNodeIndex: -1,
-      // 不清除 activeWorkflowId，以便界面知道上次选的是哪个
+      globalContext: {
+        variables: {
+          loop_index: 1,
+          batch_range: '',
+        },
+        executionStack: [],
+        activeVolumeAnchor: undefined,
+        pendingSplitChapter: undefined,
+        pendingNextVolumeName: undefined,
+        pendingSplits: [],
+        volumeEndChapters: undefined,
+      },
     };
     this.notify();
   }

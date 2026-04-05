@@ -4,7 +4,9 @@ import { GeneratorPreset, Novel } from '../../../../types';
 import { WorkflowNode, WorkflowNodeData } from '../../types';
 import { BasicNodeInfo, NodeHeader } from './Shared/BasicNodeInfo';
 import { LoopConfigPanel, LoopInstructionsPanel } from './Shared/LoopConfigPanel';
+import { LoopConfiguratorPanel } from './Shared/LoopConfiguratorPanel';
 import { ModelConfigPanel } from './Shared/ModelConfigPanel';
+import { MultiFolderConfigPanel } from './Shared/MultiFolderConfigPanel';
 import { OutputList } from './Shared/OutputList';
 import { PromptEditor } from './Shared/PromptEditor';
 import { ReferenceSelector } from './Shared/ReferenceSelector';
@@ -208,9 +210,25 @@ export const DesktopPanel = ({
             <VolumeConfigPanel data={node.data} onUpdate={handleUpdate} />
           )}
 
+          {node.data.typeKey === 'multiCreateFolder' && (
+            <MultiFolderConfigPanel data={node.data} onUpdate={handleUpdate} />
+          )}
+
+          {node.data.typeKey === 'loopConfigurator' && (
+            <LoopConfiguratorPanel 
+              data={node.data} 
+              onUpdate={handleUpdate} 
+              globalConfig={globalConfig}
+              allPresets={allPresets}
+              consolidatedModelList={consolidatedModelList}
+            />
+          )}
+
           {node.data.typeKey !== 'userInput' &&
             node.data.typeKey !== 'pauseNode' &&
             node.data.typeKey !== 'saveToVolume' &&
+            node.data.typeKey !== 'multiCreateFolder' &&
+            node.data.typeKey !== 'loopConfigurator' &&
             activeNovel && (
               <ReferenceSelector
                 data={node.data}

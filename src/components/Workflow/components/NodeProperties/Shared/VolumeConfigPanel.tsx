@@ -22,6 +22,10 @@ export const VolumeConfigPanel = ({ data, onUpdate, isMobile = false }: VolumeCo
     ? 'w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none'
     : 'w-full bg-[#161922] border border-gray-700 rounded-lg px-2.5 py-2 text-xs text-gray-100 outline-none focus:border-teal-500 transition-all';
 
+  const numInputClass = isMobile
+    ? 'w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none'
+    : 'w-full bg-[#161922] border border-gray-700 rounded-lg px-2.5 py-2 text-xs text-gray-100 outline-none focus:border-teal-500 transition-all text-center';
+
   return (
     <div
       className={isMobile ? 'space-y-6 pt-6 border-t border-gray-800' : 'space-y-6 pt-6 border-t border-gray-700/30'}
@@ -114,7 +118,7 @@ export const VolumeConfigPanel = ({ data, onUpdate, isMobile = false }: VolumeCo
                     </div>
                   )}
 
-                  <div className={isMobile ? 'space-y-2' : 'col-span-5 space-y-1.5'}>
+                  <div className={isMobile ? 'space-y-2' : 'col-span-3 space-y-1.5'}>
                     <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">触发章节 (如: 第一章/1)</label>
                     <SharedInput
                       value={rule.chapterTitle}
@@ -127,7 +131,7 @@ export const VolumeConfigPanel = ({ data, onUpdate, isMobile = false }: VolumeCo
                       className={inputClass}
                     />
                   </div>
-                  <div className={isMobile ? 'space-y-2' : 'col-span-5 space-y-1.5'}>
+                  <div className={isMobile ? 'space-y-2' : 'col-span-3 space-y-1.5'}>
                     <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">新分卷命名</label>
                     <SharedInput
                       value={rule.nextVolumeName}
@@ -138,6 +142,36 @@ export const VolumeConfigPanel = ({ data, onUpdate, isMobile = false }: VolumeCo
                       }}
                       placeholder={isMobile ? '例如：第二卷...' : '新分卷名称...'}
                       className={inputClass}
+                    />
+                  </div>
+                  <div className={isMobile ? 'space-y-2' : 'col-span-2 space-y-1.5'}>
+                    <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">起始章节号</label>
+                    <SharedInput
+                      type="number"
+                      min="1"
+                      value={rule.startChapter?.toString() || ''}
+                      onValueChange={val => {
+                        const nextRules = [...rules];
+                        nextRules[idx] = { ...rule, startChapter: parseInt(val) || undefined };
+                        onUpdate({ splitRules: nextRules });
+                      }}
+                      placeholder="可选"
+                      className={numInputClass}
+                    />
+                  </div>
+                  <div className={isMobile ? 'space-y-2' : 'col-span-2 space-y-1.5'}>
+                    <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">终止章节号</label>
+                    <SharedInput
+                      type="number"
+                      min="1"
+                      value={rule.endChapter?.toString() || ''}
+                      onValueChange={val => {
+                        const nextRules = [...rules];
+                        nextRules[idx] = { ...rule, endChapter: parseInt(val) || undefined };
+                        onUpdate({ splitRules: nextRules });
+                      }}
+                      placeholder="可选"
+                      className={numInputClass}
                     />
                   </div>
                   {!isMobile && (

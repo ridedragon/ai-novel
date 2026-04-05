@@ -5,7 +5,9 @@ import { OutputEntry, WorkflowNode, WorkflowNodeData } from '../../types';
 import { SharedTextarea } from '../Shared/SharedInput';
 import { BasicNodeInfo, NodeHeader } from './Shared/BasicNodeInfo';
 import { LoopConfigPanel, LoopInstructionsPanel } from './Shared/LoopConfigPanel';
+import { LoopConfiguratorPanel } from './Shared/LoopConfiguratorPanel';
 import { ModelConfigPanel } from './Shared/ModelConfigPanel';
+import { MultiFolderConfigPanel } from './Shared/MultiFolderConfigPanel';
 import { OutputList } from './Shared/OutputList';
 import { PromptEditor } from './Shared/PromptEditor';
 import { ReferenceSelector } from './Shared/ReferenceSelector';
@@ -191,7 +193,25 @@ export const MobilePanel = React.memo(
             <VolumeConfigPanel data={editingNode.data} onUpdate={handleUpdate} isMobile={true} />
           )}
 
-          {editingNode.data.typeKey !== 'pauseNode' && editingNode.data.typeKey !== 'saveToVolume' && (
+          {editingNode.data.typeKey === 'multiCreateFolder' && (
+            <MultiFolderConfigPanel data={editingNode.data} onUpdate={handleUpdate} isMobile={true} />
+          )}
+
+          {editingNode.data.typeKey === 'loopConfigurator' && (
+            <LoopConfiguratorPanel 
+              data={editingNode.data} 
+              onUpdate={handleUpdate} 
+              isMobile={true}
+              globalConfig={globalConfig}
+              allPresets={allPresets}
+              consolidatedModelList={consolidatedModelList}
+            />
+          )}
+
+          {editingNode.data.typeKey !== 'pauseNode' &&
+            editingNode.data.typeKey !== 'saveToVolume' &&
+            editingNode.data.typeKey !== 'multiCreateFolder' &&
+            editingNode.data.typeKey !== 'loopConfigurator' && (
             <>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -244,6 +264,8 @@ export const MobilePanel = React.memo(
           {editingNode.data.typeKey !== 'userInput' &&
             editingNode.data.typeKey !== 'pauseNode' &&
             editingNode.data.typeKey !== 'saveToVolume' &&
+            editingNode.data.typeKey !== 'multiCreateFolder' &&
+            editingNode.data.typeKey !== 'loopConfigurator' &&
             activeNovel && (
               <ReferenceSelector
                 data={editingNode.data}
@@ -266,7 +288,9 @@ export const MobilePanel = React.memo(
             </div>
           ) : (
             editingNode.data.typeKey !== 'pauseNode' &&
-            editingNode.data.typeKey !== 'saveToVolume' && (
+            editingNode.data.typeKey !== 'saveToVolume' &&
+            editingNode.data.typeKey !== 'multiCreateFolder' &&
+            editingNode.data.typeKey !== 'loopConfigurator' && (
               <OutputList data={editingNode.data} onUpdate={handleUpdate} onPreview={onPreviewEntry} isMobile={true} />
             )
           )}

@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GeneratorPreset } from '../types';
+import { storage } from '../utils/storage';
 import { workflowManager } from '../utils/WorkflowManager';
 import { MobilePanel } from './Workflow/components/NodeProperties/MobilePanel';
 import { WorkflowEdge } from './Workflow/components/WorkflowEdge';
@@ -373,15 +374,18 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
     setTimeout(() => setError(null), 2000);
   };
 
-  const switchWorkflow = (id: string) => {
-    if (isRunning) {
+  const switchWorkflow = async (id: string) => {
+    const globalIsRunning = workflowManager.getState().isRunning;
+    if (globalIsRunning) {
       alert('请先停止当前工作流再切换');
       return;
     }
+    await storage.setActiveWorkflowId(id);
+    workflowManager.setActiveWorkflowId(id);
     setActiveWorkflowId(id);
     const wf = workflows.find(w => w.id === id);
     if (wf) {
-      const healed = healWorkflowData(wf, isRunning, activeNovel);
+      const healed = healWorkflowData(wf, globalIsRunning, activeNovel);
       setNodes(healed.nodes);
       setEdges(healed.edges);
     }
