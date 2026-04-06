@@ -440,11 +440,13 @@ function App() {
           handleRecalibrateSummaries={() => {}}
           isLoading={autoWrite.isLoading}
         />
+        <GlobalDialog isOpen={dialog.isOpen} {...dialog} onCancel={closeDialog} />
       </Suspense>
     );
   }
 
   return (
+    <>
     <NovelEditorLayout
       onNavigate={target => {
         if (target === 'dashboard') {
@@ -1672,11 +1674,14 @@ function App() {
             title={presetModalMode === 'rename' ? '重命名预设' : '另存为'}
           />
         )}
-        <GlobalDialog isOpen={dialog.isOpen} {...dialog} onCancel={closeDialog} />
+        <SkillManager isOpen={showSkillManager} onClose={() => setShowSkillManager(false)} />
       </Suspense>
-
-      <SkillManager isOpen={showSkillManager} onClose={() => setShowSkillManager(false)} />
     </NovelEditorLayout>
+
+    <Suspense fallback={null}>
+      <GlobalDialog isOpen={dialog.isOpen} {...dialog} onCancel={closeDialog} />
+    </Suspense>
+    </>
   );
 }
 

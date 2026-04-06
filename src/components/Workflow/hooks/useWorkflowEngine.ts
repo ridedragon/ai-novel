@@ -7,6 +7,7 @@ import { AutoWriteEngine, getChapterContextMessages } from '../../../utils/auto-
 import { keepAliveManager } from '../../../utils/KeepAliveManager';
 import { storage } from '../../../utils/storage';
 import { workflowManager } from '../../../utils/WorkflowManager';
+import { debugLogger, volumeFolderDebugTracker, infoClearDebugTracker, saveToVolumeDebugTracker } from '../../../utils/log';
 import { LOOP_CONFIGURATOR_PROMPT, NODE_CONFIGS, WORKFLOW_DSL_PROMPT } from '../constants';
 import { NodeTypeKey, OutputEntry, WorkflowData, WorkflowNode, WorkflowNodeData } from '../types';
 import { cleanAndParseJSON, extractEntries, extractTargetEndChapter, parseAnyNumber } from '../utils/workflowHelpers';
@@ -492,6 +493,28 @@ export const useWorkflowEngine = (options: {
 
         // --- Save To Volume Node ---
         if (node.data.typeKey === 'saveToVolume') {
+          console.log('[SAVE_TO_VOLUME] ========== START ==========', {
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeIndex: i,
+            hasOverrideAiConfig: !!node.data.overrideAiConfig,
+            hasVolumes: !!(node.data.volumes && (node.data.volumes as any[]).length > 0),
+            volumesCount: (node.data.volumes as any[])?.length || 0,
+            hasSplitRules: !!(node.data.splitRules && (node.data.splitRules as any[]).length > 0),
+            splitRulesCount: (node.data.splitRules as any[])?.length || 0,
+          });
+          
+          console.log('[SAVE_TO_VOLUME] === START ===', {
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeIndex: i,
+            hasOverrideAiConfig: !!node.data.overrideAiConfig,
+            hasVolumes: !!(node.data.volumes && (node.data.volumes as any[]).length > 0),
+            volumesCount: (node.data.volumes as any[])?.length || 0,
+            hasSplitRules: !!(node.data.splitRules && (node.data.splitRules as any[]).length > 0),
+            splitRulesCount: (node.data.splitRules as any[])?.length || 0,
+          });
+          
           await syncNodeStatus(node.id, { status: 'executing' }, i);
           setEdgeAnimation(node.id, true);
 
@@ -709,6 +732,20 @@ export const useWorkflowEngine = (options: {
               );
 
               aiResponse = volCompletion.choices[0]?.message?.content || '';
+              
+              console.log('[SAVE_TO_VOLUME] AI Response received', {
+                nodeId: node.id,
+                responseLength: aiResponse.length,
+                responsePreview: aiResponse.substring(0, 500),
+              });
+              
+              console.log('[SAVE_TO_VOLUME] AI Response received', {
+                nodeId: node.id,
+                nodeLabel: node.data.label,
+                responseLength: aiResponse.length,
+                responsePreview: aiResponse.substring(0, 300),
+              });
+              
               if (aiResponse) volSuccess = true;
               else volRetryCount++;
             } catch (volErr: any) {
@@ -724,7 +761,40 @@ export const useWorkflowEngine = (options: {
 
           const parsedResult = workflowManager.parseVolumesFromAI(aiResponse);
           const { splitRules, volumes } = parsedResult;
+          
+          console.log('[SAVE_TO_VOLUME] Parsing result', {
+            splitRulesCount: splitRules.length,
+            volumesCount: volumes.length,
+            splitRules: splitRules,
+            volumes: volumes,
+          });
+          
+          console.log('[SAVE_TO_VOLUME] Parsing result', {
+            nodeId: node.id,
+            splitRulesCount: splitRules.length,
+            volumesCount: volumes.length,
+            splitRules: splitRules.map((r: any) => ({
+              chapterTitle: r.chapterTitle,
+              nextVolumeName: r.nextVolumeName,
+              startChapter: r.startChapter,
+              endChapter: r.endChapter,
+            })),
+            volumes: volumes.map((v: any) => ({
+              volumeName: v.volumeName,
+              folderName: v.folderName,
+              startChapter: v.startChapter,
+              endChapter: v.endChapter,
+            })),
+          });
+          
           if (splitRules.length > 0 || volumes.length > 0) {
+            console.log('[SAVE_TO_VOLUME] Parsing SUCCESS', {
+              nodeId: node.id,
+              outputEntriesCount: 1,
+              splitRulesCount: splitRules.length,
+              volumesCount: volumes.length,
+            });
+            
             await syncNodeStatus(
               node.id,
               {
@@ -748,6 +818,11 @@ export const useWorkflowEngine = (options: {
               if (existingVol) workflowManager.setActiveVolumeAnchor(existingVol.id);
             }
           } else {
+            console.error('[SAVE_TO_VOLUME] Parsing FAILED - no data extracted', {
+              nodeId: node.id,
+              rawResponse: aiResponse.substring(0, 500),
+            });
+            
             await syncNodeStatus(
               node.id,
               {
@@ -762,6 +837,15 @@ export const useWorkflowEngine = (options: {
             throw new Error('无法从 AI 返回的内容中解析出分卷规划。');
           }
 
+          console.log('[SAVE_TO_VOLUME] === END ===', {
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            hasPendingSplits: splitRules?.length > 0,
+            pendingSplitsCount: splitRules?.length || 0,
+            hasVolumePlans: volumes?.length > 0,
+            volumePlansCount: volumes?.length || 0,
+          });
+          
           // lastNodeOutput += ... (已移除，改用动态构建)
           setEdgeAnimation(node.id, false);
           continue;
@@ -772,6 +856,24 @@ export const useWorkflowEngine = (options: {
           const loopConfig = node.data.loopConfig || { enabled: true, count: 1, currentIndex: 0 };
           const currentLoopIndex = (loopConfig.currentIndex || 0) + 1;
 
+          console.log('[LOOP_NODE] === START ===', {
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeIndex: i,
+            loopConfig,
+            currentLoopIndex,
+            currentVolumeIndex: workflowManager.getCurrentVolumeIndex(),
+            loopIndex: workflowManager.getContextVar('loop_index') || 1,
+          });
+          
+          volumeFolderDebugTracker.recordNodeExecution(
+            node.id,
+            'loopNode',
+            node.data.label || '循环控制',
+            'executing',
+            { loopConfig, currentLoopIndex }
+          );
+          
           await syncNodeStatus(
             node.id,
             {
@@ -785,6 +887,8 @@ export const useWorkflowEngine = (options: {
           await new Promise(resolve => setTimeout(resolve, 600));
 
           if (currentLoopIndex < loopConfig.count) {
+            console.log('[LOOP_NODE] LOOP CONTINUE:', { currentIteration: currentLoopIndex, totalIterations: loopConfig.count, targetLoopIndex: currentLoopIndex + 1 });
+            
             const outEdges = (workflowsRef.current.find(w => w.id === activeWorkflowId)?.edges || []).filter(
               e => e.source === node.id,
             );
@@ -799,6 +903,8 @@ export const useWorkflowEngine = (options: {
               if (targetIndex !== -1) {
                 const nodesToReset = sortedNodes.slice(targetIndex, i + 1);
                 const resetNodeIds = new Set(nodesToReset.map(sn => sn.id));
+                
+                console.log('[LOOP_NODE] Nodes to reset:', { resetNodeIds: Array.from(resetNodeIds), targetIndex, sliceStart: targetIndex, sliceEnd: i });
 
                 const nextNodes = nodesRef.current.map(n => {
                   if (resetNodeIds.has(n.id)) {
@@ -827,6 +933,9 @@ export const useWorkflowEngine = (options: {
                 setNodes(nextNodes);
                 i = targetIndex - 1;
                 workflowManager.setContextVar('loop_index', currentLoopIndex + 1);
+                
+                console.log('[LOOP_NODE] Jump back to index:', { targetIndex, newLoopIndex: currentLoopIndex + 1 });
+                
                 await syncNodeStatus(
                   node.id,
                   { status: 'pending', loopConfig: { ...loopConfig, currentIndex: currentLoopIndex } },
@@ -836,6 +945,16 @@ export const useWorkflowEngine = (options: {
               }
             }
           } else {
+            console.log('[LOOP_NODE] LOOP COMPLETE:', { totalIterations: loopConfig.count });
+            
+            volumeFolderDebugTracker.recordNodeExecution(
+              node.id,
+              'loopNode',
+              node.data.label || '循环控制',
+              'completed',
+              { loopConfig, iterations: loopConfig.count }
+            );
+            
             await syncNodeStatus(node.id, { status: 'completed', loopConfig: { ...loopConfig, currentIndex: 0 } }, i);
             const inEdges = (workflowsRef.current.find(w => w.id === activeWorkflowId)?.edges || []).filter(
               e => e.target === node.id,
@@ -962,10 +1081,35 @@ export const useWorkflowEngine = (options: {
 
         // --- Multi Create Folder Node (多分卷目录初始化) ---
         if (node.data.typeKey === 'multiCreateFolder') {
+          console.log('[MULTI_CREATE_FOLDER] === START ===', {
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeIndex: i,
+            totalNodes: sortedNodes.length,
+          });
+          
+          volumeFolderDebugTracker.startTracking(
+            workflowManager.getCurrentVolumeIndex(),
+            'unknown',
+            'multiCreateFolder',
+            {
+              currentNodeIndex: i,
+              currentNodeType: 'multiCreateFolder',
+              currentNodeId: node.id,
+              loopIndex: workflowManager.getContextVar('loop_index') || 1,
+              totalVolumes: workflowManager.getTotalVolumes(),
+            }
+          );
+          
           await syncNodeStatus(node.id, { status: 'executing' }, i);
           setEdgeAnimation(node.id, true);
           
           let volumeFolderConfigs = (node.data.volumeFolderConfigs || []) as any[];
+          
+          console.log('[MULTI_CREATE_FOLDER] Initial configs:', {
+            length: volumeFolderConfigs.length,
+            configs: volumeFolderConfigs,
+          });
           
           // 如果节点配置为空，尝试从前置 saveToVolume 节点获取分卷配置
           if (volumeFolderConfigs.length === 0) {
@@ -1068,22 +1212,22 @@ export const useWorkflowEngine = (options: {
           currentVolumeIndex = Math.min(currentVolumeIndex, volumeFolderConfigs.length - 1);
           currentVolumeIndex = Math.max(currentVolumeIndex, 0);
           
+          console.log('[MULTI_CREATE_FOLDER] Volume index calculation:', {
+            calculatedIndex: currentVolumeIndex,
+            chapterCount: currentChapterCount,
+            totalVolumes: volumeFolderConfigs.length,
+            volumeConfigs: volumeFolderConfigs.map((c: any) => ({
+              name: c.folderName || c.volumeName,
+              startChapter: c.startChapter,
+              endChapter: c.endChapter,
+            })),
+          });
+          
           // 更新 workflowManager 和节点数据
           workflowManager.setCurrentVolumeIndex(currentVolumeIndex);
           workflowManager.setTotalVolumes(volumeFolderConfigs.length);
           
-          terminal.log(`[MultiCreateFolder] Current volume index: ${currentVolumeIndex}, chapter count: ${currentChapterCount}, total volumes: ${volumeFolderConfigs.length}`);
-
-          // 获取当前要处理的分卷配置
-          const currentConfig = volumeFolderConfigs[currentVolumeIndex];
-          if (!currentConfig) {
-            await syncNodeStatus(node.id, { status: 'completed' }, i);
-            setEdgeAnimation(node.id, false);
-            continue;
-          }
-
-          const folderName = currentConfig.folderName || currentConfig.volumeName;
-          currentWorkflowFolder = folderName;
+          console.log(`[MultiCreateFolder] Processing all volumes, currentVolumeIndex: ${currentVolumeIndex}, total volumes: ${volumeFolderConfigs.length}`);
 
           // 创建分卷和对应的集合
           const createSetIfNotExist = (sets: any[] | undefined, name: string, creator: () => any) => {
@@ -1096,26 +1240,8 @@ export const useWorkflowEngine = (options: {
           const updatedNovel = { ...localNovel };
           let changed = false;
           let volumeAnchorId = '';
-
-          const existingVol = updatedNovel.volumes?.find(v => v.title === folderName);
-          if (existingVol) {
-            volumeAnchorId = existingVol.id;
-            workflowManager.setActiveVolumeAnchor(volumeAnchorId);
-          } else {
-            volumeAnchorId =
-              typeof crypto.randomUUID === 'function'
-                ? crypto.randomUUID()
-                : Date.now().toString(36) + Math.random().toString(36).substring(2);
-            const newVolume: any = {
-              id: volumeAnchorId,
-              title: folderName,
-              collapsed: false,
-            };
-            updatedNovel.volumes = [...(updatedNovel.volumes || []), newVolume];
-            changed = true;
-            workflowManager.setActiveVolumeAnchor(volumeAnchorId);
-          }
-
+          
+          // 遍历所有分卷配置，为缺失的卷创建文件夹
           const types = [
             'worldviewSets',
             'characterSets',
@@ -1124,25 +1250,80 @@ export const useWorkflowEngine = (options: {
             'plotOutlineSets',
           ] as const;
           const prefix = ['wv', 'char', 'out', 'insp', 'plot'] as const;
-
-          types.forEach((type, idx) => {
-            const res = createSetIfNotExist(updatedNovel[type], folderName, () => ({
-              id: `${prefix[idx]}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-              name: folderName,
-              entries: [],
-              characters: [],
-              items: [],
-            }));
-            if (res.isNew) {
-              (updatedNovel as any)[type] = [...(updatedNovel[type] || []), res.set];
-              changed = true;
+          
+          let lastCreatedVolumeId = '';
+          let lastCreatedVolumeName = '';
+          
+          for (let volIdx = 0; volIdx < volumeFolderConfigs.length; volIdx++) {
+            const cfg = volumeFolderConfigs[volIdx];
+            const folderName = cfg.folderName || cfg.volumeName;
+            
+            console.log(`[MULTI_CREATE_FOLDER] Processing volume ${volIdx}: ${folderName}`);
+            
+            const existingVol = updatedNovel.volumes?.find(v => v.title === folderName);
+            
+            if (existingVol) {
+              console.log(`[MULTI_CREATE_FOLDER] Volume "${folderName}" already exists, skipping`);
+              if (volIdx === currentVolumeIndex) {
+                volumeAnchorId = existingVol.id;
+                workflowManager.setActiveVolumeAnchor(volumeAnchorId);
+              }
+              continue;
             }
-          });
-
-          if (changed) await updateLocalAndGlobal(updatedNovel);
+            
+            // 创建新的分卷
+            console.log(`[MULTI_CREATE_FOLDER] Creating NEW volume: ${folderName}`);
+            const newVolId =
+              typeof crypto.randomUUID === 'function'
+                ? crypto.randomUUID()
+                : Date.now().toString(36) + Math.random().toString(36).substring(2);
+            const newVolume: any = {
+              id: newVolId,
+              title: folderName,
+              collapsed: false,
+            };
+            updatedNovel.volumes = [...(updatedNovel.volumes || []), newVolume];
+            changed = true;
+            
+            console.log(`[MULTI_CREATE_FOLDER] New volume created: ${folderName} (${newVolId})`);
+            
+            // 创建对应的 Sets
+            types.forEach((type, typeIdx) => {
+              const res = createSetIfNotExist(updatedNovel[type], folderName, () => ({
+                id: `${prefix[typeIdx]}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                name: folderName,
+                entries: [],
+                characters: [],
+                items: [],
+              }));
+              if (res.isNew) {
+                (updatedNovel as any)[type] = [...(updatedNovel[type] || []), res.set];
+                console.log(`[MULTI_CREATE_FOLDER] Created new ${type} for ${folderName}`);
+              }
+            });
+            
+            lastCreatedVolumeId = newVolId;
+            lastCreatedVolumeName = folderName;
+            
+            // 如果这是当前应该活动的卷，设置它
+            if (volIdx === currentVolumeIndex) {
+              volumeAnchorId = newVolId;
+              workflowManager.setActiveVolumeAnchor(volumeAnchorId);
+            }
+          }
+          
+          // 如果没有找到当前卷但有刚创建的卷，使用刚创建的最后一个卷
+          if (!volumeAnchorId && lastCreatedVolumeId) {
+            volumeAnchorId = lastCreatedVolumeId;
+            workflowManager.setActiveVolumeAnchor(volumeAnchorId);
+            console.log(`[MULTI_CREATE_FOLDER] Set active volume to last created: ${lastCreatedVolumeName} (${lastCreatedVolumeId})`);
+          }
+          
+          currentWorkflowFolder = volumeFolderConfigs[currentVolumeIndex]?.folderName || volumeFolderConfigs[currentVolumeIndex]?.volumeName || '';
 
           // Bug 2 修复：设置分卷终止章配置，使用 volumeEndChapters 机制
-          if (currentConfig.endChapter) {
+          const currentConfig = volumeFolderConfigs[currentVolumeIndex];
+          if (currentConfig?.endChapter) {
             const endChapterConfigs = volumeFolderConfigs
               .filter((cfg: any) => cfg.endChapter)
               .map((cfg: any, cfgIdx: number) => ({
@@ -1154,7 +1335,7 @@ export const useWorkflowEngine = (options: {
             
             if (endChapterConfigs.length > 0) {
               workflowManager.setVolumeEndChapters(endChapterConfigs);
-              terminal.log(`[MultiCreateFolder] Set ${endChapterConfigs.length} volume end chapter configs`);
+              console.log(`[MULTI_CREATE_FOLDER] Set ${endChapterConfigs.length} volume end chapter configs`);
             }
             
             // 同时设置当前分卷的终止章触发规则
@@ -1181,6 +1362,14 @@ export const useWorkflowEngine = (options: {
           nodesRef.current = nextNodesAfterFolder;
           setNodes(nextNodesAfterFolder);
 
+          // 如果有变化，保存更新
+          if (changed) {
+            console.log('[MULTI_CREATE_FOLDER] Calling updateLocalAndGlobal:', {
+              updatedNovelVolumes: updatedNovel.volumes?.length,
+            });
+            await updateLocalAndGlobal(updatedNovel);
+          }
+
           // 更新节点的 currentVolumeIndex 以便下次执行时使用
           await syncNodeStatus(node.id, { 
             status: 'completed', 
@@ -1188,6 +1377,17 @@ export const useWorkflowEngine = (options: {
             volumeFolderConfigs 
           }, i);
           setEdgeAnimation(node.id, false);
+          
+          console.log('[MULTI_CREATE_FOLDER] === END ===', {
+            nodeId: node.id,
+            volumeIndex: currentVolumeIndex,
+            currentWorkflowFolder,
+            volumeAnchorId,
+            totalVolumesCreated: updatedNovel.volumes?.length,
+          });
+          
+          volumeFolderDebugTracker.finishTracking();
+          
           continue;
         }
 
@@ -1622,6 +1822,21 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         }
 
         if (node.data.typeKey === 'creationInfo') {
+          console.log('[CREATION_INFO] === START ===', {
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeIndex: i,
+            hasInstruction: !!node.data.instruction,
+          });
+          
+          volumeFolderDebugTracker.recordNodeExecution(
+            node.id,
+            'creationInfo',
+            node.data.label || '创作信息',
+            'executing',
+            { instruction: node.data.instruction }
+          );
+          
           await syncNodeStatus(node.id, { status: 'executing' }, i);
           setEdgeAnimation(node.id, true);
           
@@ -1629,6 +1844,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           
           const activeVolumeId = workflowManager.getActiveVolumeAnchor();
           const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
+          
+          console.log('[CREATION_INFO] Current state:', {
+            activeVolumeId,
+            currentVolumeIndex,
+            loopIndex: workflowManager.getContextVar('loop_index') || 1,
+          });
           
           // 从 multiCreateFolder 节点获取分卷配置
           let totalVolumesFromMultiFolder = 0;
@@ -1641,6 +1862,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               if (configs[currentVolumeIndex]) {
                 currentVolumeConfigFromMulti = configs[currentVolumeIndex];
               }
+              console.log('[CREATION_INFO] Found multiCreateFolder node:', {
+                nodeId: prevNode.id,
+                totalVolumes: totalVolumesFromMultiFolder,
+                currentConfig: currentVolumeConfigFromMulti,
+              });
               break;
             }
           }
@@ -1648,11 +1874,21 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           // 优先使用分卷配置中的总数
           const totalVolumes = totalVolumesFromMultiFolder > 0 ? totalVolumesFromMultiFolder : (localNovel.volumes?.length || 0);
           
+          console.log('[CREATION_INFO] Volume info:', {
+            totalVolumes,
+            totalVolumesFromMultiFolder,
+            localNovelVolumesCount: localNovel.volumes?.length || 0,
+          });
+          
           let volumeInfoMessage = '';
           if (activeVolumeId && localNovel.volumes) {
             const activeVolume = localNovel.volumes.find(v => v.id === activeVolumeId);
             if (activeVolume) {
               volumeInfoMessage = `\n当前分卷：${activeVolume.title}`;
+              console.log('[CREATION_INFO] Active volume found:', {
+                volumeId: activeVolumeId,
+                volumeTitle: activeVolume.title,
+              });
             }
           }
           
@@ -1666,14 +1902,27 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           if (node.data.variableBinding?.length)
             workflowManager.processVariableBindings(node.data.variableBinding, interpolatedInput);
           
+          const outputEntry = {
+            id: `creation_info_${Date.now()}`,
+            title: '创作信息',
+            content: `${volumeInfoMessage}${interpolatedInput ? '\n\n用户指令：' + interpolatedInput : ''}`
+          };
+          
+          console.log('[CREATION_INFO] Creating output entry:', { outputEntry });
+          
           await syncNodeStatus(node.id, { 
             status: 'completed',
-            outputEntries: [{
-              id: `creation_info_${Date.now()}`,
-              title: '创作信息',
-              content: `${volumeInfoMessage}${interpolatedInput ? '\n\n用户指令：' + interpolatedInput : ''}`
-            }]
+            outputEntries: [outputEntry]
           }, i);
+          
+          volumeFolderDebugTracker.recordNodeExecution(
+            node.id,
+            'creationInfo',
+            node.data.label || '创作信息',
+            'completed',
+            { outputEntry }
+          );
+          
           setEdgeAnimation(node.id, false);
           continue;
         }
@@ -2115,6 +2364,30 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 if (shouldSwitch && nextVolumeName) {
                   terminal.log(`[WORKFLOW] Creating next volume: ${nextVolumeName}`);
                   
+                  console.log('[VOLUME_SWITCH] === TRIGGERED ===', {
+                    currentChapter: currentTitle,
+                    currentChapterNum,
+                    currentVolumeIndex,
+                    nextVolumeName,
+                    pendingSplits: pendingSplits.map((s: any) => ({
+                      chapterTitle: s.chapterTitle,
+                      nextVolumeName: s.nextVolumeName,
+                      processed: s.processed,
+                    })),
+                  });
+                  
+                  // 记录清除前的状态
+                  const beforeClearNodesState: Record<string, any[]> = {};
+                  const beforeClearNovelSets: Record<string, any[]> = {};
+                  nodesRef.current.forEach(n => {
+                    if (['worldview', 'characters', 'plotOutline', 'outline', 'creationInfo'].includes(n.data.typeKey)) {
+                      beforeClearNodesState[n.id] = n.data.outputEntries || [];
+                    }
+                  });
+                  ['worldviewSets', 'characterSets', 'outlineSets', 'inspirationSets', 'plotOutlineSets'].forEach(type => {
+                    beforeClearNovelSets[type] = (localNovel as any)[type] || [];
+                  });
+                  
                   const existingNextVol = localNovel.volumes?.find(v => v.title === nextVolumeName);
                   if (!existingNextVol) {
                     const newVolId = `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -2170,6 +2443,53 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     return n;
                   });
                   setNodes([...nodesRef.current]);
+                  
+                  // 记录清除后的状态
+                  const afterClearNodesState: Record<string, any[]> = {};
+                  const clearedNodes: Array<{ nodeId: string; nodeType: string; nodeLabel: string; previousOutputCount: number; clearedOutputCount: number }> = [];
+                  nodesRef.current.forEach(n => {
+                    if (['worldview', 'characters', 'plotOutline', 'outline', 'creationInfo'].includes(n.data.typeKey)) {
+                      afterClearNodesState[n.id] = n.data.outputEntries || [];
+                      const beforeCount = beforeClearNodesState[n.id]?.length || 0;
+                      const afterCount = afterClearNodesState[n.id]?.length || 0;
+                      if (beforeCount !== afterCount || n.data.typeKey === 'creationInfo') {
+                        clearedNodes.push({
+                          nodeId: n.id,
+                          nodeType: n.data.typeKey,
+                          nodeLabel: n.data.label || n.data.typeKey,
+                          previousOutputCount: beforeCount,
+                          clearedOutputCount: afterCount,
+                        });
+                      }
+                    }
+                  });
+                  
+                  console.log('[VOLUME_SWITCH] Info cleared:', {
+                    clearedNodes,
+                    nextVolumeName,
+                    currentVolumeIndex,
+                  });
+                  
+                  infoClearDebugTracker.recordClearComplete(
+                    'volume_switch',
+                    {
+                      volumeIndex: currentVolumeIndex,
+                      volumeName: localNovel.volumes?.find(v => v.id === workflowManager.getActiveVolumeAnchor())?.title || '',
+                      nextVolumeName,
+                      chapterTitle: currentTitle,
+                      loopIndex: workflowManager.getContextVar('loop_index') || 1,
+                    },
+                    clearedNodes,
+                    {
+                      clearedWorldviewSets: [],
+                      clearedCharacterSets: [],
+                      clearedOutlineSets: [],
+                      clearedInspirationSets: [],
+                      clearedPlotOutlineSets: [],
+                    },
+                    { nodesOutput: beforeClearNodesState, novelSets: beforeClearNovelSets },
+                    { nodesOutput: afterClearNodesState, novelSets: {} }
+                  );
                   
                   await updateLocalAndGlobal(localNovel);
                   
