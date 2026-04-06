@@ -26,7 +26,7 @@ export interface SaveToVolumeNodeLog {
     error?: string;
     
     splitRulesExtracted: Array<{
-      chapterTitle: string;
+      chapterTitle?: string;
       nextVolumeName: string;
       startChapter?: number;
       endChapter?: number;

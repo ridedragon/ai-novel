@@ -491,11 +491,22 @@ class WorkflowManager {
       const unprocessedRules = context.pendingSplits.filter(r => !r.processed);
       terminal.log(`[WorkflowManager] Checking split: ${unprocessedRules.length} rules for "${currentChapterTitle}" (globalIndex: ${currentChapterGlobalIndex}, norm: ${normalizedCurrent})`);
       for (const rule of unprocessedRules) {
-        const ruleNorm = this.normalizeChapterToken(rule.chapterTitle);
-        const matched = isMatch(rule.chapterTitle, rule.startChapter);
-        terminal.log(`[WorkflowManager]   Rule: "${rule.chapterTitle}" (startChapter: ${rule.startChapter}, norm: ${ruleNorm}) -> match=${matched}`);
-        if (matched) {
-          return { chapterTitle: currentChapterTitle, nextVolumeName: rule.nextVolumeName };
+        // 使用 endChapter 判断触发（如果存在）
+        // endChapter=4 表示第4章是最后一章，第4章完成后（globalIndex > 4）切换
+        if (rule.endChapter && currentChapterGlobalIndex !== undefined) {
+          const shouldTrigger = currentChapterGlobalIndex > rule.endChapter;
+          terminal.log(`[WorkflowManager]   Rule: "${rule.nextVolumeName}" (endChapter: ${rule.endChapter}) -> globalIndex=${currentChapterGlobalIndex}, trigger=${shouldTrigger}`);
+          if (shouldTrigger) {
+            return { chapterTitle: currentChapterTitle, nextVolumeName: rule.nextVolumeName };
+          }
+        } else if (rule.chapterTitle) {
+          // 兜底：使用 chapterTitle 判断（兼容旧数据）
+          const ruleNorm = this.normalizeChapterToken(rule.chapterTitle);
+          const matched = isMatch(rule.chapterTitle, rule.startChapter);
+          terminal.log(`[WorkflowManager]   Rule: "${rule.chapterTitle}" (startChapter: ${rule.startChapter}, norm: ${ruleNorm}) -> match=${matched}`);
+          if (matched) {
+            return { chapterTitle: currentChapterTitle, nextVolumeName: rule.nextVolumeName };
+          }
         }
       }
     }
@@ -505,8 +516,8 @@ class WorkflowManager {
     if (context.volumePlans && context.volumePlans.length > 1 && currentChapterGlobalIndex !== undefined) {
       const unprocessedVolumes = context.volumePlans.filter((v: any, idx: number) => !v.processed && idx > 0);
       for (const volume of unprocessedVolumes) {
-        // 如果该分卷有 endChapter，并且当前全局索引 >= endChapter + 1，就应该触发到这个分卷
-        if (volume.endChapter && currentChapterGlobalIndex >= volume.endChapter + 1) {
+        // 如果该分卷有 endChapter，并且当前全局索引 > endChapter（表示最后一章已完成），就应该触发到这个分卷
+        if (volume.endChapter && currentChapterGlobalIndex > volume.endChapter) {
           terminal.log(`[WorkflowManager] SAFETY TRIGGER: Reached end of volume, switching to "${volume.volumeName}" (globalIndex=${currentChapterGlobalIndex}, endChapter=${volume.endChapter})`);
           return { chapterTitle: currentChapterTitle, nextVolumeName: volume.volumeName };
         }
@@ -577,13 +588,14 @@ class WorkflowManager {
 
     // 检查是否有分卷终止章配置
     const volumeEndChapters = context.volumeEndChapters || [];
-    
+
     for (const vec of volumeEndChapters) {
-      if (vec.volumeId === context.activeVolumeAnchor || 
+      if (vec.volumeId === context.activeVolumeAnchor ||
           (currentVolumeIndex >= 0 && vec.volumeId === `vol_idx_${currentVolumeIndex}`)) {
         const endChapterNum = parseInt(this.normalizeChapterToken(vec.endChapterTitle));
-        
-        if (!isNaN(endChapterNum) && currentChapterNum >= endChapterNum) {
+
+        // endChapter=4 表示第4章是最后一章，第4章完成后（currentChapterNum > 4）切换
+        if (!isNaN(endChapterNum) && currentChapterNum > endChapterNum) {
           return {
             shouldSwitchVolume: true,
             nextVolumeIndex: currentVolumeIndex + 1,

@@ -118,19 +118,7 @@ export const VolumeConfigPanel = ({ data, onUpdate, isMobile = false }: VolumeCo
                     </div>
                   )}
 
-                  <div className={isMobile ? 'space-y-2' : 'col-span-3 space-y-1.5'}>
-                    <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">触发章节 (如: 第一章/1)</label>
-                    <SharedInput
-                      value={rule.chapterTitle}
-                      onValueChange={val => {
-                        const nextRules = [...rules];
-                        nextRules[idx] = { ...rule, chapterTitle: val };
-                        onUpdate({ splitRules: nextRules });
-                      }}
-                      placeholder="例如: 第一章 或 1"
-                      className={inputClass}
-                    />
-                  </div>
+
                   <div className={isMobile ? 'space-y-2' : 'col-span-3 space-y-1.5'}>
                     <label className="text-[9px] text-gray-500 uppercase font-bold pl-1">新分卷命名</label>
                     <SharedInput

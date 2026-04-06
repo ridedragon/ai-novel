@@ -287,12 +287,12 @@ export interface VariableBinding {
 
 export interface WorkflowSplitRule {
   id: string;
-  chapterTitle: string;
+  chapterTitle?: string; // 已废弃，改用 endChapter 判断
   nextVolumeName: string;
   processed?: boolean;
   description?: string; // 分卷剧情概述
   startChapter?: number;
-  endChapter?: number;
+  endChapter?: number; // 终止章节号，章节创作完成切换分卷
 }
 
 export interface VolumeEndChapter {

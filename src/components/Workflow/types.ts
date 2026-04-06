@@ -56,7 +56,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   targetVolumeName?: string;
   splitChapterTitle?: string;
   nextVolumeName?: string;
-  splitRules?: { id: string; chapterTitle: string; nextVolumeName: string; startChapter?: number; endChapter?: number; description?: string }[];
+  splitRules?: { id: string; chapterTitle?: string; nextVolumeName: string; startChapter?: number; endChapter?: number; description?: string }[];
   volumes?: { 
     id: string; 
     volumeName: string; 
