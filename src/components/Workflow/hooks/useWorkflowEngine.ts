@@ -2385,8 +2385,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           const autoDetectStart = () => {
             currentSet.items.forEach((item, k) => {
               const isStd = /^第?\s*[0-9零一二两三四五六七八九十百千]+\s*[章节]/.test(item.title);
+              // 核心修复：无论是否为标准章节标题，都必须检查卷ID
+              // 因为每卷的章节标题都从"第一章"重新开始，如果不检查卷ID，
+              // 会错误地将上一卷的同名章节（如"第一章"）认为是已存在，导致跳过生成
               const ex = localNovel.chapters?.find(c =>
-                isStd ? c.title === item.title : c.title === item.title && (fVolId ? c.volumeId === fVolId : !c.volumeId),
+                c.title === item.title && (fVolId ? c.volumeId === fVolId : !c.volumeId),
               );
               if (wStart === k && (!ex || !ex.content?.trim())) wStart = k;
               else if (wStart === k) wStart = k + 1;
@@ -2541,6 +2544,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 const currentVolumeConfig = volumePlans[currentVolumeIndex] || pendingSplits[0];
                 if (currentVolumeConfig?.endChapter) {
                   const endChapter = currentVolumeConfig.endChapter;
+                  // 获取下一卷名称：pendingSplits 有 nextVolumeName，volumePlans 使用 volumeName/folderName
+                  const fallbackNextVolName = volumePlans[currentVolumeIndex + 1]?.volumeName || volumePlans[currentVolumeIndex + 1]?.folderName || '';
                   
                   if (isVolumeMode) {
                     // 本卷模式：使用卷内章节编号比较
@@ -2548,7 +2553,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     console.log(`[VOLUME_SWITCH_CHECK] 本卷模式: currentChapterNum=${currentChapterNum} >= endChapter=${endChapter}?`);
                     if (currentChapterNum >= endChapter) {
                       shouldSwitch = true;
-                      nextVolumeName = currentVolumeConfig.nextVolumeName || (volumePlans[currentVolumeIndex + 1]?.volumeName || volumePlans[currentVolumeIndex + 1]?.folderName || '');
+                      nextVolumeName = (currentVolumeConfig as any).nextVolumeName || fallbackNextVolName;
                       terminal.log(`[WORKFLOW] Volume ${currentVolumeIndex} end chapter matched (本卷模式): chapterNum=${currentChapterNum} >= endChapter=${endChapter}, switching to "${nextVolumeName}"`);
                     }
                   } else {
@@ -2557,7 +2562,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     console.log(`[VOLUME_SWITCH_CHECK] 整书模式: completedChaptersCount=${completedChaptersCount} >= endChapter=${endChapter}?`);
                     if (completedChaptersCount >= endChapter) {
                       shouldSwitch = true;
-                      nextVolumeName = currentVolumeConfig.nextVolumeName || (volumePlans[currentVolumeIndex + 1]?.volumeName || volumePlans[currentVolumeIndex + 1]?.folderName || '');
+                      nextVolumeName = (currentVolumeConfig as any).nextVolumeName || fallbackNextVolName;
                       terminal.log(`[WORKFLOW] Volume ${currentVolumeIndex} end chapter matched (整书模式): globalCount=${completedChaptersCount} >= endChapter=${endChapter}, switching to "${nextVolumeName}"`);
                     }
                   }

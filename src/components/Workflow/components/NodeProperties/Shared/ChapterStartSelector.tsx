@@ -60,10 +60,14 @@ export const ChapterStartSelector = ({
   const getAutoStartIndex = () => {
     if (!outlineItems.length) return 0;
     let autoStart = 0;
+    // 获取当前卷ID，用于正确匹配章节
+    const currentVolumeId = activeNovel?.volumes?.[0]?.id || null;
     outlineItems.forEach((item, k) => {
-      const isStd = /^第?\s*[0-9零一二两三四五六七八九十百千]+\s*[章节]/.test(item.title);
+      // 核心修复：无论是否为标准章节标题，都必须检查卷ID
+      // 因为每卷的章节标题都从"第一章"重新开始，如果不检查卷ID，
+      // 会错误地将上一卷的同名章节（如"第一章"）认为是已存在，导致显示错误的起始章节
       const ex = activeNovel?.chapters?.find(c =>
-        isStd ? c.title === item.title : c.title === item.title,
+        c.title === item.title && (currentVolumeId ? c.volumeId === currentVolumeId : !c.volumeId),
       );
       if (autoStart === k && (!ex || !ex.content?.trim())) autoStart = k;
       else if (autoStart === k) autoStart = k + 1;
