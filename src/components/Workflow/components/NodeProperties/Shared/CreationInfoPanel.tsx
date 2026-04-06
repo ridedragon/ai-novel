@@ -28,47 +28,31 @@ export const CreationInfoPanel = ({ data, onUpdate, isMobile = false, volumeInfo
     ? 'w-full h-40 bg-gray-800 border border-gray-700 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed'
     : 'w-full h-40 bg-[#161922] border border-gray-700 rounded-lg p-4 text-sm text-gray-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 outline-none resize-none font-mono leading-relaxed transition-all';
 
-  const generatePromptContent = () => {
-    if (!volumeInfo) {
-      return '暂无分卷信息。请确保工作流中存在分卷规划节点或分卷目录节点。';
-    }
-
-    const { currentVolumeName, volumeIndex, totalVolumes, startChapter, endChapter, chapterCount } = volumeInfo;
-    
-    let content = `当前正在创作：${currentVolumeName || `第${volumeIndex + 1}卷`}\n`;
-    content += `分卷进度：第 ${volumeIndex + 1} 卷 / 共 ${totalVolumes} 卷\n`;
-    
-    if (startChapter && endChapter) {
-      content += `章节范围：第 ${startChapter} 章 - 第 ${endChapter} 章\n`;
-    } else if (startChapter) {
-      content += `起始章节：第 ${startChapter} 章\n`;
-    }
-    
-    if (chapterCount) {
-      content += `本卷章节数：${chapterCount} 章\n`;
-    }
-
-    return content;
-  };
+  const currentVolumeName = volumeInfo?.currentVolumeName || `第${(volumeInfo?.volumeIndex ?? 0) + 1}卷`;
 
   return (
     <div className={containerClass}>
       <div className="space-y-3">
         <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
-          <Info className="w-3.5 h-3.5" /> 分卷创作提示 (自动生成)
+          <BookOpen className="w-3.5 h-3.5" /> 当前创作分卷
         </label>
         <div className={infoBoxClass}>
-          <div className="flex items-start gap-3">
-            <BookOpen className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="flex items-center gap-3">
+            <BookOpen className="w-5 h-5 text-emerald-400 shrink-0" />
             <div className="flex-1">
-              <pre className="text-xs text-emerald-300 font-mono whitespace-pre-wrap leading-relaxed">
-                {generatePromptContent()}
-              </pre>
+              <div className="text-lg font-bold text-emerald-300">
+                {currentVolumeName}
+              </div>
+              {volumeInfo && (
+                <div className="text-xs text-emerald-500/80 mt-1">
+                  第 {volumeInfo.volumeIndex + 1} 卷 / 共 {volumeInfo.totalVolumes} 卷
+                  {volumeInfo.startChapter && volumeInfo.endChapter && (
+                    <span className="ml-2">· 第 {volumeInfo.startChapter}-{volumeInfo.endChapter} 章</span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-          <p className="text-[9px] text-emerald-500/70 mt-3 pt-3 border-t border-emerald-500/20">
-            * 以上信息将在工作流执行时自动注入到 AI 上下文中，帮助 AI 了解当前创作进度。
-          </p>
         </div>
       </div>
 

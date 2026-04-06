@@ -574,8 +574,17 @@ class WorkflowManager {
   /**
    * 检查是否到达分卷终止章
    * 用于多分卷目录节点，当创作完成终止章后自动切换到下一卷
+   * @param currentChapterTitle 当前章节标题
+   * @param currentVolumeIndex 当前分卷索引
+   * @param isVolumeMode 是否为本卷模式（true: 每卷章节号重新开始; false: 整书模式，章节号全局延续）
+   * @param completedChaptersCount 全局已完成章节数（整书模式使用）
    */
-  public checkVolumeEndChapter(currentChapterTitle: string, currentVolumeIndex: number): { 
+  public checkVolumeEndChapter(
+    currentChapterTitle: string, 
+    currentVolumeIndex: number,
+    isVolumeMode: boolean = true,
+    completedChaptersCount?: number
+  ): { 
     shouldSwitchVolume: boolean; 
     nextVolumeIndex: number;
     endChapterNum: number;
@@ -594,8 +603,23 @@ class WorkflowManager {
           (currentVolumeIndex >= 0 && vec.volumeId === `vol_idx_${currentVolumeIndex}`)) {
         const endChapterNum = parseInt(this.normalizeChapterToken(vec.endChapterTitle));
 
-        // endChapter=4 表示第4章是最后一章，第4章完成后（currentChapterNum > 4）切换
-        if (!isNaN(endChapterNum) && currentChapterNum > endChapterNum) {
+        if (isNaN(endChapterNum)) continue;
+
+        // 根据模式选择不同的比较逻辑
+        let shouldSwitch = false;
+        if (isVolumeMode) {
+          // 本卷模式：使用卷内章节编号比较
+          // endChapter=3 表示第3章是该卷最后一章，第3章完成后（currentChapterNum >= 3）切换
+          shouldSwitch = currentChapterNum >= endChapterNum;
+        } else {
+          // 整书模式：使用全局章节索引比较
+          // endChapter=3 表示第1-3章属于当前卷，第3章完成后（completedChaptersCount >= 3）切换
+          if (completedChaptersCount !== undefined) {
+            shouldSwitch = completedChaptersCount >= endChapterNum;
+          }
+        }
+
+        if (shouldSwitch) {
           return {
             shouldSwitchVolume: true,
             nextVolumeIndex: currentVolumeIndex + 1,

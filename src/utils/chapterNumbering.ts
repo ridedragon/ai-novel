@@ -8,6 +8,33 @@ import { Chapter, Novel, NovelVolume } from '../types';
  */
 
 /**
+ * 从章节标题中提取章节名称
+ * 例如: "第1章 命运的相遇" -> "命运的相遇"
+ *       "第1章" -> null
+ */
+export const extractChapterName = (title: string): string | null => {
+  if (!title || typeof title !== 'string') return null;
+  const match = title.match(/^第\d+章\s+(.+)$/);
+  return match && match[1] ? match[1].trim() : null;
+};
+
+/**
+ * 生成章节标题
+ * @param index 章节编号
+ * @param originalTitle 原有标题（可选），用于保留章节名称
+ */
+export const generateChapterTitle = (index: number, originalTitle?: string): string => {
+  const baseTitle = `第${index}章`;
+  if (originalTitle) {
+    const name = extractChapterName(originalTitle);
+    if (name) {
+      return `${baseTitle} ${name}`;
+    }
+  }
+  return baseTitle;
+};
+
+/**
  * 为小说的所有章节初始化双编号信息
  * 在切换模式或加载数据时调用
  */
@@ -39,10 +66,10 @@ export const initializeChapterNumbering = (novel: Novel): Novel => {
     });
   });
 
-  // 4. 根据当前模式更新章节标题
+  // 4. 根据当前模式更新章节标题（保留原有章节名称）
   const updatedStoryChapters = storyChapters.map(chapter => {
     const displayIndex = mode === 'perVolume' ? chapter.volumeIndex : chapter.globalIndex;
-    const newTitle = generateChapterTitle(displayIndex || 1);
+    const newTitle = generateChapterTitle(displayIndex || 1, chapter.title);
     return { ...chapter, title: newTitle };
   });
 
@@ -61,13 +88,6 @@ export const initializeChapterNumbering = (novel: Novel): Novel => {
   });
 
   return { ...novel, chapters: updatedChapters };
-};
-
-/**
- * 生成章节标题
- */
-export const generateChapterTitle = (index: number): string => {
-  return `第${index}章`;
 };
 
 /**

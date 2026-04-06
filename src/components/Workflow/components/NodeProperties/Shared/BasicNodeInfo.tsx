@@ -30,15 +30,15 @@ export const BasicNodeInfo = ({ data, onUpdate, activeNovel, isMobile = false }:
     ? 'w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-primary shadow-inner'
     : 'w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all';
 
+  const isFolderNode = data.typeKey === 'createFolder' || data.typeKey === 'reuseDirectory';
+
   return (
     <div className={containerClass}>
       <div className="space-y-2.5">
         <label className={labelClass}>模块显示名称</label>
         <SharedInput value={data.label} onValueChange={val => onUpdate({ label: val })} className={inputClass} />
       </div>
-      <div
-        className={`space-y-2.5 ${data.typeKey === 'createFolder' || data.typeKey === 'reuseDirectory' ? (isMobile ? '' : 'col-span-2') : ''}`}
-      >
+      <div className={`space-y-2.5 ${isFolderNode ? (isMobile ? '' : 'col-span-2') : ''}`}>
         <label className="text-[10px] font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
           {data.typeKey === 'createFolder' ? <FolderPlus className="w-3 h-3" /> : <Folder className="w-3 h-3" />}
           {data.typeKey === 'createFolder'

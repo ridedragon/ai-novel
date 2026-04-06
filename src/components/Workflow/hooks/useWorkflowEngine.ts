@@ -83,7 +83,10 @@ export const useWorkflowEngine = (options: {
   // 辅助函数：同步节点状态并持久化
   const syncNodeStatus = useCallback(
     async (nodeId: string, updates: Partial<WorkflowNodeData>, currentIndex: number) => {
-      if (abortControllerRef.current?.signal.aborted) return;
+      // 核心修复：即使 abort 也要保存已完成的状态，只有 pending 状态才跳过
+      // 这样可以确保工作流异常终止时，已完成节点的 outputEntries 不会丢失
+      const isCompletedState = updates.status === 'completed' || updates.status === 'failed';
+      if (abortControllerRef.current?.signal.aborted && !isCompletedState) return;
 
       const latestNodes = nodesRef.current.map(n => (n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n));
       nodesRef.current = latestNodes;
@@ -813,9 +816,27 @@ export const useWorkflowEngine = (options: {
             }
             // 使用第一个分卷的名称（而不是第一个切换规则的名称）
             const firstVolName = volumes.length > 0 ? volumes[0].volumeName : (splitRules[0]?.nextVolumeName);
+            const firstFolderName = volumes.length > 0 ? (volumes[0].folderName || volumes[0].volumeName) : firstVolName;
             if (firstVolName) {
               const existingVol = localNovel.volumes?.find(v => v.title === firstVolName);
               if (existingVol) workflowManager.setActiveVolumeAnchor(existingVol.id);
+            }
+            // 更新后续节点的 folderName 为第一个分卷名称
+            if (firstFolderName) {
+              nodesRef.current = nodesRef.current.map(n => {
+                const typeKey = n.data.typeKey;
+                // 排除不需要更新 folderName 的节点类型
+                if (typeKey !== 'createFolder' && typeKey !== 'multiCreateFolder' && 
+                    typeKey !== 'reuseDirectory' && typeKey !== 'saveToVolume' && 
+                    typeKey !== 'loopNode' && typeKey !== 'loopConfigurator' && 
+                    typeKey !== 'pauseNode' && typeKey !== 'userInput') {
+                  return { ...n, data: { ...n.data, folderName: firstFolderName } };
+                }
+                return n;
+              });
+              setNodes([...nodesRef.current]);
+              currentWorkflowFolder = firstFolderName;
+              console.log('[SAVE_TO_VOLUME] Updated folderName for subsequent nodes:', { firstFolderName });
             }
           } else {
             console.error('[SAVE_TO_VOLUME] Parsing FAILED - no data extracted', {
@@ -935,6 +956,38 @@ export const useWorkflowEngine = (options: {
                   }
                 }
 
+                // 如果还没找到，尝试从 localNovel.volumes 获取
+                if (!nextFolderName && localNovel.volumes && localNovel.volumes[nextVolumeIndex]) {
+                  nextFolderName = localNovel.volumes[nextVolumeIndex].title || '';
+                  nextVolumeId = localNovel.volumes[nextVolumeIndex].id;
+                }
+
+                console.log('[LOOP_NODE] Volume resolution:', {
+                  nextLoopIndex: nextLoopIndex + 1,
+                  nextVolumeIndex,
+                  volumePlansLength: volumePlans.length,
+                  volumePlansItem: volumePlans[nextVolumeIndex],
+                  nextFolderName,
+                  nextVolumeId,
+                  localVolumesCount: localNovel.volumes?.length,
+                });
+
+                // 如果还没找到，尝试从 localNovel.volumes 获取
+                if (!nextFolderName && localNovel.volumes && localNovel.volumes[nextVolumeIndex]) {
+                  nextFolderName = localNovel.volumes[nextVolumeIndex].title || '';
+                  nextVolumeId = localNovel.volumes[nextVolumeIndex].id;
+                }
+
+                console.log('[LOOP_NODE] Volume resolution:', {
+                  nextLoopIndex: nextLoopIndex + 1,
+                  nextVolumeIndex,
+                  volumePlansLength: volumePlans.length,
+                  volumePlansItem: volumePlans[nextVolumeIndex],
+                  nextFolderName,
+                  nextVolumeId,
+                  localVolumesCount: localNovel.volumes?.length,
+                });
+
                 // 查找下一个分卷的 volumeId
                 if (nextFolderName && localNovel.volumes) {
                   const nextVol = localNovel.volumes.find(v => v.title === nextFolderName);
@@ -970,7 +1023,8 @@ export const useWorkflowEngine = (options: {
                     };
 
                     // 清除创作类节点的输出，以便重新生成
-                    if (['worldview', 'characters', 'plotOutline', 'outline'].includes(typeKey)) {
+                    // 核心修复：不清空 outline 节点的 outputEntries，因为大纲是整个小说的规划，不应随分卷切换而丢失
+                    if (['worldview', 'characters', 'plotOutline'].includes(typeKey)) {
                       updates.outputEntries = [];
                     }
 
@@ -978,6 +1032,11 @@ export const useWorkflowEngine = (options: {
                     if (typeKey === 'chapter' && nextVolumeId) {
                       updates.targetVolumeId = nextVolumeId;
                       updates.targetVolumeName = nextFolderName;
+                    }
+
+                    // 更新节点的 folderName 为下一个分卷名称（适用于所有需要关联目录的节点）
+                    if (nextFolderName && typeKey !== 'createFolder' && typeKey !== 'multiCreateFolder' && typeKey !== 'loopNode' && typeKey !== 'loopConfigurator' && typeKey !== 'pauseNode') {
+                      updates.folderName = nextFolderName;
                     }
 
                     // 重置创作信息节点
@@ -2316,14 +2375,43 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
           const engine = new AutoWriteEngine(engCfg, localNovel);
           let wStart = 0;
-          currentSet.items.forEach((item, k) => {
-            const isStd = /^第?\s*[0-9零一二两三四五六七八九十百千]+\s*[章节]/.test(item.title);
-            const ex = localNovel.chapters?.find(c =>
-              isStd ? c.title === item.title : c.title === item.title && (fVolId ? c.volumeId === fVolId : !c.volumeId),
-            );
-            if (wStart === k && (!ex || !ex.content?.trim())) wStart = k;
-            else if (wStart === k) wStart = k + 1;
-          });
+          
+          const loopIndex = workflowManager.getContextVar('loop_index') || 1;
+          const isFirstExecution = loopIndex <= 1;
+          const startMode = node.data.startChapterMode || 'auto';
+          const startIdx = node.data.startChapterIndex ?? 0;
+          const enableAutoDetect = node.data.enableAutoDetect !== false; // 默认开启
+          
+          const autoDetectStart = () => {
+            currentSet.items.forEach((item, k) => {
+              const isStd = /^第?\s*[0-9零一二两三四五六七八九十百千]+\s*[章节]/.test(item.title);
+              const ex = localNovel.chapters?.find(c =>
+                isStd ? c.title === item.title : c.title === item.title && (fVolId ? c.volumeId === fVolId : !c.volumeId),
+              );
+              if (wStart === k && (!ex || !ex.content?.trim())) wStart = k;
+              else if (wStart === k) wStart = k + 1;
+            });
+          };
+          
+          if (!isFirstExecution) {
+            if (enableAutoDetect) {
+              autoDetectStart();
+            }
+          } else if (startMode === 'auto') {
+            if (enableAutoDetect) {
+              autoDetectStart();
+            }
+          } else if (startMode === 'continue') {
+            if (startIdx > 0 && startIdx < currentSet.items.length) {
+              wStart = startIdx;
+            } else {
+              if (enableAutoDetect) {
+                autoDetectStart();
+              }
+            }
+          } else if (startMode === 'restart') {
+            wStart = startIdx >= 0 && startIdx < currentSet.items.length ? startIdx : 0;
+          }
 
           if (wStart < currentSet.items.length) {
             await engine.run(
@@ -2374,26 +2462,63 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   const res = await (globalConfig.onChapterComplete as any)(cid, cont, localNovel, force, startRunId);
                   if (res?.chapters) localNovel = res;
                 }
-                
+
                 const currentChapter = localNovel.chapters?.find(c => c.id === cid);
                 const currentTitle = currentChapter?.title || '';
-                const currentChapterNum = parseInt(currentTitle.replace(/[^0-9]/g, '')) || 0;
-                
+
+                // 计算全局已完成章节数（用于整书模式）
+                const storyChapters = (localNovel.chapters || []).filter(c => !c.subtype || c.subtype === 'story');
+                const completedChaptersCount = storyChapters.length;
+
+                // 从章节标题解析卷内章节编号（用于本卷模式）
+                // 因为每卷的章节标题都从"第一章"重新开始，所以需要解析标题中的编号
+                const chapterNumMatch = currentTitle.match(/[零一二三四五六七八九十百千]+|\d+/);
+                let currentChapterNum = 0;
+                if (chapterNumMatch) {
+                  const token = chapterNumMatch[0];
+                  // 中文数字转阿拉伯数字
+                  const chineseNums: Record<string, number> = {
+                    '零': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+                    '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+                    '百': 100, '千': 1000
+                  };
+                  if (/^\d+$/.test(token)) {
+                    currentChapterNum = parseInt(token);
+                  } else if (token === '十') {
+                    currentChapterNum = 10;
+                  } else if (token.startsWith('十')) {
+                    currentChapterNum = 10 + (chineseNums[token[1]] || 0);
+                  } else if (token.endsWith('十')) {
+                    currentChapterNum = (chineseNums[token[0]] || 0) * 10;
+                  } else if (token.includes('十')) {
+                    const parts = token.split('十');
+                    currentChapterNum = (chineseNums[parts[0]] || 0) * 10 + (chineseNums[parts[1]] || 0);
+                  } else {
+                    currentChapterNum = chineseNums[token] || 0;
+                  }
+                }
+
                 const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
                 const volumePlans = workflowManager.getVolumePlans();
                 const pendingSplits = workflowManager.getPendingSplits();
-                
-                terminal.log(`[WORKFLOW] Chapter "${currentTitle}" (${currentChapterNum}) completed, checking volume switch at volume index ${currentVolumeIndex}`);
-                
+
+                // 判断当前模式：整书模式 vs 本卷模式
+                const isVolumeMode = globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume';
+                terminal.log(`[WORKFLOW] Chapter "${currentTitle}" completed, chapterNum=${currentChapterNum}, globalCount=${completedChaptersCount}, mode=${isVolumeMode ? '本卷' : '整书'}, checking volume switch at volume index ${currentVolumeIndex}`);
+
                 // 调试：打印分卷切换相关状态
                 console.log('[VOLUME_SWITCH_CHECK] Starting check:', {
                   currentTitle,
                   currentChapterNum,
+                  completedChaptersCount,
+                  contextScope: globalConfig.contextScope,
+                  isVolumeMode,
                   currentVolumeIndex,
                   pendingSplitsCount: pendingSplits.length,
                   pendingSplits: pendingSplits.map(s => ({
                     chapterTitle: s.chapterTitle,
                     nextVolumeName: s.nextVolumeName,
+                    endChapter: s.endChapter,
                     processed: s.processed,
                   })),
                   volumePlansCount: volumePlans.length,
@@ -2404,37 +2529,40 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     endChapter: p.endChapter,
                   })),
                 });
-                
-                // 使用 endChapter 判断是否应该切换分卷（不再依赖 chapterTitle）
+
+                // 使用 endChapter 判断是否应该切换分卷
+                // 根据模式选择不同的比较逻辑：
+                // - 整书模式：endChapter 表示全局章节号（如第1卷 endChapter=3 表示第1-3章）
+                // - 本卷模式：endChapter 表示卷内章节号（如每卷 endChapter=3 表示每卷有3章）
                 let shouldSwitch = false;
                 let nextVolumeName = '';
 
-                for (const split of pendingSplits) {
-                  if (split.processed) continue;
-                  // 使用 endChapter 判断：endChapter=4 表示第4章是最后一章，第4章完成后切换
-                  // 使用 > 而不是 >=，确保是在最后一章完成后再切换，而不是开始时切换
-                  const endChapterNum = split.endChapter || 0;
-                  console.log(`[VOLUME_SWITCH_CHECK] Checking split: "${split.nextVolumeName}" (endChapter: ${endChapterNum}) vs currentChapterNum: ${currentChapterNum}, processed: ${split.processed}`);
-                  if (endChapterNum > 0 && currentChapterNum > endChapterNum) {
-                    shouldSwitch = true;
-                    nextVolumeName = split.nextVolumeName || '';
-                    terminal.log(`[WORKFLOW] End chapter matched: "${split.nextVolumeName}" at chapter ${currentChapterNum}, switching to "${nextVolumeName}"`);
-                    break;
+                // 优先使用当前分卷的 endChapter
+                const currentVolumeConfig = volumePlans[currentVolumeIndex] || pendingSplits[0];
+                if (currentVolumeConfig?.endChapter) {
+                  const endChapter = currentVolumeConfig.endChapter;
+                  
+                  if (isVolumeMode) {
+                    // 本卷模式：使用卷内章节编号比较
+                    // endChapter=3 表示该卷包含第1-3章，第3章完成后（currentChapterNum >= 3）切换到下一卷
+                    console.log(`[VOLUME_SWITCH_CHECK] 本卷模式: currentChapterNum=${currentChapterNum} >= endChapter=${endChapter}?`);
+                    if (currentChapterNum >= endChapter) {
+                      shouldSwitch = true;
+                      nextVolumeName = currentVolumeConfig.nextVolumeName || (volumePlans[currentVolumeIndex + 1]?.volumeName || volumePlans[currentVolumeIndex + 1]?.folderName || '');
+                      terminal.log(`[WORKFLOW] Volume ${currentVolumeIndex} end chapter matched (本卷模式): chapterNum=${currentChapterNum} >= endChapter=${endChapter}, switching to "${nextVolumeName}"`);
+                    }
+                  } else {
+                    // 整书模式：使用全局章节索引比较
+                    // endChapter=3 表示第1-3章属于当前卷，第3章完成后（completedChaptersCount >= 3）切换到下一卷
+                    console.log(`[VOLUME_SWITCH_CHECK] 整书模式: completedChaptersCount=${completedChaptersCount} >= endChapter=${endChapter}?`);
+                    if (completedChaptersCount >= endChapter) {
+                      shouldSwitch = true;
+                      nextVolumeName = currentVolumeConfig.nextVolumeName || (volumePlans[currentVolumeIndex + 1]?.volumeName || volumePlans[currentVolumeIndex + 1]?.folderName || '');
+                      terminal.log(`[WORKFLOW] Volume ${currentVolumeIndex} end chapter matched (整书模式): globalCount=${completedChaptersCount} >= endChapter=${endChapter}, switching to "${nextVolumeName}"`);
+                    }
                   }
                 }
-                
-                // 如果 pendingSplits 没有匹配，检查 volumeEndChapters
-                if (!shouldSwitch) {
-                  const endChapterCheck = workflowManager.checkVolumeEndChapter(currentTitle, currentVolumeIndex);
-                  console.log(`[VOLUME_SWITCH_CHECK] endChapterCheck result:`, endChapterCheck);
-                  if (endChapterCheck && endChapterCheck.shouldSwitchVolume) {
-                    shouldSwitch = true;
-                    const nextVolConfig = volumePlans[endChapterCheck.nextVolumeIndex];
-                    nextVolumeName = nextVolConfig?.folderName || nextVolConfig?.volumeName || '';
-                    terminal.log(`[WORKFLOW] Volume end chapter matched: nextVolumeIndex=${endChapterCheck.nextVolumeIndex}, name="${nextVolumeName}"`);
-                  }
-                }
-                
+
                 console.log(`[VOLUME_SWITCH_CHECK] Final result: shouldSwitch=${shouldSwitch}, nextVolumeName="${nextVolumeName}"`);
                 
                 if (shouldSwitch && nextVolumeName) {
@@ -2525,9 +2653,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   workflowManager.markSplitProcessed(currentTitle, nextVolumeName);
 
                   // 清除创作类节点的输出，以便下一卷重新生成
+                  // 核心修复：不清空 outline 节点的 outputEntries，因为大纲是整个小说的规划，不应随分卷切换而丢失
                   nodesRef.current = nodesRef.current.map(n => {
                     const typeKey = n.data.typeKey;
-                    if (['worldview', 'characters', 'plotOutline', 'outline'].includes(typeKey)) {
+                    if (['worldview', 'characters', 'plotOutline'].includes(typeKey)) {
                       // 更新节点的 folderName 为新的分卷名称，确保 Sets 写入正确的卷
                       const updatedData = { ...n.data, outputEntries: [] };
                       if (nextVolumeName) {
@@ -2535,11 +2664,23 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                       }
                       return { ...n, data: updatedData };
                     }
+                    // outline 节点只更新 folderName，不清空 outputEntries
+                    if (typeKey === 'outline') {
+                      const updatedData = { ...n.data };
+                      if (nextVolumeName) {
+                        updatedData.folderName = nextVolumeName;
+                      }
+                      return { ...n, data: updatedData };
+                    }
                     if (typeKey === 'chapter' && nextVolumeName) {
-                      return { ...n, data: { ...n.data, targetVolumeId: '', targetVolumeName: nextVolumeName } };
+                      return { ...n, data: { ...n.data, targetVolumeId: '', targetVolumeName: nextVolumeName, folderName: nextVolumeName } };
                     }
                     if (typeKey === 'creationInfo') {
-                      return { ...n, data: { ...n.data, status: 'pending' } };
+                      return { ...n, data: { ...n.data, status: 'pending', folderName: nextVolumeName } };
+                    }
+                    // 更新其他需要关联目录的节点的 folderName
+                    if (nextVolumeName && typeKey !== 'createFolder' && typeKey !== 'multiCreateFolder' && typeKey !== 'loopNode' && typeKey !== 'loopConfigurator' && typeKey !== 'pauseNode') {
+                      return { ...n, data: { ...n.data, folderName: nextVolumeName } };
                     }
                     return n;
                   });
@@ -2636,25 +2777,54 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 
                 // 分卷终止章检测：用于多分卷目录节点
                 const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
-                const endChapterCheck = workflowManager.checkVolumeEndChapter(title, currentVolumeIndex);
+                const isVolumeModeForCheck = globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume';
+                const storyChaptersForCheck = (localNovel.chapters || []).filter(c => !c.subtype || c.subtype === 'story');
+                const completedChaptersForCheck = storyChaptersForCheck.length;
+                const endChapterCheck = workflowManager.checkVolumeEndChapter(
+                  title, 
+                  currentVolumeIndex, 
+                  isVolumeModeForCheck,
+                  completedChaptersForCheck
+                );
                 if (endChapterCheck && endChapterCheck.shouldSwitchVolume) {
                   terminal.log(`[WORKFLOW] Volume end chapter reached: ${title}, switching to volume ${endChapterCheck.nextVolumeIndex}`);
 
                   const nextVolIdx = endChapterCheck.nextVolumeIndex;
                   const volumePlans = workflowManager.getVolumePlans();
                   const nextVolConfig = volumePlans[nextVolIdx];
-                  const nextFolderName = nextVolConfig?.folderName || nextVolConfig?.volumeName || '';
+                  let nextFolderName = nextVolConfig?.folderName || nextVolConfig?.volumeName || '';
+
+                  // 如果 volumePlans 中没有找到，尝试从 localNovel.volumes 获取
+                  if (!nextFolderName && localNovel.volumes && localNovel.volumes[nextVolIdx]) {
+                    nextFolderName = localNovel.volumes[nextVolIdx].title || '';
+                  }
+
+                  terminal.log(`[WORKFLOW] Volume switch resolution:`, {
+                    nextVolIdx,
+                    volumePlansLength: volumePlans.length,
+                    nextFolderName,
+                    localVolumesCount: localNovel.volumes?.length,
+                  });
 
                   nodesRef.current = nodesRef.current.map(n => {
                     const typeKey = n.data.typeKey;
-                    if (['worldview', 'characters', 'plotOutline', 'outline'].includes(typeKey)) {
-                      return { ...n, data: { ...n.data, outputEntries: [] } };
+                    // 核心修复：不清空 outline 节点的 outputEntries，因为大纲是整个小说的规划，不应随分卷切换而丢失
+                    if (['worldview', 'characters', 'plotOutline'].includes(typeKey)) {
+                      return { ...n, data: { ...n.data, outputEntries: [], folderName: nextFolderName } };
+                    }
+                    // outline 节点只更新 folderName，不清空 outputEntries
+                    if (typeKey === 'outline') {
+                      return { ...n, data: { ...n.data, folderName: nextFolderName } };
                     }
                     if (typeKey === 'chapter' && nextFolderName) {
-                      return { ...n, data: { ...n.data, targetVolumeId: '', targetVolumeName: nextFolderName } };
+                      return { ...n, data: { ...n.data, targetVolumeId: '', targetVolumeName: nextFolderName, folderName: nextFolderName } };
                     }
                     if (typeKey === 'creationInfo') {
-                      return { ...n, data: { ...n.data, status: 'pending' } };
+                      return { ...n, data: { ...n.data, status: 'pending', folderName: nextFolderName } };
+                    }
+                    // 更新其他需要关联目录的节点的 folderName
+                    if (nextFolderName && typeKey !== 'createFolder' && typeKey !== 'multiCreateFolder' && typeKey !== 'loopNode' && typeKey !== 'loopConfigurator' && typeKey !== 'pauseNode') {
+                      return { ...n, data: { ...n.data, folderName: nextFolderName } };
                     }
                     return n;
                   });
@@ -2898,7 +3068,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             }
             
             aiRes = completion.choices[0]?.message?.content || '';
+            // 核心修复：添加 AI 响应日志
+            terminal.log(`[WORKFLOW] ${node.data.typeLabel} - ${node.data.label} AI 响应已接收, 长度: ${aiRes.length}`);
             if (!aiRes?.trim()) {
+              terminal.warn(`[WORKFLOW] ${node.data.typeLabel} - ${node.data.label} AI 返回内容为空`);
               if (retry < 2) {
                 retry++;
                 continue;
@@ -2909,7 +3082,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             try {
               const parsed = await cleanAndParseJSON(aiRes);
               entriesToStore = await extractEntries(parsed);
-            } catch {
+            } catch (parseError: any) {
+              // 核心修复：添加 JSON 解析错误日志
+              terminal.warn(`[WORKFLOW] JSON 解析失败 (${node.data.typeLabel}): ${parseError.message}`);
+              console.warn(`[WORKFLOW] JSON 解析失败，原始响应:`, aiRes.substring(0, 500));
               if (
                 ['outline', 'plotOutline', 'characters', 'worldview'].includes(node.data.typeKey as string) &&
                 retry < 2
@@ -2958,8 +3134,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             accEntries = [...accEntries, ...currIterEntries];
             nodeDone = true;
           } catch (e: any) {
+            // 核心修复：添加错误日志，避免错误被静默吞掉
+            terminal.error(`[WORKFLOW ERROR] ${node.data.typeLabel} - ${node.data.label} 执行失败: ${e.message || e}`);
+            console.error(`[WORKFLOW ERROR] ${node.data.typeLabel} - ${node.data.label}:`, e);
             if (e.name === 'AbortError' || retry === 2) throw e;
             retry++;
+            terminal.log(`[WORKFLOW] 重试 ${retry}/2...`);
           }
         }
 
@@ -2968,6 +3148,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         const finalHistory = nodesRef.current.find(n => n.id === node.id)?.data.outputEntries || [];
         const savedIds = new Set(finalHistory.map(e => e.id));
         const unsaved = accEntries.filter(e => !savedIds.has(e.id));
+        // 核心修复：添加节点完成日志
+        terminal.log(`[WORKFLOW] ${node.data.typeLabel} - ${node.data.label} 执行完成, 条目数: ${accEntries.length}`);
         await syncNodeStatus(node.id, { status: 'completed', outputEntries: [...finalHistory, ...unsaved] }, i);
 
         // Update Novel Sets

@@ -5,6 +5,7 @@ import { workflowManager } from '../../../../utils/WorkflowManager';
 import { OutputEntry, WorkflowNode, WorkflowNodeData } from '../../types';
 import { SharedTextarea } from '../Shared/SharedInput';
 import { BasicNodeInfo, NodeHeader } from './Shared/BasicNodeInfo';
+import { ChapterStartSelector } from './Shared/ChapterStartSelector';
 import { CreationInfoPanel } from './Shared/CreationInfoPanel';
 import { LoopConfigPanel, LoopInstructionsPanel } from './Shared/LoopConfigPanel';
 import { LoopConfiguratorPanel } from './Shared/LoopConfiguratorPanel';
@@ -312,15 +313,23 @@ export const MobilePanel = React.memo(
             )}
 
           {editingNode.data.typeKey === 'chapter' ? (
-            <div className="space-y-4 pt-6 border-t border-gray-800">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                <FileText className="w-3.5 h-3.5 text-indigo-400" /> 生成产物说明
-              </label>
-              <div className="text-center py-10 bg-gray-800/50 rounded-[2.5rem] border border-dashed border-gray-700">
-                <p className="text-sm text-gray-400">章节已保存至小说目录</p>
-                <p className="text-[10px] text-gray-500 mt-1 px-10">正文将保存至上一个“保存至分卷”节点指定的分卷中。</p>
+            <>
+              <ChapterStartSelector 
+                data={editingNode.data} 
+                activeNovel={activeNovel} 
+                onUpdate={handleUpdate} 
+                isMobile={true}
+              />
+              <div className="space-y-4 pt-6 border-t border-gray-800">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5 text-indigo-400" /> 生成产物说明
+                </label>
+                <div className="text-center py-10 bg-gray-800/50 rounded-[2.5rem] border border-dashed border-gray-700">
+                  <p className="text-sm text-gray-400">章节已保存至小说目录</p>
+                  <p className="text-[10px] text-gray-500 mt-1 px-10">正文将保存至上一个"保存至分卷"节点指定的分卷中。</p>
+                </div>
               </div>
-            </div>
+            </>
           ) : (
             editingNode.data.typeKey !== 'pauseNode' &&
             editingNode.data.typeKey !== 'saveToVolume' &&

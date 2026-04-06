@@ -104,6 +104,11 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   globalLoopInstructions?: LoopInstruction[]; // 全局循环指令
   useAiGeneration?: boolean; // 是否使用AI生成循环配置
   generatedLoopConfig?: string; // AI生成的循环配置原始内容
+
+  // 正文生成节点特定设置
+  startChapterIndex?: number; // 起始章节索引 (0-based)，用于从指定章节开始生成
+  startChapterMode?: 'auto' | 'continue' | 'restart'; // 起始章节模式: auto=自动检测, continue=继续写, restart=从头开始
+  enableAutoDetect?: boolean; // 是否启用自动检测跳过已完成章节（默认 true）
 }
 
 export type WorkflowNode = Node<WorkflowNodeData>;

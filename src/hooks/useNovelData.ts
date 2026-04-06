@@ -351,12 +351,12 @@ export function useNovelData() {
       let newChapters = (novel.chapters || []).filter(c => !cascadeIds.has(c.id));
       // 删除章节后重新校准编号
       newChapters = recalibrateChapterNumbering(newChapters);
-      // 根据当前模式更新章节标题
+      // 根据当前模式更新章节标题（保留原有章节名称）
       const mode = novel.chapterNumberingMode || 'global';
       newChapters = newChapters.map(c => {
         if (!c.subtype || c.subtype === 'story') {
           const displayIndex = mode === 'perVolume' ? c.volumeIndex : c.globalIndex;
-          return { ...c, title: generateChapterTitle(displayIndex || 1) };
+          return { ...c, title: generateChapterTitle(displayIndex || 1, c.title) };
         }
         return c;
       });
@@ -618,7 +618,7 @@ export function useNovelData() {
         updatedChapters = updatedChapters.map(c => {
           if (!c.subtype || c.subtype === 'story') {
             const displayIndex = mode === 'perVolume' ? c.volumeIndex : c.globalIndex;
-            return { ...c, title: generateChapterTitle(displayIndex || 1) };
+            return { ...c, title: generateChapterTitle(displayIndex || 1, c.title) };
           }
           return c;
         });

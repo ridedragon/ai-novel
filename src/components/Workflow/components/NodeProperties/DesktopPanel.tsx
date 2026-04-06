@@ -4,6 +4,7 @@ import { GeneratorPreset, Novel } from '../../../../types';
 import { workflowManager } from '../../../../utils/WorkflowManager';
 import { WorkflowNode, WorkflowNodeData } from '../../types';
 import { BasicNodeInfo, NodeHeader } from './Shared/BasicNodeInfo';
+import { ChapterStartSelector } from './Shared/ChapterStartSelector';
 import { CreationInfoPanel } from './Shared/CreationInfoPanel';
 import { LoopConfigPanel, LoopInstructionsPanel } from './Shared/LoopConfigPanel';
 import { LoopConfiguratorPanel } from './Shared/LoopConfiguratorPanel';
@@ -329,20 +330,27 @@ export const DesktopPanel = ({
           )}
 
           {node.data.typeKey === 'chapter' ? (
-            <div className="space-y-4 pt-6 border-t border-gray-700/30">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                <FileText className="w-3.5 h-3.5 text-indigo-400" /> 生成产物说明
-              </label>
-              <div className="text-center py-12 bg-[#161922] rounded-xl border border-dashed border-gray-700">
-                <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
-                  <BookOpen className="w-6 h-6 text-indigo-500" />
+            <>
+              <ChapterStartSelector 
+                data={node.data} 
+                activeNovel={activeNovel} 
+                onUpdate={handleUpdate} 
+              />
+              <div className="space-y-4 pt-6 border-t border-gray-700/30">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5 text-indigo-400" /> 生成产物说明
+                </label>
+                <div className="text-center py-12 bg-[#161922] rounded-xl border border-dashed border-gray-700">
+                  <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
+                    <BookOpen className="w-6 h-6 text-indigo-500" />
+                  </div>
+                  <p className="text-sm text-gray-300">章节内容已实时保存至侧边栏目录</p>
+                  <p className="text-xs text-gray-500 mt-2 px-10 leading-relaxed">
+                    工作流执行过程中生成的正文会直接写入小说对应的分卷中（由前置的"保存至分卷"节点决定），您可以在主界面左侧的目录树中点击查看、编辑或手动优化这些章节。
+                  </p>
                 </div>
-                <p className="text-sm text-gray-300">章节内容已实时保存至侧边栏目录</p>
-                <p className="text-xs text-gray-500 mt-2 px-10 leading-relaxed">
-                  工作流执行过程中生成的正文会直接写入小说对应的分卷中（由前置的“保存至分卷”节点决定），您可以在主界面左侧的目录树中点击查看、编辑或手动优化这些章节。
-                </p>
               </div>
-            </div>
+            </>
           ) : (
             node.data.typeKey !== 'pauseNode' &&
             node.data.typeKey !== 'saveToVolume' &&
