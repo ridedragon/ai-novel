@@ -353,3 +353,73 @@ const setEdgeAnimation = useCallback((nodeId: string, animated: boolean) => {
 ---
 
 *第二次修复完成*
+
+---
+
+## 第三次修复日志
+
+**日期**: 2026/4/7  
+**修复人**: Cline  
+**问题**: 
+1. 节点不能刷新显示 - 已经创作第二卷了，但各个节点仍然显示第一卷的内容
+2. 动画均没有被修复
+
+### 问题描述
+
+用户反馈第二次修复后引入了新问题：
+1. 工作流正常运行（确实是第二卷的内容了），但各个节点仍然显示第一卷的内容
+2. 动画问题仍然没有被修复
+
+### 根因分析
+
+经过分析，发现第二次修复中使用的 `[...newEdges]` 强制创建新数组引用的方式导致了 XYFlow 内部状态与 React 状态不同步：
+
+1. **XYFlow 内部状态不同步**: XYFlow 使用边的引用作为内部状态管理的 key，当强制创建新数组引用时，XYFlow 可能无法正确识别边的变化，导致节点渲染使用了过时的数据
+2. **节点显示异常**: 由于边的状态更新影响了整个画布的渲染，节点可能无法正确获取最新的 `data` 属性（如 `folderName`、`outputEntries` 等）
+3. **动画未修复**: 动画问题可能与 CSS 动画本身或边的 `animated` 属性更新时机有关，而非数组引用问题
+
+### 修复方案
+
+回退 `setEdgeAnimation` 函数到简单实现，移除 `[...newEdges]` 强制更新机制：
+
+```javascript
+// 修复前（第二次修复 - 有问题）
+const setEdgeAnimation = useCallback((nodeId: string, animated: boolean) => {
+  setEdges(eds => {
+    const newEdges = eds.map(e => {
+      if (e.target === nodeId) {
+        return { ...e, animated: !!animated };
+      }
+      return e;
+    });
+    return [...newEdges];  // <-- 问题：导致 XYFlow 内部状态不同步
+  });
+}, [setEdges]);
+
+// 修复后（第三次修复）
+const setEdgeAnimation = useCallback((nodeId: string, animated: boolean) => {
+  setEdges(eds => eds.map(e => {
+    if (e.target === nodeId) {
+      return { ...e, animated };
+    }
+    return e;
+  }));
+}, [setEdges]);
+```
+
+### 关键变更
+
+1. **移除 `[...newEdges]`**: 让 XYFlow 正常处理边的状态更新
+2. **移除 `!!animated`**: 直接使用 `animated` 值，避免不必要的类型转换
+3. **保持 `e.target === nodeId`**: 匹配进入当前节点的边（正确的匹配逻辑）
+
+### 关于动画问题的后续
+
+动画问题可能需要从其他角度排查：
+1. 检查 CSS 动画 `.animate-workflow-dash` 是否正确定义
+2. 检查边的 `animated` 属性是否正确传递到 `WorkflowEdge` 组件
+3. 检查浏览器是否支持 CSS `stroke-dasharray` 动画
+
+---
+
+*第三次修复完成*
