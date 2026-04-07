@@ -148,8 +148,9 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
   );
 
   useEffect(() => {
-    // 核心修复：智能合并更新，防止丢失 syncNodeStatus 中的最新数据
-    // 策略：比较 nodes 和 nodesRef.current，保留数据更完整的版本
+    // 核心修复：直接使用 nodes 更新 ref，不再进行复杂的合并逻辑
+    // 原来的问题：合并逻辑会导致用户修改的 instruction 等字段被旧数据覆盖
+    // 修复：nodes state 是最新的，直接使用它更新 ref
     
     if (nodesRef.current.length === 0 && nodes.length > 0) {
       // 首次加载：直接使用 nodes 初始化 ref
@@ -166,29 +167,9 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
       // 节点列表变化（添加/删除节点），更新 ref
       nodesRef.current = nodes;
     } else {
-      // 节点 ID 列表相同，合并数据：保留数据更丰富的版本
-      const mergedNodes = nodes.map(n => {
-        const refNode = nodesRef.current.find(r => r.id === n.id);
-        if (!refNode) return n;
-        
-        // 比较两个节点的数据丰富程度
-        // 如果 refNode 有更多的数据（如 volumes、splitRules、volumeContent），优先使用 refNode
-        const refDataKeys = Object.keys(refNode.data || {}).filter(k => refNode.data[k] !== undefined && refNode.data[k] !== null && refNode.data[k] !== '');
-        const nodeDataKeys = Object.keys(n.data || {}).filter(k => n.data[k] !== undefined && n.data[k] !== null && n.data[k] !== '');
-        
-        // 特殊检查：如果 refNode 有 volumes 或 splitRules 数据，优先使用 refNode
-        const hasVolumeData = (refNode.data.volumes && (refNode.data.volumes as any[]).length > 0) ||
-          (refNode.data.splitRules && (refNode.data.splitRules as any[]).length > 0) ||
-          refNode.data.volumeContent;
-        
-        if (hasVolumeData) {
-          return refNode;
-        }
-        
-        // 否则使用数据更丰富的版本
-        return refDataKeys.length >= nodeDataKeys.length ? refNode : n;
-      });
-      nodesRef.current = mergedNodes;
+      // 节点 ID 列表相同，直接使用 nodes 更新 ref
+      // 不再进行复杂的合并逻辑，避免覆盖用户修改
+      nodesRef.current = nodes;
     }
   }, [nodes]);
 
@@ -413,10 +394,32 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
     );
   };
 
-  const handleSaveWorkflow = () => {
-    autoSave(nodes, edges, currentNodeIndex);
-    setError('工作流已手动保存');
-    setTimeout(() => setError(null), 2000);
+  const handleSaveWorkflow = async () => {
+    // 立即保存，不等待自动保存的延迟
+    clearAutoSaveTimeout?.();
+    
+    const currentWorkflows = workflowsRef.current.map(w => {
+      if (w.id === activeWorkflowId) {
+        return {
+          ...w,
+          nodes,
+          edges,
+          currentNodeIndex,
+          lastModified: Date.now(),
+        };
+      }
+      return w;
+    });
+    
+    try {
+      await storage.saveWorkflows(currentWorkflows);
+      setWorkflows(currentWorkflows);
+      setError('工作流已手动保存');
+      setTimeout(() => setError(null), 2000);
+    } catch (e) {
+      setError('保存失败: ' + (e as Error).message);
+      setTimeout(() => setError(null), 3000);
+    }
   };
 
   const switchWorkflow = async (id: string) => {

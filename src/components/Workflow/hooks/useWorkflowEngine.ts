@@ -3418,9 +3418,19 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
       terminal.log(`[DEBUG-RESET] nodesRef.current.length: ${nodesRef.current.length}`);
       terminal.log(`[DEBUG-RESET] workflowsRef.current.length: ${workflowsRef.current.length}`);
       
-      // 打印 nodesRef 中每个节点的 typeKey 和 label
+      // 打印 nodesRef 中每个节点的详细信息
       nodesRef.current.forEach((n, i) => {
-        terminal.log(`[DEBUG-RESET]   node[${i}] typeKey=${n.data.typeKey}, label=${n.data.label}`);
+        const dataKeys = Object.keys(n.data || {}).filter(k => n.data[k] !== undefined && n.data[k] !== null && n.data[k] !== '');
+        terminal.log(`[DEBUG-RESET]   node[${i}] typeKey=${n.data.typeKey}, label=${n.data.label}, dataKeys=${dataKeys.length}`);
+        if (n.data.instruction) {
+          terminal.log(`[DEBUG-RESET]     instruction: ${n.data.instruction.substring(0, 50)}...`);
+        }
+        if (n.data.splitRules && (n.data.splitRules as any[]).length > 0) {
+          terminal.log(`[DEBUG-RESET]     splitRules: ${(n.data.splitRules as any[]).length} items`);
+        }
+        if (n.data.volumeContent) {
+          terminal.log(`[DEBUG-RESET]     volumeContent: ${n.data.volumeContent.substring(0, 50)}...`);
+        }
       });
       
       // 打印 workflowsRef 中每个工作流的 id 和 nodes 数量
