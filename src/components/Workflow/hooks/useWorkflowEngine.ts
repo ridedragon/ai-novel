@@ -3410,8 +3410,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
       stopRequestedRef.current = true;
       abortControllerRef.current?.abort();
 
-      // 第三次修复核心：重置时只清除执行状态，保留用户配置和节点位置
-      // 关键修复 1：清除待执行的 autoSave 超时，防止延迟保存覆盖重置结果
+      // 第六次修复核心：直接从存储读取最新数据，不依赖任何 ref 或 state
+      // 这是最可靠的方式，确保我们总是操作最新的数据
       clearAutoSaveTimeout?.();
       
       const updatedNodes = nodesRef.current.map(n => {
@@ -3421,17 +3421,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           loopInstructions: [],
         };
 
-        // 仅重置运行时的动态标签，不重置用户自定义的 label
         if (n.data.typeKey === 'chapter') {
           updates.label = NODE_CONFIGS.chapter.defaultLabel;
           updates.targetVolumeName = '';
         }
 
-        // saveToVolume 节点：只清除运行时产生的分卷规划结果
         if (n.data.typeKey === 'saveToVolume') {
           updates.splitRules = [];
           updates.volumeContent = '';
-          // 保留 volumes 字段（用户手动配置的）
         }
 
         if (n.data.typeKey === 'loopConfigurator') {
@@ -3443,11 +3440,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           updates.loopConfig = { ...n.data.loopConfig, currentIndex: 0 };
         }
 
-        // 注意：不修改 position 字段，保留用户调整的节点位置
         return { ...n, data: { ...n.data, ...updates } };
       });
 
-      // 先更新 nodesRef，确保后续操作使用最新数据
+      // 先更新 UI
       nodesRef.current = updatedNodes;
       setNodes(updatedNodes);
       setCurrentNodeIndex(-1);
@@ -3457,29 +3453,33 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
       workflowManager.stop();
 
-      // 关键修复：基于最新的 workflowsRef.current 构建更新
-      const updatedWorkflows = workflowsRef.current.map(w => {
-        if (w.id === activeWorkflowId) {
-          return {
-            ...w,
-            nodes: updatedNodes,
-            currentNodeIndex: -1,
-            lastModified: Date.now(),
-            contextSnapshot: undefined,
-          };
-        }
-        return w;
-      });
-      
+      // 第六次修复：直接从存储读取最新工作流列表，确保数据是最新的
       try {
+        const latestWorkflows = await storage.getWorkflows();
+        terminal.log(`[ENGINE] Read ${latestWorkflows.length} workflows from storage for reset`);
+        
+        const updatedWorkflows = latestWorkflows.map(w => {
+          if (w.id === activeWorkflowId) {
+            return {
+              ...w,
+              nodes: updatedNodes,
+              edges: w.edges || [],
+              currentNodeIndex: -1,
+              lastModified: Date.now(),
+              contextSnapshot: undefined,
+            };
+          }
+          return w;
+        });
+        
         // 保存到存储
         await storage.saveWorkflows(updatedWorkflows);
-        // 第四次修复核心：同时更新 React state 和 ref
-        // 1. 更新 workflowsRef.current 确保 autoSave 闭包读到最新数据
-        workflowsRef.current = updatedWorkflows;
-        // 2. 更新 React state 触发 useEffect 同步（useWorkflowStorage 中的 useEffect 会同步 workflowsRef）
+        
+        // 同步更新 React state 和 ref
         setWorkflows?.(updatedWorkflows);
-        terminal.log(`[ENGINE] 重置完成，已更新 workflowsRef.current 和 workflows state`);
+        workflowsRef.current = updatedWorkflows;
+        
+        terminal.log(`[ENGINE] 重置完成，已保存 ${updatedWorkflows.length} 个工作流`);
       } catch (e) {
         terminal.error(`[ENGINE] 重置保存失败: ${e}`);
       }
