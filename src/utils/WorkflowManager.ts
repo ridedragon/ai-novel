@@ -487,25 +487,37 @@ class WorkflowManager {
     };
 
     // 1. 优先检查新规则列表
+    // 核心修复 (Bug 6): 只检查第一个未处理的规则，防止旧规则误触发
+    // 原来的问题：volume 2 的规则 (endChapter: 3) 未被标记为 processed
+    // 当 volume 3 章节运行时 (globalIndex 7, 8, 9)，7 > 3 会错误触发
     if (context.pendingSplits && context.pendingSplits.length > 0) {
       const unprocessedRules = context.pendingSplits.filter(r => !r.processed);
-      terminal.log(`[WorkflowManager] Checking split: ${unprocessedRules.length} rules for "${currentChapterTitle}" (globalIndex: ${currentChapterGlobalIndex}, norm: ${normalizedCurrent})`);
-      for (const rule of unprocessedRules) {
+      terminal.log(`[WorkflowManager] Checking split: ${unprocessedRules.length} unprocessed rules for "${currentChapterTitle}" (globalIndex: ${currentChapterGlobalIndex}, norm: ${normalizedCurrent})`);
+      
+      // 只检查第一个未处理的规则
+      if (unprocessedRules.length > 0) {
+        const rule = unprocessedRules[0];
+        terminal.log(`[WorkflowManager]   Checking FIRST rule: "${rule.nextVolumeName}" (endChapter: ${rule.endChapter}, chapterTitle: ${rule.chapterTitle})`);
+        
         // 使用 endChapter 判断触发（如果存在）
         // endChapter=4 表示第4章是最后一章，第4章完成后（globalIndex > 4）切换
         if (rule.endChapter && currentChapterGlobalIndex !== undefined) {
           const shouldTrigger = currentChapterGlobalIndex > rule.endChapter;
-          terminal.log(`[WorkflowManager]   Rule: "${rule.nextVolumeName}" (endChapter: ${rule.endChapter}) -> globalIndex=${currentChapterGlobalIndex}, trigger=${shouldTrigger}`);
+          terminal.log(`[WorkflowManager]   endChapter check: globalIndex=${currentChapterGlobalIndex} > endChapter=${rule.endChapter} = ${shouldTrigger}`);
           if (shouldTrigger) {
+            terminal.log(`[WorkflowManager]   TRIGGERED by endChapter`);
             return { chapterTitle: currentChapterTitle, nextVolumeName: rule.nextVolumeName };
+          } else {
+            // 如果 endChapter 不匹配，说明还没到切换点，不再检查后续规则
+            terminal.log(`[WorkflowManager]   Not triggered yet, skipping remaining rules`);
           }
         } else if (rule.chapterTitle) {
           // 兜底：使用 chapterTitle 判断（兼容旧数据）
           const ruleNorm = this.normalizeChapterToken(rule.chapterTitle);
           const matched = isMatch(rule.chapterTitle, rule.startChapter);
-          terminal.log(`[WorkflowManager]   Rule: "${rule.chapterTitle}" (startChapter: ${rule.startChapter}, norm: ${ruleNorm}) -> match=${matched}`);
+          terminal.log(`[WorkflowManager]   chapterTitle check: "${rule.chapterTitle}" (norm: ${ruleNorm}) -> match=${matched}`);
           if (matched) {
-            return { chapterTitle: currentChapterTitle, nextVolumeName: rule.nextVolumeName };
+            return { chapterTitle: currentChapterTitle, nextVolumeName: rule.nextVolumeName || '' };
           }
         }
       }
