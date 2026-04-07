@@ -139,15 +139,15 @@ export const useWorkflowEngine = (options: {
 
   // 统一的连线动画管理函数
   // 解决动画延迟、消失或一直存在的问题
-  // Bug 1 修复：匹配从节点出去的边（e.source === nodeId），而不是进入节点的边
-  // 这样动画显示的是当前节点向下一个节点传递的效果，更符合用户预期
+  // Bug 1 修复：匹配进入节点的边（e.target === nodeId），即从上一个节点到当前节点的连线
+  // 动画应显示上一个节点向当前节点传递的效果，例如"世界观→粗纲"当粗纲正在执行时
   // Bug 1 二次修复：添加强制更新机制，防止动画状态在 React 批处理中丢失
   const setEdgeAnimation = useCallback((nodeId: string, animated: boolean) => {
     // 直接更新，不使用 requestAnimationFrame 延迟，确保状态同步
     setEdges(eds => {
       // 创建新数组引用，确保 React 检测到变化
       const newEdges = eds.map(e => {
-        if (e.source === nodeId) {
+        if (e.target === nodeId) {
           // 显式设置 animated 属性为布尔值
           return { ...e, animated: !!animated };
         }
