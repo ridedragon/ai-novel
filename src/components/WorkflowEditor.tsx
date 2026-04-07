@@ -261,7 +261,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
   useEffect(() => {
     autoSave(nodes, edges, currentNodeIndex, isRunning);
-  }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning]);
+  }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning, autoSave]);
 
   const switchWorkflow = useCallback(async (id: string) => {
     const globalIsRunning = workflowManager.getState().isRunning;

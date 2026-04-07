@@ -239,7 +239,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
 
   useEffect(() => {
     autoSave(nodes, edges, currentNodeIndex, isRunning);
-  }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning]);
+  }, [nodes, edges, currentNodeIndex, activeWorkflowId, isRunning, autoSave]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges(eds => addEdge({ ...params, type: 'custom', animated: false }, eds)),
