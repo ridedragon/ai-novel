@@ -248,7 +248,7 @@ const fixChineseQuotes = (content: string): string => {
 
 /**
  * 尝试从字符串中提取JSON数组（逐行解析模式）
- * 用于处理AI返回的非标准JSON格式
+ * 用于处理AI返回的非标准JSON格式，支持多种键名类型
  */
 const extractJsonArrayByLines = (content: string): any[] | null => {
   try {
@@ -259,33 +259,98 @@ const extractJsonArrayByLines = (content: string): any[] | null => {
     let currentValue = '';
     let inMultiLineValue = false;
     
+    // 支持的所有键名
+    const validKeys = new Set([
+      'item', 'setting', 'name', 'bio', 'title', 'content',
+      'summary', 'chapter', 'description', 'plot', 'background',
+      // 中文键名
+      '设定项', '设定', '名称', '角色', '标题', '内容', '摘要', '章节'
+    ]);
+    
+    // 判断键是否是有效的（或者是新的自定义键）
+    const isValidKey = (key: string): boolean => {
+      return validKeys.has(key) || /^[a-zA-Z_\u4e00-\u9fa5][a-zA-Z0-9_\u4e00-\u9fa5]{0,50}$/.test(key);
+    };
+    
     for (const line of lines) {
       const trimmed = line.trim();
       
-      // 跳过空行和纯装饰性行
-      if (!trimmed || trimmed === '[' || trimmed === ']' || trimmed === '{' || trimmed === '}') {
+      // 跳过空行
+      if (!trimmed) continue;
+      
+      // 处理数组标记
+      if (trimmed === '[') continue;
+      if (trimmed === ']' || (trimmed.endsWith(']') && !trimmed.includes('"'))) {
+        // 保存最后一个对象
+        if (currentItem && Object.keys(currentItem).length > 0) {
+          if (currentKey && currentValue) {
+            currentItem[currentKey] = currentValue.trim();
+          }
+          items.push(currentItem);
+        } else if (currentItem && currentKey && !inMultiLineValue) {
+          items.push(currentItem);
+        }
+        return items.length > 0 ? items : null;
+      }
+      
+      // 跳过纯对象括号
+      if (trimmed === '{') {
+        if (!currentItem) currentItem = {};
+        continue;
+      }
+      if (trimmed === '}' || trimmed.endsWith('},') || trimmed.endsWith('}')) {
+        if (currentItem && currentKey && currentValue !== undefined) {
+          currentItem[currentKey] = currentValue.trim();
+        }
+        if (currentItem && Object.keys(currentItem).length > 0) {
+          items.push({...currentItem});
+        }
+        currentItem = {};
+        currentKey = '';
+        currentValue = '';
+        inMultiLineValue = false;
         continue;
       }
       
-      // 检测键值对模式: "key": "value" 或 "key": "value
-      const kvMatch = trimmed.match(/^"([^"]+)"\s*:\s*"(.*)$/);
+      // 检测键值对模式: "key": "value" 或 "key": "value（多行开始）
+      // 支持 "key": "value" 和 "key" : "value" 以及 'key': 'value'
+      const kvMatch = trimmed.match(/^["']([^"']+)["']\s*:\s*["'](.*)$/);
       if (kvMatch) {
-        if (currentItem && currentKey && !inMultiLineValue) {
-          // 保存前一个键值对
-          currentItem[currentKey] = currentValue.trim();
+        const newKey = kvMatch[1];
+        let valuePart = kvMatch[2];
+        
+        // 处理值末尾可能的 "}' 或 "},'
+        let endedWithQuote = false;
+        if (valuePart.endsWith('"}') || valuePart.endsWith('"}')) {
+          valuePart = valuePart.slice(0, -2);
+          endedWithQuote = true;
+        } else if (valuePart.endsWith('"},') || valuePart.endsWith('"}')) {
+          valuePart = valuePart.slice(0, -3);
+          endedWithQuote = true;
+        } else if (valuePart.endsWith('"') && !valuePart.endsWith('\\"')) {
+          valuePart = valuePart.slice(0, -1);
+          endedWithQuote = true;
         }
         
-        currentKey = kvMatch[1];
-        const valuePart = kvMatch[2];
+        // 如果之前有未完成的键值对，先保存
+        if (currentItem && currentKey && !inMultiLineValue) {
+          currentItem[currentKey] = currentValue.trim();
+        } else if (inMultiLineValue && currentItem && currentKey) {
+          currentItem[currentKey] = (currentValue + '\n' + valuePart).trim();
+          currentKey = '';
+          currentValue = '';
+          inMultiLineValue = false;
+          continue;
+        }
         
-        if (valuePart.endsWith('"') && !valuePart.endsWith('\\"')) {
+        currentKey = isValidKey(newKey) ? newKey : newKey;
+        
+        if (endedWithQuote) {
           // 单行完整值
-          currentValue = valuePart.slice(0, -1);
-          if (!inMultiLineValue && currentItem) {
-            currentItem[currentKey] = currentValue;
-            currentKey = '';
-            currentValue = '';
-          }
+          if (!currentItem) currentItem = {};
+          currentItem[currentKey] = valuePart.trim();
+          currentKey = '';
+          currentValue = '';
           inMultiLineValue = false;
         } else {
           // 多行值开始
@@ -293,9 +358,15 @@ const extractJsonArrayByLines = (content: string): any[] | null => {
           inMultiLineValue = true;
         }
       } else if (inMultiLineValue) {
-        // 继续多行值
-        if (trimmed.endsWith('"') && !trimmed.endsWith('\\"')) {
-          currentValue += '\n' + trimmed.slice(0, -1);
+        // 继续多行值 - 检查是否结束
+        if ((trimmed.endsWith('"') || trimmed.endsWith('"}') || trimmed.endsWith('"},') || trimmed.endsWith('"},') || trimmed.endsWith('"}')) && !trimmed.endsWith('\\"')) {
+          // 移除末尾的引号和可能的括号/逗号
+          let lineValue = trimmed;
+          if (lineValue.endsWith('"}')) lineValue = lineValue.slice(0, -2);
+          else if (lineValue.endsWith('"},') || lineValue.endsWith('"},') || lineValue.endsWith('"},') || lineValue.endsWith('"}')) lineValue = lineValue.slice(0, -3);
+          else if (lineValue.endsWith('"')) lineValue = lineValue.slice(0, -1);
+          
+          currentValue += '\n' + lineValue;
           if (currentItem && currentKey) {
             currentItem[currentKey] = currentValue.trim();
           }
@@ -307,32 +378,20 @@ const extractJsonArrayByLines = (content: string): any[] | null => {
         }
       }
       
-      // 检测对象结束
-      if (trimmed === '}' || trimmed.endsWith('},') || trimmed.endsWith('}')) {
-        if (currentItem && currentKey && currentValue) {
-          currentItem[currentKey] = currentValue.trim();
-        }
-        if (currentItem && Object.keys(currentItem).length > 0) {
-          items.push(currentItem);
-        }
-        currentItem = {};
-        currentKey = '';
-        currentValue = '';
-        inMultiLineValue = false;
-      }
-      
-      // 检测对象开始
-      if (trimmed === '{') {
+      // 初始化currentItem（如果遇到键值对但还没有）
+      if (!currentItem && (currentKey || kvMatch)) {
         currentItem = {};
       }
     }
     
     // 处理最后一个对象
-    if (currentItem && currentKey && currentValue) {
-      currentItem[currentKey] = currentValue.trim();
-    }
-    if (currentItem && Object.keys(currentItem).length > 0) {
-      items.push(currentItem);
+    if (currentItem) {
+      if (currentKey && currentValue !== undefined && currentValue !== '') {
+        currentItem[currentKey] = currentValue.trim();
+      }
+      if (Object.keys(currentItem).length > 0) {
+        items.push(currentItem);
+      }
     }
     
     return items.length > 0 ? items : null;
@@ -501,31 +560,34 @@ export const sanitizeAndParseJson = (content: string): any[] | null => {
 /**
  * 尝试提取第一个看起来像 JSON 对象的片段
  * 用于处理AI返回的不完整或格式错误的数据
+ * 支持多种类型的键名（outline: title/summary, character: name/bio, worldview: item/setting, inspiration: title/content）
  */
 const tryExtractObjectFromString = (content: string): Array<Record<string, string>> | null => {
   try {
     // 匹配 { "key": "value" } 或 { "key": "value\n多行内容..." } 模式
-    const objRegex = /\{\s*"([^"]+)"\s*:\s*"([\s\S]*?)"\s*,\s*"([^"]+)"\s*:\s*"([\s\S]*?)"\s*\}/g;
+    // 使用非贪婪匹配，支持多行值
+    const objRegex = /\{\s*"([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*?)"\s*\}/g;
     let match;
     const results: Array<Record<string, string>> = [];
     
     while ((match = objRegex.exec(content)) !== null) {
       const obj: Record<string, string> = {};
-      obj[match[1]] = match[2];
-      obj[match[3]] = match[4];
+      // 处理转义字符
+      obj[match[1]] = match[2].replace(/\\"/g, '"').replace(/\\n/g, '\n');
+      obj[match[3]] = match[4].replace(/\\"/g, '"').replace(/\\n/g, '\n');
       results.push(obj);
     }
     
     if (results.length > 0) return results;
     
-    // 尝试更宽松的匹配：只匹配键值对
-    const kvRegex = /"([^"]+)"\s*:\s*"([\s\S]*?)(?="\s*,\s*"|"?\s*\})/g;
+    // 尝试更宽松的匹配：只匹配键值对，然后按两个一组组合
+    const kvRegex = /"([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*?)"\s*(?:,|\})/g;
     const kvResults: string[][] = [];
     let currentKv: string[] = [];
     
     while ((match = kvRegex.exec(content)) !== null) {
-      currentKv.push(match[1], match[2]);
-      if (currentKv.length === 4) { // 两个键值对
+      currentKv.push(match[1], match[2].replace(/\\"/g, '"').replace(/\\n/g, '\n'));
+      if (currentKv.length === 4) { // 两个键值对组成一个对象
         kvResults.push([...currentKv]);
         currentKv = [];
       }
@@ -533,6 +595,29 @@ const tryExtractObjectFromString = (content: string): Array<Record<string, strin
     
     if (kvResults.length > 0) {
       return kvResults.map(kv => ({
+        [kv[0]]: kv[1],
+        [kv[2]]: kv[3]
+      }));
+    }
+    
+    // 简化版：按行扫描（处理没有外层花括号的情况）
+    const lines = content.split('\n');
+    const looseResults: string[][] = [];
+    let looseKv: string[] = [];
+    
+    for (const line of lines) {
+      const lineMatch = line.trim().match(/^"([^"]+)"\s*:\s*"(.*)$/);
+      if (lineMatch) {
+        looseKv.push(lineMatch[1], lineMatch[2].replace(/"?\s*[,}]?\s*$/, ''));
+        if (looseKv.length === 4) {
+          looseResults.push([...looseKv]);
+          looseKv = [];
+        }
+      }
+    }
+    
+    if (looseResults.length > 0) {
+      return looseResults.map(kv => ({
         [kv[0]]: kv[1],
         [kv[2]]: kv[3]
       }));
