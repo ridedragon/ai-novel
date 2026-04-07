@@ -139,10 +139,12 @@ export const useWorkflowEngine = (options: {
 
   // 统一的连线动画管理函数
   // 解决动画延迟、消失或一直存在的问题
+  // Bug 1 修复：匹配从节点出去的边（e.source === nodeId），而不是进入节点的边
+  // 这样动画显示的是当前节点向下一个节点传递的效果，更符合用户预期
   const setEdgeAnimation = useCallback((nodeId: string, animated: boolean) => {
     // 直接更新，不使用 requestAnimationFrame 延迟，确保状态同步
     setEdges(eds => eds.map(e => {
-      if (e.target === nodeId) {
+      if (e.source === nodeId) {
         return { ...e, animated };
       }
       return e;
@@ -477,6 +479,14 @@ export const useWorkflowEngine = (options: {
 
         // --- Pause Node ---
         if (node.data.typeKey === 'pauseNode') {
+          // Bug 2 修复：检查跳过状态，如果被跳过则直接跳过
+          if (node.data.skipped) {
+            terminal.log(`${logPrefix} Pause node skipped: ${node.id}`);
+            await syncNodeStatus(node.id, { status: 'completed' }, i);
+            setEdgeAnimation(node.id, false);
+            continue;
+          }
+          
           await syncNodeStatus(node.id, { status: 'executing' }, i);
           setEdgeAnimation(node.id, true);
           await new Promise(resolve => setTimeout(resolve, 300));
@@ -1061,6 +1071,9 @@ export const useWorkflowEngine = (options: {
 
                 console.log('[LOOP_NODE] Jump back to index:', { targetIndex, newLoopIndex: currentLoopIndex + 1, nextFolderName });
 
+                // Bug 1 修复：回跳前关闭当前节点的动画，防止动画状态泄漏
+                setEdgeAnimation(node.id, false);
+                
                 await syncNodeStatus(
                   node.id,
                   { status: 'pending', loopConfig: { ...loopConfig, currentIndex: currentLoopIndex } },
