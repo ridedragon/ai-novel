@@ -680,13 +680,16 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                                 data: {
                                   ...n.data,
                                   status: 'pending' as const,
+                                  outputEntries: [],
                                   // 重置正文生成节点的动态关联，保留用户配置
                                   targetVolumeName: n.data.typeKey === 'chapter' ? '' : n.data.targetVolumeName,
                                   label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label,
-                                  // 核心修复：重置非当前工作流进度时也清理分卷规则
+                                  // 核心修复：重置时只清除运行时产生的分卷规划结果，
+                                  // 保留用户手动配置的 volumes 列表
                                   splitRules: n.data.typeKey === 'saveToVolume' ? [] : n.data.splitRules,
                                   splitChapterTitle: n.data.typeKey === 'saveToVolume' ? '' : n.data.splitChapterTitle,
                                   nextVolumeName: n.data.typeKey === 'saveToVolume' ? '' : n.data.nextVolumeName,
+                                  volumeContent: n.data.typeKey === 'saveToVolume' ? '' : n.data.volumeContent,
                                 }
                               }));
 

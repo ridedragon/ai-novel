@@ -3406,22 +3406,33 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
       stopRequestedRef.current = true;
       abortControllerRef.current?.abort();
 
+      // 核心修复：重置时只清除执行状态（status、outputEntries、动画等），
+      // 保留用户配置数据（volumes、splitRules、volumeContent、instruction、preset 等）
+      // 避免"重置"操作导致用户辛辛苦苦配置的分卷规则、提示词等数据丢失
       const updatedNodes = nodesRef.current.map(n => {
         const updates: any = {
           status: 'pending' as const,
           outputEntries: [],
-          label: n.data.typeKey === 'chapter' ? NODE_CONFIGS.chapter.defaultLabel : n.data.label,
           loopInstructions: [],
         };
 
+        // 仅重置运行时的动态标签，不重置用户自定义的 label
         if (n.data.typeKey === 'chapter') {
+          // 只重置为默认标签（这是运行时动态修改的）
+          updates.label = NODE_CONFIGS.chapter.defaultLabel;
           updates.targetVolumeName = '';
-        } else if (n.data.typeKey === 'saveToVolume') {
+        }
+
+        // saveToVolume 节点：只清除运行时产生的分卷规划结果，保留用户的手动配置
+        if (n.data.typeKey === 'saveToVolume') {
+          // 清除 AI 生成的分卷规划结果
           updates.splitRules = [];
-          updates.splitChapterTitle = '';
-          updates.nextVolumeName = '';
           updates.volumeContent = '';
-        } else if (n.data.typeKey === 'loopConfigurator') {
+          // 注意：不清除 user-configured 的 volumes 列表，那是用户在配置面板设置的
+          // 保留 volumes 字段，因为它是用户手动配置的
+        }
+
+        if (n.data.typeKey === 'loopConfigurator') {
           updates.globalLoopInstructions = [];
           updates.generatedLoopConfig = '';
         }
