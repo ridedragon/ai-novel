@@ -25,8 +25,13 @@ export const useWorkflowStorage = (
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const workflowsRef = useRef<WorkflowData[]>([]);
 
-  // 同步 Ref 以便在异步闭包中使用
-  workflowsRef.current = workflows;
+  // 第四次修复核心：使用 useEffect 同步 Ref，而不是在每次渲染时同步
+  // 原来的问题：workflowsRef.current = workflows 在每次渲染时执行
+  // 当 resetWorkflowStatus 更新 workflowsRef.current 后，下一次 React 渲染
+  // 会再次执行 workflowsRef.current = workflows，覆盖掉重置时的更新
+  useEffect(() => {
+    workflowsRef.current = workflows;
+  }, [workflows]);
 
   // 数据自愈与转换逻辑 (从组件迁移而来)
   const healWorkflowData = useCallback((workflow: WorkflowData, globalIsRunning: boolean, novel?: Novel) => {

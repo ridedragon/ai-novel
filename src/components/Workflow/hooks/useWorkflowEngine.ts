@@ -25,6 +25,7 @@ export const useWorkflowEngine = (options: {
   getOrderedNodes: () => WorkflowNode[];
   isMobile?: boolean;
   clearAutoSaveTimeout?: () => void;
+  setWorkflows?: React.Dispatch<React.SetStateAction<WorkflowData[]>>;
 }) => {
   const {
     activeNovel,
@@ -39,6 +40,7 @@ export const useWorkflowEngine = (options: {
     getOrderedNodes,
     isMobile = false,
     clearAutoSaveTimeout,
+    setWorkflows,
   } = options;
 
   const [isRunning, setIsRunning] = useState(workflowManager.getState().isRunning);
@@ -3472,10 +3474,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
       try {
         // 保存到存储
         await storage.saveWorkflows(updatedWorkflows);
-        // 第三次修复关键：保存后立即更新 workflowsRef.current
-        // 防止 autoSave 的 useEffect 触发时使用旧数据覆盖本次保存
+        // 第四次修复核心：同时更新 React state 和 ref
+        // 1. 更新 workflowsRef.current 确保 autoSave 闭包读到最新数据
         workflowsRef.current = updatedWorkflows;
-        terminal.log(`[ENGINE] 重置完成，已更新 workflowsRef.current`);
+        // 2. 更新 React state 触发 useEffect 同步（useWorkflowStorage 中的 useEffect 会同步 workflowsRef）
+        setWorkflows?.(updatedWorkflows);
+        terminal.log(`[ENGINE] 重置完成，已更新 workflowsRef.current 和 workflows state`);
       } catch (e) {
         terminal.error(`[ENGINE] 重置保存失败: ${e}`);
       }

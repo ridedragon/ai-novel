@@ -94,6 +94,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
     importWorkflowData,
     healWorkflowData,
     clearAutoSaveTimeout,
+    setWorkflows,
   } = useWorkflowStorage(isOpen, activeWorkflowId, setActiveWorkflowId, activeNovel);
 
   // 2. 布局逻辑 (Mobile)
@@ -123,6 +124,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
     getOrderedNodes: () => orderedNodes,
     isMobile: true,
     clearAutoSaveTimeout,
+    setWorkflows,
   });
 
   // 获取工作流中所有“初始化目录”节点定义的文件夹名

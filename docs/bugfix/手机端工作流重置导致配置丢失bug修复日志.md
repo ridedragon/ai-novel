@@ -119,3 +119,64 @@ const updatedNodes = wf.nodes.map(n => ({
 - 手机端工作流编辑器（MobileWorkflowEditor.tsx）
 - 桌面端工作流编辑器（WorkflowEditor.tsx）
 - 两者共享 `useWorkflowEngine` hook 中的 `resetWorkflowStatus` 函数
+
+---
+
+## 第四次修复（最终修复）
+
+### 问题描述
+即使用户手动点击了保存按钮，点击重置后所有修改仍然没有被保存。节点位置也回到了初始位置。第三次修复（清除 autoSave 超时）仍然没有解决问题。
+
+### 根本原因
+代码中存在**两个不同的 `workflowsRef` 对象**：
+
+1. **Component 的 ref**（MobileWorkflowEditor.tsx 第 68 行）：
+   ```javascript
+   const workflowsRef = useRef<WorkflowData[]>([]);
+   ```
+
+2. **useWorkflowStorage 的 ref**（useWorkflowStorage.ts 第 26 行）：
+   ```javascript
+   const workflowsRef = useRef<WorkflowData[]>([]);
+   ```
+
+`resetWorkflowStatus` 更新的是 component 的 `workflowsRef.current`，但 `autoSave` 函数读取的是 `useWorkflowStorage` 内部的 `workflowsRef.current`。它们是完全不同的两个对象！
+
+此外，`useWorkflowStorage` 中原来有一行代码：
+```javascript
+workflowsRef.current = workflows;  // 在每次渲染时执行
+```
+这行代码在每次渲染时都会将 ref 覆盖为 `workflows` state 的值。即使 `resetWorkflowStatus` 更新了 ref，下一次 React 渲染又会将其覆盖。
+
+### 修复方案
+1. **在 `useWorkflowStorage.ts` 中**：将 `workflowsRef.current = workflows` 改为在 `useEffect` 中执行，确保只在 `workflows` state 真正变化时才同步
+2. **在 `useWorkflowEngine.ts` 中**：
+   - 添加 `setWorkflows` 参数
+   - 在 `resetWorkflowStatus` 中同时调用 `setWorkflows(updatedWorkflows)` 更新 React state
+   - 这样 `useWorkflowStorage` 的 useEffect 会触发同步，确保其 ref 也被更新
+3. **在 `MobileWorkflowEditor.tsx` 中**：将 `setWorkflows` 传递给 `useWorkflowEngine`
+
+### 修改文件
+- `src/components/Workflow/hooks/useWorkflowStorage.ts` - 使用 useEffect 同步 Ref
+- `src/components/Workflow/hooks/useWorkflowEngine.ts` - 添加 setWorkflows 参数，在 resetWorkflowStatus 中调用
+- `src/components/MobileWorkflowEditor.tsx` - 传递 setWorkflows 到 useWorkflowEngine
+
+### 数据流图
+```
+resetWorkflowStatus
+    ↓
+更新 workflowsRef.current (component 的 ref)
+    ↓
+调用 setWorkflows(updatedWorkflows)  ← 新增
+    ↓
+触发 React state 更新
+    ↓
+useWorkflowStorage 的 useEffect 触发
+    ↓
+同步 useWorkflowStorage.workflowsRef.current  ← 关键修复
+    ↓
+autoSave 读取到正确的数据
+```
+
+### 修复日期
+2026/4/7
