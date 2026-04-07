@@ -135,10 +135,21 @@ export const useWorkflowStorage = (
       // 运行时延长保存间隔，减少频繁保存导致的抽搐
       const saveDelay = isRunning ? 15000 : 5000;
 
+      // 调试日志：记录 autoSave 被调用
+      terminal.log(`[DEBUG-AUTOSAVE] autoSave 被调用, nodes.length=${nodes.length}, edges.length=${edges.length}, delay=${saveDelay}ms`);
+
       saveTimeoutRef.current = setTimeout(async () => {
         const startTime = Date.now();
+        
+        // 调试日志：记录即将保存的数据
+        terminal.log(`[DEBUG-AUTOSAVE] 即将保存数据, workflowsRef.length=${workflowsRef.current.length}`);
+        terminal.log(`[DEBUG-AUTOSAVE]   目标工作流 id=${activeWorkflowId}`);
+        terminal.log(`[DEBUG-AUTOSAVE]   传入 nodes.length=${nodes.length}`);
+        terminal.log(`[DEBUG-AUTOSAVE]   workflowsRef 中目标工作流 nodes.length=${workflowsRef.current.find(w => w.id === activeWorkflowId)?.nodes?.length || 0}`);
+        
         const currentWorkflows = workflowsRef.current.map(w => {
           if (w.id === activeWorkflowId) {
+            terminal.log(`[DEBUG-AUTOSAVE]   更新目标工作流, 使用传入的 nodes 和 edges`);
             return {
               ...w,
               nodes,
