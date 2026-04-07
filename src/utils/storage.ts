@@ -849,14 +849,25 @@ export const storage = {
   // --- 工作流持久化增强 ---
   async getWorkflows(): Promise<any[]> {
     try {
+      terminal.log(`[DEBUG-STORAGE] getWorkflows 被调用`);
+      
       // 1. 优先从 IndexedDB 获取
       let workflows = await get<any[]>(WORKFLOWS_KEY);
+      terminal.log(`[DEBUG-STORAGE]   IndexedDB 读取 workflows.length: ${workflows?.length || 0}`);
+      
+      if (workflows && workflows.length > 0) {
+        workflows.forEach((w, i) => {
+          terminal.log(`[DEBUG-STORAGE]   IDB workflow[${i}] id=${w.id}, nodes=${w.nodes?.length || 0}`);
+        });
+      }
 
       if (!workflows) {
         // 尝试从远程获取
+        terminal.log(`[DEBUG-STORAGE]   IndexedDB 为空，尝试从远程获取`);
         const remoteWorkflows = await fetchFromApi<any[]>(WORKFLOWS_KEY);
         if (remoteWorkflows) {
           workflows = remoteWorkflows;
+          terminal.log(`[DEBUG-STORAGE]   远程获取 workflows.length: ${workflows.length}`);
           await set(WORKFLOWS_KEY, workflows);
         }
       } else {
@@ -922,6 +933,21 @@ export const storage = {
   },
 
   async saveWorkflows(workflows: any[]): Promise<void> {
+    // ===== 详细调试日志 =====
+    terminal.log(`[DEBUG-STORAGE] saveWorkflows 被调用`);
+    terminal.log(`[DEBUG-STORAGE]   输入 workflows.length: ${workflows.length}`);
+    
+    if (workflows.length > 0) {
+      workflows.forEach((w, i) => {
+        terminal.log(`[DEBUG-STORAGE]   workflow[${i}] id=${w.id}, name=${w.name || 'unnamed'}, nodes=${w.nodes?.length || 0}, edges=${w.edges?.length || 0}`);
+        if (w.nodes && w.nodes.length > 0) {
+          terminal.log(`[DEBUG-STORAGE]     第一个节点: typeKey=${w.nodes[0].data?.typeKey}, label=${w.nodes[0].data?.label}`);
+        }
+      });
+    } else {
+      terminal.error(`[DEBUG-STORAGE]   WARNING: 保存空工作流数组!`);
+    }
+    
     // 将新的写入请求排入队列，通过 Promise 链实现串行化
     workflowSaveQueue = workflowSaveQueue.then(async () => {
       try {
@@ -929,12 +955,18 @@ export const storage = {
         // 如果数据中包含 React 组件或 Symbol，JSON 序列化会将其过滤掉或抛出错误，
         // 从而避免 IndexedDB 的 DataCloneError 导致应用崩溃。
         const serializableWorkflows = JSON.parse(JSON.stringify(workflows));
+        
+        terminal.log(`[DEBUG-STORAGE]   序列化完成, workflows.length: ${serializableWorkflows.length}`);
 
         // 核心修复：使用 IndexedDB 存储，彻底解决 5MB 限制
         await set(WORKFLOWS_KEY, serializableWorkflows);
+        terminal.log(`[DEBUG-STORAGE]   IndexedDB set 完成`);
+        
         await saveToApi(WORKFLOWS_KEY, serializableWorkflows);
+        terminal.log(`[DEBUG-STORAGE]   API save 完成`);
       } catch (e) {
-        terminal.error(`[STORAGE] 工作流保存至 IndexedDB 失败 (队列执行): ${e}`);
+        terminal.error(`[DEBUG-STORAGE] 工作流保存至 IndexedDB 失败 (队列执行): ${e}`);
+        terminal.error(`[DEBUG-STORAGE] 错误堆栈:`, e instanceof Error ? e.stack : 'N/A');
         // 这里不抛出异常，防止某个任务失败导致后续队列永久中断，仅记录错误
       }
     });

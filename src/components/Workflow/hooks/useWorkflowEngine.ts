@@ -3410,9 +3410,23 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
       stopRequestedRef.current = true;
       abortControllerRef.current?.abort();
 
-      // 第六次修复核心：直接从存储读取最新数据，不依赖任何 ref 或 state
-      // 这是最可靠的方式，确保我们总是操作最新的数据
       clearAutoSaveTimeout?.();
+      
+      // ===== 详细调试日志：重置前状态 =====
+      terminal.log(`[DEBUG-RESET] ===== 开始重置工作流 =====`);
+      terminal.log(`[DEBUG-RESET] activeWorkflowId: ${activeWorkflowId}`);
+      terminal.log(`[DEBUG-RESET] nodesRef.current.length: ${nodesRef.current.length}`);
+      terminal.log(`[DEBUG-RESET] workflowsRef.current.length: ${workflowsRef.current.length}`);
+      
+      // 打印 nodesRef 中每个节点的 typeKey 和 label
+      nodesRef.current.forEach((n, i) => {
+        terminal.log(`[DEBUG-RESET]   node[${i}] typeKey=${n.data.typeKey}, label=${n.data.label}`);
+      });
+      
+      // 打印 workflowsRef 中每个工作流的 id 和 nodes 数量
+      workflowsRef.current.forEach((w, i) => {
+        terminal.log(`[DEBUG-RESET]   workflow[${i}] id=${w.id}, nodes=${w.nodes?.length || 0}`);
+      });
       
       const updatedNodes = nodesRef.current.map(n => {
         const updates: any = {
@@ -3443,6 +3457,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         return { ...n, data: { ...n.data, ...updates } };
       });
 
+      terminal.log(`[DEBUG-RESET] updatedNodes.length: ${updatedNodes.length}`);
+
       // 先更新 UI
       nodesRef.current = updatedNodes;
       setNodes(updatedNodes);
@@ -3453,13 +3469,31 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
       workflowManager.stop();
 
-      // 第六次修复：直接从存储读取最新工作流列表，确保数据是最新的
+      // 直接从存储读取最新工作流列表
       try {
         const latestWorkflows = await storage.getWorkflows();
-        terminal.log(`[ENGINE] Read ${latestWorkflows.length} workflows from storage for reset`);
+        terminal.log(`[DEBUG-RESET] Read ${latestWorkflows.length} workflows from storage`);
+        
+        latestWorkflows.forEach((w, i) => {
+          terminal.log(`[DEBUG-RESET]   latestWorkflow[${i}] id=${w.id}, nodes=${w.nodes?.length || 0}, edges=${w.edges?.length || 0}`);
+        });
+        
+        const targetWorkflow = latestWorkflows.find(w => w.id === activeWorkflowId);
+        if (!targetWorkflow) {
+          terminal.error(`[DEBUG-RESET] ERROR: 找不到目标工作流 id=${activeWorkflowId}`);
+          terminal.error(`[DEBUG-RESET] 可用的工作流 IDs: ${latestWorkflows.map(w => w.id).join(', ')}`);
+          return;
+        }
+        
+        terminal.log(`[DEBUG-RESET] 找到目标工作流: ${targetWorkflow.name || 'unnamed'}`);
+        terminal.log(`[DEBUG-RESET] 目标工作流 nodes 数量: ${targetWorkflow.nodes?.length || 0}`);
+        terminal.log(`[DEBUG-RESET] 目标工作流 edges 数量: ${targetWorkflow.edges?.length || 0}`);
         
         const updatedWorkflows = latestWorkflows.map(w => {
           if (w.id === activeWorkflowId) {
+            terminal.log(`[DEBUG-RESET] 更新工作流: ${w.id}`);
+            terminal.log(`[DEBUG-RESET]   新 nodes 数量: ${updatedNodes.length}`);
+            terminal.log(`[DEBUG-RESET]   保留 edges 数量: ${w.edges?.length || 0}`);
             return {
               ...w,
               nodes: updatedNodes,
@@ -3472,16 +3506,39 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           return w;
         });
         
+        // 打印即将保存的数据摘要
+        const savedWorkflow = updatedWorkflows.find(w => w.id === activeWorkflowId);
+        if (savedWorkflow) {
+          terminal.log(`[DEBUG-RESET] 即将保存的工作流: id=${savedWorkflow.id}`);
+          terminal.log(`[DEBUG-RESET]   nodes 数量: ${savedWorkflow.nodes?.length || 0}`);
+          terminal.log(`[DEBUG-RESET]   edges 数量: ${savedWorkflow.edges?.length || 0}`);
+          terminal.log(`[DEBUG-RESET]   第一个节点 typeKey: ${savedWorkflow.nodes?.[0]?.data?.typeKey || 'N/A'}`);
+        }
+        
         // 保存到存储
+        terminal.log(`[DEBUG-RESET] 调用 storage.saveWorkflows...`);
         await storage.saveWorkflows(updatedWorkflows);
+        terminal.log(`[DEBUG-RESET] storage.saveWorkflows 完成`);
+        
+        // 验证保存后的数据
+        const verifyWorkflows = await storage.getWorkflows();
+        const verifyWorkflow = verifyWorkflows.find(w => w.id === activeWorkflowId);
+        if (verifyWorkflow) {
+          terminal.log(`[DEBUG-RESET] 验证: 保存后读取的工作流 nodes 数量: ${verifyWorkflow.nodes?.length || 0}`);
+          terminal.log(`[DEBUG-RESET] 验证: 保存后读取的工作流 edges 数量: ${verifyWorkflow.edges?.length || 0}`);
+          terminal.log(`[DEBUG-RESET] 验证: 第一个节点 typeKey: ${verifyWorkflow.nodes?.[0]?.data?.typeKey || 'N/A'}`);
+        } else {
+          terminal.error(`[DEBUG-RESET] 验证失败: 保存后找不到目标工作流`);
+        }
         
         // 同步更新 React state 和 ref
         setWorkflows?.(updatedWorkflows);
         workflowsRef.current = updatedWorkflows;
         
-        terminal.log(`[ENGINE] 重置完成，已保存 ${updatedWorkflows.length} 个工作流`);
+        terminal.log(`[DEBUG-RESET] ===== 重置完成 =====`);
       } catch (e) {
-        terminal.error(`[ENGINE] 重置保存失败: ${e}`);
+        terminal.error(`[DEBUG-RESET] 重置保存失败: ${e}`);
+        terminal.error(`[DEBUG-RESET] 错误堆栈:`, e instanceof Error ? e.stack : 'N/A');
       }
     }
   };
