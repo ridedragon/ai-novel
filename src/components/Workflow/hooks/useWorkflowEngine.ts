@@ -3187,7 +3187,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             } catch (parseError: any) {
               // 核心修复：添加 JSON 解析错误日志
               terminal.warn(`[WORKFLOW] JSON 解析失败 (${node.data.typeLabel}): ${parseError.message}`);
-              console.warn(`[WORKFLOW] JSON 解析失败，原始响应:`, aiRes.substring(0, 500));
+              console.warn(`[WORKFLOW] JSON 解析失败，完整原始响应:`, aiRes);
               if (
                 ['outline', 'plotOutline', 'characters', 'worldview'].includes(node.data.typeKey as string) &&
                 retry < 2
