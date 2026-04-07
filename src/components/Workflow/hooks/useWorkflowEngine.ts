@@ -2383,39 +2383,70 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           const enableAutoDetect = node.data.enableAutoDetect !== false; // 默认开启
           
           const autoDetectStart = () => {
+            terminal.log(`[ChapterNode] autoDetectStart: fVolId=${fVolId}, currentSet.items.length=${currentSet.items.length}`);
             currentSet.items.forEach((item, k) => {
-              const isStd = /^第?\s*[0-9零一二两三四五六七八九十百千]+\s*[章节]/.test(item.title);
+              // Bug修复：移除未使用的 isStd 变量，简化逻辑
               // 核心修复：无论是否为标准章节标题，都必须检查卷ID
               // 因为每卷的章节标题都从"第一章"重新开始，如果不检查卷ID，
               // 会错误地将上一卷的同名章节（如"第一章"）认为是已存在，导致跳过生成
-              const ex = localNovel.chapters?.find(c =>
-                c.title === item.title && (fVolId ? c.volumeId === fVolId : !c.volumeId),
-              );
-              if (wStart === k && (!ex || !ex.content?.trim())) wStart = k;
-              else if (wStart === k) wStart = k + 1;
+              const ex = localNovel.chapters?.find(c => {
+                // 标题匹配
+                if (c.title !== item.title) return false;
+                // 卷ID匹配逻辑修复：
+                // - 如果有 fVolId，匹配同一卷的章节
+                // - 如果没有 fVolId，匹配没有卷ID的章节（未归类章节）
+                if (fVolId) {
+                  return c.volumeId === fVolId;
+                } else {
+                  // 没有 fVolId 时，只匹配同样没有卷ID的章节
+                  return !c.volumeId || c.volumeId === '';
+                }
+              });
+              
+              terminal.log(`[ChapterNode] autoDetect: k=${k}, title="${item.title}", exists=${!!ex}, hasContent=${!!ex?.content?.trim()}, wStart=${wStart}`);
+              
+              if (wStart === k && (!ex || !ex.content?.trim())) {
+                terminal.log(`[ChapterNode] autoDetect: will start from k=${k} "${item.title}"`);
+                wStart = k;
+              }
+              else if (wStart === k) {
+                terminal.log(`[ChapterNode] autoDetect: skipping k=${k} "${item.title}" (already exists with content)`);
+                wStart = k + 1;
+              }
             });
+            terminal.log(`[ChapterNode] autoDetectEnd: final wStart=${wStart}, itemsCount=${currentSet.items.length}`);
           };
           
-          if (!isFirstExecution) {
-            if (enableAutoDetect) {
-              autoDetectStart();
-            }
-          } else if (startMode === 'auto') {
-            if (enableAutoDetect) {
-              autoDetectStart();
-            }
+          // Bug修复：始终调用 autoDetectStart，确保正确的卷ID匹配
+          // 原来的问题：continue 模式使用 UI 预计算的 startIdx，但 UI 可能使用了错误的卷ID
+          // 修复：无论什么模式，都重新检测当前卷中哪些章节已存在
+          if (enableAutoDetect) {
+            autoDetectStart();
           } else if (startMode === 'continue') {
-            if (startIdx > 0 && startIdx < currentSet.items.length) {
-              wStart = startIdx;
-            } else {
-              if (enableAutoDetect) {
-                autoDetectStart();
-              }
-            }
+            // 如果禁用了自动检测，使用 UI 指定的起始章节
+            wStart = startIdx >= 0 && startIdx < currentSet.items.length ? startIdx : 0;
           } else if (startMode === 'restart') {
             wStart = startIdx >= 0 && startIdx < currentSet.items.length ? startIdx : 0;
           }
 
+          // Bug修复：记录引擎执行前的关键状态，用于诊断最后一章不生成问题
+          terminal.log(`[ChapterNode] BEFORE engine.run: wStart=${wStart}, items.length=${currentSet.items.length}`);
+          terminal.log(`[ChapterNode] currentSet items: ${currentSet.items.map((item: any, idx: number) => `[${idx}] ${item.title}`).join(', ')}`);
+          terminal.log(`[ChapterNode] fVolId=${fVolId}, loopIndex=${loopIndex}, startMode=${startMode}`);
+          
+          if (wStart >= currentSet.items.length) {
+            terminal.warn(`[ChapterNode] SKIPPING engine.run: wStart(${wStart}) >= items.length(${currentSet.items.length})`);
+            terminal.warn(`[ChapterNode] This means ALL outline items are detected as already completed`);
+            // 输出每个大纲项对应的章节是否存在
+            currentSet.items.forEach((item: any, k: number) => {
+              const ex = localNovel.chapters?.find(c =>
+                c.title === item.title && (fVolId ? c.volumeId === fVolId : !c.volumeId),
+              );
+              const existsWithContent = ex && ex.content && ex.content.trim().length > 0;
+              terminal.log(`[ChapterNode] Item [${k}] "${item.title}": exists=${!!ex}, hasContent=${existsWithContent}, volMatch=${ex?.volumeId === fVolId}`);
+            });
+          }
+          
           if (wStart < currentSet.items.length) {
             await engine.run(
               currentSet.items,
@@ -2780,98 +2811,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   return { updatedNovel: localNovel, newVolumeId: tid };
                 }
                 
-                // 分卷终止章检测：用于多分卷目录节点
-                const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
-                const isVolumeModeForCheck = globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume';
-                const storyChaptersForCheck = (localNovel.chapters || []).filter(c => !c.subtype || c.subtype === 'story');
-                const completedChaptersForCheck = storyChaptersForCheck.length;
-                const endChapterCheck = workflowManager.checkVolumeEndChapter(
-                  title, 
-                  currentVolumeIndex, 
-                  isVolumeModeForCheck,
-                  completedChaptersForCheck
-                );
-                if (endChapterCheck && endChapterCheck.shouldSwitchVolume) {
-                  terminal.log(`[WORKFLOW] Volume end chapter reached: ${title}, switching to volume ${endChapterCheck.nextVolumeIndex}`);
-
-                  const nextVolIdx = endChapterCheck.nextVolumeIndex;
-                  const volumePlans = workflowManager.getVolumePlans();
-                  const nextVolConfig = volumePlans[nextVolIdx];
-                  let nextFolderName = nextVolConfig?.folderName || nextVolConfig?.volumeName || '';
-
-                  // 如果 volumePlans 中没有找到，尝试从 localNovel.volumes 获取
-                  if (!nextFolderName && localNovel.volumes && localNovel.volumes[nextVolIdx]) {
-                    nextFolderName = localNovel.volumes[nextVolIdx].title || '';
-                  }
-
-                  terminal.log(`[WORKFLOW] Volume switch resolution:`, {
-                    nextVolIdx,
-                    volumePlansLength: volumePlans.length,
-                    nextFolderName,
-                    localVolumesCount: localNovel.volumes?.length,
-                  });
-
-                  nodesRef.current = nodesRef.current.map(n => {
-                    const typeKey = n.data.typeKey;
-                    // 核心修复：不清空 outline 节点的 outputEntries，因为大纲是整个小说的规划，不应随分卷切换而丢失
-                    if (['worldview', 'characters', 'plotOutline'].includes(typeKey)) {
-                      return { ...n, data: { ...n.data, outputEntries: [], folderName: nextFolderName } };
-                    }
-                    // outline 节点只更新 folderName，不清空 outputEntries
-                    if (typeKey === 'outline') {
-                      return { ...n, data: { ...n.data, folderName: nextFolderName } };
-                    }
-                    if (typeKey === 'chapter' && nextFolderName) {
-                      return { ...n, data: { ...n.data, targetVolumeId: '', targetVolumeName: nextFolderName, folderName: nextFolderName } };
-                    }
-                    if (typeKey === 'creationInfo') {
-                      return { ...n, data: { ...n.data, status: 'pending', folderName: nextFolderName } };
-                    }
-                    // 更新其他需要关联目录的节点的 folderName
-                    if (nextFolderName && typeKey !== 'createFolder' && typeKey !== 'multiCreateFolder' && typeKey !== 'loopNode' && typeKey !== 'loopConfigurator' && typeKey !== 'pauseNode') {
-                      return { ...n, data: { ...n.data, folderName: nextFolderName } };
-                    }
-                    return n;
-                  });
-                  setNodes([...nodesRef.current]);
-
-                  const existingNextVol = localNovel.volumes?.find(v => v.title === nextFolderName);
-                  if (!existingNextVol && nextFolderName) {
-                    const newVolId = `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-                    const newVolume = {
-                      id: newVolId,
-                      title: nextFolderName,
-                      collapsed: false,
-                    };
-                    localNovel = {
-                      ...localNovel,
-                      volumes: [...(localNovel.volumes || []), newVolume]
-                    };
-
-                    const types = ['worldviewSets', 'characterSets', 'outlineSets', 'inspirationSets', 'plotOutlineSets'] as const;
-                    const prefix = ['wv', 'char', 'out', 'insp', 'plot'] as const;
-
-                    types.forEach((type, idx) => {
-                      const newSet = {
-                        id: `${prefix[idx]}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                        name: nextFolderName,
-                        entries: [],
-                        characters: [],
-                        items: [],
-                      };
-                      (localNovel as any)[type] = [...((localNovel as any)[type] || []), newSet];
-                    });
-                  }
-
-                  workflowManager.setCurrentVolumeIndex(nextVolIdx);
-                  workflowManager.pause(i);
-
-                  return {
-                    updatedNovel: localNovel,
-                    shouldPauseForVolumeSwitch: true,
-                    nextVolumeIndex: nextVolIdx,
-                  };
-                }
+                // Bug修复：移除 onBeforeChapter 中的 checkVolumeEndChapter 检查
+                // 原来的问题：当 endChapter=2 时，onBeforeChapter("第二章") 会触发 2 >= 2 = true
+                // 导致引擎在生成第二章之前就暂停了，第二章永远无法生成
+                // 修复：只在 onChapterComplete 中处理分卷切换（章节生成完成后）
               },
               fVolId,
               true,

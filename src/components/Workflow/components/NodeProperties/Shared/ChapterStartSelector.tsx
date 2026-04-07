@@ -60,15 +60,23 @@ export const ChapterStartSelector = ({
   const getAutoStartIndex = () => {
     if (!outlineItems.length) return 0;
     let autoStart = 0;
-    // 获取当前卷ID，用于正确匹配章节
-    const currentVolumeId = activeNovel?.volumes?.[0]?.id || null;
+    // Bug修复：通过大纲集名称匹配对应的卷ID，而不是固定使用第一卷
+    // 因为每卷的章节标题都从"第一章"重新开始，如果不检查正确的卷ID，
+    // 会错误地将其他卷的同名章节认为是已存在，导致跳过本该生成的章节
+    const currentVolumeId = activeNovel?.volumes?.find(v => v.title === currentSet?.name)?.id || null;
     outlineItems.forEach((item, k) => {
-      // 核心修复：无论是否为标准章节标题，都必须检查卷ID
-      // 因为每卷的章节标题都从"第一章"重新开始，如果不检查卷ID，
-      // 会错误地将上一卷的同名章节（如"第一章"）认为是已存在，导致显示错误的起始章节
-      const ex = activeNovel?.chapters?.find(c =>
-        c.title === item.title && (currentVolumeId ? c.volumeId === currentVolumeId : !c.volumeId),
-      );
+      const ex = activeNovel?.chapters?.find(c => {
+        // 标题匹配
+        if (c.title !== item.title) return false;
+        // 卷ID匹配逻辑修复：
+        // - 如果有 currentVolumeId，匹配同一卷的章节
+        // - 如果没有 currentVolumeId，匹配没有卷ID的章节（未归类章节）
+        if (currentVolumeId) {
+          return c.volumeId === currentVolumeId;
+        } else {
+          return !c.volumeId || c.volumeId === '';
+        }
+      });
       if (autoStart === k && (!ex || !ex.content?.trim())) autoStart = k;
       else if (autoStart === k) autoStart = k + 1;
     });

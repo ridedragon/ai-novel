@@ -511,18 +511,20 @@ class WorkflowManager {
       }
     }
 
-    // 【安全机制】：检查 volumePlans 中的分卷规划
-    // 如果当前全局索引已经超过了某个分卷的结束章节，即使标题不匹配也应该触发分卷
-    if (context.volumePlans && context.volumePlans.length > 1 && currentChapterGlobalIndex !== undefined) {
-      const unprocessedVolumes = context.volumePlans.filter((v: any, idx: number) => !v.processed && idx > 0);
-      for (const volume of unprocessedVolumes) {
-        // 如果该分卷有 endChapter，并且当前全局索引 > endChapter（表示最后一章已完成），就应该触发到这个分卷
-        if (volume.endChapter && currentChapterGlobalIndex > volume.endChapter) {
-          terminal.log(`[WorkflowManager] SAFETY TRIGGER: Reached end of volume, switching to "${volume.volumeName}" (globalIndex=${currentChapterGlobalIndex}, endChapter=${volume.endChapter})`);
-          return { chapterTitle: currentChapterTitle, nextVolumeName: volume.volumeName };
-        }
-      }
-    }
+    // Bug修复：禁用 SAFETY TRIGGER，因为它使用了错误的 endChapter 数据
+    // 原来的问题：volumePlans 中的 endChapter 值不正确（如第二卷 endChapter=2）
+    // 导致在最后一章还没完成时就触发了分卷切换
+    // 修复：依赖 onChapterComplete 中的主分卷切换机制，它在章节完成后正确判断
+    // 【安全机制已禁用】：检查 volumePlans 中的分卷规划
+    // if (context.volumePlans && context.volumePlans.length > 1 && currentChapterGlobalIndex !== undefined) {
+    //   const unprocessedVolumes = context.volumePlans.filter((v: any, idx: number) => !v.processed && idx > 0);
+    //   for (const volume of unprocessedVolumes) {
+    //     if (volume.endChapter && currentChapterGlobalIndex > volume.endChapter) {
+    //       terminal.log(`[WorkflowManager] SAFETY TRIGGER: ...`);
+    //       return { chapterTitle: currentChapterTitle, nextVolumeName: volume.volumeName };
+    //     }
+    //   }
+    // }
 
     // 2. 兜底 Legacy 逻辑
     if (context.pendingSplitChapter && isMatch(context.pendingSplitChapter)) {
