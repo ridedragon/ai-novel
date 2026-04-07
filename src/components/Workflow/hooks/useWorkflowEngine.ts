@@ -24,6 +24,7 @@ export const useWorkflowEngine = (options: {
   onUpdateNovel?: (novel: Novel) => void;
   getOrderedNodes: () => WorkflowNode[];
   isMobile?: boolean;
+  clearAutoSaveTimeout?: () => void;
 }) => {
   const {
     activeNovel,
@@ -37,6 +38,7 @@ export const useWorkflowEngine = (options: {
     onUpdateNovel,
     getOrderedNodes,
     isMobile = false,
+    clearAutoSaveTimeout,
   } = options;
 
   const [isRunning, setIsRunning] = useState(workflowManager.getState().isRunning);
@@ -3406,9 +3408,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
       stopRequestedRef.current = true;
       abortControllerRef.current?.abort();
 
-      // 核心修复：重置时只清除执行状态（status、outputEntries、动画等），
-      // 保留用户配置数据（volumes、splitRules、volumeContent、instruction、preset 等）
-      // 避免"重置"操作导致用户辛辛苦苦配置的分卷规则、提示词等数据丢失
+      // 第三次修复核心：重置时只清除执行状态，保留用户配置和节点位置
+      // 关键修复 1：清除待执行的 autoSave 超时，防止延迟保存覆盖重置结果
+      clearAutoSaveTimeout?.();
+      
       const updatedNodes = nodesRef.current.map(n => {
         const updates: any = {
           status: 'pending' as const,
@@ -3418,18 +3421,15 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
         // 仅重置运行时的动态标签，不重置用户自定义的 label
         if (n.data.typeKey === 'chapter') {
-          // 只重置为默认标签（这是运行时动态修改的）
           updates.label = NODE_CONFIGS.chapter.defaultLabel;
           updates.targetVolumeName = '';
         }
 
-        // saveToVolume 节点：只清除运行时产生的分卷规划结果，保留用户的手动配置
+        // saveToVolume 节点：只清除运行时产生的分卷规划结果
         if (n.data.typeKey === 'saveToVolume') {
-          // 清除 AI 生成的分卷规划结果
           updates.splitRules = [];
           updates.volumeContent = '';
-          // 注意：不清除 user-configured 的 volumes 列表，那是用户在配置面板设置的
-          // 保留 volumes 字段，因为它是用户手动配置的
+          // 保留 volumes 字段（用户手动配置的）
         }
 
         if (n.data.typeKey === 'loopConfigurator') {
@@ -3441,9 +3441,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           updates.loopConfig = { ...n.data.loopConfig, currentIndex: 0 };
         }
 
+        // 注意：不修改 position 字段，保留用户调整的节点位置
         return { ...n, data: { ...n.data, ...updates } };
       });
 
+      // 先更新 nodesRef，确保后续操作使用最新数据
       nodesRef.current = updatedNodes;
       setNodes(updatedNodes);
       setCurrentNodeIndex(-1);
@@ -3453,6 +3455,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
       workflowManager.stop();
 
+      // 关键修复：基于最新的 workflowsRef.current 构建更新
       const updatedWorkflows = workflowsRef.current.map(w => {
         if (w.id === activeWorkflowId) {
           return {
@@ -3465,8 +3468,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         }
         return w;
       });
+      
       try {
+        // 保存到存储
         await storage.saveWorkflows(updatedWorkflows);
+        // 第三次修复关键：保存后立即更新 workflowsRef.current
+        // 防止 autoSave 的 useEffect 触发时使用旧数据覆盖本次保存
+        workflowsRef.current = updatedWorkflows;
+        terminal.log(`[ENGINE] 重置完成，已更新 workflowsRef.current`);
       } catch (e) {
         terminal.error(`[ENGINE] 重置保存失败: ${e}`);
       }

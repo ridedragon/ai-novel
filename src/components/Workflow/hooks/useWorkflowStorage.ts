@@ -255,6 +255,14 @@ export const useWorkflowStorage = (
     [workflows, setActiveWorkflowId],
   );
 
+  // 暴露 saveTimeoutRef 以便外部清除待执行的延迟保存
+  const clearAutoSaveTimeout = useCallback(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+  }, []);
+
   return {
     workflows,
     isLoading,
@@ -267,6 +275,7 @@ export const useWorkflowStorage = (
     importWorkflowData,
     setWorkflows,
     healWorkflowData,
+    clearAutoSaveTimeout,
     isInitialLoad: isInitialLoadRef.current,
   };
 };

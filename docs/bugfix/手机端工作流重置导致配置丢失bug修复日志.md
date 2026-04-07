@@ -1,6 +1,33 @@
 # 手机端工作流重置导致配置丢失 Bug 修复日志
 
-## 问题描述
+## 第三次修复（最终修复）
+
+### 问题描述
+即使用户手动点击了保存按钮，点击重置后所有修改仍然没有被保存。节点位置也回到了初始位置。
+
+### 根本原因
+`autoSave` 函数使用了 `setTimeout` 延迟保存（非运行时 5 秒，运行时 15 秒）。当用户修改节点配置后：
+1. `autoSave` 被触发，设置了一个延迟 5 秒的 `setTimeout`
+2. 用户在这 5 秒内点击了"重置"按钮
+3. `resetWorkflowStatus` 保存了重置后的状态到 IndexedDB
+4. 5 秒后，之前设置的 `setTimeout` 触发，`autoSave` 使用**重置前的旧节点数据**覆盖了重置后的保存
+
+### 修复方案
+1. 在 `useWorkflowStorage.ts` 中暴露 `clearAutoSaveTimeout` 函数
+2. 在 `resetWorkflowStatus` 执行时，先调用 `clearAutoSaveTimeout()` 清除待执行的延迟保存
+3. 然后再执行重置和保存操作
+4. 保存后更新 `workflowsRef.current`，防止后续 `autoSave` 使用旧数据覆盖
+
+### 修改文件
+- `src/components/Workflow/hooks/useWorkflowStorage.ts` - 添加 `clearAutoSaveTimeout` 函数
+- `src/components/Workflow/hooks/useWorkflowEngine.ts` - 在 `resetWorkflowStatus` 中调用 `clearAutoSaveTimeout`
+- `src/components/MobileWorkflowEditor.tsx` - 传递 `clearAutoSaveTimeout` 到 `useWorkflowEngine`
+
+---
+
+## 第一次修复
+
+### 问题描述
 用户在手机端点击"重置"按钮后，所有工作流配置（包括分卷规则、提示词、预设等）都会被清空，导致用户辛辛苦苦配置的内容完全丢失，无法保存修改。
 
 ## 根本原因
