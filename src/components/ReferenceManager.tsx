@@ -22,19 +22,39 @@ interface ReferenceManagerProps {
   onUpdateNovel: (updatedNovel: Novel) => void
   sidebarHeader?: React.ReactNode
   onBack?: () => void
+  // 外接的文件夹状态
+  referenceFolderId?: string | null;
+  referenceFileId?: string | null;
+  onSetReferenceFolderId?: (id: string | null) => void;
+  onSetReferenceFileId?: (id: string | null) => void;
 }
 
 export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
   novel,
   onUpdateNovel,
   sidebarHeader,
-  onBack
+  onBack,
+  referenceFolderId,
+  referenceFileId,
+  onSetReferenceFolderId,
+  onSetReferenceFileId
 }) => {
   // Safety check
   if (!novel) return <div className="flex-1 flex items-center justify-center text-gray-500">数据加载中...</div>
 
-  const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
+  // Safety check
+  if (!novel) return <div className="flex-1 flex items-center justify-center text-gray-500">数据加载中...</div>
+
+  // 本地状态（当没有外接状态时使用）
+  const [localCurrentFolderId, localSetCurrentFolderId] = useState<string | null>(null);
+  const [localSelectedFileId, localSetSelectedFileId] = useState<string | null>(null);
+
+  // 使用外接状态或本地状态（外接优先）
+  const currentFolderId = referenceFolderId ?? localCurrentFolderId;
+  const setCurrentFolderId = onSetReferenceFolderId ?? ((id: string | null) => { localSetCurrentFolderId(id); });
+  
+  const selectedFileId = referenceFileId ?? localSelectedFileId;
+  const setSelectedFileId = onSetReferenceFileId ?? ((id: string | null) => { localSetSelectedFileId(id); });
   const [isUploading, setIsLoading] = useState(false)
 
   // 弹窗状态
@@ -133,7 +153,7 @@ export const ReferenceManager: React.FC<ReferenceManagerProps> = ({
       try {
         // Double check size before processing
         if (file.size > MAX_FILE_SIZE) {
-          terminal.warn(`[REFERENCE] 跳过过大文件: ${file.name}`);
+          console.warn(`[REFERENCE] 跳过过大文件: ${file.name}`);
           continue;
         }
 

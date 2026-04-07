@@ -163,6 +163,10 @@ function App() {
   const [selectedReferenceIndices, setSelectedReferenceIndices] = useState<number[]>([]);
   const [showReferenceSelector, setShowReferenceSelector] = useState(false);
 
+  // 资料库文件夹状态（跨模块保持）
+  const [referenceFolderId, setReferenceFolderId] = useState<string | null>(null);
+  const [referenceFileId, setReferenceFileId] = useState<string | null>(null);
+
   // 辅助函数：切换条目选择
   const handleToggleItem = (
     type: 'worldview' | 'character' | 'inspiration' | 'outline' | 'reference',
@@ -1169,7 +1173,11 @@ function App() {
             onSendToModule: handleSendToModule,
             onReturnToMainWithContent: handleReturnToMainWithContent,
           }}
-          referenceProps={{ ...novelData }}
+          referenceProps={{ ...novelData, referenceFolderId, referenceFileId, onSetReferenceFolderId: setReferenceFolderId, onSetReferenceFileId: setReferenceFileId }}
+          referenceFolderId={referenceFolderId}
+          referenceFileId={referenceFileId}
+          onSetReferenceFolderId={setReferenceFolderId}
+          onSetReferenceFileId={setReferenceFileId}
         />
       ) : (
         <ChapterEditor

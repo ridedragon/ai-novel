@@ -36,6 +36,11 @@ interface AutomationDashboardProps {
   outlineProps: any;
   plotOutlineProps: any;
   referenceProps: any;
+  // 资料库文件夹状态（跨模块保持）
+  referenceFolderId: string | null;
+  referenceFileId: string | null;
+  onSetReferenceFolderId: (id: string | null) => void;
+  onSetReferenceFileId: (id: string | null) => void;
 }
 
 export const AutomationDashboard: React.FC<AutomationDashboardProps> = ({
@@ -51,6 +56,10 @@ export const AutomationDashboard: React.FC<AutomationDashboardProps> = ({
   outlineProps,
   plotOutlineProps,
   referenceProps,
+  referenceFolderId,
+  referenceFileId,
+  onSetReferenceFolderId,
+  onSetReferenceFileId,
 }) => {
   return (
     <div className={`flex-1 bg-white dark:bg-[#09090b] flex flex-col custom-bg-transition ${(creationModule === 'characters' || creationModule === 'worldview' || creationModule === 'outline' || creationModule === 'inspiration' || creationModule === 'plotOutline' || creationModule === 'reference') ? 'p-0 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
@@ -137,7 +146,14 @@ export const AutomationDashboard: React.FC<AutomationDashboardProps> = ({
             <PlotOutlineManager novel={activeNovel} {...plotOutlineProps} />
           )}
           {creationModule === 'reference' && activeNovel && (
-            <ReferenceManager novel={activeNovel} {...referenceProps} />
+            <ReferenceManager 
+              novel={activeNovel} 
+              {...referenceProps}
+              referenceFolderId={referenceFolderId}
+              referenceFileId={referenceFileId}
+              onSetReferenceFolderId={onSetReferenceFolderId}
+              onSetReferenceFileId={onSetReferenceFileId}
+            />
           )}
         </Suspense>
       </div>

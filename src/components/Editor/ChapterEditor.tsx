@@ -81,12 +81,15 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
         setHasUnsavedChanges(false);
       }
 
-      if (contentScrollRef.current) {
-        contentScrollRef.current.scrollTop = 0;
-      }
-      if (textareaRef.current) {
-        textareaRef.current.scrollTop = 0;
-      }
+      // 使用 requestAnimationFrame 确保在内容渲染后再滚动到顶部
+      requestAnimationFrame(() => {
+        if (contentScrollRef.current) {
+          contentScrollRef.current.scrollTop = 0;
+        }
+        if (textareaRef.current) {
+          textareaRef.current.scrollTop = 0;
+        }
+      });
     }, [activeChapterId, isEditingChapter]);
 
     // 添加 beforeunload 事件，防止意外关闭丢失数据
