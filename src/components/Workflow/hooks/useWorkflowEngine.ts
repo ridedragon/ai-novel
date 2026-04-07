@@ -138,12 +138,12 @@ export const useWorkflowEngine = (options: {
   }, []);
 
   // 统一的连线动画管理函数
-  // Bug 1 修复：匹配进入节点的边（e.target === nodeId），即从上一个节点到当前节点的连线
-  // 动画应显示上一个节点向当前节点传递的效果，例如"世界观→粗纲"当粗纲正在执行时
-  // Bug 1 三次修复：移除 [...newEdges] 避免 XYFlow 内部状态不同步导致节点显示异常
+  // 第四次修复：匹配从当前节点出发的边（e.source === nodeId）
+  // 动画应显示从当前执行节点到下一个节点的连线流动，例如"世界观→粗纲"当世界观正在执行时
+  // 这样用户可以清晰看到数据从哪个节点流向下一个节点
   const setEdgeAnimation = useCallback((nodeId: string, animated: boolean) => {
     setEdges(eds => eds.map(e => {
-      if (e.target === nodeId) {
+      if (e.source === nodeId) {
         return { ...e, animated };
       }
       return e;
@@ -3330,6 +3330,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         if (loopBack) {
           const tIdx = sortedNodes.findIndex(sn => sn.id === loopBack.target);
           if (tIdx !== -1 && tIdx <= i) {
+            // 第四次修复：回跳前关闭当前节点的动画，防止动画状态泄漏
+            setEdgeAnimation(node.id, false);
             workflowManager.setContextVar('loop_index', (workflowManager.getContextVar('loop_index') || 1) + 1);
             i = tIdx - 1;
             continue;
