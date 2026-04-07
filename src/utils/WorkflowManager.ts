@@ -551,8 +551,10 @@ class WorkflowManager {
 
   /**
    * 标记某个分卷规则已处理
+   * 核心修复 (Bug 7): 分卷切换时，清理所有过期的 pendingSplits 规则
+   * 原来的问题：旧规则（如 endChapter: 1）未被清理，后续章节 globalIndex > 1 会误触发
    */
-  public markSplitProcessed(chapterTitle: string, nextVolumeName?: string) {
+  public markSplitProcessed(chapterTitle: string, nextVolumeName?: string, currentGlobalIndex?: number) {
     const context = this.state.globalContext;
     const normalizedCurrent = this.normalizeChapterToken(chapterTitle);
 
@@ -570,9 +572,20 @@ class WorkflowManager {
       });
     }
 
-    // 标记新规则已处理
+    // 核心修复：清理所有过期的 pendingSplits 规则
     if (context.pendingSplits) {
-      const newSplits = context.pendingSplits.map(r => (isMatch(r.chapterTitle) ? { ...r, processed: true } : r));
+      const newSplits = context.pendingSplits.map(r => {
+        // 1. 匹配当前章节的规则，标记为已处理
+        if (r.chapterTitle && isMatch(r.chapterTitle)) {
+          return { ...r, processed: true };
+        }
+        // 2. 清理所有 endChapter 小于当前全局索引的规则（过期规则）
+        if (currentGlobalIndex !== undefined && r.endChapter && currentGlobalIndex > r.endChapter) {
+          terminal.log(`[WorkflowManager] Marking stale rule as processed: "${r.nextVolumeName}" (endChapter: ${r.endChapter} < globalIndex: ${currentGlobalIndex})`);
+          return { ...r, processed: true };
+        }
+        return r;
+      });
       this.updateContext({ pendingSplits: newSplits });
     }
 

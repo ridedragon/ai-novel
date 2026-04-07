@@ -117,3 +117,73 @@ if (res?.chapters) {
 
 - `src/utils/WorkflowManager.ts` - 修复 checkTriggerSplit 只检查第一个规则
 - `src/components/Workflow/hooks/useWorkflowEngine.ts` - 修复 targetVolumeId 和 onChapterComplete
+
+---
+
+## 第四次修复记录（追加）
+
+### 修复日期
+2026/4/7 下午4:38
+
+### 问题发现
+
+前三次修复后，问题依然存在。从新的日志分析：
+
+```
+[WorkflowManager] Checking split: 1 unprocessed rules for "第一章：龙息入器" (globalIndex: 3, norm: 1)
+[WorkflowManager]   Checking FIRST rule: "龙潜于衣" (endChapter: 1, chapterTitle: undefined)
+[WorkflowManager]   endChapter check: globalIndex=3 > endChapter=1 = true
+[WorkflowManager]   TRIGGERED by endChapter
+```
+
+**真正的问题**：即使只检查第一个规则，该规则本身已经是过期的（endChapter: 1），而 globalIndex 已经是 3。规则从未被标记为 processed，因为 `markSplitProcessed` 只匹配 `chapterTitle`，而新规则只有 `endChapter` 没有 `chapterTitle`。
+
+### 根因分析
+
+`markSplitProcessed` 函数只通过 `chapterTitle` 匹配来标记规则为已处理：
+
+```javascript
+const newSplits = context.pendingSplits.map(r => (isMatch(r.chapterTitle) ? { ...r, processed: true } : r));
+```
+
+但很多规则只有 `endChapter` 字段，没有 `chapterTitle`，导致这些规则永远不会被标记为 processed，后续章节运行时 globalIndex > endChapter 就会误触发。
+
+### 修复方案
+
+**文件**: `src/utils/WorkflowManager.ts` - `markSplitProcessed` 函数
+
+修改签名，增加 `currentGlobalIndex` 参数，在标记匹配规则的同时，清理所有过期的规则：
+
+```javascript
+public markSplitProcessed(chapterTitle: string, nextVolumeName?: string, currentGlobalIndex?: number) {
+  // ...
+  if (context.pendingSplits) {
+    const newSplits = context.pendingSplits.map(r => {
+      // 1. 匹配当前章节的规则，标记为已处理
+      if (r.chapterTitle && isMatch(r.chapterTitle)) {
+        return { ...r, processed: true };
+      }
+      // 2. 清理所有 endChapter 小于当前全局索引的规则（过期规则）
+      if (currentGlobalIndex !== undefined && r.endChapter && currentGlobalIndex > r.endChapter) {
+        terminal.log(`[WorkflowManager] Marking stale rule as processed: "${r.nextVolumeName}" (endChapter: ${r.endChapter} < globalIndex: ${currentGlobalIndex})`);
+        return { ...r, processed: true };
+      }
+      return r;
+    });
+    this.updateContext({ pendingSplits: newSplits });
+  }
+}
+```
+
+**调用处更新**: `src/components/Workflow/hooks/useWorkflowEngine.ts`
+
+```javascript
+// 标记 pendingSplit 为已处理，同时清理所有过期规则
+workflowManager.markSplitProcessed(currentTitle, nextVolumeName, completedChaptersCount);
+```
+
+### 修复逻辑
+
+1. 分卷切换时，传入 `completedChaptersCount` 作为当前全局章节索引
+2. `markSplitProcessed` 不仅标记匹配的规则，还清理所有 `endChapter < currentGlobalIndex` 的过期规则
+3. 防止旧规则（如 endChapter: 1）在后续章节（globalIndex: 3+）运行时误触发

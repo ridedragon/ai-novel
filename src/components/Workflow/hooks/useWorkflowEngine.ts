@@ -2740,8 +2740,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   terminal.log(`[VOLUME_SWITCH] After setCurrentVolumeIndex, getCurrentVolumeIndex = ${workflowManager.getCurrentVolumeIndex()}`);
                   workflowManager.setActiveVolumeAnchor(existingNextVol?.id || localNovel.volumes?.find(v => v.title === nextVolumeName)?.id || '');
                   
-                  // 标记 pendingSplit 为已处理
-                  workflowManager.markSplitProcessed(currentTitle, nextVolumeName);
+                  // 标记 pendingSplit 为已处理，同时清理所有过期规则
+                  workflowManager.markSplitProcessed(currentTitle, nextVolumeName, completedChaptersCount);
 
                   // 清除创作类节点的输出，以便下一卷重新生成
                   // 核心修复：不清空 outline 节点的 outputEntries，因为大纲是整个小说的规划，不应随分卷切换而丢失
