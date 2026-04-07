@@ -4,8 +4,9 @@
 const stripNonJsonWrappers = (content: string): string => {
   let processed = content.trim();
   
-  // 移除 markdown 代码块标记
+  // 移除 markdown 代码块标记（支持多种变体）
   processed = processed.replace(/```json\s*/gi, '').replace(/```\s*/gi, '');
+  processed = processed.replace(/`{3,}.*?\n/g, ''); // 处理其他语言的代码块
   // 移除常见的 JSON 包装标签
   processed = processed.replace(/\[\/?JSON\]/gi, '');
   processed = processed.replace(/<\??json.*?>/gi, '').replace(/<\/?\??json>/gi, '');
@@ -173,12 +174,171 @@ const convertSingleQuotesToDouble = (content: string): string => {
 };
 
 /**
- * 修复未加引号的键名（仅限常见的简单键名）
+ * 修复未加引号的键名（支持中文键名）
  * 例如：{item: "value"} -> {"item": "value"}
+ * 例如：{"设定项": "value"} 已经正确加引号的保持不变
  */
 const fixUnquotedKeys = (content: string): string => {
-  // 匹配 { 或 , 后跟随未加引号的键名
-  return content.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":');
+  // 匹配 { 或 , 后跟随未加引号的键名（包括中文、英文、数字、下划线）
+  let result = content.replace(/([{,]\s*)([a-zA-Z_\u4e00-\u9fa5][a-zA-Z0-9_\u4e00-\u9fa5]*)\s*:/g, '$1"$2":');
+  
+  // 额外处理：修复键值对中键名缺少引号的情况（处理更复杂的场景）
+  // 匹配 "key": value 但 value 是对象时的内部未加引号键
+  return result;
+};
+
+/**
+ * 修复键名中的中文引号（将中文引号转换为标准JSON转义）
+ * 处理 "item": ""设定项名称"" 这种情况
+ */
+const fixChineseQuotes = (content: string): string => {
+  let result = '';
+  let inString = false;
+  let isEscaped = false;
+  let bracketDepth = 0;
+  let braceDepth = 0;
+  
+  // 中文字符常量
+  const LEFT_DOUBLE_QUOTE = '\u201C';  // "
+  const RIGHT_DOUBLE_QUOTE = '\u201D'; // "
+  const LEFT_SINGLE_QUOTE = '\u2018';  // '
+  const RIGHT_SINGLE_QUOTE = '\u2019'; // '
+  
+  for (let i = 0; i < content.length; i++) {
+    const char = content[i];
+    
+    if (isEscaped) {
+      isEscaped = false;
+      result += char;
+      continue;
+    }
+    
+    if (char === '\\') {
+      isEscaped = true;
+      result += char;
+      continue;
+    }
+    
+    if (char === '"') {
+      inString = !inString;
+      result += char;
+      continue;
+    }
+    
+    if (!inString) {
+      if (char === '[') bracketDepth++;
+      else if (char === ']') bracketDepth--;
+      else if (char === '{') braceDepth++;
+      else if (char === '}') braceDepth--;
+    }
+    
+    // 在字符串内部，将中文双引号转义
+    if (inString && (char === LEFT_DOUBLE_QUOTE || char === RIGHT_DOUBLE_QUOTE)) {
+      result += '\\"';
+    } else if (inString && (char === LEFT_SINGLE_QUOTE || char === RIGHT_SINGLE_QUOTE)) {
+      // 中文单引号保持原样（JSON允许）
+      result += char;
+    } else {
+      result += char;
+    }
+  }
+  
+  return result;
+};
+
+/**
+ * 尝试从字符串中提取JSON数组（逐行解析模式）
+ * 用于处理AI返回的非标准JSON格式
+ */
+const extractJsonArrayByLines = (content: string): any[] | null => {
+  try {
+    const lines = content.split('\n');
+    const items: any[] = [];
+    let currentItem: Record<string, string> | null = null;
+    let currentKey = '';
+    let currentValue = '';
+    let inMultiLineValue = false;
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      
+      // 跳过空行和纯装饰性行
+      if (!trimmed || trimmed === '[' || trimmed === ']' || trimmed === '{' || trimmed === '}') {
+        continue;
+      }
+      
+      // 检测键值对模式: "key": "value" 或 "key": "value
+      const kvMatch = trimmed.match(/^"([^"]+)"\s*:\s*"(.*)$/);
+      if (kvMatch) {
+        if (currentItem && currentKey && !inMultiLineValue) {
+          // 保存前一个键值对
+          currentItem[currentKey] = currentValue.trim();
+        }
+        
+        currentKey = kvMatch[1];
+        const valuePart = kvMatch[2];
+        
+        if (valuePart.endsWith('"') && !valuePart.endsWith('\\"')) {
+          // 单行完整值
+          currentValue = valuePart.slice(0, -1);
+          if (!inMultiLineValue && currentItem) {
+            currentItem[currentKey] = currentValue;
+            currentKey = '';
+            currentValue = '';
+          }
+          inMultiLineValue = false;
+        } else {
+          // 多行值开始
+          currentValue = valuePart;
+          inMultiLineValue = true;
+        }
+      } else if (inMultiLineValue) {
+        // 继续多行值
+        if (trimmed.endsWith('"') && !trimmed.endsWith('\\"')) {
+          currentValue += '\n' + trimmed.slice(0, -1);
+          if (currentItem && currentKey) {
+            currentItem[currentKey] = currentValue.trim();
+          }
+          currentKey = '';
+          currentValue = '';
+          inMultiLineValue = false;
+        } else {
+          currentValue += '\n' + trimmed;
+        }
+      }
+      
+      // 检测对象结束
+      if (trimmed === '}' || trimmed.endsWith('},') || trimmed.endsWith('}')) {
+        if (currentItem && currentKey && currentValue) {
+          currentItem[currentKey] = currentValue.trim();
+        }
+        if (currentItem && Object.keys(currentItem).length > 0) {
+          items.push(currentItem);
+        }
+        currentItem = {};
+        currentKey = '';
+        currentValue = '';
+        inMultiLineValue = false;
+      }
+      
+      // 检测对象开始
+      if (trimmed === '{') {
+        currentItem = {};
+      }
+    }
+    
+    // 处理最后一个对象
+    if (currentItem && currentKey && currentValue) {
+      currentItem[currentKey] = currentValue.trim();
+    }
+    if (currentItem && Object.keys(currentItem).length > 0) {
+      items.push(currentItem);
+    }
+    
+    return items.length > 0 ? items : null;
+  } catch (e) {
+    return null;
+  }
 };
 
 /**
@@ -262,7 +422,10 @@ export const sanitizeAndParseJson = (content: string): any[] | null => {
   // 第 5 层：修复尾随逗号
   result = fixTrailingCommas(result);
 
-  // 第 6 层：修复未加引号的键名
+  // 第 6 层：修复中文引号（将字符串内的中文双引号转义）
+  result = fixChineseQuotes(result);
+
+  // 第 7 层：修复未加引号的键名
   result = fixUnquotedKeys(result);
 
   // 尝试解析
@@ -333,6 +496,52 @@ export const sanitizeAndParseJson = (content: string): any[] | null => {
   }
 
   return null;
+};
+
+/**
+ * 尝试提取第一个看起来像 JSON 对象的片段
+ * 用于处理AI返回的不完整或格式错误的数据
+ */
+const tryExtractObjectFromString = (content: string): Array<Record<string, string>> | null => {
+  try {
+    // 匹配 { "key": "value" } 或 { "key": "value\n多行内容..." } 模式
+    const objRegex = /\{\s*"([^"]+)"\s*:\s*"([\s\S]*?)"\s*,\s*"([^"]+)"\s*:\s*"([\s\S]*?)"\s*\}/g;
+    let match;
+    const results: Array<Record<string, string>> = [];
+    
+    while ((match = objRegex.exec(content)) !== null) {
+      const obj: Record<string, string> = {};
+      obj[match[1]] = match[2];
+      obj[match[3]] = match[4];
+      results.push(obj);
+    }
+    
+    if (results.length > 0) return results;
+    
+    // 尝试更宽松的匹配：只匹配键值对
+    const kvRegex = /"([^"]+)"\s*:\s*"([\s\S]*?)(?="\s*,\s*"|"?\s*\})/g;
+    const kvResults: string[][] = [];
+    let currentKv: string[] = [];
+    
+    while ((match = kvRegex.exec(content)) !== null) {
+      currentKv.push(match[1], match[2]);
+      if (currentKv.length === 4) { // 两个键值对
+        kvResults.push([...currentKv]);
+        currentKv = [];
+      }
+    }
+    
+    if (kvResults.length > 0) {
+      return kvResults.map(kv => ({
+        [kv[0]]: kv[1],
+        [kv[2]]: kv[3]
+      }));
+    }
+    
+    return null;
+  } catch (e) {
+    return null;
+  }
 };
 
 /**
@@ -418,6 +627,17 @@ export const safeParseJSONArray = (content: string): any[] => {
     }
   }
 
-  if (objects.length > 0) return objects;
+  // 最终兜底：尝试从字符串中提取对象（逐行解析模式）
+  const extracted = extractJsonArrayByLines(content);
+  if (extracted && extracted.length > 0) {
+    return extracted;
+  }
+  
+  // 终极兜底：尝试正则提取
+  const extractedObj = tryExtractObjectFromString(content);
+  if (extractedObj && extractedObj.length > 0) {
+    return extractedObj;
+  }
+  
   throw new Error('无法解析有效的 JSON 数据');
 };
