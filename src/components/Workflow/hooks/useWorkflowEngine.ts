@@ -927,9 +927,12 @@ export const useWorkflowEngine = (options: {
 
                 console.log('[LOOP_NODE] Nodes to reset:', { resetNodeIds: Array.from(resetNodeIds), targetIndex, sliceStart: targetIndex, sliceEnd: i });
 
-                // 获取下一个分卷的索引
+                // Bug 3 修复：获取下一个分卷的索引
+                // currentLoopIndex 是刚完成的迭代次数（从 1 开始）
+                // 下一个循环将处理第 nextLoopIndex 次迭代，对应 volumePlans[nextVolumeIndex]
+                // 例如：完成第 1 轮（currentLoopIndex=1）后进入第 2 轮，应使用 volumePlans[1]
                 const nextLoopIndex = currentLoopIndex; // 当前是第 currentLoopIndex 次，下一次是第 currentLoopIndex + 1 次
-                const nextVolumeIndex = nextLoopIndex - 1; // volumePlans 从 0 开始
+                const nextVolumeIndex = nextLoopIndex; // 修复：应该是 currentLoopIndex 而不是 currentLoopIndex - 1
 
                 // 查找下一个分卷的配置
                 let nextVolumeConfig: any = null;
@@ -972,28 +975,18 @@ export const useWorkflowEngine = (options: {
                   localVolumesCount: localNovel.volumes?.length,
                 });
 
-                // 如果还没找到，尝试从 localNovel.volumes 获取
-                if (!nextFolderName && localNovel.volumes && localNovel.volumes[nextVolumeIndex]) {
-                  nextFolderName = localNovel.volumes[nextVolumeIndex].title || '';
-                  nextVolumeId = localNovel.volumes[nextVolumeIndex].id;
-                }
-
-                console.log('[LOOP_NODE] Volume resolution:', {
-                  nextLoopIndex: nextLoopIndex + 1,
-                  nextVolumeIndex,
-                  volumePlansLength: volumePlans.length,
-                  volumePlansItem: volumePlans[nextVolumeIndex],
-                  nextFolderName,
-                  nextVolumeId,
-                  localVolumesCount: localNovel.volumes?.length,
-                });
-
                 // 查找下一个分卷的 volumeId
                 if (nextFolderName && localNovel.volumes) {
                   const nextVol = localNovel.volumes.find(v => v.title === nextFolderName);
                   if (nextVol) {
                     nextVolumeId = nextVol.id;
                   }
+                }
+
+                // Bug 3 修复：添加兜底逻辑，当 nextFolderName 仍然为空时，使用分卷索引作为回退方案
+                if (!nextFolderName) {
+                  nextFolderName = `第${nextVolumeIndex + 1}卷`;
+                  terminal.warn(`[LOOP_NODE] Using fallback folder name: ${nextFolderName}`);
                 }
 
                 console.log('[LOOP_NODE] Switching to next volume:', {
@@ -1023,8 +1016,8 @@ export const useWorkflowEngine = (options: {
                     };
 
                     // 清除创作类节点的输出，以便重新生成
-                    // 核心修复：不清空 outline 节点的 outputEntries，因为大纲是整个小说的规划，不应随分卷切换而丢失
-                    if (['worldview', 'characters', 'plotOutline'].includes(typeKey)) {
+                    // 修复：扩大清空范围，包含世界观、角色、粗纲、大纲和灵感节点
+                    if (['worldview', 'characters', 'plotOutline', 'outline', 'inspiration'].includes(typeKey)) {
                       updates.outputEntries = [];
                     }
 
@@ -1039,9 +1032,10 @@ export const useWorkflowEngine = (options: {
                       updates.folderName = nextFolderName;
                     }
 
-                    // 重置创作信息节点
+                    // 重置创作信息节点并确保清空 outputEntries（Bug 1 修复）
                     if (typeKey === 'creationInfo') {
                       updates.status = 'pending';
+                      updates.outputEntries = [];  // 清空旧的创作信息，让下一卷重新生成
                     }
 
                     return {
@@ -2202,15 +2196,26 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         const isLoopNode = workflowManager.getContextVar('loop_index');
 
         // 核心修复 (Bug 6): 动态集合注入
-        // 在循环模式下，如果用户未显式选择集合，或者存在动态创建的集合（如“第一卷角色”），
+        // 在循环模式下，如果用户未显式选择集合，或者存在动态创建的集合（如"第一卷角色"），
         // 尝试自动注入当前 localNovel 中所有相关的集合，防止循环中信息丢失。
-        // 特别是对于“大纲生成”类节点，需要过滤掉粗纲和大纲本身（避免递归引用），只保留设定类信息。
+        // 特别是对于"大纲生成"类节点，需要过滤掉粗纲和大纲本身（避免递归引用），只保留设定类信息。
         const isOutlineGen = node.data.typeKey === 'outline' || node.data.typeKey === 'plotOutline';
+        
+        // 本卷模式修复：获取当前卷名称，用于过滤集合
+        const isVolumeMode = globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume';
+        const currentVolumeName = currentWorkflowFolder || node.data.folderName || '';
+        terminal.log(`[CONTEXT] isVolumeMode=${isVolumeMode}, currentVolumeName="${currentVolumeName}"`);
 
         const autoInject = (selectedIds: string[], allSets: any[] | undefined) => {
           // 如果已手动选择，则仅解析手动选择的
           if (selectedIds && selectedIds.length > 0) {
             return resolvePending([...selectedIds], allSets);
+          }
+          // 本卷模式修复：只注入当前卷的集合
+          if (isVolumeMode && allSets && currentVolumeName) {
+            const volumeSets = allSets.filter(s => s.name === currentVolumeName);
+            terminal.log(`[CONTEXT] autoInject volume sets: ${volumeSets.length} for "${currentVolumeName}"`);
+            return volumeSets.map(s => s.id);
           }
           // 如果是循环模式且未手动选择，默认全选 (除了大纲生成时的大纲引用)
           if (isLoopNode && allSets) {
@@ -2295,19 +2300,37 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               const lastWithVol = [...localNovel.chapters].reverse().find(c => c.volumeId);
               effectiveVolumeId = lastWithVol?.volumeId;
             }
+            
+            // 本卷模式修复：如果当前节点所在卷没有章节（新卷刚开始），不发送前文回顾
+            const volumeChapters = (localNovel.chapters || []).filter(c => c.volumeId === effectiveVolumeId);
+            if (volumeChapters.length === 0) {
+              terminal.log(`[CONTEXT] Volume mode: no chapters in current volume "${currentVolumeName}", skipping summary context`);
+              summaryContextMessages = [];
+            } else {
+              // 使用节点感知的卷 ID 过滤总结
+              summaryContextMessages = getChapterContextMessages(
+                localNovel,
+                { ...volumeChapters[volumeChapters.length - 1], volumeId: effectiveVolumeId },
+                {
+                  longTextMode: true,
+                  contextScope: 'volume',  // 本卷模式下只获取当前卷的总结
+                  contextChapterCount: globalConfig.contextChapterCount || 1,
+                },
+              );
+            }
+          } else {
+            // 整书模式：使用最后一章
+            const lastChapter = localNovel.chapters[localNovel.chapters.length - 1];
+            summaryContextMessages = getChapterContextMessages(
+              localNovel,
+              lastChapter,
+              {
+                longTextMode: true,
+                contextScope: globalConfig.contextScope || 'all',
+                contextChapterCount: globalConfig.contextChapterCount || 1,
+              },
+            );
           }
-
-          const lastChapter = localNovel.chapters[localNovel.chapters.length - 1];
-          // 使用节点感知的卷 ID 过滤总结
-          summaryContextMessages = getChapterContextMessages(
-            localNovel,
-            { ...lastChapter, volumeId: effectiveVolumeId || lastChapter.volumeId },
-            {
-              longTextMode: true,
-              contextScope: globalConfig.contextScope || 'all',
-              contextChapterCount: globalConfig.contextChapterCount || 1,
-            },
-          );
         }
 
         const formatMulti = (text: string) => {
@@ -2489,12 +2512,44 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 };
                 updateLocalAndGlobal(localNovel);
               },
-              async (cid, cont, up, force) => {
+                async (cid, cont, up, force) => {
                 if (!checkActive()) return;
                 if (up) localNovel = up;
                 if (globalConfig.onChapterComplete) {
                   const res = await (globalConfig.onChapterComplete as any)(cid, cont, localNovel, force, startRunId);
-                  if (res?.chapters) localNovel = res;
+                  if (res?.chapters) {
+                    // 核心修复 (Bug 4): 防止分卷切换后章节 volumeId 错误
+                    // 问题：res.chapters 可能来自闭包中的旧状态，其 volumeId 可能仍为切换前的值
+                    // 修复：使用 localNovel.chapters 作为基础，仅合并已完成的章节
+                    //       只修正刚刚完成的章节 (cid) 的 volumeId，不影响其他章节
+                    const activeVolId = workflowManager.getActiveVolumeAnchor() || '';
+                    const incomingChaptersMap = new Map((res.chapters as any[]).map(c => [c.id, c]));
+                    
+                    localNovel = {
+                      ...res,
+                      chapters: localNovel.chapters?.map(c => {
+                        const incoming = incomingChaptersMap.get(c.id);
+                        if (incoming) {
+                          // 只修正刚刚完成的章节的 volumeId
+                          // 其他章节保持原有 volumeId 不变
+                          if (c.id === cid && activeVolId) {
+                            return {
+                              ...incoming,
+                              volumeId: activeVolId,
+                            };
+                          }
+                          return incoming;
+                        }
+                        // 保留原有章节
+                        return c;
+                      }) || res.chapters,
+                      volumes: res.volumes && res.volumes.length > 0 ? res.volumes : localNovel.volumes,
+                    };
+                    
+                    if (activeVolId) {
+                      terminal.log(`[VOLUME_FIX] onChapterComplete: ensuring chapter ${cid} has volumeId=${activeVolId}`);
+                    }
+                  }
                 }
 
                 const currentChapter = localNovel.chapters?.find(c => c.id === cid);
@@ -2709,10 +2764,39 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                       return { ...n, data: updatedData };
                     }
                     if (typeKey === 'chapter' && nextVolumeName) {
-                      return { ...n, data: { ...n.data, targetVolumeId: '', targetVolumeName: nextVolumeName, folderName: nextVolumeName } };
+                      // 核心修复 (Bug 5): 分卷切换时，必须设置正确的 targetVolumeId
+                      // 原来的问题：targetVolumeId 被设置为空字符串 ''，导致后续 fVolId 为空
+                      // autoDetectStart 会错误地匹配其他卷的同名章节（如"第一章"）
+                      // 修复：使用新分卷的实际 ID 作为 targetVolumeId
+                      const newVolumeId = existingNextVol?.id || localNovel.volumes?.find(v => v.title === nextVolumeName)?.id || '';
+                      return { ...n, data: { ...n.data, targetVolumeId: newVolumeId, targetVolumeName: nextVolumeName, folderName: nextVolumeName } };
                     }
                     if (typeKey === 'creationInfo') {
-                      return { ...n, data: { ...n.data, status: 'pending', folderName: nextVolumeName } };
+                      // 生成新的创作信息内容，包含新分卷的名称
+                      const newVolumeInfoContent = nextVolumeName ? `当前分卷：${nextVolumeName}` : '';
+                      const totalVolumes = localNovel.volumes?.length || 0;
+                      const volumeProgress = totalVolumes > 0 ? `分卷进度：第 ${nextVolIdx + 1} 卷 / 共 ${totalVolumes} 卷` : '';
+                      const loopIndex = workflowManager.getContextVar('loop_index') || 1;
+                      const loopInfo = `当前循环轮次：第 ${loopIndex} 轮`;
+                      
+                      let newContent = [newVolumeInfoContent, volumeProgress, loopInfo].filter(Boolean).join('\n');
+                      if (n.data.instruction) {
+                        newContent += `\n\n用户指令：${n.data.instruction}`;
+                      }
+                      
+                      return { 
+                        ...n, 
+                        data: { 
+                          ...n.data, 
+                          status: 'pending', 
+                          folderName: nextVolumeName,
+                          outputEntries: [{ 
+                            id: `creation_info_auto_${Date.now()}`, 
+                            title: '创作信息', 
+                            content: newContent 
+                          }]
+                        } 
+                      };
                     }
                     // 更新其他需要关联目录的节点的 folderName
                     if (nextVolumeName && typeKey !== 'createFolder' && typeKey !== 'multiCreateFolder' && typeKey !== 'loopNode' && typeKey !== 'loopConfigurator' && typeKey !== 'pauseNode') {
@@ -2772,6 +2856,60 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     { nodesOutput: beforeClearNodesState, novelSets: beforeClearNovelSets },
                     { nodesOutput: afterClearNodesState, novelSets: {} }
                   );
+                  
+                  // Bug 2 修复：在分卷切换时，强制对当前卷的最后一个实际章节触发总结检查
+                  // 这样即使章节数不足总结步长，也能在卷完成时触发总结
+                  // 注意：必须使用 currentVolumeIndex（更新前）来获取当前完成卷的ID
+                  // 因为 workflowManager.getActiveVolumeAnchor() 已经被设置为下一卷的ID了
+                  const completedVolId = localNovel.volumes?.[currentVolumeIndex]?.id || '';
+                  const completedVolTitle = localNovel.volumes?.[currentVolumeIndex]?.title || '';
+                  terminal.log(`[VOLUME_SWITCH] Summary check - completedVolId=${completedVolId}, completedVolTitle="${completedVolTitle}", currentVolumeIndex=${currentVolumeIndex}`);
+                  terminal.log(`[VOLUME_SWITCH] Summary check - totalVolumes=${localNovel.volumes?.length || 0}, totalChapters=${localNovel.chapters?.length || 0}`);
+                  
+                  // 列出当前卷的所有章节
+                  const volumeChapters = (localNovel.chapters || [])
+                    .filter(c => {
+                      const cVolId = c.volumeId || '';
+                      return cVolId === completedVolId && (!c.subtype || c.subtype === 'story');
+                    });
+                  terminal.log(`[VOLUME_SWITCH] Summary check - volumeChapters count=${volumeChapters.length}, chapters=${volumeChapters.map(c => c.title).join(', ')}`);
+                  
+                  const lastStoryChapter = volumeChapters.pop();
+
+                  if (!completedVolId) {
+                    terminal.warn(`[VOLUME_SWITCH] No completedVolId found, skipping summary check`);
+                  }
+                  
+                  if (!lastStoryChapter) {
+                    terminal.warn(`[VOLUME_SWITCH] No lastStoryChapter found for completedVolId=${completedVolId}`);
+                  }
+                  
+                  if (!globalConfig.onChapterComplete) {
+                    terminal.warn(`[VOLUME_SWITCH] globalConfig.onChapterComplete is not defined`);
+                  }
+
+                  if (lastStoryChapter && globalConfig.onChapterComplete) {
+                    terminal.log(`[VOLUME_SWITCH] Triggering summary check for last chapter of completed volume: ${lastStoryChapter.title}`);
+                    terminal.log(`[VOLUME_SWITCH] Chapter content length: ${lastStoryChapter.content?.length || 0}`);
+                    try {
+                      const summaryResult = await (globalConfig.onChapterComplete as any)(
+                        lastStoryChapter.id,
+                        lastStoryChapter.content,
+                        localNovel,
+                        true,  // forceFinal = true 强制触发总结检查
+                      );
+                      terminal.log(`[VOLUME_SWITCH] Summary result: ${summaryResult ? 'received' : 'null'}`);
+                      if (summaryResult?.chapters) {
+                        terminal.log(`[VOLUME_SWITCH] Summary generated, chapters count: ${summaryResult.chapters.length}`);
+                        localNovel = summaryResult;
+                        await updateLocalAndGlobal(localNovel);
+                      } else {
+                        terminal.warn(`[VOLUME_SWITCH] Summary result has no chapters`);
+                      }
+                    } catch (summaryErr) {
+                      terminal.error(`[VOLUME_SWITCH] Summary generation failed: ${summaryErr}`);
+                    }
+                  }
                   
                   await updateLocalAndGlobal(localNovel);
                   
