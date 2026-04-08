@@ -479,8 +479,9 @@ function App() {
             <Home className="w-[18px] h-[18px]" />
           </button>
           <button
-            className="hidden md:block p-2 text-slate-500"
+            className="p-1.5 text-slate-500 md:p-2"
             onClick={() => novelData.activeNovel && handleExportNovel(novelData.activeNovel)}
+            title="导出全书"
           >
             <Download className="w-[18px] h-[18px]" />
           </button>

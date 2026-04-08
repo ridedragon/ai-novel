@@ -741,17 +741,30 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
             </div>
 
             <div className="p-4 md:p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-[#09090b]/50 flex flex-wrap justify-between items-center gap-3">
-              <button
-                onClick={() => {
-                  if (editingNovel) {
-                    onDeleteNovel(editingNovel.id);
-                  }
-                }}
-                className="px-4 py-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors flex items-center gap-2 text-sm font-bold border border-red-200 dark:border-red-500/20 order-2 md:order-1 w-full md:w-auto justify-center"
-              >
-                <Trash2 className="w-4 h-4" />
-                删除作品
-              </button>
+              <div className="flex gap-2 order-2 md:order-1 w-full md:w-auto">
+                <button
+                  onClick={() => {
+                    if (editingNovel) {
+                      onExportNovel(editingNovel);
+                    }
+                  }}
+                  className="px-4 py-2.5 text-[var(--theme-color)] hover:bg-[var(--theme-color)]/10 dark:hover:bg-[var(--theme-color)]/20 rounded-xl transition-colors flex items-center gap-2 text-sm font-bold border border-[var(--theme-color)]/20 dark:border-[var(--theme-color)]/30 w-full md:w-auto justify-center"
+                >
+                  <Download className="w-4 h-4" />
+                  导出全书
+                </button>
+                <button
+                  onClick={() => {
+                    if (editingNovel) {
+                      onDeleteNovel(editingNovel.id);
+                    }
+                  }}
+                  className="px-4 py-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors flex items-center gap-2 text-sm font-bold border border-red-200 dark:border-red-500/20 w-full md:w-auto justify-center"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  删除作品
+                </button>
+              </div>
               <div className="flex gap-3 flex-1 justify-end order-1 md:order-2">
                 <button
                   onClick={() => setEditingNovel(null)}

@@ -9,6 +9,7 @@ import { storage } from '../../../utils/storage';
 import { workflowManager } from '../../../utils/WorkflowManager';
 import { debugLogger, volumeFolderDebugTracker, infoClearDebugTracker, saveToVolumeDebugTracker } from '../../../utils/log';
 import { LOOP_CONFIGURATOR_PROMPT, NODE_CONFIGS, WORKFLOW_DSL_PROMPT } from '../constants';
+import { MacroContext } from '../macros';
 import { NodeTypeKey, OutputEntry, WorkflowData, WorkflowNode, WorkflowNodeData } from '../types';
 import { cleanAndParseJSON, extractEntries, extractTargetEndChapter, parseAnyNumber } from '../utils/workflowHelpers';
 
@@ -266,8 +267,30 @@ export const useWorkflowEngine = (options: {
 
       sortedNodes = sortedNodes.map((sn, idx) => (idx >= startIndex ? resetNodeData(sn) : sn));
 
+      // 构建宏上下文：供 interpolateWithMacros 使用
+      // 宏组件可以在任何节点的指令和提示词中使用，获取其他节点的全部内容
+      const buildMacroContext = (currentIndex: number): Partial<MacroContext> => {
+        const previousNodes: MacroContext['previousNodes'] = [];
+        for (let j = 0; j < currentIndex; j++) {
+          const pNode = nodesRef.current.find(n => n.id === sortedNodes[j].id) || sortedNodes[j];
+          previousNodes.push({ id: pNode.id, typeKey: pNode.data.typeKey, data: pNode.data });
+        }
+        const allNodes: MacroContext['allNodes'] = nodesRef.current.map(n => ({
+          id: n.id, typeKey: n.data.typeKey, data: n.data
+        }));
+        return {
+          previousNodes,
+          allNodes,
+          currentNode: { id: sortedNodes[currentIndex].id, typeKey: sortedNodes[currentIndex].data.typeKey, data: sortedNodes[currentIndex].data },
+          globalVariables: workflowManager.getState().globalContext.variables,
+          activeVolumeAnchor: workflowManager.getActiveVolumeAnchor(),
+          currentVolumeIndex: workflowManager.getCurrentVolumeIndex(),
+          novelData: localNovel,
+        };
+      };
+
       // 核心重构：动态构建上下文函数
-      // 解决“循环中只使用最新内容”和“节点信息传递”的问题
+      // 解决"循环中只使用最新内容"和"节点信息传递"的问题
       const buildDynamicContext = (currentIndex: number) => {
         const dynamicContextMessages: any[] = [];
         let dynamicFolder = '';
@@ -379,6 +402,37 @@ export const useWorkflowEngine = (options: {
           // outputEntries 中存储的是首次执行时生成的内容，循环轮次等信息已过时，
           // 会导致重复发送【创作信息输出】且循环轮次错误
           if (pNode.data.typeKey === 'creationInfo') {
+            continue;
+          }
+
+          // 修复：saveToVolume 节点优先使用 volumeContent（支持手动编辑）
+          // 用户可能在 UI 中修改了分卷规划内容，volumeContent 始终是最新版本
+          // outputEntries 可能在非AI模式下为空，或包含旧的AI生成内容
+          if (pNode.data.typeKey === 'saveToVolume' && pNode.data.volumeContent) {
+            const volumeMode = globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume';
+            if (volumeMode && j < boundaryIndex) {
+              // 本卷模式下跳过隔离边界之前的节点
+            } else {
+              dynamicContextMessages.push({
+                role: 'system',
+                content: `【小说分卷】：\n${pNode.data.volumeContent}`,
+              });
+            }
+            continue;
+          }
+
+          // 修复：loopConfigurator 节点传递生成的循环配置内容
+          // 循环配置器的生成结果对后续AI节点理解整体创作结构很有帮助
+          if (pNode.data.typeKey === 'loopConfigurator' && pNode.data.generatedLoopConfig) {
+            const volumeMode = globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume';
+            if (volumeMode && j < boundaryIndex) {
+              // 本卷模式下跳过隔离边界之前的节点
+            } else {
+              dynamicContextMessages.push({
+                role: 'system',
+                content: `【循环配置输出】：\n${pNode.data.generatedLoopConfig}`,
+              });
+            }
             continue;
           }
 
@@ -507,7 +561,8 @@ export const useWorkflowEngine = (options: {
           return;
         }
 
-        // 动态构建当前节点的上下文
+        // 动态构建当前节点的上下文和宏上下文
+        const macroCtx = buildMacroContext(i);
         const { dynamicContextMessages, dynamicFolder } = buildDynamicContext(i);
         // 如果当前节点没有指定文件夹，且上下文中有文件夹，更新 currentWorkflowFolder
         if (!currentWorkflowFolder && dynamicFolder) currentWorkflowFolder = dynamicFolder;
@@ -557,7 +612,36 @@ export const useWorkflowEngine = (options: {
             if (targetVolumeId) workflowManager.setActiveVolumeAnchor(targetVolumeId);
             const rules = (node.data.splitRules as any[]) || [];
             if (rules.length > 0) workflowManager.setPendingSplits(rules);
-            await syncNodeStatus(node.id, { status: 'completed' }, i);
+            
+            // 修复：非AI模式下也需要设置 outputEntries，确保节点内容能传递给后续节点
+            // 如果用户在 UI 中手动编辑了 volumeContent，使用它作为输出
+            // 如果有 splitRules 或 volumes 配置，也将其作为上下文输出
+            const nonAiOutputEntries: OutputEntry[] = [];
+            if (node.data.volumeContent) {
+              nonAiOutputEntries.push({
+                id: `vol_nonai_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                title: '分卷规划内容',
+                content: node.data.volumeContent,
+              });
+            }
+            if (rules.length > 0) {
+              const rulesSummary = rules.map((r: any, idx: number) => {
+                let desc = `${idx + 1}. 新分卷: ${r.nextVolumeName || '未命名'}`;
+                if (r.startChapter) desc += ` (第${r.startChapter}章起)`;
+                if (r.endChapter) desc += ` (至第${r.endChapter}章)`;
+                return desc;
+              }).join('\n');
+              nonAiOutputEntries.push({
+                id: `vol_rules_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                title: '分卷触发规则',
+                content: rulesSummary,
+              });
+            }
+            
+            await syncNodeStatus(node.id, { 
+              status: 'completed', 
+              outputEntries: nonAiOutputEntries.length > 0 ? nonAiOutputEntries : undefined,
+            }, i);
             setEdgeAnimation(node.id, false);
             continue;
           }
@@ -673,7 +757,7 @@ export const useWorkflowEngine = (options: {
               .map(p => {
                 // 如果有 {{context}} 占位符，这里简单替换为空，因为我们会单独注入 Context 消息
                 // 或者我们可以保留它，但这比较复杂。现在的逻辑是将 Context 放在 System 之后。
-                const content = workflowManager.interpolate(p.content.replace('{{context}}', ''));
+                const content = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), macroCtx);
                 return { role: p.role, content: p.role === 'user' ? formatAtts(content) : content };
               });
             planningMessages.push(...customPrompts);
@@ -697,7 +781,7 @@ export const useWorkflowEngine = (options: {
           if (node.data.instruction) {
             planningMessages.push({
               role: 'user',
-              content: formatAtts(workflowManager.interpolate(node.data.instruction)),
+              content: formatAtts(workflowManager.interpolateWithMacros(node.data.instruction, macroCtx)),
             });
           } else if (planningMessages.length === 0 || planningMessages[planningMessages.length - 1].role !== 'user') {
             // 确保最后有一条 User 消息
@@ -1690,7 +1774,7 @@ export const useWorkflowEngine = (options: {
                     .replace('{{user_instruction}}', node.data.instruction || '请智能生成适合的循环配置')
                     .replace('{{volume_planning}}', volumePlanningInfo || '（无分卷规划）')
                     .replace('{{loop_structure}}', loopStructureInfo || '（无循环结构信息）');
-                  content = workflowManager.interpolate(content);
+                  content = workflowManager.interpolateWithMacros(content, macroCtx);
                   return { role: p.role, content };
                 });
               configuratorMessages.push(...customPrompts);
@@ -1934,7 +2018,37 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             setNodes(nextNodes);
           }
 
-          await syncNodeStatus(node.id, { status: 'completed' }, i);
+          // 修复：循环配置器完成时设置 outputEntries，确保生成的内容能传递给后续节点
+          const loopConfigOutputEntries: OutputEntry[] = [];
+          if (globalLoopConfig) {
+            loopConfigOutputEntries.push({
+              id: `loop_cfg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+              title: '循环配置',
+              content: `循环次数: ${globalLoopConfig.count || 1}`,
+            });
+          }
+          if (globalLoopInstructions && (globalLoopInstructions as any[]).length > 0) {
+            const instructionsContent = (globalLoopInstructions as any[])
+              .map((inst: any) => `第${inst.index}轮: ${inst.content}`)
+              .join('\n');
+            loopConfigOutputEntries.push({
+              id: `loop_inst_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+              title: '循环指令',
+              content: instructionsContent,
+            });
+          }
+          if (node.data.generatedLoopConfig) {
+            loopConfigOutputEntries.push({
+              id: `loop_raw_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+              title: '循环配置原始输出',
+              content: node.data.generatedLoopConfig,
+            });
+          }
+
+          await syncNodeStatus(node.id, { 
+            status: 'completed',
+            outputEntries: loopConfigOutputEntries.length > 0 ? loopConfigOutputEntries : undefined,
+          }, i);
           setEdgeAnimation(node.id, false);
           continue;
         }
@@ -1958,7 +2072,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           await syncNodeStatus(node.id, { status: 'executing' }, i);
           setEdgeAnimation(node.id, true);
           
-          const interpolatedInput = workflowManager.interpolate(node.data.instruction);
+          const interpolatedInput = workflowManager.interpolateWithMacros(node.data.instruction, macroCtx);
           
           const activeVolumeId = workflowManager.getActiveVolumeAnchor();
           const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
@@ -2057,7 +2171,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           await syncNodeStatus(node.id, { status: 'executing' }, i);
           setEdgeAnimation(node.id, true);
           
-          const interpolatedInput = workflowManager.interpolate(node.data.instruction);
+          const interpolatedInput = workflowManager.interpolateWithMacros(node.data.instruction, macroCtx);
           if (node.data.variableBinding?.length)
             workflowManager.processVariableBindings(node.data.variableBinding, interpolatedInput);
           await syncNodeStatus(node.id, { status: 'completed' }, i);
@@ -3006,7 +3120,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
         // 2. 处理 Prompts (替换 {{context}} 为空，因为我们有独立消息)
         basePrompts.forEach((p: any) => {
-          const c = workflowManager.interpolate(p.content.replace('{{context}}', '')); // Context 单独注入
+          const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), macroCtx); // Context 单独注入
           messages.push({ role: p.role, content: p.role === 'user' ? formatMulti(c) : c });
         });
 
@@ -3033,7 +3147,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         if (node.data.instruction) {
           messages.push({
             role: 'user',
-            content: formatMulti(workflowManager.interpolate(node.data.instruction)),
+            content: formatMulti(workflowManager.interpolateWithMacros(node.data.instruction, macroCtx)),
           });
         } else if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
           messages.push({ role: 'user', content: '请生成内容' });

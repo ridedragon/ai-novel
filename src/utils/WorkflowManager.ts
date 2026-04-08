@@ -1,5 +1,6 @@
 import terminal from 'virtual:terminal';
 import { Chapter, VariableBinding, WorkflowContextSnapshot, WorkflowGlobalContext } from '../types';
+import { resolveMacros, MacroContext, MACRO_QUICK_REFERENCE } from '../components/Workflow/macros';
 
 export type WorkflowStatus = 'idle' | 'running' | 'paused' | 'failed';
 
@@ -260,6 +261,7 @@ class WorkflowManager {
   /**
    * 变量插值引擎
    * 将字符串中的 {{variable}} 替换为全局上下文中的值
+   * 注意：此方法处理简单变量，宏组件由 interpolateWithMacros 处理
    */
   public interpolate(text: string): string {
     if (!text) return text;
@@ -285,6 +287,49 @@ class WorkflowManager {
       }
       return match; // 未找到变量保持原样
     });
+  }
+
+  /**
+   * 增强版插值引擎 - 支持宏组件
+   * 在变量插值的基础上，额外处理宏组件解析
+   * 宏组件可以引用其他节点的全部内容，不受执行顺序限制
+   * 
+   * @param text 要处理的文本
+   * @param macroContext 宏解析上下文（包含所有节点数据）
+   * @returns 处理后的文本
+   */
+  public interpolateWithMacros(text: string, macroContext: Partial<MacroContext>): string {
+    if (!text) return text;
+
+    // 1. 先进行基础变量插值
+    let result = this.interpolate(text);
+
+    // 2. 构建完整的宏上下文
+    const fullContext: MacroContext = {
+      previousNodes: macroContext.previousNodes || [],
+      allNodes: macroContext.allNodes || [],
+      currentNode: macroContext.currentNode,
+      globalVariables: {
+        ...this.state.globalContext.variables,
+        ...macroContext.globalVariables,
+      },
+      activeVolumeAnchor: this.state.globalContext.activeVolumeAnchor || macroContext.activeVolumeAnchor,
+      currentVolumeIndex: this.getCurrentVolumeIndex(),
+      novelData: macroContext.novelData,
+    };
+
+    // 3. 进行宏组件解析
+    result = resolveMacros(result, fullContext);
+
+    return result;
+  }
+
+  /**
+   * 获取宏组件快速参考文本
+   * 用于在 UI 中显示可用的宏列表
+   */
+  public getMacroQuickReference(): string {
+    return MACRO_QUICK_REFERENCE;
   }
 
   /**
