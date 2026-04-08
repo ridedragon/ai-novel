@@ -90,7 +90,7 @@ export function useNovelData() {
         storage.saveNovels(novels).catch(e => {
           terminal.error(`[STORAGE] 自动保存失败: ${e.message}`);
         });
-      }, 500);
+      }, 500) as unknown as number;
     }
 
     // 组件卸载时清除定时器

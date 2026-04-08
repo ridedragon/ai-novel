@@ -121,7 +121,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
         isDirtyRef.current = false;
         setHasUnsavedChanges(false);
         setLastSavedTime(new Date());
-      }, 500);
+      }, 500) as unknown as number;
     };
 
     // 退出编辑时立即同步

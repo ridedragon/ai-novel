@@ -666,7 +666,7 @@ export const storage = {
         } catch (e) {
           reject(e);
         }
-      }, 300); // 300ms 防抖
+      }, 300) as unknown as number; // 300ms 防抖
     });
   },
 

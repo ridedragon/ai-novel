@@ -160,7 +160,7 @@ export const useWorkflowStorage = (
         } catch (e) {
           terminal.error(`[WORKFLOW] 自动保存失败: ${e}`);
         }
-      }, saveDelay);
+      }, saveDelay) as unknown as number;
     },
     [isOpen, activeWorkflowId, isLoading],
   );
