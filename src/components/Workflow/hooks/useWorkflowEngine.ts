@@ -730,6 +730,30 @@ export const useWorkflowEngine = (options: {
                 terminal.log(`[WORKFLOW_START] Fallback to last story chapter: volIdx=${volIdx}, volId=${lastStoryCh.volumeId}`);
               }
             }
+          } else {
+            // 核心修复：当用户指定了目标卷时，更新从 startIndex 开始所有后续章节节点的 targetVolumeId
+            const targetVolume = localNovel.volumes?.find(v => v.id === userSpecifiedTargetVolumeId);
+            if (targetVolume) {
+              // 更新从 startIndex 开始的所有后续章节节点的 targetVolumeId
+              nodesRef.current = nodesRef.current.map(n => {
+                const nodeIndex = sortedNodes.findIndex(sn => sn.id === n.id);
+                // 只更新 startIndex 之后的章节节点
+                if (nodeIndex >= startIndex && n.data.typeKey === 'chapter') {
+                  return {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      targetVolumeId: userSpecifiedTargetVolumeId,
+                      targetVolumeName: targetVolume.title,
+                      folderName: targetVolume.title,
+                    }
+                  };
+                }
+                return n;
+              });
+              setNodes([...nodesRef.current]);
+              terminal.log(`[WORKFLOW_START] Updated ${sortedNodes.filter((_, idx) => idx >= startIndex).filter(n => n.data.typeKey === 'chapter').length} chapter nodes to targetVolumeId=${userSpecifiedTargetVolumeId}`);
+            }
           }
 
           // 同步 currentWorkflowFolder
@@ -2723,7 +2747,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           if (!currentSet?.items?.length) throw new Error('未关联有效大纲集。');
 
           // 核心修复：优先使用用户指定的卷ID，确保章节生成到正确的卷
-          let fVolId = userSpecifiedTargetVolumeId || workflowManager.getActiveVolumeAnchor() || '';
+          let fVolId = userSpecifiedTargetVolumeId || node.data.targetVolumeId || workflowManager.getActiveVolumeAnchor() || '';
           if (!fVolId && localNovel.chapters?.length) {
             for (let k = localNovel.chapters.length - 1; k >= 0; k--) {
               const chapVolId = localNovel.chapters[k].volumeId;
