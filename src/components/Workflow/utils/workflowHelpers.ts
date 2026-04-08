@@ -111,7 +111,14 @@ export const cleanAndParseJSON = async (text: string) => {
     return jsonStr
       .replace(/":\s*:/g, '":') // 修复双冒号 "::"
       .replace(/,\s*([\]}])/g, '$1') // 移除末尾多余逗号
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // 移除不可见控制字符
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // 移除不可见控制字符
+      // 修复中文/全角引号：仅替换 JSON 结构位置的引号（键/值边界），保留字符串内容中的中文引号
+      // U+201C = " (左双引号)，U+201D = " (右双引号)
+      .replace(/([{\[,]\s*)\u201C/g, '$1"') // 替换 { [ , 后面的左中文引号为英文引号（key 开头）
+      .replace(/(:\s*)\u201C/g, '$1"')       // 替换 : 后面的左中文引号为英文引号（value 开头）
+      .replace(/\u201D(\s*[,\]}:])/g, '"$1') // 替换 , } ] : 前面的右中文引号为英文引号（key/value 结尾）
+      .replace(/^\s*\u201C/g, '"')           // 处理 JSON 字符串开头的左中文引号
+      .replace(/\u201D\s*$/g, '"');          // 处理 JSON 字符串结尾的右中文引号
   };
 
   try {
