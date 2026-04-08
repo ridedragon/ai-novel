@@ -3098,6 +3098,36 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   }
                 }
 
+                // 核心修复：兜底卷切换检测
+                // 当 endChapter 未设置或无法匹配时，使用大纲项数量作为卷的章节数
+                // 如果当前大纲已全部生成完毕，也应该触发卷切换
+                if (!shouldSwitch) {
+                  // 检查当前卷是否还有剩余大纲项未生成
+                  const currentOutlineSet = localNovel.outlineSets?.find(s => {
+                    const volTitle = localNovel.volumes?.find(v => v.id === (workflowManager.getActiveVolumeAnchor() || ''))?.title;
+                    return s.name === volTitle;
+                  });
+                  const outlineItemCount = currentOutlineSet?.items?.length || 0;
+                  const currentVolumeChapters = (localNovel.chapters || []).filter(c => {
+                    return c.volumeId === (workflowManager.getActiveVolumeAnchor() || '') && 
+                           (!c.subtype || c.subtype === 'story') && 
+                           c.content && c.content.trim().length > 0;
+                  }).length;
+                  
+                  // 如果当前卷的所有大纲项都已生成为章节，且还有下一卷
+                  if (outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
+                    const nextVolFromPlans = volumePlans[currentVolumeIndex + 1];
+                    const nextVolFromNovel = localNovel.volumes?.[currentVolumeIndex + 1];
+                    const nextVolName = nextVolFromPlans?.volumeName || nextVolFromPlans?.folderName || nextVolFromNovel?.title || '';
+                    
+                    if (nextVolName) {
+                      shouldSwitch = true;
+                      nextVolumeName = nextVolName;
+                      terminal.log(`[WORKFLOW] Volume ${currentVolumeIndex} fallback switch: all ${currentVolumeChapters}/${outlineItemCount} outline items generated, switching to "${nextVolName}"`);
+                    }
+                  }
+                }
+
                 console.log(`[VOLUME_SWITCH_CHECK] Final result: shouldSwitch=${shouldSwitch}, nextVolumeName="${nextVolumeName}"`);
                 
                 if (shouldSwitch && nextVolumeName) {
@@ -3188,23 +3218,22 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   workflowManager.markSplitProcessed(currentTitle, nextVolumeName, completedChaptersCount);
 
                   // 清除创作类节点的输出，以便下一卷重新生成
-                  // 核心修复：不清空 outline 节点的 outputEntries，因为大纲是整个小说的规划，不应随分卷切换而丢失
+                  // 核心修复：卷模式下，大纲、世界观、角色等节点必须重新执行，生成新卷的内容
+                  // 原来的问题：只清空 outputEntries 但不重置 status，导致节点被跳过，新卷没有大纲
                   nodesRef.current = nodesRef.current.map(n => {
                     const typeKey = n.data.typeKey;
-                    if (['worldview', 'characters', 'plotOutline'].includes(typeKey)) {
-                      // 更新节点的 folderName 为新的分卷名称，确保 Sets 写入正确的卷
-                      const updatedData = { ...n.data, outputEntries: [] };
+                    if (['worldview', 'characters', 'plotOutline', 'outline'].includes(typeKey)) {
+                      // 核心修复：必须重置 status 为 pending，确保节点在新卷中重新执行
+                      // 更新 folderName 为新的分卷名称，确保 Sets 写入正确的卷
+                      const updatedData = { 
+                        ...n.data, 
+                        status: 'pending' as const,  // 重置状态，确保重新执行
+                        outputEntries: []  // 清空输出，准备生成新卷内容
+                      };
                       if (nextVolumeName) {
                         updatedData.folderName = nextVolumeName;
                       }
-                      return { ...n, data: updatedData };
-                    }
-                    // outline 节点只更新 folderName，不清空 outputEntries
-                    if (typeKey === 'outline') {
-                      const updatedData = { ...n.data };
-                      if (nextVolumeName) {
-                        updatedData.folderName = nextVolumeName;
-                      }
+                      terminal.log(`[VOLUME_SWITCH] Reset node ${n.data.label} (typeKey=${typeKey}) to pending for new volume "${nextVolumeName}"`);
                       return { ...n, data: updatedData };
                     }
                     if (typeKey === 'chapter' && nextVolumeName) {

@@ -11,7 +11,10 @@ import { Chapter, Novel, NovelVolume } from '../types';
  * 从章节标题中提取章节名称
  * 例如:
  * - "第1章 命运的相遇" -> "命运的相遇"
+ * - "第一章 命运的相遇" -> "命运的相遇"
+ * - "第10章 风起云涌" -> "风起云涌"
  * - "第1章" -> null
+ * - "第一章" -> null
  * - "命运的相遇" -> "命运的相遇"
  */
 export const extractChapterName = (title: string): string | null => {
@@ -20,15 +23,20 @@ export const extractChapterName = (title: string): string | null => {
   const trimmedTitle = title.trim();
   if (!trimmedTitle) return null;
 
-  // 标准格式：第N章 标题
-  const numberedTitleMatch = trimmedTitle.match(/^第\d+章\s+(.+)$/);
+  // 中文数字字符集（支持一到九十九等常见编号）
+  const chineseNumberPattern = '[一二三四五六七八九十百千\\d]+';
+  
+  // 标准格式：第N章 标题（支持中文数字和阿拉伯数字）
+  const numberedTitleRegex = new RegExp(`^第${chineseNumberPattern}章\\s+(.+)$`);
+  const numberedTitleMatch = trimmedTitle.match(numberedTitleRegex);
   if (numberedTitleMatch && numberedTitleMatch[1]) {
     const extractedName = numberedTitleMatch[1].trim();
     return extractedName || null;
   }
 
-  // 只有编号，没有章节名
-  if (/^第\d+章\s*$/.test(trimmedTitle)) {
+  // 只有编号，没有章节名（支持中文数字和阿拉伯数字）
+  const onlyNumberRegex = new RegExp(`^第${chineseNumberPattern}章\\s*$`);
+  if (onlyNumberRegex.test(trimmedTitle)) {
     return null;
   }
 
