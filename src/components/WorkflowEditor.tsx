@@ -15,37 +15,28 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  BookOpen,
-  CheckSquare,
   ChevronDown,
-  Cpu,
   Download,
   Edit2,
   FileText,
-  Folder,
-  FolderPlus,
   LayoutList,
-  MessageSquare,
-  PauseCircle,
   Play,
   Plus,
   Repeat,
+  AlertTriangle,
   Save,
   Settings2,
   Square,
   Trash2,
   Upload,
-  Wand2,
   Workflow,
   X
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GeneratorPreset, GeneratorPrompt, LoopInstruction, Novel } from '../types';
+import { GeneratorPreset } from '../types';
 import { storage } from '../utils/storage';
 import { workflowManager } from '../utils/WorkflowManager';
 import { DesktopPanel } from './Workflow/components/NodeProperties/DesktopPanel';
-import { ModelConfigPanel } from './Workflow/components/NodeProperties/Shared/ModelConfigPanel';
-import { ReferenceSelector } from './Workflow/components/NodeProperties/Shared/ReferenceSelector';
 import { WorkflowEdge } from './Workflow/components/WorkflowEdge';
 import { WorkflowNode as CustomWorkflowNode } from './Workflow/components/WorkflowNode';
 import { NODE_CONFIGS, WORKFLOW_DSL_PROMPT } from './Workflow/constants';
@@ -58,7 +49,8 @@ import {
   WorkflowData,
   WorkflowEditorProps,
   WorkflowNode,
-  WorkflowNodeData
+  WorkflowNodeData,
+  WorkflowRestartMode,
 } from './Workflow/types';
 
 
@@ -79,6 +71,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
   const [edgeToDelete, setEdgeToDelete] = useState<Edge | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OutputEntry | null>(null);
+  const [showStartWorkflowModal, setShowStartWorkflowModal] = useState(false);
+  const [selectedStartIndex, setSelectedStartIndex] = useState(0);
+  const [selectedStartVolumeId, setSelectedStartVolumeId] = useState('');
+  const [restartMode, setRestartMode] = useState<WorkflowRestartMode>('volume');
   const lastClickTimeRef = useRef<number>(0);
 
   const nodesRef = useRef<WorkflowNode[]>([]);
@@ -110,7 +106,6 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     importWorkflowData,
     setWorkflows,
     healWorkflowData,
-    isInitialLoad,
   } = useWorkflowStorage(isOpen, activeWorkflowId, setActiveWorkflowId, activeNovel);
 
   // 2. 布局逻辑
@@ -222,6 +217,76 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const pendingFolders = nodes
     .filter(n => n.data.typeKey === 'createFolder' && n.data.folderName)
     .map(n => n.data.folderName);
+
+  const hasLoopNode = useMemo(() => orderedNodes.some(n => n.data.typeKey === 'loopNode'), [orderedNodes]);
+
+  const firstLoopRestartIndex = useMemo(() => {
+    const firstLoopNode = orderedNodes.find(n => n.data.typeKey === 'loopNode');
+    if (!firstLoopNode) return -1;
+
+    const loopNodeIndex = orderedNodes.findIndex(n => n.id === firstLoopNode.id);
+    if (loopNodeIndex === -1) return -1;
+
+    const loopTargets = edges
+      .filter(e => e.source === firstLoopNode.id)
+      .map(e => orderedNodes.findIndex(n => n.id === e.target))
+      .filter(idx => idx !== -1 && idx <= loopNodeIndex)
+      .sort((a, b) => a - b);
+
+    return loopTargets[0] ?? loopNodeIndex;
+  }, [orderedNodes, edges]);
+
+  useEffect(() => {
+    if (!showStartWorkflowModal) return;
+    if (!selectedStartVolumeId) {
+      setSelectedStartVolumeId(activeNovel?.volumes?.[0]?.id || '');
+    }
+  }, [showStartWorkflowModal, activeNovel, selectedStartVolumeId]);
+
+  useEffect(() => {
+    if (restartMode === 'full' && !hasLoopNode) {
+      setRestartMode('volume');
+    }
+  }, [restartMode, hasLoopNode]);
+
+  const openStartWorkflowModal = useCallback(() => {
+    if (nodes.length === 0 || orderedNodes.length === 0) {
+      alert('当前工作流没有可执行节点。');
+      return;
+    }
+    setSelectedStartIndex(Math.min(selectedStartIndex, Math.max(orderedNodes.length - 1, 0)));
+    setSelectedStartVolumeId(activeNovel?.volumes?.[0]?.id || '');
+    setRestartMode(hasLoopNode ? 'volume' : 'volume');
+    setShowStartWorkflowModal(true);
+  }, [nodes.length, orderedNodes, selectedStartIndex, activeNovel, hasLoopNode]);
+
+  const handleStartWorkflowFromModal = useCallback(() => {
+    if (!selectedStartVolumeId) {
+      alert('请选择要执行的目标卷。');
+      return;
+    }
+
+    if (restartMode === 'full') {
+      if (!hasLoopNode || firstLoopRestartIndex < 0) {
+        alert('当前工作流不存在循环节点，不能使用完全重写模式。');
+        return;
+      }
+      runWorkflow({
+        startIndex: firstLoopRestartIndex,
+        targetVolumeId: selectedStartVolumeId,
+        mode: 'full',
+      });
+      setShowStartWorkflowModal(false);
+      return;
+    }
+
+    runWorkflow({
+      startIndex: selectedStartIndex,
+      targetVolumeId: selectedStartVolumeId,
+      mode: 'volume',
+    });
+    setShowStartWorkflowModal(false);
+  }, [selectedStartVolumeId, restartMode, hasLoopNode, firstLoopRestartIndex, runWorkflow, selectedStartIndex]);
 
   // 加载预设
   useEffect(() => {
@@ -497,34 +562,6 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     updateNodeData(editingNodeId, { [key]: newList });
   }, [editingNodeId, updateNodeData]);
 
-  const updateEntryContent = (entryId: string, content: string) => {
-    if (!editingNodeId || !editingNode) return;
-    const newEntries = editingNode.data.outputEntries.map(e => e.id === entryId ? { ...e, content } : e);
-    updateNodeData(editingNodeId, { outputEntries: newEntries });
-  };
-
-  const updateEntryTitle = (entryId: string, title: string) => {
-    if (!editingNodeId || !editingNode) return;
-    const newEntries = editingNode.data.outputEntries.map(e => e.id === entryId ? { ...e, title } : e);
-    updateNodeData(editingNodeId, { outputEntries: newEntries });
-  };
-
-  const removeEntry = (entryId: string) => {
-    if (!editingNodeId || !editingNode) return;
-    const newEntries = editingNode.data.outputEntries.filter(e => e.id !== entryId);
-    updateNodeData(editingNodeId, { outputEntries: newEntries });
-  };
-
-  const addEntry = () => {
-    if (!editingNodeId || !editingNode) return;
-    const newEntry: OutputEntry = {
-      id: Date.now().toString(),
-      title: '新条目',
-      content: ''
-    };
-    updateNodeData(editingNodeId, { outputEntries: [...editingNode.data.outputEntries, newEntry] });
-  };
-
   const handleSaveWorkflow = () => {
     autoSave(nodes, edges, currentNodeIndex);
   };
@@ -775,35 +812,25 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                   <Play className="w-4 h-4 fill-current" />
                   从停止处继续
                 </button>
-                <select
-                  className="bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-xs text-gray-200 outline-none"
-                  value=""
-                  onChange={(e) => {
-                    const idx = parseInt(e.target.value);
-                    if (!isNaN(idx)) runWorkflow(idx);
-                  }}
+                <button
+                  onClick={openStartWorkflowModal}
+                  disabled={orderedNodes.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-sm font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-violet-900/20"
                 >
-                  <option value="" disabled>跳转至节点...</option>
-                  {orderedNodes.map((n, idx) => (
-                    <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
-                  ))}
-                </select>
+                  <Settings2 className="w-4 h-4" />
+                  指定启动
+                </button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <select
-                  className="bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-xs text-gray-200 outline-none"
-                  value=""
-                  onChange={(e) => {
-                    const idx = parseInt(e.target.value);
-                    if (!isNaN(idx)) runWorkflow(idx);
-                  }}
+                <button
+                  onClick={openStartWorkflowModal}
+                  disabled={isRunning || orderedNodes.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-sm font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-violet-900/20"
                 >
-                  <option value="" disabled>从指定节点开始...</option>
-                  {orderedNodes.map((n, idx) => (
-                    <option key={n.id} value={idx}>{idx + 1}. {n.data.label}</option>
-                  ))}
-                </select>
+                  <Settings2 className="w-4 h-4" />
+                  指定启动
+                </button>
                 <button
                   onClick={() => runWorkflow(0)}
                   disabled={isRunning || nodes.length === 0}
@@ -968,6 +995,144 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
               </button>
             </div>
           </>
+        )}
+
+        {showStartWorkflowModal && (
+          <div className="fixed inset-0 z-[190] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="absolute inset-0" onClick={() => setShowStartWorkflowModal(false)} />
+            <div className="relative w-full max-w-xl bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-gray-800 bg-gray-800/60 flex items-center justify-between">
+                <div>
+                  <h4 className="text-lg font-bold text-gray-100">从指定位置启动工作流</h4>
+                  <p className="text-sm text-gray-400 mt-1">选择起始节点、目标卷和运行模式。</p>
+                </div>
+                <button
+                  onClick={() => setShowStartWorkflowModal(false)}
+                  className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">从哪个节点开始</label>
+                  <select
+                    value={selectedStartIndex}
+                    onChange={(e) => setSelectedStartIndex(parseInt(e.target.value, 10) || 0)}
+                    disabled={restartMode === 'full'}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 outline-none disabled:opacity-50"
+                  >
+                    {orderedNodes.map((n, idx) => (
+                      <option key={n.id} value={idx}>
+                        {idx + 1}. {n.data.label}
+                      </option>
+                    ))}
+                  </select>
+                  {restartMode === 'full' && (
+                    <p className="text-xs text-amber-400">
+                      完全重写模式会自动从第一个循环开始的第一个节点启动。
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">目标卷</label>
+                  <select
+                    value={selectedStartVolumeId}
+                    onChange={(e) => setSelectedStartVolumeId(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 outline-none"
+                  >
+                    <option value="">请选择目标卷</option>
+                    {(activeNovel?.volumes || []).map((volume, idx) => (
+                      <option key={volume.id} value={volume.id}>
+                        第{idx + 1}卷 · {volume.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-gray-300">运行模式</label>
+
+                  <button
+                    type="button"
+                    onClick={() => setRestartMode('volume')}
+                    className={`w-full text-left rounded-2xl border px-4 py-4 transition-colors ${
+                      restartMode === 'volume'
+                        ? 'border-emerald-500 bg-emerald-500/10'
+                        : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-sm font-bold text-gray-100">重写卷模式</div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          仅清空所选卷已生成的章节与关联内容，不影响其他卷。
+                        </p>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border ${restartMode === 'volume' ? 'border-emerald-400 bg-emerald-400' : 'border-gray-500'}`} />
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => hasLoopNode && setRestartMode('full')}
+                    disabled={!hasLoopNode}
+                    className={`w-full text-left rounded-2xl border px-4 py-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      restartMode === 'full'
+                        ? 'border-red-500 bg-red-500/10'
+                        : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-sm font-bold text-gray-100">完全重写模式</div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          清空所选卷及其后续卷内容，并从第一个循环起点重新运行。
+                        </p>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border ${restartMode === 'full' ? 'border-red-400 bg-red-400' : 'border-gray-500'}`} />
+                    </div>
+                  </button>
+
+                  {!hasLoopNode && (
+                    <p className="text-xs text-amber-400">当前工作流没有循环节点，无法启用完全重写模式。</p>
+                  )}
+
+                  {restartMode === 'full' && (
+                    <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="text-sm font-bold text-red-300">危险操作警告</div>
+                          <p className="text-xs text-red-200/90 mt-1 leading-5">
+                            该模式会清空所选卷以及之后所有卷的已生成章节内容、卷内相关集合内容和对应文件夹文件。该操作不可撤销。
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="px-6 py-4 border-t border-gray-800 bg-gray-800/40 flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowStartWorkflowModal(false)}
+                  className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-xl text-sm font-medium transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleStartWorkflowFromModal}
+                  disabled={!selectedStartVolumeId || orderedNodes.length === 0}
+                  className="px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  开始执行
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* --- 章节正文预览弹窗 --- */}

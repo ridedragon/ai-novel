@@ -123,6 +123,14 @@ export interface WorkflowData {
   contextSnapshot?: any; // 存储 WorkflowContextSnapshot
 }
 
+export type WorkflowRestartMode = 'volume' | 'full';
+
+export interface WorkflowStartOptions {
+  startIndex: number;
+  targetVolumeId?: string;
+  mode?: WorkflowRestartMode;
+}
+
 export interface ExecutionNode {
   type: 'node' | 'container';
   node: WorkflowNode;

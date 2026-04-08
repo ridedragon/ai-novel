@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Copy,
   Download,
+  AlertTriangle,
   Edit2,
   FileText,
   LayoutList,
@@ -49,6 +50,7 @@ import {
   WorkflowEditorProps,
   WorkflowNode,
   WorkflowNodeData,
+  WorkflowRestartMode,
 } from './Workflow/types';
 
 const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
@@ -66,6 +68,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [edgeToDelete, setEdgeToDelete] = useState<Edge | null>(null);
   const [previewEntry, setPreviewEntry] = useState<OutputEntry | null>(null);
+  const [showStartWorkflowSheet, setShowStartWorkflowSheet] = useState(false);
+  const [selectedStartIndex, setSelectedStartIndex] = useState(0);
+  const [selectedStartVolumeId, setSelectedStartVolumeId] = useState('');
+  const [restartMode, setRestartMode] = useState<WorkflowRestartMode>('volume');
 
   const nodesRef = useRef(nodes);
   const workflowsRef = useRef<WorkflowData[]>([]);
@@ -131,6 +137,76 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
   const pendingFolders = nodes
     .filter(n => n.data.typeKey === 'createFolder' && n.data.folderName)
     .map(n => n.data.folderName);
+
+  const hasLoopNode = useMemo(() => orderedNodes.some(n => n.data.typeKey === 'loopNode'), [orderedNodes]);
+
+  const firstLoopRestartIndex = useMemo(() => {
+    const firstLoopNode = orderedNodes.find(n => n.data.typeKey === 'loopNode');
+    if (!firstLoopNode) return -1;
+
+    const loopNodeIndex = orderedNodes.findIndex(n => n.id === firstLoopNode.id);
+    if (loopNodeIndex === -1) return -1;
+
+    const loopTargets = edges
+      .filter(e => e.source === firstLoopNode.id)
+      .map(e => orderedNodes.findIndex(n => n.id === e.target))
+      .filter(idx => idx !== -1 && idx <= loopNodeIndex)
+      .sort((a, b) => a - b);
+
+    return loopTargets[0] ?? loopNodeIndex;
+  }, [orderedNodes, edges]);
+
+  useEffect(() => {
+    if (!showStartWorkflowSheet) return;
+    if (!selectedStartVolumeId) {
+      setSelectedStartVolumeId(activeNovel?.volumes?.[0]?.id || '');
+    }
+  }, [showStartWorkflowSheet, activeNovel, selectedStartVolumeId]);
+
+  useEffect(() => {
+    if (restartMode === 'full' && !hasLoopNode) {
+      setRestartMode('volume');
+    }
+  }, [restartMode, hasLoopNode]);
+
+  const openStartWorkflowSheet = useCallback(() => {
+    if (nodes.length === 0 || orderedNodes.length === 0) {
+      alert('当前工作流没有可执行节点。');
+      return;
+    }
+    setSelectedStartIndex(Math.min(selectedStartIndex, Math.max(orderedNodes.length - 1, 0)));
+    setSelectedStartVolumeId(activeNovel?.volumes?.[0]?.id || '');
+    setRestartMode('volume');
+    setShowStartWorkflowSheet(true);
+  }, [nodes.length, orderedNodes, selectedStartIndex, activeNovel]);
+
+  const handleStartWorkflowFromSheet = useCallback(() => {
+    if (!selectedStartVolumeId) {
+      alert('请选择要执行的目标卷。');
+      return;
+    }
+
+    if (restartMode === 'full') {
+      if (!hasLoopNode || firstLoopRestartIndex < 0) {
+        alert('当前工作流不存在循环节点，不能使用完全重写模式。');
+        return;
+      }
+      runWorkflow({
+        startIndex: firstLoopRestartIndex,
+        targetVolumeId: selectedStartVolumeId,
+        mode: 'full',
+      });
+      setShowStartWorkflowSheet(false);
+      return;
+    }
+
+    runWorkflow({
+      startIndex: selectedStartIndex,
+      targetVolumeId: selectedStartVolumeId,
+      mode: 'volume',
+    });
+    setShowStartWorkflowSheet(false);
+  }, [selectedStartVolumeId, restartMode, hasLoopNode, firstLoopRestartIndex, runWorkflow, selectedStartIndex]);
 
   // 性能优化：显式使用 useMemo 锁定 nodeTypes 和 edgeTypes，消除 React Flow 的重绘警告
   const nodeTypes = useMemo(
@@ -614,25 +690,13 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
 
           {isRunning ? null : isPaused && currentNodeIndex !== -1 ? (
             <div className="flex items-center gap-1.5">
-              <div className="flex flex-col gap-0.5">
-                <select
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-1 py-1 text-[9px] text-gray-300 outline-none max-w-[70px]"
-                  value=""
-                  onChange={e => {
-                    const idx = parseInt(e.target.value);
-                    if (!isNaN(idx)) runWorkflow(idx);
-                  }}
-                >
-                  <option value="" disabled>
-                    选择节点...
-                  </option>
-                  {orderedNodes.map((n, idx) => (
-                    <option key={n.id} value={idx}>
-                      {idx + 1}. {n.data.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <button
+                onClick={openStartWorkflowSheet}
+                className="flex flex-col items-center justify-center bg-violet-600/20 text-violet-400 p-1.5 rounded-lg border border-violet-500/20 shadow-lg"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                <span className="text-[8px] font-bold mt-0.5">指定</span>
+              </button>
 
               <button
                 onClick={resumeWorkflow}
@@ -644,25 +708,14 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              <div className="flex flex-col gap-0.5">
-                <select
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-1 py-1 text-[9px] text-gray-300 outline-none max-w-[70px]"
-                  value=""
-                  onChange={e => {
-                    const idx = parseInt(e.target.value);
-                    if (!isNaN(idx)) runWorkflow(idx);
-                  }}
-                >
-                  <option value="" disabled>
-                    从头开始
-                  </option>
-                  {orderedNodes.map((n, idx) => (
-                    <option key={n.id} value={idx}>
-                      {idx + 1}. {n.data.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <button
+                onClick={openStartWorkflowSheet}
+                disabled={orderedNodes.length === 0}
+                className="flex flex-col items-center justify-center bg-violet-600/20 text-violet-400 p-1.5 rounded-lg border border-violet-500/20 shadow-lg disabled:opacity-50"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                <span className="text-[8px] font-bold mt-0.5">指定</span>
+              </button>
               <button
                 onClick={() => runWorkflow(0)}
                 disabled={nodes.length === 0}
@@ -803,6 +856,142 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
             >
               取消
             </button>
+          </div>
+        </div>
+      )}
+
+      {showStartWorkflowSheet && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[140] flex items-end justify-center p-0"
+          onClick={() => setShowStartWorkflowSheet(false)}
+        >
+          <div
+            className="bg-gray-800 w-full rounded-t-[2.2rem] p-5 pb-7 animate-in slide-in-from-bottom duration-300 shadow-2xl max-h-[85vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-12 h-1.5 bg-gray-700 rounded-full mx-auto mb-5" />
+            <div className="flex items-start justify-between gap-3 mb-5">
+              <div>
+                <h3 className="text-base font-bold text-gray-100">从指定位置启动</h3>
+                <p className="text-xs text-gray-400 mt-1">选择节点、卷和运行模式。</p>
+              </div>
+              <button
+                onClick={() => setShowStartWorkflowSheet(false)}
+                className="p-2 bg-gray-700 rounded-full text-gray-300"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-gray-300 block mb-2">从哪个节点开始</label>
+                <select
+                  value={selectedStartIndex}
+                  onChange={e => setSelectedStartIndex(parseInt(e.target.value, 10) || 0)}
+                  disabled={restartMode === 'full'}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-2xl px-4 py-3 text-sm text-gray-100 outline-none disabled:opacity-50"
+                >
+                  {orderedNodes.map((n, idx) => (
+                    <option key={n.id} value={idx}>
+                      {idx + 1}. {n.data.label}
+                    </option>
+                  ))}
+                </select>
+                {restartMode === 'full' && (
+                  <p className="text-[11px] text-amber-400 mt-2">完全重写模式会自动从第一个循环起点启动。</p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-300 block mb-2">目标卷</label>
+                <select
+                  value={selectedStartVolumeId}
+                  onChange={e => setSelectedStartVolumeId(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-2xl px-4 py-3 text-sm text-gray-100 outline-none"
+                >
+                  <option value="">请选择目标卷</option>
+                  {(activeNovel?.volumes || []).map((volume, idx) => (
+                    <option key={volume.id} value={volume.id}>
+                      第{idx + 1}卷 · {volume.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-300 block mb-2">运行模式</label>
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => setRestartMode('volume')}
+                    className={`w-full rounded-2xl border px-4 py-4 text-left ${
+                      restartMode === 'volume'
+                        ? 'border-emerald-500 bg-emerald-500/10'
+                        : 'border-gray-700 bg-gray-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-bold text-gray-100">重写卷模式</div>
+                        <p className="text-[11px] text-gray-400 mt-1">只清空所选卷内容，不影响其他卷。</p>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border ${restartMode === 'volume' ? 'border-emerald-400 bg-emerald-400' : 'border-gray-500'}`} />
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => hasLoopNode && setRestartMode('full')}
+                    disabled={!hasLoopNode}
+                    className={`w-full rounded-2xl border px-4 py-4 text-left disabled:opacity-50 ${
+                      restartMode === 'full'
+                        ? 'border-red-500 bg-red-500/10'
+                        : 'border-gray-700 bg-gray-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-bold text-gray-100">完全重写模式</div>
+                        <p className="text-[11px] text-gray-400 mt-1">清空所选卷及之后所有卷，并从循环起点重跑。</p>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border ${restartMode === 'full' ? 'border-red-400 bg-red-400' : 'border-gray-500'}`} />
+                    </div>
+                  </button>
+
+                  {!hasLoopNode && (
+                    <p className="text-[11px] text-amber-400">当前工作流没有循环节点，无法启用完全重写模式。</p>
+                  )}
+
+                  {restartMode === 'full' && (
+                    <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                        <p className="text-[11px] leading-5 text-red-200">
+                          会清空所选卷及其后续卷的章节内容、卷内集合内容与对应文件夹文件，该操作不可撤销。
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowStartWorkflowSheet(false)}
+                  className="flex-1 py-3 bg-gray-700 text-gray-200 rounded-2xl font-bold"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleStartWorkflowFromSheet}
+                  disabled={!selectedStartVolumeId || orderedNodes.length === 0}
+                  className="flex-1 py-3 bg-violet-600 text-white rounded-2xl font-bold disabled:opacity-50"
+                >
+                  开始执行
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

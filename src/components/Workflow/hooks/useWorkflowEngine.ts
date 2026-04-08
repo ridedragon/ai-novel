@@ -2,7 +2,7 @@ import { Edge } from '@xyflow/react';
 import OpenAI from 'openai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
-import { GeneratorPreset, GeneratorPrompt, LoopInstruction, Novel } from '../../../types';
+import { GeneratorPreset, GeneratorPrompt, LoopInstruction, Novel, ReferenceFolder } from '../../../types';
 import { AutoWriteEngine, getChapterContextMessages } from '../../../utils/auto-write';
 import { keepAliveManager } from '../../../utils/KeepAliveManager';
 import { storage } from '../../../utils/storage';
@@ -10,7 +10,14 @@ import { workflowManager } from '../../../utils/WorkflowManager';
 import { debugLogger, volumeFolderDebugTracker, infoClearDebugTracker, saveToVolumeDebugTracker } from '../../../utils/log';
 import { LOOP_CONFIGURATOR_PROMPT, NODE_CONFIGS, WORKFLOW_DSL_PROMPT } from '../constants';
 import { MacroContext } from '../macros';
-import { NodeTypeKey, OutputEntry, WorkflowData, WorkflowNode, WorkflowNodeData } from '../types';
+import {
+  NodeTypeKey,
+  OutputEntry,
+  WorkflowData,
+  WorkflowNode,
+  WorkflowNodeData,
+  WorkflowStartOptions,
+} from '../types';
 import { cleanAndParseJSON, extractEntries, extractTargetEndChapter, parseAnyNumber } from '../utils/workflowHelpers';
 
 export const useWorkflowEngine = (options: {
@@ -161,10 +168,101 @@ export const useWorkflowEngine = (options: {
     setEdges(eds => eds.map(e => ({ ...e, animated: false })));
   }, [setEdges]);
 
+  const normalizeStartOptions = (input?: number | WorkflowStartOptions): WorkflowStartOptions => {
+    if (typeof input === 'number') {
+      return { startIndex: input };
+    }
+    return {
+      startIndex: input?.startIndex ?? 0,
+      targetVolumeId: input?.targetVolumeId,
+      mode: input?.mode,
+    };
+  };
+
+  const collectDescendantFolderIds = (folders: ReferenceFolder[] = [], parentIds: Set<string>) => {
+    const collected = new Set<string>(parentIds);
+    let changed = true;
+
+    while (changed) {
+      changed = false;
+      folders.forEach(folder => {
+        if (folder.parentId && collected.has(folder.parentId) && !collected.has(folder.id)) {
+          collected.add(folder.id);
+          changed = true;
+        }
+      });
+    }
+
+    return collected;
+  };
+
+  const clearNovelContentByVolumes = (novel: Novel, volumeIds: string[], clearFollowingVolumes: boolean) => {
+    if (!volumeIds.length) return novel;
+
+    const volumeOrder = novel.volumes || [];
+    const startOrderIndex = volumeOrder.findIndex(v => v.id === volumeIds[0]);
+    const affectedVolumeIds = new Set(
+      clearFollowingVolumes && startOrderIndex >= 0
+        ? volumeOrder.slice(startOrderIndex).map(v => v.id)
+        : volumeIds,
+    );
+    const affectedVolumeTitles = new Set(
+      volumeOrder.filter(v => affectedVolumeIds.has(v.id)).map(v => v.title).filter(Boolean),
+    );
+
+    const nextReferenceFolders = [...(novel.referenceFolders || [])];
+    const directFolderIds = new Set(
+      nextReferenceFolders
+        .filter(folder => affectedVolumeTitles.has(folder.name))
+        .map(folder => folder.id),
+    );
+    const allFolderIds = collectDescendantFolderIds(nextReferenceFolders, directFolderIds);
+
+    return {
+      ...novel,
+      chapters: (novel.chapters || []).map(chapter => {
+        if (!chapter.volumeId || !affectedVolumeIds.has(chapter.volumeId)) {
+          return chapter;
+        }
+
+        return {
+          ...chapter,
+          content: '',
+          sourceContent: '',
+          optimizedContent: '',
+          showingVersion: 'source' as const,
+          versions: [],
+          activeVersionId: undefined,
+          analysisResult: undefined,
+          logicScore: undefined,
+        };
+      }),
+      outlineSets: (novel.outlineSets || []).map(set =>
+        affectedVolumeTitles.has(set.name) ? { ...set, items: [] } : set,
+      ),
+      characterSets: (novel.characterSets || []).map(set =>
+        affectedVolumeTitles.has(set.name) ? { ...set, characters: [] } : set,
+      ),
+      worldviewSets: (novel.worldviewSets || []).map(set =>
+        affectedVolumeTitles.has(set.name) ? { ...set, entries: [] } : set,
+      ),
+      inspirationSets: (novel.inspirationSets || []).map(set =>
+        affectedVolumeTitles.has(set.name) ? { ...set, items: [] } : set,
+      ),
+      plotOutlineSets: (novel.plotOutlineSets || []).map(set =>
+        affectedVolumeTitles.has(set.name) ? { ...set, items: [] } : set,
+      ),
+      referenceFiles: (novel.referenceFiles || []).filter(file => !file.parentId || !allFolderIds.has(file.parentId)),
+    };
+  };
+
   // 执行引擎核心逻辑
-  const runWorkflow = async (startIndex: number = 0) => {
+  const runWorkflow = async (startInput: number | WorkflowStartOptions = 0) => {
+    const { startIndex, targetVolumeId, mode } = normalizeStartOptions(startInput);
     const logPrefix = isMobile ? '[Mobile Workflow]' : '[WORKFLOW]';
-    terminal.log(`${logPrefix} 准备执行工作流, 起始索引: ${startIndex}`);
+    terminal.log(
+      `${logPrefix} 准备执行工作流, 起始索引: ${startIndex}, 模式: ${mode || 'normal'}, 目标卷: ${targetVolumeId || '未指定'}`,
+    );
 
     const logMemory = () => {
       if ((performance as any).memory) {
@@ -229,6 +327,26 @@ export const useWorkflowEngine = (options: {
         setError('工作流中没有任何节点可执行');
         workflowManager.stop();
         return;
+      }
+
+      const targetVolumeIndex = targetVolumeId
+        ? localNovel.volumes?.findIndex(v => v.id === targetVolumeId) ?? -1
+        : -1;
+
+      if (targetVolumeId && targetVolumeIndex === -1) {
+        setError('目标卷不存在，无法启动工作流');
+        workflowManager.stop();
+        return;
+      }
+
+      if (targetVolumeId && targetVolumeIndex >= 0) {
+        workflowManager.setActiveVolumeAnchor(targetVolumeId);
+        workflowManager.setCurrentVolumeIndex(targetVolumeIndex);
+      }
+
+      if (targetVolumeId && mode) {
+        localNovel = clearNovelContentByVolumes(localNovel, [targetVolumeId], mode === 'full');
+        await updateLocalAndGlobal(localNovel);
       }
 
       const checkActive = () => {
@@ -3606,7 +3724,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
   };
 
   const resumeWorkflow = () => {
-    if (currentNodeIndex !== -1) runWorkflow(currentNodeIndex);
+    if (currentNodeIndex !== -1) runWorkflow({ startIndex: currentNodeIndex });
   };
 
   const resetWorkflowStatus = async () => {
