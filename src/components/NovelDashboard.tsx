@@ -20,7 +20,7 @@ import {
   X,
   Zap
 } from 'lucide-react';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Novel } from '../types';
 
 interface NovelDashboardProps {
@@ -51,6 +51,12 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [editingNovel, setEditingNovel] = useState<Novel | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingNovel && !novels.some(novel => novel.id === editingNovel.id)) {
+      setEditingNovel(null);
+    }
+  }, [editingNovel, novels]);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -756,7 +762,9 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({
                 <button
                   onClick={() => {
                     if (editingNovel) {
-                      onDeleteNovel(editingNovel.id);
+                      const deletingNovelId = editingNovel.id;
+                      setEditingNovel(null);
+                      onDeleteNovel(deletingNovelId);
                     }
                   }}
                   className="px-4 py-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors flex items-center gap-2 text-sm font-bold border border-red-200 dark:border-red-500/20 w-full md:w-auto justify-center"

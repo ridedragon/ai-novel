@@ -621,6 +621,7 @@ function App() {
               },
             })
           }
+          handleMoveChapterOrder={novelData.moveChapterOrder}
           handleAddVolume={() =>
             setDialog({
               isOpen: true,

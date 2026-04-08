@@ -1,14 +1,4 @@
-import {
-  ChevronDown,
-  ChevronRight,
-  Download,
-  Edit3,
-  FileText,
-  Folder,
-  FolderPlus,
-  Plus,
-  Trash2
-} from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Download, Edit3, FileText, Folder, FolderPlus, Plus, Trash2 } from 'lucide-react';
 import React from 'react';
 import { Chapter, NovelVolume } from '../../types';
 import { ChapterNumberingModeSwitch } from '../ChapterNumberingModeSwitch';
@@ -27,6 +17,7 @@ interface AppSidebarLeftProps {
   handleRenameVolume: (volumeId: string, currentTitle: string) => void;
   handleDeleteVolume: (volumeId: string) => void;
   handleDeleteChapter: (chapterId: number) => void;
+  handleMoveChapterOrder: (chapterId: number, direction: 'up' | 'down') => void;
   contextScope: string;
   chapterNumberingMode?: 'global' | 'perVolume';
   onChapterNumberingModeChange?: (mode: 'global' | 'perVolume') => void;
@@ -46,6 +37,7 @@ export const AppSidebarLeft: React.FC<AppSidebarLeftProps> = ({
   handleRenameVolume,
   handleDeleteVolume,
   handleDeleteChapter,
+  handleMoveChapterOrder,
   contextScope,
   chapterNumberingMode,
   onChapterNumberingModeChange,
@@ -96,6 +88,22 @@ export const AppSidebarLeft: React.FC<AppSidebarLeftProps> = ({
                   >
                     <FileText className={`w-[14px] h-[14px] ${chapter.subtype === 'small_summary' ? 'text-primary' : chapter.subtype === 'big_summary' ? 'text-amber-500 dark:text-amber-400' : ''}`} />
                     <span className="truncate flex-1">{getDisplayTitle(chapter)}</span>
+                    <div className="flex items-center md:opacity-0 group-hover:opacity-100 transition-all">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleMoveChapterOrder(chapter.id, 'up'); }}
+                        className="p-1.5 md:p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                        title={chapter.subtype ? "上移总结" : "上移章节"}
+                      >
+                        <ChevronUp className="w-4 h-4 md:w-3 md:h-3" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleMoveChapterOrder(chapter.id, 'down'); }}
+                        className="p-1.5 md:p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                        title={chapter.subtype ? "下移总结" : "下移章节"}
+                      >
+                        <ChevronDown className="w-4 h-4 md:w-3 md:h-3" />
+                      </button>
+                    </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chapter.id); }}
                       className="md:opacity-0 group-hover:opacity-100 p-1.5 md:p-1 text-slate-400 hover:text-red-500 transition-all"
@@ -119,6 +127,22 @@ export const AppSidebarLeft: React.FC<AppSidebarLeftProps> = ({
             >
               <FileText className="w-[14px] h-[14px]" />
               <span className="truncate flex-1">{getDisplayTitle(chapter)}</span>
+              <div className="flex items-center md:opacity-0 group-hover:opacity-100 transition-all">
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleMoveChapterOrder(chapter.id, 'up'); }}
+                  className="p-1.5 md:p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  title={chapter.subtype ? "上移总结" : "上移章节"}
+                >
+                  <ChevronUp className="w-4 h-4 md:w-3 md:h-3" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleMoveChapterOrder(chapter.id, 'down'); }}
+                  className="p-1.5 md:p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  title={chapter.subtype ? "下移总结" : "下移章节"}
+                >
+                  <ChevronDown className="w-4 h-4 md:w-3 md:h-3" />
+                </button>
+              </div>
               <button
                 onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chapter.id); }}
                 className="md:opacity-0 group-hover:opacity-100 p-1.5 md:p-1 text-slate-400 hover:text-red-500 transition-all"

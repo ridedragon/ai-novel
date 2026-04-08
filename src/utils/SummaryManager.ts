@@ -64,18 +64,11 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
       finalResult.push(story);
       // 挂载属于该章的总结
       const related = summariesByParentId.get(story.id);
-      if (related) {
-        related.sort((a, b) => {
-          // 类型优先级：小总结在前
-          if (a.subtype !== b.subtype) return a.subtype === 'small_summary' ? -1 : 1;
-          // 范围优先级：范围更小的在前 (即起始章节更晚)
-          const startA = parseInt(a.summaryRange?.split('-')[0] || '0');
-          const startB = parseInt(b.summaryRange?.split('-')[0] || '0');
-          if (startA !== startB) return startB - startA;
-          return (a.id || 0) - (b.id || 0);
-        });
-        finalResult.push(...related);
-      }
+        if (related) {
+          // 保留同一挂载点下总结的物理顺序，支持用户手动调整总结显示位置
+          // 这里只负责“挂载到对应正文之后”，不再强制改写同组总结之间的先后顺序
+          finalResult.push(...related);
+        }
     });
 
     // 分卷孤儿补救：如果孤儿总结的 volumeId 指向该卷，将其强制堆叠在该卷正文结束之后

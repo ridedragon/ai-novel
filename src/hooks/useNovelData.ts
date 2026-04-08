@@ -11,11 +11,10 @@ import {
   WorldviewSet,
 } from '../types';
 import { storage } from '../utils/storage';
-import { recalibrateSummaries, sortChapters } from '../utils/SummaryManager';
+import { isSummaryChapter, recalibrateSummaries, sortChapters } from '../utils/SummaryManager';
 import {
   calculateNewChapterNumbering,
   generateChapterTitle,
-  initializeChapterNumbering,
   recalibrateChapterNumbering,
   switchNumberingMode,
 } from '../utils/chapterNumbering';
@@ -220,6 +219,23 @@ export function useNovelData() {
     activePlotOutlineSetId,
   ]);
 
+  const normalizeChapters = useCallback(
+    (chapterList: Chapter[]) => {
+      const recalibratedNumbering = recalibrateChapterNumbering([...chapterList]);
+      const mode = activeNovel?.chapterNumberingMode || 'global';
+      const renumberedTitles = recalibratedNumbering.map(chapter => {
+        if (!chapter.subtype || chapter.subtype === 'story') {
+          const displayIndex = mode === 'perVolume' ? chapter.volumeIndex : chapter.globalIndex;
+          return { ...chapter, title: generateChapterTitle(displayIndex || 1, chapter.title) };
+        }
+        return chapter;
+      });
+
+      return sortChapters(recalibrateSummaries(renumberedTitles));
+    },
+    [activeNovel],
+  );
+
   const setChapters = useCallback(
     (value: Chapter[] | ((prev: Chapter[]) => Chapter[])) => {
       if (!activeNovelId) return;
@@ -228,13 +244,13 @@ export function useNovelData() {
           if (n.id === activeNovelId) {
             const currentChapters = n.chapters || [];
             const newChapters = typeof value === 'function' ? (value as any)(currentChapters) : value;
-            return { ...n, chapters: sortChapters(recalibrateSummaries(newChapters)) };
+            return { ...n, chapters: normalizeChapters(newChapters) };
           }
           return n;
         }),
       );
     },
-    [activeNovelId, setNovels],
+    [activeNovelId, setNovels, normalizeChapters],
   );
 
   const setVolumes = useCallback(
@@ -611,21 +627,83 @@ export function useNovelData() {
   // 移动章节到不同分卷时重新校准编号
   const moveChapter = useCallback(
     (chapterId: number, volumeId: string | undefined) => {
+      setChapters(prev => prev.map(c => (c.id === chapterId ? { ...c, volumeId } : c)));
+    },
+    [setChapters],
+  );
+
+  const moveChapterOrder = useCallback(
+    (chapterId: number, direction: 'up' | 'down') => {
       setChapters(prev => {
-        let updatedChapters = prev.map(c => (c.id === chapterId ? { ...c, volumeId } : c));
-        updatedChapters = recalibrateChapterNumbering(updatedChapters);
-        const mode = activeNovel?.chapterNumberingMode || 'global';
-        updatedChapters = updatedChapters.map(c => {
-          if (!c.subtype || c.subtype === 'story') {
-            const displayIndex = mode === 'perVolume' ? c.volumeIndex : c.globalIndex;
-            return { ...c, title: generateChapterTitle(displayIndex || 1, c.title) };
+        const chapterIndex = prev.findIndex(chapter => chapter.id === chapterId);
+        if (chapterIndex === -1) return prev;
+
+        const chapter = prev[chapterIndex];
+
+        if (isSummaryChapter(chapter)) {
+          const reordered = [...prev];
+
+          if (direction === 'up') {
+            if (chapterIndex === 0) return prev;
+            [reordered[chapterIndex - 1], reordered[chapterIndex]] = [reordered[chapterIndex], reordered[chapterIndex - 1]];
+            return reordered;
           }
-          return c;
-        });
-        return updatedChapters;
+
+          if (chapterIndex >= prev.length - 1) return prev;
+          [reordered[chapterIndex], reordered[chapterIndex + 1]] = [reordered[chapterIndex + 1], reordered[chapterIndex]];
+          return reordered;
+        }
+
+        let blockEnd = chapterIndex + 1;
+        while (blockEnd < prev.length && isSummaryChapter(prev[blockEnd])) {
+          blockEnd += 1;
+        }
+
+        const currentBlock = prev.slice(chapterIndex, blockEnd);
+
+        if (direction === 'up') {
+          let previousStoryStart = -1;
+          for (let i = chapterIndex - 1; i >= 0; i -= 1) {
+            if (!isSummaryChapter(prev[i])) {
+              previousStoryStart = i;
+              break;
+            }
+          }
+
+          if (previousStoryStart === -1) return prev;
+
+          const reordered = [...prev];
+          reordered.splice(chapterIndex, currentBlock.length);
+
+          reordered.splice(previousStoryStart, 0, ...currentBlock);
+          return reordered;
+        }
+
+        let nextStoryStart = -1;
+        for (let i = blockEnd; i < prev.length; i += 1) {
+          if (!isSummaryChapter(prev[i])) {
+            nextStoryStart = i;
+            break;
+          }
+        }
+
+        if (nextStoryStart === -1) return prev;
+
+        let nextBlockEnd = nextStoryStart + 1;
+        while (nextBlockEnd < prev.length && isSummaryChapter(prev[nextBlockEnd])) {
+          nextBlockEnd += 1;
+        }
+
+        const nextBlock = prev.slice(nextStoryStart, nextBlockEnd);
+        return [
+          ...prev.slice(0, chapterIndex),
+          ...nextBlock,
+          ...currentBlock,
+          ...prev.slice(nextBlockEnd),
+        ];
       });
     },
-    [setChapters, activeNovel],
+    [setChapters],
   );
 
   return {
@@ -672,6 +750,7 @@ export function useNovelData() {
     deleteNovel,
     renameChapter,
     moveChapter,
+    moveChapterOrder,
     addProjectSet,
     deleteSet,
     renameSet,

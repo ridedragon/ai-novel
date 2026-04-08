@@ -296,6 +296,7 @@ export const useWorkflowEngine = (options: {
 
     try {
       if (!activeNovel) {
+        workflowManager.clearStartVolumeLock();
         workflowManager.stop();
         return;
       }
@@ -344,8 +345,11 @@ export const useWorkflowEngine = (options: {
       const userSpecifiedTargetVolumeIndex = targetVolumeIndex;
 
       if (userSpecifiedTargetVolumeId && userSpecifiedTargetVolumeIndex >= 0) {
+        workflowManager.lockStartVolume(userSpecifiedTargetVolumeId, userSpecifiedTargetVolumeIndex);
         workflowManager.setActiveVolumeAnchor(userSpecifiedTargetVolumeId);
         workflowManager.setCurrentVolumeIndex(userSpecifiedTargetVolumeIndex);
+      } else {
+        workflowManager.clearStartVolumeLock();
       }
 
       if (userSpecifiedTargetVolumeId && mode) {
@@ -731,28 +735,76 @@ export const useWorkflowEngine = (options: {
               }
             }
           } else {
-            // 核心修复：当用户指定了目标卷时，更新从 startIndex 开始所有后续章节节点的 targetVolumeId
+            // 核心修复：当用户指定了目标卷时，除了章节节点，还要统一更新后续所有按卷/文件夹归档的节点。
+            // 否则正文会写到指定卷，但大纲/设定/灵感等内容仍可能沿用旧 folderName，最终落到错误文件夹。
             const targetVolume = localNovel.volumes?.find(v => v.id === userSpecifiedTargetVolumeId);
             if (targetVolume) {
-              // 更新从 startIndex 开始的所有后续章节节点的 targetVolumeId
+              const folderScopedNodeTypes = new Set([
+                'chapter',
+                'worldview',
+                'characters',
+                'outline',
+                'plotOutline',
+                'inspiration',
+                'creationInfo',
+                'saveToVolume',
+                'aiChat',
+              ]);
+
+              let updatedChapterCount = 0;
+              let updatedFolderScopedCount = 0;
+
               nodesRef.current = nodesRef.current.map(n => {
                 const nodeIndex = sortedNodes.findIndex(sn => sn.id === n.id);
-                // 只更新 startIndex 之后的章节节点
-                if (nodeIndex >= startIndex && n.data.typeKey === 'chapter') {
-                  return {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      targetVolumeId: userSpecifiedTargetVolumeId,
-                      targetVolumeName: targetVolume.title,
-                      folderName: targetVolume.title,
-                    }
-                  };
+                if (nodeIndex < startIndex || !folderScopedNodeTypes.has(n.data.typeKey)) {
+                  return n;
                 }
-                return n;
+
+                const nextData: any = {
+                  ...n.data,
+                  folderName: targetVolume.title,
+                };
+
+                updatedFolderScopedCount++;
+
+                if (n.data.typeKey === 'chapter') {
+                  nextData.targetVolumeId = userSpecifiedTargetVolumeId;
+                  nextData.targetVolumeName = targetVolume.title;
+                  updatedChapterCount++;
+                }
+
+                if (n.data.typeKey === 'creationInfo' && Array.isArray(n.data.outputEntries) && n.data.outputEntries.length > 0) {
+                  const loopIndex = workflowManager.getContextVar('loop_index') || 1;
+                  const totalVolumes = localNovel.volumes?.length || 0;
+                  const volumeProgress = totalVolumes > 0
+                    ? `分卷进度：第 ${userSpecifiedTargetVolumeIndex + 1} 卷 / 共 ${totalVolumes} 卷`
+                    : '';
+                  let newContent = [`当前分卷：${targetVolume.title}`, volumeProgress, `当前循环轮次：第 ${loopIndex} 轮`]
+                    .filter(Boolean)
+                    .join('\n');
+                  if (n.data.instruction) {
+                    newContent += `\n\n用户指令：${n.data.instruction}`;
+                  }
+
+                  nextData.outputEntries = [
+                    {
+                      id: `creation_info_start_${Date.now()}`,
+                      title: '创作信息',
+                      content: newContent,
+                    },
+                  ];
+                }
+
+                return {
+                  ...n,
+                  data: nextData,
+                };
               });
+
               setNodes([...nodesRef.current]);
-              terminal.log(`[WORKFLOW_START] Updated ${sortedNodes.filter((_, idx) => idx >= startIndex).filter(n => n.data.typeKey === 'chapter').length} chapter nodes to targetVolumeId=${userSpecifiedTargetVolumeId}`);
+              terminal.log(
+                `[WORKFLOW_START] Updated ${updatedChapterCount} chapter nodes and ${updatedFolderScopedCount} folder-scoped nodes to targetVolumeId=${userSpecifiedTargetVolumeId}, folder="${targetVolume.title}"`,
+              );
             }
           }
 
@@ -771,6 +823,7 @@ export const useWorkflowEngine = (options: {
 
       for (let i = startIndex; i < sortedNodes.length; i++) {
         if (!checkActive()) {
+          workflowManager.clearStartVolumeLock();
           workflowManager.pause(i);
           break;
         }
@@ -3636,24 +3689,26 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         
         const upSets = (sets: any[] | undefined, type: string) => {
           if (!sets) sets = [];
-          
-          // 找到目标集合：优先使用匹配文件夹名称的集合，如果没有则使用第一个集合，都没有则创建新的
-          let target = sets.find(s => s.name === folder);
-          if (!target && sets.length > 0) {
-            target = sets[0];
-          }
+
+          // 核心修复：归档集合必须优先写入“当前目标文件夹/卷”。
+          // 旧逻辑在找不到同名集合时会退回 sets[0]，导致指定卷启动后内容被错误塞进第一个文件夹。
+          const normalizedFolder = (folder || '').trim();
+          let target = normalizedFolder ? sets.find(s => s.name === normalizedFolder) : undefined;
+
           if (!target) {
-            // 创建新的集合
             target = {
               id: `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-              name: folder || '默认集合',
+              name: normalizedFolder || '默认集合',
               entries: [],
               characters: [],
               items: [],
             };
             sets = [...sets, target];
+            terminal.log(
+              `[WORKFLOW_FOLDER_FIX] Created new ${type} set for folder="${normalizedFolder || '默认集合'}" instead of falling back to first set`,
+            );
           }
-          
+
           const news = [
             ...(type === 'worldview' ? target.entries : type === 'character' ? target.characters : target.items),
           ];

@@ -9,13 +9,31 @@ import { Chapter, Novel, NovelVolume } from '../types';
 
 /**
  * 从章节标题中提取章节名称
- * 例如: "第1章 命运的相遇" -> "命运的相遇"
- *       "第1章" -> null
+ * 例如:
+ * - "第1章 命运的相遇" -> "命运的相遇"
+ * - "第1章" -> null
+ * - "命运的相遇" -> "命运的相遇"
  */
 export const extractChapterName = (title: string): string | null => {
   if (!title || typeof title !== 'string') return null;
-  const match = title.match(/^第\d+章\s+(.+)$/);
-  return match && match[1] ? match[1].trim() : null;
+
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) return null;
+
+  // 标准格式：第N章 标题
+  const numberedTitleMatch = trimmedTitle.match(/^第\d+章\s+(.+)$/);
+  if (numberedTitleMatch && numberedTitleMatch[1]) {
+    const extractedName = numberedTitleMatch[1].trim();
+    return extractedName || null;
+  }
+
+  // 只有编号，没有章节名
+  if (/^第\d+章\s*$/.test(trimmedTitle)) {
+    return null;
+  }
+
+  // 非标准编号格式或纯自定义标题，直接作为章节名保留
+  return trimmedTitle;
 };
 
 /**

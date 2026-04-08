@@ -12,6 +12,8 @@ interface WorkflowState {
   error: string | null;
   globalContext: WorkflowGlobalContext;
   totalVolumes: number; // 计划的总分卷数
+  lockedStartVolumeId?: string;
+  lockedStartVolumeIndex?: number;
 }
 
 export interface NodeStatusUpdate {
@@ -36,6 +38,8 @@ class WorkflowManager {
     activeWorkflowId: null,
     error: null,
     totalVolumes: 0,
+    lockedStartVolumeId: undefined,
+    lockedStartVolumeIndex: undefined,
     globalContext: {
       variables: {},
       executionStack: [],
@@ -384,6 +388,38 @@ class WorkflowManager {
     return this.state.globalContext.activeVolumeAnchor;
   }
 
+  public lockStartVolume(volumeId?: string, volumeIndex?: number) {
+    this.state = {
+      ...this.state,
+      lockedStartVolumeId: volumeId,
+      lockedStartVolumeIndex: volumeIndex,
+    };
+    this.notify();
+    terminal.log(
+      `[WorkflowManager] Start volume lock set: volumeId=${volumeId || 'none'}, index=${volumeIndex ?? 'none'}`,
+    );
+  }
+
+  public clearStartVolumeLock() {
+    if (this.state.lockedStartVolumeId === undefined && this.state.lockedStartVolumeIndex === undefined) {
+      return;
+    }
+    this.state = {
+      ...this.state,
+      lockedStartVolumeId: undefined,
+      lockedStartVolumeIndex: undefined,
+    };
+    this.notify();
+    terminal.log('[WorkflowManager] Start volume lock cleared');
+  }
+
+  public getStartVolumeLock() {
+    return {
+      volumeId: this.state.lockedStartVolumeId,
+      volumeIndex: this.state.lockedStartVolumeIndex,
+    };
+  }
+
   public setPendingSplit(chapterTitle: string | undefined, nextVolumeName: string | undefined) {
     this.updateContext({
       pendingSplitChapter: chapterTitle,
@@ -537,18 +573,47 @@ class WorkflowManager {
     // 当 volume 3 章节运行时 (globalIndex 7, 8, 9)，7 > 3 会错误触发
     if (context.pendingSplits && context.pendingSplits.length > 0) {
       const unprocessedRules = context.pendingSplits.filter(r => !r.processed);
-      terminal.log(`[WorkflowManager] Checking split: ${unprocessedRules.length} unprocessed rules for "${currentChapterTitle}" (globalIndex: ${currentChapterGlobalIndex}, norm: ${normalizedCurrent})`);
-      
+      terminal.log(
+        `[WorkflowManager] Checking split: ${unprocessedRules.length} unprocessed rules for "${currentChapterTitle}" (globalIndex: ${currentChapterGlobalIndex}, norm: ${normalizedCurrent})`,
+      );
+
       // 只检查第一个未处理的规则
       if (unprocessedRules.length > 0) {
         const rule = unprocessedRules[0];
-        terminal.log(`[WorkflowManager]   Checking FIRST rule: "${rule.nextVolumeName}" (endChapter: ${rule.endChapter}, chapterTitle: ${rule.chapterTitle})`);
-        
+        terminal.log(
+          `[WorkflowManager]   Checking FIRST rule: "${rule.nextVolumeName}" (startChapter: ${rule.startChapter}, endChapter: ${rule.endChapter}, chapterTitle: ${rule.chapterTitle})`,
+        );
+
+        // 核心修复：从指定卷/指定位置启动时，禁止旧规则把执行回切到更早的卷。
+        // 典型场景：用户从第二卷开始，但第一条未处理规则仍是“切到第二卷/第一卷之前的旧规则”，
+        // 由于 currentChapterGlobalIndex > endChapter，会被误触发，导致当前章节写入错误分卷。
+        const startLock = this.getStartVolumeLock();
+        const lockIndex = startLock.volumeIndex;
+        if (
+          lockIndex !== undefined &&
+          lockIndex > 0 &&
+          currentChapterGlobalIndex !== undefined &&
+          rule.startChapter !== undefined &&
+          currentChapterGlobalIndex >= rule.startChapter
+        ) {
+          const targetRuleVolumeIndex = (context.volumePlans || []).findIndex(
+            (v: any) => (v.volumeName || v.folderName) === rule.nextVolumeName,
+          );
+          if (targetRuleVolumeIndex !== -1 && targetRuleVolumeIndex < lockIndex) {
+            terminal.warn(
+              `[WorkflowManager]   Split suppressed by start volume lock: targetRuleVolumeIndex=${targetRuleVolumeIndex} < lockIndex=${lockIndex}`,
+            );
+            return null;
+          }
+        }
+
         // 使用 endChapter 判断触发（如果存在）
         // endChapter=4 表示第4章是最后一章，第4章完成后（globalIndex > 4）切换
         if (rule.endChapter && currentChapterGlobalIndex !== undefined) {
           const shouldTrigger = currentChapterGlobalIndex > rule.endChapter;
-          terminal.log(`[WorkflowManager]   endChapter check: globalIndex=${currentChapterGlobalIndex} > endChapter=${rule.endChapter} = ${shouldTrigger}`);
+          terminal.log(
+            `[WorkflowManager]   endChapter check: globalIndex=${currentChapterGlobalIndex} > endChapter=${rule.endChapter} = ${shouldTrigger}`,
+          );
           if (shouldTrigger) {
             terminal.log(`[WorkflowManager]   TRIGGERED by endChapter`);
             return { chapterTitle: currentChapterTitle, nextVolumeName: rule.nextVolumeName };
@@ -560,7 +625,9 @@ class WorkflowManager {
           // 兜底：使用 chapterTitle 判断（兼容旧数据）
           const ruleNorm = this.normalizeChapterToken(rule.chapterTitle);
           const matched = isMatch(rule.chapterTitle, rule.startChapter);
-          terminal.log(`[WorkflowManager]   chapterTitle check: "${rule.chapterTitle}" (norm: ${ruleNorm}) -> match=${matched}`);
+          terminal.log(
+            `[WorkflowManager]   chapterTitle check: "${rule.chapterTitle}" (norm: ${ruleNorm}) -> match=${matched}`,
+          );
           if (matched) {
             return { chapterTitle: currentChapterTitle, nextVolumeName: rule.nextVolumeName || '' };
           }
@@ -933,6 +1000,8 @@ class WorkflowManager {
       isPaused: false,
       currentNodeIndex: -1,
       totalVolumes: 0,
+      lockedStartVolumeId: undefined,
+      lockedStartVolumeIndex: undefined,
       globalContext: {
         variables: {
           loop_index: 1,
