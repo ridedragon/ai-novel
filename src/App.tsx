@@ -22,10 +22,8 @@ import { NovelDashboard } from './components/NovelDashboard';
 const GlobalSettingsModal = lazy(() =>
   import('./components/GlobalSettingsModal').then(m => ({ default: m.GlobalSettingsModal })),
 );
-const MobileWorkflowEditor = lazy(() =>
-  import('./components/MobileWorkflowEditor').then(m => ({ default: m.MobileWorkflowEditor })),
-);
-const WorkflowEditor = lazy(() => import('./components/WorkflowEditor').then(m => ({ default: m.WorkflowEditor })));
+import { MobileWorkflowEditor } from './components/MobileWorkflowEditor';
+import { WorkflowEditor } from './components/WorkflowEditor';
 const AdvancedSettingsModal = lazy(() =>
   import('./components/Modals/AdvancedSettingsModal').then(m => ({ default: m.AdvancedSettingsModal })),
 );
