@@ -1,4 +1,4 @@
-import { Book, BookOpen, FileText, Globe, Home, Lightbulb, Menu, Users, Zap } from 'lucide-react';
+import { Book, BookOpen, FileText, Globe, Lightbulb, Menu, Users } from 'lucide-react';
 import React, { ReactNode } from 'react';
 import { useLayout } from '../../contexts/LayoutContext';
 

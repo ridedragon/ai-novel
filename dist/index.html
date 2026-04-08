@@ -1,14 +1,131 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI 小说写作助手</title>
-    <script type="module" crossorigin src="/assets/index-E5Jqznen.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-Bq7F7DTY.css">
+    <script>
+      (function () {
+        try {
+          const storageKey = 'vite-ui-theme';
+          const theme = localStorage.getItem(storageKey) || 'dark';
+          const root = document.documentElement;
+          root.classList.remove('light', 'dark');
+
+          if (theme === 'system') {
+            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            root.classList.add(systemTheme);
+          } else {
+            root.classList.add(theme);
+          }
+        } catch (e) {
+          console.error('Theme init failed', e);
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-DdSDdO9J.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DGMpAScT.css">
   <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div
+        id="initial-loading"
+        style="
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          width: 100vw;
+          background-color: #09090b;
+          color: #f3f4f6;
+          font-family: system-ui, -apple-system, sans-serif;
+        "
+      >
+        <style>
+          .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: #3b82f6;
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 16px;
+          }
+          @keyframes spin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        </style>
+        <div class="spinner"></div>
+        <div style="font-size: 1.125rem; font-weight: 600">AI 小说写作助手</div>
+        <div id="loading-status" style="font-size: 0.875rem; color: #9ca3af; margin-top: 8px">
+          正在加载资源，请稍候...
+        </div>
+        <div
+          id="loading-error"
+          style="
+            display: none;
+            font-size: 0.75rem;
+            color: #ef4444;
+            margin-top: 12px;
+            max-width: 80%;
+            text-align: center;
+            font-family: monospace;
+            white-space: pre-wrap;
+          "
+        ></div>
+        <button
+          id="retry-button"
+          style="
+            display: none;
+            margin-top: 16px;
+            padding: 8px 16px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+          "
+          onclick="location.reload()"
+        >
+          重试
+        </button>
+      </div>
+    </div>
+    <script>
+      // 监控加载状态
+      window.addEventListener(
+        'error',
+        function (event) {
+          const errorDiv = document.getElementById('loading-error');
+          const retryBtn = document.getElementById('retry-button');
+          if (errorDiv) {
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = '初始化错误: ' + (event.error ? event.error.message : event.message);
+          }
+          if (retryBtn) retryBtn.style.display = 'block';
+        },
+        true,
+      );
+
+      // 超时监控
+      setTimeout(function () {
+        const initialLoading = document.getElementById('initial-loading');
+        if (initialLoading) {
+          const statusDiv = document.getElementById('loading-status');
+          const errorDiv = document.getElementById('loading-error');
+          const retryBtn = document.getElementById('retry-button');
+          if (statusDiv && !errorDiv.textContent) {
+            statusDiv.textContent = '加载时间过长，可能是 IndexedDB 响应慢或资源加载失败';
+            statusDiv.style.color = '#f59e0b';
+            if (retryBtn) retryBtn.style.display = 'block';
+          }
+        }
+      }, 10000); // 10秒超时
+    </script>
   </body>
 </html>

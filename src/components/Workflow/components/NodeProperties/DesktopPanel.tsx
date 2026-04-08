@@ -40,7 +40,7 @@ export const DesktopPanel = ({
   consolidatedModelList,
   nodes,
 }: DesktopPanelProps) => {
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<number | null>(null);
   const [isInstructionExpanded, setIsInstructionExpanded] = useState(false);
 
   const creationInfoVolumeInfo = useMemo(() => {

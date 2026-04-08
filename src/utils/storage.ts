@@ -1,4 +1,5 @@
-import { del, get, set } from 'idb-keyval';
+import * as idb from 'idb-keyval';
+const { del, get, set } = idb;
 import terminal from 'virtual:terminal';
 import { ChapterVersion, Novel } from '../types';
 
@@ -626,7 +627,7 @@ export const storage = {
   _lastSaveTime: 0,
   _saveCountInWindow: 0,
   // 保存防抖定时器
-  _saveDebounceTimer: null as NodeJS.Timeout | null,
+  _saveDebounceTimer: null as number | null,
   // 待保存的 novels 引用
   _pendingNovels: null as Novel[] | null,
 

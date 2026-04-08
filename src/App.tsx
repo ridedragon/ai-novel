@@ -32,15 +32,11 @@ const AdvancedSettingsModal = lazy(() =>
 const AnalysisResultModal = lazy(() =>
   import('./components/Modals/AnalysisResultModal').then(m => ({ default: m.AnalysisResultModal })),
 );
-const AutoWriteConfigModal = lazy(() =>
-  import('./components/Modals/AutoWriteConfigModal').then(m => ({ default: m.AutoWriteConfigModal })),
-);
+
 const CreateNovelModal = lazy(() =>
   import('./components/Modals/CreateNovelModal').then(m => ({ default: m.CreateNovelModal })),
 );
-const GeneratorPromptEditModal = lazy(() =>
-  import('./components/Modals/GeneratorPromptEditModal').then(m => ({ default: m.GeneratorPromptEditModal })),
-);
+
 const GeneratorSettingsModal = lazy(() =>
   import('./components/Modals/GeneratorSettingsModal').then(m => ({ default: m.GeneratorSettingsModal })),
 );
@@ -65,7 +61,7 @@ import { storage } from './utils/storage';
 import { checkAndGenerateSummary } from './utils/SummaryManager';
 import { initializeBuiltinSkills } from './skills/builtinSkills';
 import { skillRegistry } from './skills/SkillRegistry';
-import { SkillTriggerMatcher, SkillLoader } from './skills';
+
 import SkillManager from './components/SkillManager';
 
 function App() {
@@ -91,7 +87,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [showCreateNovelModal, setShowCreateNovelModal] = useState(false);
-  const [showAutoWriteModal, setShowAutoWriteModal] = useState(false);
+
   const [showAnalysisResultModal, setShowAnalysisResultModal] = useState(false);
   const [showRegexModal, setShowRegexModal] = useState(false);
   const [showGeneratorSettingsModal, setShowGeneratorSettingsModal] = useState(false);
@@ -141,7 +137,7 @@ function App() {
   const worldviewAbortControllerRef = useRef<AbortController | null>(null);
   const inspirationAbortControllerRef = useRef<AbortController | null>(null);
   const plotOutlineAbortControllerRef = useRef<AbortController | null>(null);
-  const generateAbortControllerRef = useRef<AbortController | null>(null);
+
 
   // 参考选择器状态
   const [selectedWorldviewSetId, setSelectedWorldviewSetId] = useState<string | null>(null);
@@ -171,7 +167,7 @@ function App() {
   // 辅助函数：切换条目选择
   const handleToggleItem = (
     type: 'worldview' | 'character' | 'inspiration' | 'outline' | 'reference',
-    setId: string,
+    _setId: string,
     index: number,
   ) => {
     const setIndicesMap = {
@@ -291,32 +287,7 @@ function App() {
     return [...config.globalRegexScripts, ...(activePreset?.regexScripts || [])];
   }, [config.globalRegexScripts, completion.completionPresets, completion.activePresetId]);
 
-  const handleOptimizeAction = useCallback(
-    async (tid?: number, content?: string) => {
-      await autoWrite.handleOptimize({
-        targetId: tid || novelData.activeChapterId!,
-        initialContent: content,
-        activeNovelId: novelData.activeNovelId,
-        novelsRef: novelData.novelsRef,
-        optimizePresets: generators.optimizePresets,
-        activeOptimizePresetId: generators.activeOptimizePresetId,
-        optimizeModel: config.optimizeModel,
-        apiKey: config.apiKey,
-        baseUrl: config.baseUrl,
-        maxRetries: config.maxRetries,
-        twoStepOptimization: config.twoStepOptimization,
-        analysisPresets: generators.analysisPresets,
-        activeAnalysisPresetId: generators.activeAnalysisPresetId,
-        analysisModel: config.analysisModel,
-        setChapters: novelData.setChapters,
-        getActiveScripts,
-        onError: msg => {
-          setDialog({ isOpen: true, type: 'alert', title: '错误', message: msg, onConfirm: closeDialog });
-        },
-      });
-    },
-    [novelData, generators, config, getActiveScripts, autoWrite],
-  );
+
 
   const [newNovelData, setNewNovelData] = useState<{
     title: string;
@@ -1284,7 +1255,7 @@ function App() {
           }}
           onPrevVersion={() => handleVersionStep(-1)}
           onNextVersion={() => handleVersionStep(1)}
-          onSwitchVersion={async v =>
+          _onSwitchVersion={async (v: any) =>
             novelData.setChapters(prev =>
               prev.map(c =>
                 c.id === novelData.activeChapterId ? { ...c, activeVersionId: v.id, content: v.content } : c,

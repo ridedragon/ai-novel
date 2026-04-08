@@ -15,7 +15,7 @@ import {
 import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import terminal from 'virtual:terminal';
-import { Chapter, ChapterVersion } from '../../types';
+import { Chapter } from '../../types';
 
 interface ChapterEditorProps {
   activeChapter: Chapter | undefined;
@@ -37,7 +37,8 @@ interface ChapterEditorProps {
   onShowOptimizeSettings: () => void;
   onPrevVersion: () => void;
   onNextVersion: () => void;
-  onSwitchVersion: (version: ChapterVersion) => void;
+  _onSwitchVersion?: (version: any) => void;
+
   onDeleteChapter: (chapterId: number) => void;
 }
 
@@ -61,7 +62,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     onShowOptimizeSettings,
     onPrevVersion,
     onNextVersion,
-    onSwitchVersion,
+    _onSwitchVersion,
     onDeleteChapter,
   }) => {
     const contentScrollRef = useRef<HTMLDivElement>(null);
@@ -70,7 +71,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     const [localContent, setLocalContent] = useState('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
-    const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const syncTimeoutRef = useRef<number | null>(null);
     const isDirtyRef = useRef(false);
 
     // 当章节切换或进入编辑模式时，初始化本地状态

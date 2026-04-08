@@ -27,7 +27,7 @@ export function useNovelData() {
   const deletedChapterIdsRef = useRef<Set<number>>(new Set());
 
   // 自动保存的防抖定时器
-  const saveDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const saveDebounceTimerRef = useRef<number | null>(null);
 
   // 活跃状态
   const [activeNovelId, setActiveNovelId] = useState<string | null>(null);
