@@ -375,6 +375,13 @@ export const useWorkflowEngine = (options: {
             });
           }
 
+          // 创作信息节点跳过 outputEntries 处理：其内容已通过上方动态生成（【创作信息】），
+          // outputEntries 中存储的是首次执行时生成的内容，循环轮次等信息已过时，
+          // 会导致重复发送【创作信息输出】且循环轮次错误
+          if (pNode.data.typeKey === 'creationInfo') {
+            continue;
+          }
+
           if (pNode.data.outputEntries && pNode.data.outputEntries.length > 0) {
             // 本卷模式修复：如果开启了本卷模式，过滤掉隔离边界之前的节点输出
             if ((globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume') && j < boundaryIndex) {
