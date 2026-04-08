@@ -58,7 +58,7 @@ export class AutoWriteEngine {
     signal?: AbortSignal,
     runId?: string | null,
     workflowContext?: string | ChatMessage[],
-  ) {
+  ): Promise<{ shouldPauseForVolumeSwitch?: boolean; nextVolumeIndex?: number } | void> {
     // 核心增强 (Bug 1 反馈加固)：引擎级分卷继承机制
     // 如果外部未传入目标分卷（由于快照丢失或重启），自动回溯现有章节的最后一章所属的分卷
     if (!targetVolumeId && this.novel.chapters && this.novel.chapters.length > 0) {
@@ -121,13 +121,22 @@ export class AutoWriteEngine {
     while (startIndex < outline.length && checkActive()) {
       const batchItems: { item: OutlineItem; idx: number; id: number; volumeId?: string }[] = [];
 
+      // 核心修复：批量生成时对每个章节单独检查分卷归属
+      // 问题根源：原来批量生成时所有章节使用同一个 targetVolumeId
+      // 如果批次内包含跨卷章节（如第一卷最后几章 + 第二卷前几章）
+      // 第二卷的章节会被错误保存到第一卷
+      // 修复：对每个章节单独检查是否需要切换分卷，遇到跨卷时拆分批次
+      
+      let batchVolumeId = targetVolumeId; // 批次起始卷ID
+      let batchSplitIndex = -1; // 如果检测到跨卷，记录拆分位置
+      
       for (let i = 0; i < maxBatchSize; i++) {
         const currIdx = startIndex + i;
         if (currIdx >= outline.length) break;
 
         const item = outline[currIdx];
 
-        // --- 核心修复：分卷预检拦截 ---
+        // --- 核心修复：分卷预检拦截（每个章节单独检查）---
         // 在创建任何占位符或生成内容前，先询问 UI 是否需要分卷。
         // 这解决了分卷触发章被错误归入上一个分卷的问题。
         if (onBeforeChapter) {
@@ -139,7 +148,7 @@ export class AutoWriteEngine {
               onStatusUpdate(`分卷终止章完成，等待切换到下一卷...`);
               // 暂停当前执行，等待外部处理分卷切换
               this.isRunning = false;
-              return;
+              return { shouldPauseForVolumeSwitch: true, nextVolumeIndex: beforeResult.nextVolumeIndex };
             }
 
             if (beforeResult.updatedNovel) {
@@ -149,11 +158,21 @@ export class AutoWriteEngine {
             if (beforeResult.newVolumeId) {
               // --- 核心增强：分卷结束时的强制总结 ---
               // 如果发生了分卷切换，说明上一个分卷结束了，触发一次强制总结
-              // 修复：归一化 volumeId 比较，确保“未分类”到“具体分卷”的切换也能触发
+              // 修复：归一化 volumeId 比较，确保"未分类"到"具体分卷"的切换也能触发
               const currentVolId = targetVolumeId || '';
               const nextVolId = beforeResult.newVolumeId || '';
 
               if (currentVolId !== nextVolId) {
+                // 核心修复：批量生成时检测跨卷情况
+                // 如果批次已有章节（i > 0），检测到分卷切换意味着批次内包含跨卷章节
+                // 此时应该拆分批次，只处理当前卷的章节，下一卷的章节留待下一次循环
+                if (i > 0 && batchItems.length > 0) {
+                  terminal.log(`[AutoWriteEngine] Cross-volume detected in batch at index ${i}. Splitting batch. Current volume: ${currentVolId}, Next volume: ${nextVolId}`);
+                  batchSplitIndex = i;
+                  // 不继续添加更多章节到当前批次
+                  break;
+                }
+                
                 const lastChapterOfPrevVol = (this.novel.chapters || [])
                   .filter(c => {
                     const cVolId = c.volumeId || '';
@@ -186,13 +205,16 @@ export class AutoWriteEngine {
               // 立即切换当前及后续章节的目标分卷
               targetVolumeId = beforeResult.newVolumeId;
               terminal.log(`[AutoWriteEngine] Switched targetVolumeId to ${targetVolumeId} for chapter: ${item.title}`);
+              
+              // 核心修复：更新批次起始卷ID，确保后续章节使用正确的 volumeId
+              batchVolumeId = targetVolumeId;
             }
           }
         }
 
         // 核心修复 (Bug 2)：查重逻辑优化。
         // 1. 查重范围应严格限制在当前目标分卷（targetVolumeId）内。
-        // 2. 这解决了用户删除当前卷章节后，因“回收站”或“其他卷”存在同名章而导致引擎跳过生成的问题。
+        // 2. 这解决了用户删除当前卷章节后，因"回收站"或"其他卷"存在同名章而导致引擎跳过生成的问题。
         const existingChapter = (this.novel.chapters || []).find(c => {
           const isTitleMatch = c.title === item.title;
           if (!isTitleMatch) return false;
@@ -230,8 +252,11 @@ export class AutoWriteEngine {
           item,
           idx: currIdx,
           id: existingChapter ? existingChapter.id : Date.now() + Math.floor(Math.random() * 1000000) + i,
-          volumeId: targetVolumeId, // 锁定每一章所属的分卷 ID，防止批量生成时的分卷偏移
+          volumeId: targetVolumeId, // 锁定每一章所属的分卷 ID，每个章节单独设置
         });
+        
+        // 核心修复：记录当前章节使用的 volumeId，用于跨卷检测
+        // 如果后续章节检测到分卷切换，会比较与 batchVolumeId 是否一致
       }
 
       if (batchItems.length === 0) {
@@ -704,8 +729,8 @@ export class AutoWriteEngine {
                 this.novel = result.updatedNovel as Novel;
               }
               if ('shouldPauseForVolumeSwitch' in result && result.shouldPauseForVolumeSwitch) {
-                terminal.log('[AutoWrite] Volume switch signal received, pausing...');
-                return;
+                terminal.log('[AutoWrite] Volume switch signal received from onChapterComplete, pausing...');
+                return { shouldPauseForVolumeSwitch: true, nextVolumeIndex: result.nextVolumeIndex };
               }
             }
 

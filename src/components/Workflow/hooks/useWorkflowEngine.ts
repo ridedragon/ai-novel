@@ -257,8 +257,11 @@ export const useWorkflowEngine = (options: {
   };
 
   // 执行引擎核心逻辑
-  const runWorkflow = async (startInput: number | WorkflowStartOptions = 0) => {
-    const { startIndex, targetVolumeId, mode } = normalizeStartOptions(startInput);
+  const runWorkflow = async (opts?: number | WorkflowStartOptions) => {
+    const normalizedOpts = normalizeStartOptions(opts);
+    const startIndex = normalizedOpts.startIndex ?? workflowManager.getState().currentNodeIndex ?? 0;
+    const mode = normalizedOpts.mode;
+    const targetVolumeId = normalizedOpts.targetVolumeId;
     const logPrefix = isMobile ? '[Mobile Workflow]' : '[WORKFLOW]';
     terminal.log(
       `${logPrefix} 准备执行工作流, 起始索引: ${startIndex}, 模式: ${mode || 'normal'}, 目标卷: ${targetVolumeId || '未指定'}`,
@@ -1304,6 +1307,23 @@ export const useWorkflowEngine = (options: {
 
           if (currentLoopIndex < loopConfig.count) {
             console.log('[LOOP_NODE] LOOP CONTINUE:', { currentIteration: currentLoopIndex, totalIterations: loopConfig.count, targetLoopIndex: currentLoopIndex + 1 });
+            
+            // 核心修复：重写卷模式（单卷模式）下，不进行循环回跳
+            // 当用户指定了目标卷且有 mode（重写/全量模式），说明是"重写单卷"，只处理一卷
+            // 此时不应回跳到循环起点继续下一卷，而是在当前卷完成后直接完成循环
+            if (userSpecifiedTargetVolumeId && mode) {
+              console.log('[LOOP_NODE] 单卷重写模式：跳过循环回跳，直接完成循环', {
+                userSpecifiedTargetVolumeId,
+                mode,
+                currentLoopIndex,
+                totalIterations: loopConfig.count,
+              });
+              terminal.log(`[LOOP_NODE] 单卷重写模式：当前卷已完成，不再回跳到下一卷`);
+              // 标记循环完成
+              await syncNodeStatus(node.id, { status: 'completed', loopConfig: { ...loopConfig, currentIndex: 0 } }, i);
+              setEdgeAnimation(node.id, false);
+              continue;
+            }
             
             const outEdges = (workflowsRef.current.find(w => w.id === activeWorkflowId)?.edges || []).filter(
               e => e.source === node.id,
@@ -2851,8 +2871,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           
           const autoDetectStart = () => {
             terminal.log(`[ChapterNode] autoDetectStart: fVolId=${fVolId}, currentSet.items.length=${currentSet.items.length}`);
-            currentSet.items.forEach((item, k) => {
-              // Bug修复：移除未使用的 isStd 变量，简化逻辑
+            // Bug修复：重写自动检测逻辑
+            // 原问题：假设章节必须从0开始连续创建，导致中间缺失的章节被跳过
+            // 修复：直接找到第一个不存在或无内容的章节索引
+            for (let k = 0; k < currentSet.items.length; k++) {
+              const item = currentSet.items[k];
               // 核心修复：无论是否为标准章节标题，都必须检查卷ID
               // 因为每卷的章节标题都从"第一章"重新开始，如果不检查卷ID，
               // 会错误地将上一卷的同名章节（如"第一章"）认为是已存在，导致跳过生成
@@ -2870,18 +2893,19 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 }
               });
               
-              terminal.log(`[ChapterNode] autoDetect: k=${k}, title="${item.title}", exists=${!!ex}, hasContent=${!!ex?.content?.trim()}, wStart=${wStart}`);
+              const hasContent = ex && ex.content && ex.content.trim().length > 0;
+              terminal.log(`[ChapterNode] autoDetect: k=${k}, title="${item.title}", exists=${!!ex}, hasContent=${hasContent}`);
               
-              if (wStart === k && (!ex || !ex.content?.trim())) {
-                terminal.log(`[ChapterNode] autoDetect: will start from k=${k} "${item.title}"`);
+              // 找到第一个不存在或无内容的章节，这就是起始点
+              if (!ex || !hasContent) {
+                terminal.log(`[ChapterNode] autoDetect: found start point at k=${k} "${item.title}" (${!ex ? 'not exists' : 'no content'})`);
                 wStart = k;
+                return; // 找到起始点后立即返回
               }
-              else if (wStart === k) {
-                terminal.log(`[ChapterNode] autoDetect: skipping k=${k} "${item.title}" (already exists with content)`);
-                wStart = k + 1;
-              }
-            });
-            terminal.log(`[ChapterNode] autoDetectEnd: final wStart=${wStart}, itemsCount=${currentSet.items.length}`);
+            }
+            // 如果所有章节都已存在且有内容，则起始点为最后一个章节的下一个
+            wStart = currentSet.items.length;
+            terminal.log(`[ChapterNode] autoDetectEnd: all chapters complete, wStart=${wStart}`);
           };
           
           // Bug修复：始终调用 autoDetectStart，确保正确的卷ID匹配
@@ -2914,8 +2938,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             });
           }
           
+          let chapterResult: any = null;
           if (wStart < currentSet.items.length) {
-            await engine.run(
+            chapterResult = await engine.run(
               currentSet.items,
               wStart,
               globalConfig.prompts.filter((p: any) => p.active),
@@ -3098,16 +3123,26 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   }
                 }
 
+                // 核心修复：重写卷模式下，禁止切换到下一卷
+                // 重写卷模式的目的是专注重写当前卷，不应自动进入下一卷
+                if (userSpecifiedTargetVolumeId && mode) {
+                  shouldSwitch = false;
+                  nextVolumeName = '';
+                  terminal.log(`[WORKFLOW] 单卷重写模式：禁止切换到下一卷，shouldSwitch 强制为 false`);
+                }
+
                 // 核心修复：兜底卷切换检测
                 // 当 endChapter 未设置或无法匹配时，使用大纲项数量作为卷的章节数
                 // 如果当前大纲已全部生成完毕，也应该触发卷切换
-                if (!shouldSwitch) {
-                  // 检查当前卷是否还有剩余大纲项未生成
-                  const currentOutlineSet = localNovel.outlineSets?.find(s => {
+                // 注意：单卷重写模式下不执行此检测，因为该模式不应切换到下一卷
+                if (!shouldSwitch && !(userSpecifiedTargetVolumeId && mode)) {
+                  // Bug修复：使用 currentSet（通过 outlineSetId 找到的真正关联大纲集）
+                  // 而不是通过卷名称匹配，因为大纲集名称可能与卷标题不一致
+                  const effectiveOutlineSet = currentSet || localNovel.outlineSets?.find(s => {
                     const volTitle = localNovel.volumes?.find(v => v.id === (workflowManager.getActiveVolumeAnchor() || ''))?.title;
                     return s.name === volTitle;
                   });
-                  const outlineItemCount = currentOutlineSet?.items?.length || 0;
+                  const outlineItemCount = effectiveOutlineSet?.items?.length || 0;
                   const currentVolumeChapters = (localNovel.chapters || []).filter(c => {
                     return c.volumeId === (workflowManager.getActiveVolumeAnchor() || '') && 
                            (!c.subtype || c.subtype === 'story') && 
@@ -3129,6 +3164,31 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 }
 
                 console.log(`[VOLUME_SWITCH_CHECK] Final result: shouldSwitch=${shouldSwitch}, nextVolumeName="${nextVolumeName}"`);
+                
+                // 核心修复：重写卷模式下的工作流停止检测
+                // 只有在"重写卷模式"（通过"从指定位置启动工作流"功能启用）下才主动停止工作流
+                // 正常模式下，即使当前卷的所有章节已生成，工作流仍应继续执行后续节点
+                let shouldStopForVolumeComplete = false;
+                if (!shouldSwitch && userSpecifiedTargetVolumeId && mode) {
+                  // 仅在重写卷模式下检查：当前卷的所有大纲项是否都已生成完成
+                  // 使用 currentSet（通过 outlineSetId 找到的真正关联大纲集），而不是通过卷名称匹配
+                  const effectiveOutlineSet = currentSet || localNovel.outlineSets?.find(s => {
+                    const volTitle = localNovel.volumes?.find(v => v.id === (workflowManager.getActiveVolumeAnchor() || ''))?.title;
+                    return s.name === volTitle;
+                  });
+                  const outlineItemCount = effectiveOutlineSet?.items?.length || 0;
+                  const currentVolumeChapters = (localNovel.chapters || []).filter(c => {
+                    return c.volumeId === (workflowManager.getActiveVolumeAnchor() || '') && 
+                           (!c.subtype || c.subtype === 'story') && 
+                           c.content && c.content.trim().length > 0;
+                  }).length;
+                  
+                  // 重写卷模式下，当前卷的所有大纲项都已生成完成，主动停止工作流
+                  if (outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
+                    shouldStopForVolumeComplete = true;
+                    terminal.log(`[WORKFLOW] 重写卷模式: Volume ${currentVolumeIndex} complete: all ${currentVolumeChapters}/${outlineItemCount} outline items generated, stopping workflow`);
+                  }
+                }
                 
                 if (shouldSwitch && nextVolumeName) {
                   terminal.log(`[WORKFLOW] Creating next volume: ${nextVolumeName}`);
@@ -3393,6 +3453,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   };
                 }
                 
+                // 如果卷已完成（重写模式或无下一卷），返回停止信号
+                if (shouldStopForVolumeComplete) {
+                  return {
+                    updatedNovel: localNovel,
+                    shouldStopForVolumeComplete: true,
+                  };
+                }
+                
                 return localNovel;
               },
               async title => {
@@ -3436,6 +3504,27 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               // 移除冗余的“小说大纲”条目，因为 AutoWriteEngine 内部会自带更智能的“待创作章节大纲参考”
               dynamicContextMessages.filter(m => !m.content.startsWith('【小说大纲】：')),
             );
+          }
+          // 核心修复：检查 AutoWriteEngine 的返回值，如果因为卷切换而暂停，则停止工作流
+          if (chapterResult && typeof chapterResult === 'object' && 'shouldPauseForVolumeSwitch' in chapterResult && chapterResult.shouldPauseForVolumeSwitch) {
+            terminal.log(`[WORKFLOW] AutoWriteEngine paused for volume switch, stopping workflow at node ${node.id}`);
+            await syncNodeStatus(node.id, { label: NODE_CONFIGS.chapter.defaultLabel, status: 'completed' }, i);
+            setEdgeAnimation(node.id, false);
+            // 卷切换暂停：工作流到此停止，用户需要手动重新启动来继续下一卷
+            workflowManager.stop();
+            clearAllEdgeAnimations();
+            keepAliveManager.disable();
+            return;
+          }
+          // 核心修复：重写卷模式下，卷正文创作完成后（无下一卷）主动停止工作流
+          if (chapterResult && typeof chapterResult === 'object' && 'shouldStopForVolumeComplete' in chapterResult && (chapterResult as any).shouldStopForVolumeComplete) {
+            terminal.log(`[WORKFLOW] Volume complete (no next volume), stopping workflow at node ${node.id}`);
+            await syncNodeStatus(node.id, { label: NODE_CONFIGS.chapter.defaultLabel, status: 'completed' }, i);
+            setEdgeAnimation(node.id, false);
+            workflowManager.stop();
+            clearAllEdgeAnimations();
+            keepAliveManager.disable();
+            return;
           }
           if (checkActive())
             await syncNodeStatus(node.id, { label: NODE_CONFIGS.chapter.defaultLabel, status: 'completed' }, i);
