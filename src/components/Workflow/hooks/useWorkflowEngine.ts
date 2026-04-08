@@ -2747,7 +2747,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           if (!currentSet?.items?.length) throw new Error('未关联有效大纲集。');
 
           // 核心修复：优先使用用户指定的卷ID，确保章节生成到正确的卷
-          let fVolId = userSpecifiedTargetVolumeId || (node.data.targetVolumeId && localNovel.volumes?.some(v => v.id === node.data.targetVolumeId) ? node.data.targetVolumeId : null) || workflowManager.getActiveVolumeAnchor() || '';
+          // 调试日志：检查 localNovel.volumes 和 node.data.targetVolumeId 的状态
+          terminal.log(`[VOLUME_DEBUG] node.data.targetVolumeId=${node.data.targetVolumeId}, localNovel.volumes?.length=${localNovel.volumes?.length}, volumes=${JSON.stringify(localNovel.volumes?.map(v => v.id))}`);
+          const targetVolumeIdValid = node.data.targetVolumeId && localNovel.volumes?.some(v => v.id === node.data.targetVolumeId);
+          terminal.log(`[VOLUME_DEBUG] targetVolumeIdValid=${targetVolumeIdValid}, userSpecifiedTargetVolumeId=${userSpecifiedTargetVolumeId}, activeVolumeAnchor=${workflowManager.getActiveVolumeAnchor()}`);
+          let fVolId = userSpecifiedTargetVolumeId || (targetVolumeIdValid ? node.data.targetVolumeId : null) || workflowManager.getActiveVolumeAnchor() || '';
           if (!fVolId && localNovel.chapters?.length) {
             for (let k = localNovel.chapters.length - 1; k >= 0; k--) {
               const chapVolId = localNovel.chapters[k].volumeId;
