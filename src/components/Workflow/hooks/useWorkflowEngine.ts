@@ -529,6 +529,93 @@ export const useWorkflowEngine = (options: {
             }
           }
         }
+
+        // 核心修复：从特定节点开始时，恢复 currentVolumeIndex 并用多策略校准 activeVolumeAnchor
+        // 问题：当用户从最后一卷的节点开始时，上述逻辑可能把 anchor 设到错误的卷
+        // 修复：按优先级检查 startNode.targetVolumeId > volumePlans > lastChapter
+        if (startIndex > 0 && startIndex < sortedNodes.length) {
+          const startNode = sortedNodes[startIndex];
+
+          // 策略1：起始章节节点的 targetVolumeId（最高优先级）
+          if (startNode?.data?.targetVolumeId && startNode.data.typeKey === 'chapter') {
+            workflowManager.setActiveVolumeAnchor(startNode.data.targetVolumeId as string);
+            const volIdx = localNovel.volumes?.findIndex(v => v.id === startNode.data.targetVolumeId);
+            if (volIdx !== undefined && volIdx >= 0) {
+              workflowManager.setCurrentVolumeIndex(volIdx);
+            }
+            terminal.log(`[WORKFLOW_START] Restored from startNode.targetVolumeId: volIdx=${volIdx}, volId=${startNode.data.targetVolumeId}`);
+          }
+          // 策略2：起始节点的 folderName
+          else if (startNode?.data?.folderName) {
+            const matchingVol = localNovel.volumes?.find(v => v.title === startNode.data.folderName);
+            if (matchingVol) {
+              workflowManager.setActiveVolumeAnchor(matchingVol.id);
+              const volIdx = localNovel.volumes?.findIndex(v => v.id === matchingVol.id);
+              if (volIdx !== undefined && volIdx >= 0) {
+                workflowManager.setCurrentVolumeIndex(volIdx);
+              }
+              terminal.log(`[WORKFLOW_START] Restored from startNode.folderName: volIdx=${volIdx}, name="${startNode.data.folderName}"`);
+            }
+          }
+
+          // 策略3：如果有 volumePlans，根据章节数校准
+          const volumePlans = workflowManager.getVolumePlans();
+          if (volumePlans.length > 0) {
+            const storyChapterCount = (localNovel.chapters || []).filter(
+              c => !c.subtype || c.subtype === 'story'
+            ).length;
+            if (storyChapterCount > 0) {
+              for (let vIdx = 0; vIdx < volumePlans.length; vIdx++) {
+                const cfg = volumePlans[vIdx];
+                const sc = cfg.startChapter || 1;
+                const ec = cfg.endChapter || Infinity;
+                if (storyChapterCount >= sc && storyChapterCount <= ec) {
+                  workflowManager.setCurrentVolumeIndex(vIdx);
+                  const volName = cfg.volumeName || cfg.folderName;
+                  const matchVol = localNovel.volumes?.find(v => v.title === volName);
+                  if (matchVol && !workflowManager.getActiveVolumeAnchor()) {
+                    workflowManager.setActiveVolumeAnchor(matchVol.id);
+                  }
+                  terminal.log(`[WORKFLOW_START] Calibrated from volumePlans: volIdx=${vIdx}, chapters=${storyChapterCount}, name="${volName}"`);
+                  break;
+                }
+                if (storyChapterCount > ec && vIdx === volumePlans.length - 1) {
+                  workflowManager.setCurrentVolumeIndex(vIdx);
+                  const volName = cfg.volumeName || cfg.folderName;
+                  const matchVol = localNovel.volumes?.find(v => v.title === volName);
+                  if (matchVol && !workflowManager.getActiveVolumeAnchor()) {
+                    workflowManager.setActiveVolumeAnchor(matchVol.id);
+                  }
+                  terminal.log(`[WORKFLOW_START] Calibrated (last volume): volIdx=${vIdx}, chapters=${storyChapterCount}`);
+                }
+              }
+            }
+          }
+
+          // 策略4：如果还是没有 anchor，使用最后一章的 volumeId 并找到正确的索引
+          if (!workflowManager.getActiveVolumeAnchor()) {
+            const lastStoryCh = [...(localNovel.chapters || [])].reverse().find(c => !c.subtype || c.subtype === 'story');
+            if (lastStoryCh?.volumeId) {
+              workflowManager.setActiveVolumeAnchor(lastStoryCh.volumeId);
+              const volIdx = localNovel.volumes?.findIndex(v => v.id === lastStoryCh.volumeId);
+              if (volIdx !== undefined && volIdx >= 0) {
+                workflowManager.setCurrentVolumeIndex(volIdx);
+              }
+              terminal.log(`[WORKFLOW_START] Fallback to last story chapter: volIdx=${volIdx}, volId=${lastStoryCh.volumeId}`);
+            }
+          }
+
+          // 同步 currentWorkflowFolder
+          const anchorId = workflowManager.getActiveVolumeAnchor();
+          if (anchorId) {
+            const anchorVol = localNovel.volumes?.find(v => v.id === anchorId);
+            if (anchorVol) {
+              currentWorkflowFolder = anchorVol.title;
+            }
+          }
+
+          terminal.log(`[WORKFLOW_START] Final state: volIdx=${workflowManager.getCurrentVolumeIndex()}, anchor=${workflowManager.getActiveVolumeAnchor()}, folder="${currentWorkflowFolder}"`);
+        }
       }
 
       for (let i = startIndex; i < sortedNodes.length; i++) {

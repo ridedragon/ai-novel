@@ -113,6 +113,7 @@ function App() {
 
   const [showSkillManager, setShowSkillManager] = useState(false);
   const [skillsCount, setSkillsCount] = useState(0);
+  const [collapsedVolumesByNovel, setCollapsedVolumesByNovel] = useState<Record<string, Record<string, boolean>>>({});
 
   useEffect(() => {
     initializeBuiltinSkills();
@@ -208,6 +209,48 @@ function App() {
     () => completion.completionPresets.find(p => p.id === completion.activePresetId),
     [completion.completionPresets, completion.activePresetId],
   );
+
+  useEffect(() => {
+    if (!novelData.activeNovelId) return;
+
+    setCollapsedVolumesByNovel(prev => {
+      const currentNovelState = prev[novelData.activeNovelId!] || {};
+      let changed = false;
+      const nextNovelState = { ...currentNovelState };
+
+      novelData.volumes.forEach(volume => {
+        if (!(volume.id in nextNovelState)) {
+          nextNovelState[volume.id] = Boolean(volume.collapsed);
+          changed = true;
+        }
+      });
+
+      Object.keys(nextNovelState).forEach(volumeId => {
+        if (!novelData.volumes.some(volume => volume.id === volumeId)) {
+          delete nextNovelState[volumeId];
+          changed = true;
+        }
+      });
+
+      if (!changed) return prev;
+
+      return {
+        ...prev,
+        [novelData.activeNovelId!]: nextNovelState,
+      };
+    });
+  }, [novelData.activeNovelId, novelData.volumes]);
+
+  const sidebarVolumes = useMemo(() => {
+    const currentNovelCollapsedState = novelData.activeNovelId
+      ? collapsedVolumesByNovel[novelData.activeNovelId] || {}
+      : {};
+
+    return novelData.volumes.map(volume => ({
+      ...volume,
+      collapsed: currentNovelCollapsedState[volume.id] ?? Boolean(volume.collapsed),
+    }));
+  }, [novelData.activeNovelId, novelData.volumes, collapsedVolumesByNovel]);
 
   useEffect(() => {
     if (completion.prompts.length > 0) {
@@ -541,13 +584,26 @@ function App() {
       sidebarLeft={
         <AppSidebarLeft
           chapters={novelData.chapters}
-          volumes={novelData.volumes}
+          volumes={sidebarVolumes}
           chaptersByVolume={novelData.chaptersByVolume}
           activeChapterId={novelData.activeChapterId}
           setActiveChapterId={novelData.setActiveChapterId}
           setShowOutline={setShowOutline}
           handleToggleVolumeCollapse={vid =>
-            novelData.setVolumes(vs => vs.map(v => (v.id === vid ? { ...v, collapsed: !v.collapsed } : v)))
+            setCollapsedVolumesByNovel(prev => {
+              if (!novelData.activeNovelId) return prev;
+
+              const currentNovelState = prev[novelData.activeNovelId] || {};
+              const fallbackCollapsed = novelData.volumes.find(v => v.id === vid)?.collapsed ?? false;
+
+              return {
+                ...prev,
+                [novelData.activeNovelId]: {
+                  ...currentNovelState,
+                  [vid]: !(currentNovelState[vid] ?? fallbackCollapsed),
+                },
+              };
+            })
           }
           handleExportVolume={vid => {
             const vol = novelData.volumes.find(v => v.id === vid);
