@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@xyflow/react": "^12.10.0",
+    "@xyflow/react": "^12.10.2",
     "adm-zip": "^0.5.17",
     "express": "^5.2.1",
     "idb-keyval": "^6.2.2",

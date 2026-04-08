@@ -17,7 +17,6 @@ interface AIChatModalProps {
   isOpen: boolean
   onClose: () => void
   novel: Novel | undefined
-  activeChapter: Chapter | undefined
   activeOutlineSetId: string | null
   apiKey: string
   baseUrl: string
@@ -32,7 +31,6 @@ export function AIChatModal({
   isOpen,
   onClose,
   novel,
-  activeChapter,
   activeOutlineSetId,
   apiKey,
   baseUrl,

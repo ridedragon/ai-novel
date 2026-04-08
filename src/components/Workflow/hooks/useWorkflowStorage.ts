@@ -22,7 +22,7 @@ export const useWorkflowStorage = (
     activeNovelRef.current = activeNovel;
   }, [activeNovel]);
 
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<number | null>(null);
   const workflowsRef = useRef<WorkflowData[]>([]);
 
   // 第四次修复核心：使用 useEffect 同步 Ref，而不是在每次渲染时同步
@@ -160,7 +160,7 @@ export const useWorkflowStorage = (
         } catch (e) {
           terminal.error(`[WORKFLOW] 自动保存失败: ${e}`);
         }
-      }, saveDelay);
+      }, saveDelay) as unknown as number;
     },
     [isOpen, activeWorkflowId, isLoading],
   );
