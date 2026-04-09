@@ -47,11 +47,23 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
   // 3. 构建分卷拓扑：按剧情章出现的先后顺序排列分卷
   const volumeOrder: (string | undefined)[] = [];
   const storiesByVol = new Map<string | undefined, Chapter[]>();
+  const volumeFirstOccurrence = new Map<string | undefined, number>();
 
-  allStories.forEach(s => {
-    if (!volumeOrder.includes(s.volumeId)) volumeOrder.push(s.volumeId);
+  // 记录每个分卷首次出现的位置
+  allStories.forEach((s, index) => {
+    if (!volumeFirstOccurrence.has(s.volumeId)) {
+      volumeFirstOccurrence.set(s.volumeId, index);
+      volumeOrder.push(s.volumeId);
+    }
     if (!storiesByVol.has(s.volumeId)) storiesByVol.set(s.volumeId, []);
     storiesByVol.get(s.volumeId)!.push(s);
+  });
+
+  // 按分卷首次出现的位置排序，确保分卷顺序的稳定性
+  volumeOrder.sort((a, b) => {
+    const posA = volumeFirstOccurrence.get(a) || 0;
+    const posB = volumeFirstOccurrence.get(b) || 0;
+    return posA - posB;
   });
 
   const finalResult: Chapter[] = [];
@@ -90,6 +102,25 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
     if (firstStoryIdx !== -1) {
       const [badItem] = finalResult.splice(0, 1);
       finalResult.splice(firstStoryIdx, 0, badItem);
+    }
+  }
+
+  // 7. 确保总结章的volumeId与挂载点章节一致
+  for (let i = 1; i < finalResult.length; i++) {
+    const current = finalResult[i];
+    if (isSummaryChapter(current)) {
+      // 找到前一个非总结章节作为挂载点
+      let anchor: Chapter | null = null;
+      for (let j = i - 1; j >= 0; j--) {
+        if (!isSummaryChapter(finalResult[j])) {
+          anchor = finalResult[j];
+          break;
+        }
+      }
+      // 如果找到挂载点，确保总结章的volumeId与挂载点一致
+      if (anchor && current.volumeId !== anchor.volumeId) {
+        current.volumeId = anchor.volumeId;
+      }
     }
   }
 
