@@ -869,6 +869,15 @@ export const useWorkflowEngine = (options: {
             continue;
           }
           
+          // 核心修复：如果是从暂停状态恢复（startIndex > 0），并且当前节点是暂停节点，
+          // 说明该节点已经执行过暂停操作，应该直接跳过，继续执行下一个节点
+          if (startIndex > 0) {
+            terminal.log(`${logPrefix} Pause node already processed, skipping: ${node.id}`);
+            await syncNodeStatus(node.id, { status: 'completed' }, i);
+            setEdgeAnimation(node.id, false);
+            continue;
+          }
+          
           await syncNodeStatus(node.id, { status: 'executing' }, i);
           setEdgeAnimation(node.id, true);
           await new Promise(resolve => setTimeout(resolve, 300));
