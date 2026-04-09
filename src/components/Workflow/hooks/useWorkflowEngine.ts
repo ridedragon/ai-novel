@@ -2646,53 +2646,51 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           await syncNodeStatus(node.id, { status: 'executing' }, i);
           setEdgeAnimation(node.id, true);
 
-          // 获取目标卷信息（Bug1 终修：必须校验 targetVolumeId 是否真实存在）
-          const hasValidVolume = (vid?: string) =>
-            !!vid && !!localNovel.volumes?.some(v => String(v.id) === String(vid));
-
-          let targetVolumeId = node.data.targetVolumeId as string;
-          if (!targetVolumeId) {
-            targetVolumeId = workflowManager.getActiveVolumeAnchor() || '';
-          }
-
-          // 非空不代表有效：如果是陈旧卷 ID（例如卷被删除后残留），必须清空并走兜底链路
-          if (targetVolumeId && !hasValidVolume(targetVolumeId)) {
-            terminal.warn(`[OutlineAndChapter] 检测到无效 targetVolumeId=${targetVolumeId}，将重新解析目标分卷`);
-            targetVolumeId = '';
-          }
-
-          // 增强：如果仍然没有目标卷，尝试从当前工作流文件夹或分卷规划中获取
-          if (!targetVolumeId && localNovel.volumes && localNovel.volumes.length > 0) {
-            // 尝试从当前工作流文件夹匹配
-            if (currentWorkflowFolder) {
+          // Bug1修复：辅助函数 - 获取并验证有效的 targetVolumeId
+          const getValidVolumeId = () => {
+            // 1. 首先尝试从节点数据获取
+            let vid = node.data.targetVolumeId as string;
+            
+            // 2. 如果没有，从工作流管理器获取
+            if (!vid) {
+              vid = workflowManager.getActiveVolumeAnchor() || '';
+            }
+            
+            // 3. 验证获取到的ID是否有效
+            const isValidVolume = (id?: string) =>
+              !!id && !!localNovel.volumes?.some(v => String(v.id) === String(id));
+              
+            if (vid && isValidVolume(vid)) {
+              return vid;
+            }
+            
+            // 4. 如果无效，尝试从当前工作流文件夹匹配
+            if (currentWorkflowFolder && localNovel.volumes) {
               const volByFolder = localNovel.volumes.find(v => v.title === currentWorkflowFolder);
               if (volByFolder) {
-                targetVolumeId = volByFolder.id;
+                return volByFolder.id;
               }
             }
-
-            // 尝试从分卷规划中获取
-            if (!targetVolumeId) {
-              const volumePlans = workflowManager.getVolumePlans();
-              const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
-              if (volumePlans[currentVolumeIndex]) {
-                const volumePlan = volumePlans[currentVolumeIndex];
-                const volByName = localNovel.volumes.find(v =>
-                  v.title === volumePlan.volumeName || v.title === volumePlan.folderName
-                );
-                if (volByName) {
-                  targetVolumeId = volByName.id;
-                }
+            
+            // 5. 尝试从分卷规划中获取
+            const volumePlans = workflowManager.getVolumePlans();
+            const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
+            if (volumePlans[currentVolumeIndex] && localNovel.volumes) {
+              const volumePlan = volumePlans[currentVolumeIndex];
+              const volByName = localNovel.volumes.find(v =>
+                v.title === volumePlan.volumeName || v.title === volumePlan.folderName
+              );
+              if (volByName) {
+                return volByName.id;
               }
             }
-
-            // 兜底：使用第一个卷（Bug1修复：增加空数组保护）
-            if (!targetVolumeId && localNovel.volumes && localNovel.volumes.length > 0) {
-              targetVolumeId = localNovel.volumes[0].id;
+            
+            // 6. 兜底：使用第一个有效卷
+            if (localNovel.volumes && localNovel.volumes.length > 0) {
+              return localNovel.volumes[0].id;
             }
-          }
-
-          if (!targetVolumeId) {
+            
+            // 7. 最后手段：创建新卷
             const defaultVolumeName = currentWorkflowFolder || node.data.folderName || `第1卷`;
             const defaultVolume: NovelVolume = {
               id: `vol_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -2700,9 +2698,16 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               collapsed: false,
             };
             localNovel.volumes = [...(localNovel.volumes || []), defaultVolume];
-            targetVolumeId = defaultVolume.id;
+            return defaultVolume.id;
+          };
+
+          // 获取有效的 targetVolumeId
+          let targetVolumeId = getValidVolumeId();
+          
+          // 如果是新创建的卷，需要更新 UI
+          if (!localNovel.volumes?.some(v => v.id === targetVolumeId)) {
             await updateLocalAndGlobal(localNovel);
-            terminal.log(`[OutlineAndChapter] 自动创建默认分卷: ${defaultVolumeName}, id=${targetVolumeId}`);
+            terminal.log(`[OutlineAndChapter] 自动创建默认分卷, id=${targetVolumeId}`);
           }
 
           if (targetVolumeId) {
@@ -2822,18 +2827,38 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
           // 预创建章节占位符，确保章节立即显示在分卷下
           const chapterPlaceholders: Chapter[] = [];
+          
+          // Bug1修复：在创建占位符前再次验证并确保 targetVolumeId 有效
+          const ensureValidVolumeId = () => {
+            const isValid = (id?: string) =>
+              !!id && !!localNovel.volumes?.some(v => String(v.id) === String(id));
+            if (!isValid(targetVolumeId)) {
+              terminal.warn(`[OutlineAndChapter] targetVolumeId 无效，重新获取: ${targetVolumeId}`);
+              targetVolumeId = getValidVolumeId();
+            }
+            return targetVolumeId;
+          };
+          
+          // 确保有有效的 volumeId
+          let finalVolumeId = ensureValidVolumeId();
+          
+          // 如果创建了新卷，需要先更新 UI
+          if (!localNovel.volumes?.some(v => v.id === finalVolumeId)) {
+            await updateLocalAndGlobal(localNovel);
+          }
+          
           for (let pi = 0; pi < chapterCount; pi++) {
             chapterPlaceholders.push({
               id: Date.now() + pi,
               title: `第${pi + 1}章`,
               content: '',
-              volumeId: targetVolumeId,
+              volumeId: finalVolumeId,
               subtype: 'story',
             });
           }
           localNovel.chapters = [...(localNovel.chapters || []), ...chapterPlaceholders];
           await updateLocalAndGlobal(localNovel);
-          terminal.log(`[OutlineAndChapter] 已创建 ${chapterCount} 个章节占位符, volumeId=${targetVolumeId}`);
+          terminal.log(`[OutlineAndChapter] 已创建 ${chapterCount} 个章节占位符, volumeId=${finalVolumeId}`);
 
           for (let chapterIndex = 0; chapterIndex < chapterCount; chapterIndex++) {
             if (!checkActive()) break;
@@ -2933,42 +2958,41 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 outlineEntries = await extractEntries(parsed);
                 break;
               } catch (parseError: any) {
-                terminal.warn(`[OutlineAndChapter] 大纲JSON解析失败(重试${parseRetry}/2): ${parseError.message}`);
+                terminal.warn(`[WORKFLOW] JSON 解析失败 (outlineAndChapter): ${parseError.message}`);
+                console.warn(`[WORKFLOW] JSON 解析失败，完整原始响应:`, parsedOutlineResponse);
 
-                if (parseRetry >= 2) {
-                  outlineEntries = [{
-                    title: `第${chapterIndex + 1}章`,
-                    content: parsedOutlineResponse || outlineResponse,
-                  }];
+                if (parseRetry < 2) {
+                  // Bug3修复：与大纲节点一致的错误提示
+                  parseMessages = [
+                    ...parseMessages,
+                    { role: 'assistant', content: parsedOutlineResponse },
+                    {
+                      role: 'user',
+                      content: `(系统提示：你生成的内容格式有误，无法解析为JSON。请修正错误，仅输出正确的JSON格式内容，不要添加任何其他说明文字。确保JSON格式严格正确，包括正确的引号、逗号和括号。)`,
+                    },
+                  ];
+
+                  const repairCompletionParams: any = {
+                    model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
+                    messages: parseMessages,
+                    temperature: finalOutlinePreset.temperature,
+                    top_p: finalOutlinePreset.topP,
+                  };
+                  if ((finalOutlinePreset as any).maxTokens)
+                    repairCompletionParams.max_tokens = (finalOutlinePreset as any).maxTokens;
+                  if ((finalOutlinePreset as any).frequencyPenalty)
+                    repairCompletionParams.frequency_penalty = (finalOutlinePreset as any).frequencyPenalty;
+                  if ((finalOutlinePreset as any).presencePenalty)
+                    repairCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
+
+                  const repairedCompletion = await outlineOpenai.chat.completions.create(repairCompletionParams);
+                  parsedOutlineResponse = repairedCompletion.choices[0]?.message?.content || parsedOutlineResponse;
+                  parseRetry++;
+                } else {
+                  // Bug3修复：与大纲节点一致的fallback逻辑
+                  outlineEntries = [{ title: `生成结果 ${new Date().toLocaleTimeString()}`, content: parsedOutlineResponse || outlineResponse }];
                   break;
                 }
-
-                parseMessages = [
-                  ...parseMessages,
-                  { role: 'assistant', content: parsedOutlineResponse },
-                  {
-                    role: 'user',
-                    content:
-                      '(系统提示：你生成的大纲 JSON 格式有误，无法解析。请仅输出严格合法的 JSON，保持原有语义，不要输出任何解释文字。)',
-                  },
-                ];
-
-                const repairCompletionParams: any = {
-                  model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
-                  messages: parseMessages,
-                  temperature: finalOutlinePreset.temperature,
-                  top_p: finalOutlinePreset.topP,
-                };
-                if ((finalOutlinePreset as any).maxTokens)
-                  repairCompletionParams.max_tokens = (finalOutlinePreset as any).maxTokens;
-                if ((finalOutlinePreset as any).frequencyPenalty)
-                  repairCompletionParams.frequency_penalty = (finalOutlinePreset as any).frequencyPenalty;
-                if ((finalOutlinePreset as any).presencePenalty)
-                  repairCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
-
-                const repairedCompletion = await outlineOpenai.chat.completions.create(repairCompletionParams);
-                parsedOutlineResponse = repairedCompletion.choices[0]?.message?.content || parsedOutlineResponse;
-                parseRetry++;
               }
             }
 
@@ -2999,9 +3023,20 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               ? localNovel.chapters.find(c => c.id === chapterPlaceholders[chapterIndex].id)
               : null;
             if (placeholderChapter) {
+              // Bug1修复：在更新标题前验证并确保 volumeId 有效
+              const isValidVolume = (id?: string) =>
+                !!id && !!localNovel.volumes?.some(v => String(v.id) === String(id));
+                
+              if (!isValidVolume(placeholderChapter.volumeId)) {
+                terminal.warn(`[OutlineAndChapter] 章节 volumeId 无效，重新分配: ${placeholderChapter.volumeId}`);
+                // 使用当前有效的 targetVolumeId
+                placeholderChapter.volumeId = finalVolumeId;
+              }
+              
               placeholderChapter.title = resolvedTitle;
               // Bug1修复：更新占位符标题后立即刷新UI，确保章节名称在分卷下立即更新
               await updateLocalAndGlobal(localNovel);
+              terminal.log(`[OutlineAndChapter] 更新章节标题: id=${placeholderChapter.id}, title=${resolvedTitle}, volumeId=${placeholderChapter.volumeId}`);
             }
 
             // 添加大纲到输出条目
@@ -3108,9 +3143,15 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             }
 
             // 确保 targetVolumeId 不为空且有效（防止落到未分卷）
-            if (!targetVolumeId || !localNovel.volumes?.some(v => String(v.id) === String(targetVolumeId))) {
-              targetVolumeId = localNovel.volumes?.[0]?.id || '';
-              terminal.warn(`[OutlineAndChapter] 警告: 使用默认分卷 ID: ${targetVolumeId}`);
+            const isValidVolume = (id?: string) =>
+              !!id && !!localNovel.volumes?.some(v => String(v.id) === String(id));
+              
+            if (!isValidVolume(finalVolumeId)) {
+              terminal.warn(`[OutlineAndChapter] 警告: finalVolumeId 无效，重新获取`);
+              finalVolumeId = getValidVolumeId();
+              if (!localNovel.volumes?.some(v => v.id === finalVolumeId)) {
+                await updateLocalAndGlobal(localNovel);
+              }
             }
             
             // 更新占位符章节的内容（而非创建新章节）
@@ -3120,6 +3161,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               : null;
             
             if (existingChapter) {
+              // Bug1修复：确保章节有有效的 volumeId
+              if (!isValidVolume(existingChapter.volumeId)) {
+                terminal.warn(`[OutlineAndChapter] 章节 volumeId 无效，重新分配: ${existingChapter.volumeId}`);
+                existingChapter.volumeId = finalVolumeId;
+              }
               existingChapter.content = chapterResponse;
               terminal.log(`[OutlineAndChapter] 更新占位符章节: id=${existingChapter.id}, volumeId=${existingChapter.volumeId}`);
             } else {
@@ -3127,11 +3173,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 id: Date.now() + chapterIndex,
                 title: `第${chapterIndex + 1}章`,
                 content: chapterResponse,
-                volumeId: targetVolumeId,
+                volumeId: finalVolumeId,
                 subtype: 'story',
               };
               localNovel.chapters = [...(localNovel.chapters || []), fallbackChapter];
-              terminal.log(`[OutlineAndChapter] 创建回退章节: id=${fallbackChapter.id}, volumeId=${targetVolumeId}`);
+              terminal.log(`[OutlineAndChapter] 创建回退章节: id=${fallbackChapter.id}, volumeId=${finalVolumeId}`);
             }
             
             lastChapterContent = chapterResponse;
