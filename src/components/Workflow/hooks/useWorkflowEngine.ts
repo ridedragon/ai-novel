@@ -2715,7 +2715,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           // 构建上下文信息
           const { dynamicContextMessages, dynamicFolder } = buildDynamicContext(i);
           // 增强：优先使用activeVolume的标题，确保大纲保存到正确的卷文件夹
-          const currentVolumeName = activeVolume?.title || dynamicFolder || '';
+          let currentVolumeName = activeVolume?.title || '';
+          if (!currentVolumeName && dynamicFolder) {
+            currentVolumeName = dynamicFolder;
+          }
 
           // 生成大纲和正文
           const outputEntries: OutputEntry[] = [];
@@ -2742,6 +2745,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             } else {
               terminal.log(`[OutlineAndChapter] 使用现有大纲集: ${currentVolumeName}`);
             }
+          } else {
+            await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_3', title: '错误', content: '未找到当前卷名称，无法创建大纲集' }] }, i);
+            setEdgeAnimation(node.id, false);
+            continue;
           }
 
           for (let chapterIndex = 0; chapterIndex < chapterCount; chapterIndex++) {
@@ -2815,6 +2822,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 title: `第${chapterIndex + 1}章`,
                 summary: outlineResponse
               });
+              
+              // 显式更新 localNovel.outlineSets，确保大纲集的更新能够反映到 localNovel 中
+              localNovel.outlineSets = localNovel.outlineSets.map(s => 
+                s.id === outlineSet.id ? outlineSet : s
+              );
             }
 
             // 添加大纲到输出条目
@@ -2823,6 +2835,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               title: `第${chapterIndex + 1}章大纲`,
               content: outlineResponse
             });
+
+            // 及时更新节点的 outputEntries，以便大纲能够及时显示在自动化创作中心的大纲文件夹中
+            await syncNodeStatus(node.id, { outputEntries }, i);
 
             // 2. 生成正文
             const chapterOpenai = new OpenAI({
@@ -2902,6 +2917,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             // 更新本地小说数据，确保大纲和正文都被保存
             await updateLocalAndGlobal(localNovel);
+            // 等待状态更新完成
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
 
           await syncNodeStatus(node.id, { status: 'completed', outputEntries }, i);
