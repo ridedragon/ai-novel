@@ -2717,12 +2717,37 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             let outlineResponse = '';
             try {
+              console.groupCollapsed(
+                `[Workflow AI Request] 大纲与正文生成 - 大纲 ${chapterIndex + 1}`
+              );
+              console.log('Messages:', outlineMessages);
+              console.log('Config:', {
+                model: outlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
+                temperature: outlinePreset.temperature || 0.7,
+              });
+              console.groupEnd();
+
+              terminal.log(`
+>> AI REQUEST [工作流: 大纲生成] 第${chapterIndex + 1}章
+>> -----------------------------------------------------------
+>> Model:       ${outlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model}
+>> Temperature: ${outlinePreset.temperature || 0.7}
+>> -----------------------------------------------------------
+`);
+
               const outlineCompletion = await outlineOpenai.chat.completions.create({
                 model: outlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
                 messages: outlineMessages,
                 temperature: outlinePreset.temperature || 0.7,
               });
               outlineResponse = outlineCompletion.choices[0]?.message?.content || '';
+              
+              terminal.log(`
+>> AI RESPONSE [工作流: 大纲生成] 第${chapterIndex + 1}章
+>> -----------------------------------------------------------
+>> Content length: ${outlineResponse.length} characters
+>> -----------------------------------------------------------
+`);
             } catch (err) {
               terminal.error(`[OutlineAndChapter] 大纲生成失败: ${err}`);
               continue;
@@ -2783,12 +2808,37 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             let chapterResponse = '';
             try {
+              console.groupCollapsed(
+                `[Workflow AI Request] 大纲与正文生成 - 正文 ${chapterIndex + 1}`
+              );
+              console.log('Messages:', chapterMessages);
+              console.log('Config:', {
+                model: chapterPreset.apiConfig?.model || globalConfig.model,
+                temperature: chapterPreset.temperature || 0.7,
+              });
+              console.groupEnd();
+
+              terminal.log(`
+>> AI REQUEST [工作流: 正文生成] 第${chapterIndex + 1}章
+>> -----------------------------------------------------------
+>> Model:       ${chapterPreset.apiConfig?.model || globalConfig.model}
+>> Temperature: ${chapterPreset.temperature || 0.7}
+>> -----------------------------------------------------------
+`);
+
               const chapterCompletion = await chapterOpenai.chat.completions.create({
                 model: chapterPreset.apiConfig?.model || globalConfig.model,
                 messages: chapterMessages,
                 temperature: chapterPreset.temperature || 0.7,
               });
               chapterResponse = chapterCompletion.choices[0]?.message?.content || '';
+              
+              terminal.log(`
+>> AI RESPONSE [工作流: 正文生成] 第${chapterIndex + 1}章
+>> -----------------------------------------------------------
+>> Content length: ${chapterResponse.length} characters
+>> -----------------------------------------------------------
+`);
             } catch (err) {
               terminal.error(`[OutlineAndChapter] 正文生成失败: ${err}`);
               continue;
