@@ -3818,32 +3818,67 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               content: e.content,
             }));
 
-            if (isOut && tEnd) {
-              const lastNum = parseAnyNumber(entriesToStore[entriesToStore.length - 1]?.title || '');
-              if (lastNum && lastNum < tEnd && iter < 5) {
-                accEntries = [...accEntries, ...currIterEntries];
-                await syncNodeStatus(
-                  node.id,
-                  {
-                    outputEntries: [
-                      ...(nodesRef.current.find(n => n.id === node.id)?.data.outputEntries || []),
-                      ...currIterEntries,
-                    ],
-                  },
-                  i,
-                );
-                iter++;
-                currMsgs = [
-                  ...currMsgs,
-                  { role: 'assistant', content: aiRes },
-                  {
-                    role: 'user',
-                    content: `(系统接龙：刚才只到第 ${lastNum} 章。请不要重复，直接从第 ${
-                      lastNum + 1
-                    } 章开始继续到第 ${tEnd} 章。严格遵守 JSON。)`,
-                  },
-                ];
-                continue;
+            if (isOut) {
+              // Check if we need to use volume planner chapter count instead of tEnd
+              let requiredChapterCount = null;
+              let startChapter = 1;
+              let endChapter = tEnd;
+              
+              // Get current volume plan from workflowManager
+              const volumePlans = workflowManager.getVolumePlans();
+              const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
+              
+              if (volumePlans.length > 0 && currentVolumeIndex >= 0 && currentVolumeIndex < volumePlans.length) {
+                const currentVolumePlan = volumePlans[currentVolumeIndex];
+                if (currentVolumePlan.startChapter !== undefined && currentVolumePlan.endChapter !== undefined) {
+                  startChapter = currentVolumePlan.startChapter;
+                  endChapter = currentVolumePlan.endChapter;
+                  requiredChapterCount = (endChapter - startChapter) + 1;
+                  terminal.log(`[OUTLINE] Volume planner detected: chapters ${startChapter}-${endChapter}, required: ${requiredChapterCount}`);
+                }
+              }
+              
+              // Use either volume planner count or tEnd
+              const targetEnd = requiredChapterCount ? endChapter : tEnd;
+              
+              if (targetEnd) {
+                const lastNum = parseAnyNumber(entriesToStore[entriesToStore.length - 1]?.title || '');
+                const currentEntryCount = entriesToStore.length;
+                const neededCount = requiredChapterCount || (targetEnd - startChapter + 1);
+                
+                terminal.log(`[OUTLINE] Current entries: ${currentEntryCount}, needed: ${neededCount}, last chapter: ${lastNum}`);
+                
+                if ((lastNum && lastNum < targetEnd) || (requiredChapterCount && currentEntryCount < requiredChapterCount) && iter < 5) {
+                  accEntries = [...accEntries, ...currIterEntries];
+                  await syncNodeStatus(
+                    node.id,
+                    {
+                      outputEntries: [
+                        ...(nodesRef.current.find(n => n.id === node.id)?.data.outputEntries || []),
+                        ...currIterEntries,
+                      ],
+                    },
+                    i,
+                  );
+                  iter++;
+                  
+                  let followUpMessage = '';
+                  if (requiredChapterCount) {
+                    followUpMessage = `(系统提示：当前生成了 ${currentEntryCount} 个大纲条目，但分卷规划需要 ${requiredChapterCount} 个条目（第 ${startChapter} 章到第 ${endChapter} 章）。请继续生成剩余的大纲条目，不要重复已有的内容。严格遵守 JSON 格式。)`;
+                  } else if (lastNum) {
+                    followUpMessage = `(系统接龙：刚才只到第 ${lastNum} 章。请不要重复，直接从第 ${lastNum + 1} 章开始继续到第 ${targetEnd} 章。严格遵守 JSON。)`;
+                  }
+                  
+                  currMsgs = [
+                    ...currMsgs,
+                    { role: 'assistant', content: aiRes },
+                    {
+                      role: 'user',
+                      content: followUpMessage,
+                    },
+                  ];
+                  continue;
+                }
               }
             }
             accEntries = [...accEntries, ...currIterEntries];
