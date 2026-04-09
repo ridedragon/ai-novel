@@ -59,10 +59,34 @@ export const useWorkflowEngine = (options: {
   const stopRequestedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeNovelRef = useRef(activeNovel);
+  const resumeAttemptedRef = useRef(false);
 
   useEffect(() => {
     activeNovelRef.current = activeNovel;
   }, [activeNovel]);
+
+  // 初始化时检查并恢复工作流状态
+  useEffect(() => {
+    const checkAndResumeWorkflow = async () => {
+      // 避免重复尝试恢复
+      if (resumeAttemptedRef.current) return;
+      resumeAttemptedRef.current = true;
+
+      const state = workflowManager.getState();
+      if (state.isRunning && state.activeWorkflowId === activeWorkflowId) {
+        terminal.log(`[Workflow Engine] Resuming workflow execution from saved state`);
+        
+        const orderedNodes = getOrderedNodes();
+        if (orderedNodes.length > 0 && state.currentNodeIndex >= 0) {
+          terminal.log(`[Workflow Engine] Workflow state found, will resume when runWorkflow is available`);
+          // 工作流状态已在 WorkflowManager 中恢复
+          // 具体的执行恢复会在工作流编辑器打开时处理
+        }
+      }
+    };
+
+    checkAndResumeWorkflow();
+  }, [activeWorkflowId, getOrderedNodes]);
 
   // 同步全局工作流状态
   useEffect(() => {
