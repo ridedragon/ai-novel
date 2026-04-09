@@ -2834,10 +2834,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             terminal.log(`[OutlineAndChapter] 使用现有大纲集: ${currentVolumeName}`);
           }
 
-          // 预创建章节占位符，确保章节立即显示在分卷下
-          const chapterPlaceholders: Chapter[] = [];
-          
-          // Bug1修复：在创建占位符前再次验证并确保 targetVolumeId 有效
+          // Bug1修复：验证并确保 targetVolumeId 有效
           const ensureValidVolumeId = () => {
             const isValid = (id?: string) =>
               !!id && !!localNovel.volumes?.some(v => String(v.id) === String(id));
@@ -2856,18 +2853,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             await updateLocalAndGlobal(localNovel);
           }
           
-          for (let pi = 0; pi < chapterCount; pi++) {
-            chapterPlaceholders.push({
-              id: Date.now() + pi,
-              title: `第${pi + 1}章`,
-              content: '',
-              volumeId: finalVolumeId,
-              subtype: 'story',
-            });
-          }
-          localNovel.chapters = [...(localNovel.chapters || []), ...chapterPlaceholders];
-          await updateLocalAndGlobal(localNovel);
-          terminal.log(`[OutlineAndChapter] 已创建 ${chapterCount} 个章节占位符, volumeId=${finalVolumeId}`);
+          // 存储每章的章节对象，用于后续更新内容
+          const chapterMap: Map<number, Chapter> = new Map();
 
           for (let chapterIndex = 0; chapterIndex < chapterCount; chapterIndex++) {
             if (!checkActive()) break;
@@ -3026,27 +3013,22 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               );
             }
 
-            // 使用解析后的标题更新占位符章节标题
+            // 使用解析后的标题
             const resolvedTitle = outlineEntries.length > 0 ? outlineEntries[0].title : `第${chapterIndex + 1}章`;
-            const placeholderChapter = chapterPlaceholders[chapterIndex]
-              ? localNovel.chapters.find(c => c.id === chapterPlaceholders[chapterIndex].id)
-              : null;
-            if (placeholderChapter) {
-              // Bug1修复：在更新标题前验证并确保 volumeId 有效
-              const isValidVolume = (id?: string) =>
-                !!id && !!localNovel.volumes?.some(v => String(v.id) === String(id));
-                
-              if (!isValidVolume(placeholderChapter.volumeId)) {
-                terminal.warn(`[OutlineAndChapter] 章节 volumeId 无效，重新分配: ${placeholderChapter.volumeId}`);
-                // 使用当前有效的 targetVolumeId
-                placeholderChapter.volumeId = finalVolumeId;
-              }
-              
-              placeholderChapter.title = resolvedTitle;
-              // Bug1修复：更新占位符标题后立即刷新UI，确保章节名称在分卷下立即更新
-              await updateLocalAndGlobal(localNovel);
-              terminal.log(`[OutlineAndChapter] 更新章节标题: id=${placeholderChapter.id}, title=${resolvedTitle}, volumeId=${placeholderChapter.volumeId}`);
-            }
+            
+            // 大纲生成完成后，创建对应章节
+            const newChapter: Chapter = {
+              id: Date.now() + chapterIndex,
+              title: resolvedTitle,
+              content: '', // 初始为空，后续会流式更新
+              volumeId: finalVolumeId,
+              subtype: 'story',
+            };
+            
+            localNovel.chapters = [...(localNovel.chapters || []), newChapter];
+            await updateLocalAndGlobal(localNovel);
+            chapterMap.set(chapterIndex, newChapter);
+            terminal.log(`[OutlineAndChapter] 创建章节: id=${newChapter.id}, title=${resolvedTitle}, volumeId=${finalVolumeId}`);
 
             // 添加大纲到输出条目
             outlineEntries.forEach((entry, eIdx) => {
@@ -3131,14 +3113,27 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 messages: chapterMessages,
                 temperature: finalChapterPreset.temperature,
                 top_p: finalChapterPreset.topP,
+                stream: true, // 启用流式输出
               };
               // Add optional parameters if they exist
               if ((finalChapterPreset as any).maxTokens) chapterCompletionParams.max_tokens = (finalChapterPreset as any).maxTokens;
               if ((finalChapterPreset as any).frequencyPenalty) chapterCompletionParams.frequency_penalty = (finalChapterPreset as any).frequencyPenalty;
               if ((finalChapterPreset as any).presencePenalty) chapterCompletionParams.presence_penalty = (finalChapterPreset as any).presencePenalty;
 
-              const chapterCompletion = await chapterOpenai.chat.completions.create(chapterCompletionParams);
-              chapterResponse = chapterCompletion.choices[0]?.message?.content || '';
+              // 使用流式输出
+              const stream = await chapterOpenai.chat.completions.create(chapterCompletionParams);
+              
+              for await (const chunk of stream) {
+                const content = chunk.choices[0]?.delta?.content || '';
+                chapterResponse += content;
+                
+                // 实时更新章节内容
+                const currentChapter = chapterMap.get(chapterIndex);
+                if (currentChapter) {
+                  currentChapter.content = chapterResponse;
+                  await updateLocalAndGlobal(localNovel);
+                }
+              }
               
               terminal.log(`
 >> AI RESPONSE [工作流: 正文生成] 第${chapterIndex + 1}章
@@ -3163,35 +3158,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               }
             }
             
-            // 更新占位符章节的内容（而非创建新章节）
-            const placeholderId = chapterPlaceholders[chapterIndex]?.id;
-            const existingChapter = placeholderId 
-              ? localNovel.chapters.find(c => c.id === placeholderId) 
-              : null;
-            
-            if (existingChapter) {
-              // Bug1修复：确保章节有有效的 volumeId
-              if (!isValidVolume(existingChapter.volumeId)) {
-                terminal.warn(`[OutlineAndChapter] 章节 volumeId 无效，重新分配: ${existingChapter.volumeId}`);
-                existingChapter.volumeId = finalVolumeId;
-              }
-              existingChapter.content = chapterResponse;
-              terminal.log(`[OutlineAndChapter] 更新占位符章节: id=${existingChapter.id}, volumeId=${existingChapter.volumeId}`);
-            } else {
-              const fallbackChapter: Chapter = {
-                id: Date.now() + chapterIndex,
-                title: `第${chapterIndex + 1}章`,
-                content: chapterResponse,
-                volumeId: finalVolumeId,
-                subtype: 'story',
-              };
-              localNovel.chapters = [...(localNovel.chapters || []), fallbackChapter];
-              terminal.log(`[OutlineAndChapter] 创建回退章节: id=${fallbackChapter.id}, volumeId=${finalVolumeId}`);
-            }
-            
+            // 章节内容已经在流式输出时实时更新
             lastChapterContent = chapterResponse;
 
-            await updateLocalAndGlobal(localNovel);
             await new Promise(resolve => setTimeout(resolve, 100));
           }
 
