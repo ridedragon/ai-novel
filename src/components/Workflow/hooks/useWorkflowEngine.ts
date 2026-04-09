@@ -2898,25 +2898,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             let outlineResponse = '';
             try {
-              console.groupCollapsed(
-                `[Workflow AI Request] 大纲与正文生成 - 大纲 ${chapterIndex + 1}`
-              );
-              console.log('Messages:', outlineMessages);
-              console.log('Config:', {
-                model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
-                temperature: finalOutlinePreset.temperature,
-                top_p: finalOutlinePreset.topP,
-              });
-              console.groupEnd();
-
-              terminal.log(`
->> AI REQUEST [工作流: 大纲生成] 第${chapterIndex + 1}章
->> -----------------------------------------------------------
->> Model:       ${finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model}
->> Temperature: ${finalOutlinePreset.temperature}
->> -----------------------------------------------------------
-`);
-
+              // 构建完整的参数对象，以便日志记录
               const outlineCompletionParams: any = {
                 model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
                 messages: outlineMessages,
@@ -2927,6 +2909,27 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               if ((finalOutlinePreset as any).maxTokens) outlineCompletionParams.max_tokens = (finalOutlinePreset as any).maxTokens;
               if ((finalOutlinePreset as any).frequencyPenalty) outlineCompletionParams.frequency_penalty = (finalOutlinePreset as any).frequencyPenalty;
               if ((finalOutlinePreset as any).presencePenalty) outlineCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
+
+              console.groupCollapsed(
+                `[Workflow AI Request] 大纲与正文生成 - 大纲 ${chapterIndex + 1}`
+              );
+              console.log('Messages:', outlineMessages);
+              console.log('Config:', outlineCompletionParams);
+              console.groupEnd();
+
+              // 详细的参数日志
+              terminal.log(`
+>> AI REQUEST [工作流: 大纲生成] 第${chapterIndex + 1}章
+>> -----------------------------------------------------------
+>> Model:               ${outlineCompletionParams.model}
+>> Temperature:         ${outlineCompletionParams.temperature}
+>> Top P:               ${outlineCompletionParams.top_p}
+>> Max Tokens:          ${outlineCompletionParams.max_tokens || 'Not set'}
+>> Frequency Penalty:   ${outlineCompletionParams.frequency_penalty || 'Not set'}
+>> Presence Penalty:    ${outlineCompletionParams.presence_penalty || 'Not set'}
+>> Message Count:       ${outlineCompletionParams.messages.length}
+>> -----------------------------------------------------------
+`);
 
               const outlineCompletion = await outlineOpenai.chat.completions.create(outlineCompletionParams);
               outlineResponse = outlineCompletion.choices[0]?.message?.content || '';
@@ -3089,25 +3092,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             let chapterResponse = '';
             try {
-              console.groupCollapsed(
-                `[Workflow AI Request] 大纲与正文生成 - 正文 ${chapterIndex + 1}`
-              );
-              console.log('Messages:', chapterMessages);
-              console.log('Config:', {
-                model: finalChapterPreset.apiConfig?.model || globalConfig.model,
-                temperature: finalChapterPreset.temperature,
-                top_p: finalChapterPreset.topP,
-              });
-              console.groupEnd();
-
-              terminal.log(`
->> AI REQUEST [工作流: 正文生成] 第${chapterIndex + 1}章
->> -----------------------------------------------------------
->> Model:       ${finalChapterPreset.apiConfig?.model || globalConfig.model}
->> Temperature: ${finalChapterPreset.temperature}
->> -----------------------------------------------------------
-`);
-
+              // 构建完整的参数对象，以便日志记录
               const chapterCompletionParams: any = {
                 model: finalChapterPreset.apiConfig?.model || globalConfig.model,
                 messages: chapterMessages,
@@ -3120,10 +3105,32 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               if ((finalChapterPreset as any).frequencyPenalty) chapterCompletionParams.frequency_penalty = (finalChapterPreset as any).frequencyPenalty;
               if ((finalChapterPreset as any).presencePenalty) chapterCompletionParams.presence_penalty = (finalChapterPreset as any).presencePenalty;
 
+              console.groupCollapsed(
+                `[Workflow AI Request] 大纲与正文生成 - 正文 ${chapterIndex + 1}`
+              );
+              console.log('Messages:', chapterMessages);
+              console.log('Config:', chapterCompletionParams);
+              console.groupEnd();
+
+              // 详细的参数日志
+              terminal.log(`
+>> AI REQUEST [工作流: 正文生成] 第${chapterIndex + 1}章
+>> -----------------------------------------------------------
+>> Model:               ${chapterCompletionParams.model}
+>> Temperature:         ${chapterCompletionParams.temperature}
+>> Top P:               ${chapterCompletionParams.top_p}
+>> Max Tokens:          ${chapterCompletionParams.max_tokens || 'Not set'}
+>> Frequency Penalty:   ${chapterCompletionParams.frequency_penalty || 'Not set'}
+>> Presence Penalty:    ${chapterCompletionParams.presence_penalty || 'Not set'}
+>> Stream:              ${chapterCompletionParams.stream}
+>> Message Count:       ${chapterCompletionParams.messages.length}
+>> -----------------------------------------------------------
+`);
+
               // 使用流式输出
               const stream = await chapterOpenai.chat.completions.create(chapterCompletionParams);
               
-              for await (const chunk of stream) {
+              for await (const chunk of stream as any) {
                 const content = chunk.choices[0]?.delta?.content || '';
                 chapterResponse += content;
                 
