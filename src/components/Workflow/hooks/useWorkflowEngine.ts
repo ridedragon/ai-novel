@@ -2703,10 +2703,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           // 获取大纲和正文的预设
           const outlinePresets = allPresets['outline'] || [];
           const chapterPresets = allPresets['completion'] || [];
-          const outlinePreset = outlinePresets.find(p => p.id === node.data.outlinePresetId) || outlinePresets[0];
-          const chapterPreset = chapterPresets.find(p => p.id === node.data.chapterPresetId) || chapterPresets[0];
+          const outlinePreset = outlinePresets.find(p => p.id === node.data.outlinePresetId);
+          const chapterPreset = chapterPresets.find(p => p.id === node.data.chapterPresetId);
+          
+          // 如果用户选择了预设但不存在，使用默认预设
+          const finalOutlinePreset = outlinePreset || outlinePresets[0];
+          const finalChapterPreset = chapterPreset || chapterPresets[0];
 
-          if (!outlinePreset || !chapterPreset) {
+          if (!finalOutlinePreset || !finalChapterPreset) {
             await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_2', title: '错误', content: '缺少大纲或正文预设' }] }, i);
             setEdgeAnimation(node.id, false);
             continue;
@@ -2801,8 +2805,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             // 1. 生成大纲
             const outlineOpenai = new OpenAI({
-              apiKey: outlinePreset.apiConfig?.apiKey || globalConfig.apiKey,
-              baseURL: outlinePreset.apiConfig?.baseUrl || globalConfig.baseUrl,
+              apiKey: finalOutlinePreset.apiConfig?.apiKey || globalConfig.apiKey,
+              baseURL: finalOutlinePreset.apiConfig?.baseUrl || globalConfig.baseUrl,
               dangerouslyAllowBrowser: true,
             });
 
@@ -2833,23 +2837,25 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               );
               console.log('Messages:', outlineMessages);
               console.log('Config:', {
-                model: outlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
-                temperature: outlinePreset.temperature || 0.7,
+                model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
+                temperature: finalOutlinePreset.temperature || 0.7,
+                top_p: finalOutlinePreset.topP || undefined,
               });
               console.groupEnd();
 
               terminal.log(`
 >> AI REQUEST [工作流: 大纲生成] 第${chapterIndex + 1}章
 >> -----------------------------------------------------------
->> Model:       ${outlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model}
->> Temperature: ${outlinePreset.temperature || 0.7}
+>> Model:       ${finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model}
+>> Temperature: ${finalOutlinePreset.temperature || 0.7}
 >> -----------------------------------------------------------
 `);
 
               const outlineCompletion = await outlineOpenai.chat.completions.create({
-                model: outlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
+                model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
                 messages: outlineMessages,
-                temperature: outlinePreset.temperature || 0.7,
+                temperature: finalOutlinePreset.temperature || 0.7,
+                top_p: finalOutlinePreset.topP || undefined,
               });
               outlineResponse = outlineCompletion.choices[0]?.message?.content || '';
               
@@ -2889,8 +2895,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             // 2. 生成正文
             const chapterOpenai = new OpenAI({
-              apiKey: chapterPreset.apiConfig?.apiKey || globalConfig.apiKey,
-              baseURL: chapterPreset.apiConfig?.baseUrl || globalConfig.baseUrl,
+              apiKey: finalChapterPreset.apiConfig?.apiKey || globalConfig.apiKey,
+              baseURL: finalChapterPreset.apiConfig?.baseUrl || globalConfig.baseUrl,
               dangerouslyAllowBrowser: true,
             });
 
@@ -2925,23 +2931,25 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               );
               console.log('Messages:', chapterMessages);
               console.log('Config:', {
-                model: chapterPreset.apiConfig?.model || globalConfig.model,
-                temperature: chapterPreset.temperature || 0.7,
+                model: finalChapterPreset.apiConfig?.model || globalConfig.model,
+                temperature: finalChapterPreset.temperature || 0.7,
+                top_p: finalChapterPreset.topP || undefined,
               });
               console.groupEnd();
 
               terminal.log(`
 >> AI REQUEST [工作流: 正文生成] 第${chapterIndex + 1}章
 >> -----------------------------------------------------------
->> Model:       ${chapterPreset.apiConfig?.model || globalConfig.model}
->> Temperature: ${chapterPreset.temperature || 0.7}
+>> Model:       ${finalChapterPreset.apiConfig?.model || globalConfig.model}
+>> Temperature: ${finalChapterPreset.temperature || 0.7}
 >> -----------------------------------------------------------
 `);
 
               const chapterCompletion = await chapterOpenai.chat.completions.create({
-                model: chapterPreset.apiConfig?.model || globalConfig.model,
+                model: finalChapterPreset.apiConfig?.model || globalConfig.model,
                 messages: chapterMessages,
-                temperature: chapterPreset.temperature || 0.7,
+                temperature: finalChapterPreset.temperature || 0.7,
+                top_p: finalChapterPreset.topP || undefined,
               });
               chapterResponse = chapterCompletion.choices[0]?.message?.content || '';
               
@@ -2956,6 +2964,13 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               continue;
             }
 
+            // 确保 targetVolumeId 不为空
+            if (!targetVolumeId) {
+              // 尝试获取默认分卷 ID
+              targetVolumeId = localNovel.volumes?.[0]?.id || '';
+              terminal.warn(`[OutlineAndChapter] 警告: 使用默认分卷 ID: ${targetVolumeId}`);
+            }
+            
             // 保存正文到章节
             const newChapter: Chapter = {
               id: Date.now() + chapterIndex,
@@ -2971,17 +2986,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             localNovel.chapters = [...(localNovel.chapters || []), newChapter];
             lastChapterContent = chapterResponse;
 
-            // 确保 targetVolumeId 不为空
-            if (!targetVolumeId) {
-              terminal.warn(`[OutlineAndChapter] 警告: 章节创建时 targetVolumeId 为空`);
-            }
-
             // 更新本地小说数据，确保大纲和正文都被保存
             await updateLocalAndGlobal(localNovel);
-            // 等待状态更新完成
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // 增加更长的等待时间，确保 UI 更新
+            await new Promise(resolve => setTimeout(resolve, 300));
             
-            // 调试：验证章节是否正确保存
+            // 验证章节是否正确保存
             const savedChapter = localNovel.chapters.find(ch => ch.id === newChapter.id);
             terminal.log(`[OutlineAndChapter] 章节保存验证: id=${savedChapter?.id}, volumeId=${savedChapter?.volumeId}, exists=${!!savedChapter}`);
           }

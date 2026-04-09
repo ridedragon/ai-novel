@@ -240,6 +240,12 @@ export const NODE_CONFIGS: Record<NodeTypeKey, any> = {
     color: '#ec4899',
     defaultLabel: '大纲与正文生成',
     presetType: null,
+    outlinePresetId: '',
+    outlinePresetName: '',
+    chapterPresetId: '',
+    chapterPresetName: '',
+    outlineInstruction: '',
+    chapterInstruction: '',
   },
 };
 
