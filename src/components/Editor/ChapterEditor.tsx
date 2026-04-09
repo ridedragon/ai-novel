@@ -16,6 +16,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import terminal from 'virtual:terminal';
 import { Chapter } from '../../types';
+import { extractChapterName } from '../../utils/chapterNumbering';
 
 interface ChapterEditorProps {
   activeChapter: Chapter | undefined;
@@ -315,7 +316,8 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                     const prefix = activeChapter.subtype === 'small_summary' ? '🔹小总结' : '🔸大总结';
                     return `${prefix} (${targetRange})`;
                   }
-                  return activeChapter.title;
+                  const chapterName = extractChapterName(activeChapter.title);
+                  return chapterName || activeChapter.title;
                 })()}
               </h1>
               <div className="flex items-center justify-center gap-2 md:gap-4 text-slate-300 dark:text-slate-500/60">
