@@ -3169,7 +3169,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 // 只有在"重写卷模式"（通过"从指定位置启动工作流"功能启用）下才主动停止工作流
                 // 正常模式下，即使当前卷的所有章节已生成，工作流仍应继续执行后续节点
                 let shouldStopForVolumeComplete = false;
-                if (!shouldSwitch && userSpecifiedTargetVolumeId && mode) {
+                if (!shouldSwitch && userSpecifiedTargetVolumeId && mode && mode !== 'full') {
                   // 仅在重写卷模式下检查：当前卷的所有大纲项是否都已生成完成
                   // 使用 currentSet（通过 outlineSetId 找到的真正关联大纲集），而不是通过卷名称匹配
                   const effectiveOutlineSet = currentSet || localNovel.outlineSets?.find(s => {
@@ -3512,19 +3512,29 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               dynamicContextMessages.filter(m => !m.content.startsWith('【小说大纲】：')),
             );
           }
-          // 核心修复：检查 AutoWriteEngine 的返回值，如果因为卷切换而暂停，则停止工作流
+          // 核心修复：检查 AutoWriteEngine 的返回值，如果因为卷切换而暂停，则根据模式决定是否停止工作流
           if (chapterResult && typeof chapterResult === 'object' && 'shouldPauseForVolumeSwitch' in chapterResult && chapterResult.shouldPauseForVolumeSwitch) {
-            terminal.log(`[WORKFLOW] AutoWriteEngine paused for volume switch, stopping workflow at node ${node.id}`);
-            await syncNodeStatus(node.id, { label: NODE_CONFIGS.chapter.defaultLabel, status: 'completed' }, i);
-            setEdgeAnimation(node.id, false);
-            // 卷切换暂停：工作流到此停止，用户需要手动重新启动来继续下一卷
-            workflowManager.stop();
-            clearAllEdgeAnimations();
-            keepAliveManager.disable();
-            return;
+            // 正常模式下，卷切换后继续执行工作流
+            // 只有在重写模式下才停止工作流
+            if (userSpecifiedTargetVolumeId && mode) {
+              terminal.log(`[WORKFLOW] AutoWriteEngine paused for volume switch, stopping workflow at node ${node.id}`);
+              await syncNodeStatus(node.id, { label: NODE_CONFIGS.chapter.defaultLabel, status: 'completed' }, i);
+              setEdgeAnimation(node.id, false);
+              // 卷切换暂停：工作流到此停止，用户需要手动重新启动来继续下一卷
+              workflowManager.stop();
+              clearAllEdgeAnimations();
+              keepAliveManager.disable();
+              return;
+            } else {
+              // 正常模式下，继续执行工作流
+              terminal.log(`[WORKFLOW] AutoWriteEngine paused for volume switch, continuing workflow at node ${node.id}`);
+              await syncNodeStatus(node.id, { label: NODE_CONFIGS.chapter.defaultLabel, status: 'completed' }, i);
+              setEdgeAnimation(node.id, false);
+              // 继续执行下一个节点
+            }
           }
           // 核心修复：重写卷模式下，卷正文创作完成后（无下一卷）主动停止工作流
-          if (chapterResult && typeof chapterResult === 'object' && 'shouldStopForVolumeComplete' in chapterResult && (chapterResult as any).shouldStopForVolumeComplete) {
+          if (chapterResult && typeof chapterResult === 'object' && 'shouldStopForVolumeComplete' in chapterResult && (chapterResult as any).shouldStopForVolumeComplete && mode !== 'full') {
             terminal.log(`[WORKFLOW] Volume complete (no next volume), stopping workflow at node ${node.id}`);
             await syncNodeStatus(node.id, { label: NODE_CONFIGS.chapter.defaultLabel, status: 'completed' }, i);
             setEdgeAnimation(node.id, false);
