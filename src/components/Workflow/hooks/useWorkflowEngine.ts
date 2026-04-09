@@ -2819,25 +2819,55 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           let currentSet = localNovel.outlineSets?.find(s => s.id === outlineSetId);
           if (!currentSet?.items?.length) throw new Error('未关联有效大纲集。');
 
-          // 核心修复：优先使用用户指定的卷ID，确保章节生成到正确的卷
-          // 调试日志：检查 localNovel.volumes 和 node.data.targetVolumeId 的状态
-          terminal.log(`[VOLUME_DEBUG] node.data.targetVolumeId=${node.data.targetVolumeId}, localNovel.volumes?.length=${localNovel.volumes?.length}, volumes=${JSON.stringify(localNovel.volumes?.map(v => v.id))}`);
+          // Bug4 修复：优先使用用户指定的卷ID，确保章节生成到正确的卷
+          // 增强逻辑：在循环场景下，确保获取到的是当前循环轮次对应的卷ID
+          terminal.log(`[VOLUME_DEBUG] node.data.targetVolumeId=${node.data.targetVolumeId}, localNovel.volumes?.length=${localNovel.volumes?.length}, volumes=${JSON.stringify(localNovel.volumes?.map(v => ({id: v.id, title: v.title})))}`);
           const targetVolumeIdValid = node.data.targetVolumeId && localNovel.volumes?.some(v => v.id === node.data.targetVolumeId);
           terminal.log(`[VOLUME_DEBUG] targetVolumeIdValid=${targetVolumeIdValid}, userSpecifiedTargetVolumeId=${userSpecifiedTargetVolumeId}, activeVolumeAnchor=${workflowManager.getActiveVolumeAnchor()}`);
+          
           let fVolId = userSpecifiedTargetVolumeId || (targetVolumeIdValid ? node.data.targetVolumeId : null) || workflowManager.getActiveVolumeAnchor() || '';
+          
+          // Bug4 修复：如果没有获取到卷ID，或卷ID无效，尝试从 volumePlans 获取当前循环对应的卷
+          const loopIndex = workflowManager.getContextVar('loop_index') || 1;
+          const volumePlans = workflowManager.getVolumePlans();
+          terminal.log(`[VOLUME_DEBUG] loopIndex=${loopIndex}, volumePlans.length=${volumePlans.length}`);
+          
+          if ((!fVolId || !localNovel.volumes?.some(v => v.id === fVolId)) && volumePlans.length > 0) {
+            const volumePlanIndex = loopIndex - 1;
+            if (volumePlanIndex < volumePlans.length) {
+              const volumePlan = volumePlans[volumePlanIndex];
+              const volumeName = volumePlan.volumeName || volumePlan.folderName;
+              terminal.log(`[VOLUME_DEBUG] Trying to find volume by name from volumePlans: "${volumeName}"`);
+              const volumeFromPlan = localNovel.volumes?.find(v => v.title === volumeName);
+              if (volumeFromPlan) {
+                fVolId = volumeFromPlan.id;
+                terminal.log(`[VOLUME_DEBUG] Found volume from volumePlans: ${fVolId} (${volumeName})`);
+              }
+            }
+          }
+          
+          // Bug4 修复：兜底逻辑，确保至少有一个有效的卷ID
           if (!fVolId && localNovel.chapters?.length) {
             for (let k = localNovel.chapters.length - 1; k >= 0; k--) {
               const chapVolId = localNovel.chapters[k].volumeId;
               if (chapVolId) {
                 fVolId = chapVolId;
+                terminal.log(`[VOLUME_DEBUG] Fallback: using last chapter's volumeId: ${fVolId}`);
                 break;
               }
             }
           }
-          if (!fVolId)
+          if (!fVolId) {
             fVolId =
-              localNovel.volumes?.find(v => v.title === currentWorkflowFolder)?.id || localNovel.volumes?.[0]?.id || '';
-          if (fVolId) workflowManager.setActiveVolumeAnchor(fVolId);
+              localNovel.volumes?.find(v => v.title === currentWorkflowFolder)?.id || 
+              (localNovel.volumes?.[0]?.id || '');
+            terminal.log(`[VOLUME_DEBUG] Final fallback: fVolId=${fVolId}`);
+          }
+          
+          if (fVolId) {
+            workflowManager.setActiveVolumeAnchor(fVolId);
+            terminal.log(`[VOLUME_DEBUG] Set activeVolumeAnchor to: ${fVolId}`);
+          }
 
           const nApi = (preset as any)?.apiConfig || {};
           const engCfg = {
@@ -2863,7 +2893,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           const engine = new AutoWriteEngine(engCfg, localNovel);
           let wStart = 0;
           
-          const loopIndex = workflowManager.getContextVar('loop_index') || 1;
+          // Bug4 修复：loopIndex 已经在上面声明过了，这里直接使用
           const isFirstExecution = loopIndex <= 1;
           const startMode = node.data.startChapterMode || 'auto';
           const startIdx = node.data.startChapterIndex ?? 0;
@@ -2871,21 +2901,20 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           
           const autoDetectStart = () => {
             terminal.log(`[ChapterNode] autoDetectStart: fVolId=${fVolId}, currentSet.items.length=${currentSet.items.length}`);
-            // Bug修复：重写自动检测逻辑
-            // 原问题：假设章节必须从0开始连续创建，导致中间缺失的章节被跳过
-            // 修复：直接找到第一个不存在或无内容的章节索引
+            terminal.log(`[ChapterNode] autoDetectStart: localNovel.chapters.length=${localNovel.chapters?.length || 0}`);
+            
+            // Bug4 修复：重写自动检测逻辑
+            // 增强逻辑：在循环场景下，确保正确匹配当前卷的章节
+            let foundStart = false;
             for (let k = 0; k < currentSet.items.length; k++) {
               const item = currentSet.items[k];
-              // 核心修复：无论是否为标准章节标题，都必须检查卷ID
-              // 因为每卷的章节标题都从"第一章"重新开始，如果不检查卷ID，
-              // 会错误地将上一卷的同名章节（如"第一章"）认为是已存在，导致跳过生成
+              // Bug4 修复：增强卷ID匹配逻辑
               const ex = localNovel.chapters?.find(c => {
                 // 标题匹配
                 if (c.title !== item.title) return false;
-                // 卷ID匹配逻辑修复：
-                // - 如果有 fVolId，匹配同一卷的章节
-                // - 如果没有 fVolId，匹配没有卷ID的章节（未归类章节）
+                // 卷ID匹配逻辑增强：
                 if (fVolId) {
+                  // 有 fVolId 时，必须严格匹配同一卷的章节
                   return c.volumeId === fVolId;
                 } else {
                   // 没有 fVolId 时，只匹配同样没有卷ID的章节
@@ -2894,18 +2923,28 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               });
               
               const hasContent = ex && ex.content && ex.content.trim().length > 0;
-              terminal.log(`[ChapterNode] autoDetect: k=${k}, title="${item.title}", exists=${!!ex}, hasContent=${hasContent}`);
+              
+              // Bug4 修复：增加详细的日志，便于调试
+              if (ex) {
+                terminal.log(`[ChapterNode] autoDetect: k=${k}, title="${item.title}", exists=true, hasContent=${hasContent}, volMatch=${ex.volumeId === fVolId}, ex.volumeId=${ex.volumeId}`);
+              } else {
+                terminal.log(`[ChapterNode] autoDetect: k=${k}, title="${item.title}", exists=false, hasContent=false`);
+              }
               
               // 找到第一个不存在或无内容的章节，这就是起始点
               if (!ex || !hasContent) {
                 terminal.log(`[ChapterNode] autoDetect: found start point at k=${k} "${item.title}" (${!ex ? 'not exists' : 'no content'})`);
                 wStart = k;
+                foundStart = true;
                 return; // 找到起始点后立即返回
               }
             }
-            // 如果所有章节都已存在且有内容，则起始点为最后一个章节的下一个
-            wStart = currentSet.items.length;
-            terminal.log(`[ChapterNode] autoDetectEnd: all chapters complete, wStart=${wStart}`);
+            
+            // Bug4 修复：如果所有章节都已存在且有内容，输出警告但仍然从第一个开始
+            wStart = 0; // 强制从第一个开始，避免跳过执行
+            terminal.warn(`[ChapterNode] autoDetectEnd: ALL outline items seem completed, but forcing start from k=0 to avoid skipping`);
+            terminal.warn(`[ChapterNode] autoDetectEnd: This is a Bug4 fix to prevent workflow from stopping after first run`);
+            terminal.log(`[ChapterNode] autoDetectEnd: wStart=${wStart}`);
           };
           
           // Bug修复：始终调用 autoDetectStart，确保正确的卷ID匹配
@@ -2925,18 +2964,25 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           terminal.log(`[ChapterNode] currentSet items: ${currentSet.items.map((item: any, idx: number) => `[${idx}] ${item.title}`).join(', ')}`);
           terminal.log(`[ChapterNode] fVolId=${fVolId}, loopIndex=${loopIndex}, startMode=${startMode}`);
           
+          // Bug4 修复：即使检测到所有大纲项都已完成，也不跳过执行
+          // 而是始终从第一个大纲项开始，让 AutoWriteEngine 自己决定哪些需要重新生成
           if (wStart >= currentSet.items.length) {
-            terminal.warn(`[ChapterNode] SKIPPING engine.run: wStart(${wStart}) >= items.length(${currentSet.items.length})`);
+            terminal.warn(`[ChapterNode] DETECTED: wStart(${wStart}) >= items.length(${currentSet.items.length})`);
             terminal.warn(`[ChapterNode] This means ALL outline items are detected as already completed`);
-            // 输出每个大纲项对应的章节是否存在
-            currentSet.items.forEach((item: any, k: number) => {
-              const ex = localNovel.chapters?.find(c =>
-                c.title === item.title && (fVolId ? c.volumeId === fVolId : !c.volumeId),
-              );
-              const existsWithContent = ex && ex.content && ex.content.trim().length > 0;
-              terminal.log(`[ChapterNode] Item [${k}] "${item.title}": exists=${!!ex}, hasContent=${existsWithContent}, volMatch=${ex?.volumeId === fVolId}`);
-            });
+            // Bug4 修复：不跳过执行，而是强制从第一个开始
+            wStart = 0;
+            terminal.warn(`[ChapterNode] Bug4 fix: Forcing start from wStart=0 instead of skipping`);
+            terminal.warn(`[ChapterNode] Letting AutoWriteEngine decide what to regenerate`);
           }
+          
+          // 输出每个大纲项对应的章节是否存在，用于调试
+          currentSet.items.forEach((item: any, k: number) => {
+            const ex = localNovel.chapters?.find(c =>
+              c.title === item.title && (fVolId ? c.volumeId === fVolId : !c.volumeId),
+            );
+            const existsWithContent = ex && ex.content && ex.content.trim().length > 0;
+            terminal.log(`[ChapterNode] Item [${k}] "${item.title}": exists=${!!ex}, hasContent=${existsWithContent}, volMatch=${ex?.volumeId === fVolId}`);
+          });
           
           let chapterResult: any = null;
           if (wStart < currentSet.items.length) {
