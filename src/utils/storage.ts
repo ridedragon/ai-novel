@@ -552,15 +552,29 @@ export const storage = {
     const originalChapters = novel.chapters || [];
     const originalVolumes = novel.volumes || [];
 
-    // 应用元数据到小说对象（安全合并）
-    safeMerge(novel, metadata);
+    // 创建章节ID到原始章节的映射
+    const originalChapterMap = new Map(originalChapters.map(ch => [ch.id, ch]));
 
-    // 恢复原始数据（防止 metadata 覆盖了正在使用的章节数据）
-    if (originalChapters.length > 0 && !novel.chapters?.length) {
-      novel.chapters = originalChapters;
+    // 应用元数据到小说对象，但不覆盖章节内容
+    if (metadata && metadata.chapters) {
+      // 合并章节信息，但保留原始章节的内容
+      novel.chapters = metadata.chapters.map((metaChapter: any) => {
+        const originalChapter = originalChapterMap.get(metaChapter.id);
+        if (originalChapter) {
+          // 保留原始章节的内容，只更新元数据字段
+          return {
+            ...originalChapter,
+            ...metaChapter,
+            content: originalChapter.content, // 关键：保留原始内容！
+          };
+        }
+        return metaChapter;
+      });
     }
-    if (originalVolumes.length > 0 && !novel.volumes?.length) {
-      novel.volumes = originalVolumes;
+    
+    // 合并其他元数据（volumes等）
+    if (metadata && metadata.volumes) {
+      novel.volumes = metadata.volumes;
     }
 
     // --- 双轨兼容逻辑：如果新 Key 有值则优先使用，否则沿用 Metadata 里的旧值 (实现无损平滑迁移) ---
@@ -585,8 +599,16 @@ export const storage = {
 
     // 2. 加载章节正文 (保持并行，增加远程回退)
     const contentPromises = (novel.chapters || []).map(async chapter => {
-      if (chapter.content && lastSavedContentCache.has(chapter.id)) return;
+      // 关键修改：如果内存中已经有内容，优先使用内存中的内容
+      // 但需要确保缓存是最新的
+      if (chapter.content && lastSavedContentCache.has(chapter.id)) {
+        // 如果缓存中的内容和内存中的内容一致，直接返回
+        if (lastSavedContentCache.get(chapter.id) === chapter.content) {
+          return;
+        }
+      }
 
+      // 尝试从存储加载内容
       const localContent = await get<string>(`chapter_content_${chapter.id}`);
       let content: string = localContent || '';
 
@@ -611,8 +633,12 @@ export const storage = {
         });
       }
 
-      chapter.content = content;
-      lastSavedContentCache.set(chapter.id, content);
+      // 关键修改：只有当内存中没有内容时，才用存储中的内容覆盖
+      if (!chapter.content || chapter.content.length === 0) {
+        chapter.content = content;
+      }
+      // 更新缓存
+      lastSavedContentCache.set(chapter.id, chapter.content);
     });
 
     await Promise.all(contentPromises);
