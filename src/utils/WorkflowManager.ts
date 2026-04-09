@@ -1,8 +1,18 @@
 import terminal from 'virtual:terminal';
 import { Chapter, VariableBinding, WorkflowContextSnapshot, WorkflowGlobalContext } from '../types';
 import { resolveMacros, MacroContext, MACRO_QUICK_REFERENCE } from '../components/Workflow/macros';
+import { storage } from './storage';
 
 export type WorkflowStatus = 'idle' | 'running' | 'paused' | 'failed';
+
+// 工作流执行状态接口
+interface WorkflowExecutionState {
+  runId: string | null;
+  state: WorkflowState;
+  timestamp: number;
+}
+
+const WORKFLOW_EXECUTION_KEY = 'workflow_execution_state';
 
 interface WorkflowState {
   isRunning: boolean;
@@ -51,9 +61,94 @@ class WorkflowManager {
 
   private listeners: Set<StateListener> = new Set();
   private nodeUpdateListeners: Set<NodeUpdateListener> = new Set();
+  private saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
-    // 构造函数保持干净，异步状态恢复将由 UI 组件触发
+    // 构造函数中恢复执行状态
+    this.loadExecutionState();
+    
+    // 监听 localStorage 变化，实现多标签页同步
+    window.addEventListener('storage', (event) => {
+      if (event.key === WORKFLOW_EXECUTION_KEY && event.newValue) {
+        try {
+          const executionState = JSON.parse(event.newValue);
+          this.currentRunId = executionState.runId;
+          this.state = executionState.state;
+          this.notify();
+        } catch (error) {
+          terminal.error(`[WorkflowManager] Failed to sync state from storage event: ${error}`);
+        }
+      }
+    });
+  }
+
+  // 验证状态完整性
+  private validateExecutionState(state: WorkflowExecutionState): boolean {
+    if (!state || !state.state) {
+      return false;
+    }
+    
+    // 检查必要字段
+    const requiredFields = ['isRunning', 'currentNodeIndex', 'activeWorkflowId'];
+    for (const field of requiredFields) {
+      if (!(field in state.state)) {
+        return false;
+      }
+    }
+    
+    // 检查时间戳，避免使用过期状态
+    const now = Date.now();
+    const stateAge = now - state.timestamp;
+    const maxAge = 30 * 60 * 1000; // 30分钟
+    if (stateAge > maxAge) {
+      terminal.warn(`[WorkflowManager] Execution state is too old (${stateAge}ms), discarding`);
+      return false;
+    }
+    
+    return true;
+  }
+
+  // 防抖保存状态
+  private debouncedSaveExecutionState() {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+    this.saveTimeout = setTimeout(() => {
+      this.saveExecutionState();
+    }, 500); // 500ms 防抖
+  }
+
+  // 保存执行状态到 localStorage
+  private saveExecutionState() {
+    try {
+      const executionState: WorkflowExecutionState = {
+        runId: this.currentRunId,
+        state: this.state,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(WORKFLOW_EXECUTION_KEY, JSON.stringify(executionState));
+      terminal.log(`[WorkflowManager] Execution state saved to localStorage`);
+    } catch (error) {
+      terminal.error(`[WorkflowManager] Failed to save execution state: ${error}`);
+    }
+  }
+
+  // 从 localStorage 加载执行状态
+  private loadExecutionState() {
+    try {
+      const localState = localStorage.getItem(WORKFLOW_EXECUTION_KEY);
+      if (localState) {
+        const executionState = JSON.parse(localState);
+        if (this.validateExecutionState(executionState)) {
+          this.currentRunId = executionState.runId;
+          this.state = executionState.state;
+          terminal.log(`[WorkflowManager] Execution state loaded from localStorage`);
+          this.notify();
+        }
+      }
+    } catch (error) {
+      terminal.error(`[WorkflowManager] Failed to load execution state: ${error}`);
+    }
   }
 
   public subscribeToNodeUpdates(listener: NodeUpdateListener) {
@@ -151,6 +246,9 @@ class WorkflowManager {
       error: null,
       globalContext: newContext,
     };
+    
+    // 保存状态
+    this.debouncedSaveExecutionState();
     this.notify();
   }
 
@@ -183,6 +281,9 @@ class WorkflowManager {
   public updateProgress(index: number) {
     if (this.state.currentNodeIndex !== index) {
       this.state.currentNodeIndex = index;
+      
+      // 保存状态
+      this.debouncedSaveExecutionState();
       this.notify();
     }
   }
@@ -205,6 +306,9 @@ class WorkflowManager {
         variables: newVariables,
       },
     };
+    
+    // 保存状态
+    this.debouncedSaveExecutionState();
     this.notify();
   }
 
@@ -992,6 +1096,9 @@ class WorkflowManager {
       isPaused: true,
       currentNodeIndex: index,
     };
+    
+    // 保存状态
+    this.debouncedSaveExecutionState();
     this.notify();
   }
 
@@ -1020,6 +1127,22 @@ class WorkflowManager {
         volumeEndChapters: undefined,
       },
     };
+    
+    // 清除保存的状态
+    try {
+      // 直接使用 localStorage 删除，避免 async/await 问题
+      localStorage.removeItem(WORKFLOW_EXECUTION_KEY);
+      // 异步删除 IndexedDB 中的数据
+      import('idb-keyval').then(({ del }) => {
+        del(WORKFLOW_EXECUTION_KEY).catch(error => {
+          terminal.error(`[WorkflowManager] Failed to clear execution state from IndexedDB: ${error}`);
+        });
+      });
+      terminal.log(`[WorkflowManager] Execution state cleared`);
+    } catch (error) {
+      terminal.error(`[WorkflowManager] Failed to clear execution state: ${error}`);
+    }
+    
     this.notify();
   }
 

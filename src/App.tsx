@@ -9,6 +9,7 @@ import { useAutoWriteManager } from './hooks/useAutoWriteManager';
 import { useCompletionPresets } from './hooks/useCompletionPresets';
 import { useGeneratorPresets } from './hooks/useGeneratorPresets';
 import { useNovelData } from './hooks/useNovelData';
+import { workflowManager } from './utils/WorkflowManager';
 
 // 核心编辑器与布局组件
 import { ChapterEditor } from './components/Editor/ChapterEditor';
@@ -71,6 +72,24 @@ function App() {
   const completion = useCompletionPresets();
   const aiGenerators = useAIGenerators();
   const { setIsMobileSidebarOpen } = useLayout();
+
+  // 页面加载时恢复工作流状态
+  useEffect(() => {
+    const restoreWorkflowState = async () => {
+      try {
+        const state = workflowManager.getState();
+        if (state.isRunning) {
+          terminal.log('App initialized with running workflow state, will resume execution');
+          // 工作流状态已在 WorkflowManager 构造函数中恢复
+          // 具体的执行恢复会在 useWorkflowEngine 中处理
+        }
+      } catch (error) {
+        terminal.error('Failed to restore workflow state:', error);
+      }
+    };
+
+    restoreWorkflowState();
+  }, []);
 
   // --- 2. 局部 UI 状态 ---
   const [showOutline, setShowOutline] = useState(false);
