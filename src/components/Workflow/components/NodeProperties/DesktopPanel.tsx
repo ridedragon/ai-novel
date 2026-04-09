@@ -264,6 +264,7 @@ export const DesktopPanel = ({
             node.data.typeKey !== 'multiCreateFolder' &&
             node.data.typeKey !== 'loopConfigurator' &&
             node.data.typeKey !== 'creationInfo' &&
+            node.data.typeKey !== 'outlineAndChapter' &&
             activeNovel && (
               <ReferenceSelector
                 data={node.data}
@@ -275,7 +276,8 @@ export const DesktopPanel = ({
 
           {node.data.typeKey !== 'pauseNode' && 
             node.data.typeKey !== 'saveToVolume' && 
-            node.data.typeKey !== 'creationInfo' && (
+            node.data.typeKey !== 'creationInfo' &&
+            node.data.typeKey !== 'outlineAndChapter' && (
             <>
               <div className="space-y-3 pt-6 border-t border-gray-700/30">
                 <div className="flex items-center justify-between">
@@ -410,21 +412,6 @@ export const DesktopPanel = ({
                     placeholder="输入给正文AI的特定指令..."
                     className="w-full h-24 bg-[#161922] border border-gray-700/80 rounded-lg p-4 text-sm text-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none font-mono leading-relaxed transition-all"
                   />
-                </div>
-              </div>
-
-              <div className="space-y-4 pt-6 border-t border-gray-700/30">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                  <FileText className="w-3.5 h-3.5 text-indigo-400" /> 生成产物说明
-                </label>
-                <div className="text-center py-12 bg-[#161922] rounded-xl border border-dashed border-gray-700">
-                  <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
-                    <BookOpen className="w-6 h-6 text-indigo-500" />
-                  </div>
-                  <p className="text-sm text-gray-300">大纲和正文已实时保存</p>
-                  <p className="text-xs text-gray-500 mt-2 px-10 leading-relaxed">
-                    工作流执行过程中生成的大纲会保存到对应文件夹，正文会直接写入小说对应的分卷中。您可以在主界面左侧的目录树中点击查看、编辑或手动优化这些内容。
-                  </p>
                 </div>
               </div>
               <OutputList data={node.data} onUpdate={handleUpdate} />
