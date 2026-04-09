@@ -2689,20 +2689,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         const sW = autoInject(node.data.selectedWorldviewSets || [], localNovel.worldviewSets);
         const sC = autoInject(node.data.selectedCharacterSets || [], localNovel.characterSets);
 
-        // 大纲和灵感保持原样，或者仅在大纲生成时不自动注入大纲
-        let sO = resolvePending([...(node.data.selectedOutlineSets || [])], localNovel.outlineSets);
-        if (
-          isLoopNode &&
-          !isOutlineGen &&
-          (!node.data.selectedOutlineSets || node.data.selectedOutlineSets.length === 0)
-        ) {
-          sO = (localNovel.outlineSets || []).map(s => s.id);
+        // 大纲和灵感也使用 autoInject，支持本卷模式过滤
+        let sO = autoInject(node.data.selectedOutlineSets || [], localNovel.outlineSets);
+        // 大纲生成时，如果没有手动选择大纲，则不注入大纲（避免自己引用自己）
+        if (isOutlineGen && (!node.data.selectedOutlineSets || node.data.selectedOutlineSets.length === 0)) {
+          sO = [];
         }
 
-        let sI = resolvePending([...(node.data.selectedInspirationSets || [])], localNovel.inspirationSets);
-        if (isLoopNode && (!node.data.selectedInspirationSets || node.data.selectedInspirationSets.length === 0)) {
-          sI = (localNovel.inspirationSets || []).map(s => s.id);
-        }
+        const sI = autoInject(node.data.selectedInspirationSets || [], localNovel.inspirationSets);
 
         sW.forEach(id => {
           const s = localNovel.worldviewSets?.find(x => x.id === id);
