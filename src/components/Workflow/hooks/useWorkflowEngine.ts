@@ -2715,9 +2715,43 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           // 构建上下文信息
           const { dynamicContextMessages, dynamicFolder } = buildDynamicContext(i);
           // 增强：优先使用activeVolume的标题，确保大纲保存到正确的卷文件夹
-          let currentVolumeName = activeVolume?.title || '';
-          if (!currentVolumeName && dynamicFolder) {
+          let currentVolumeName = '';
+          
+          // 添加调试日志
+          terminal.log(`[OutlineAndChapter] 调试信息: targetVolumeId=${targetVolumeId}, activeVolume=${JSON.stringify(activeVolume)}, node.data.folderName=${node.data.folderName}, currentWorkflowFolder=${currentWorkflowFolder}, dynamicFolder=${dynamicFolder}`);
+          
+          // 优先级1: activeVolume?.title
+          if (activeVolume?.title) {
+            currentVolumeName = activeVolume.title;
+            terminal.log(`[OutlineAndChapter] 使用 activeVolume.title: ${currentVolumeName}`);
+          } 
+          // 优先级2: node.data.folderName
+          else if (node.data.folderName) {
+            currentVolumeName = node.data.folderName;
+            terminal.log(`[OutlineAndChapter] 使用 node.data.folderName: ${currentVolumeName}`);
+          } 
+          // 优先级3: currentWorkflowFolder
+          else if (currentWorkflowFolder) {
+            currentVolumeName = currentWorkflowFolder;
+            terminal.log(`[OutlineAndChapter] 使用 currentWorkflowFolder: ${currentVolumeName}`);
+          } 
+          // 优先级4: dynamicFolder
+          else if (dynamicFolder) {
             currentVolumeName = dynamicFolder;
+            terminal.log(`[OutlineAndChapter] 使用 dynamicFolder: ${currentVolumeName}`);
+          } 
+          // 优先级5: 从 targetVolumeId 对应的卷中获取
+          else if (activeVolume) {
+            // 如果 activeVolume 存在但 title 为空，尝试从 volumePlans 中获取
+            const volumePlans = workflowManager.getVolumePlans();
+            const volumePlan = volumePlans.find((plan: any) => 
+              plan.volumeId === targetVolumeId || 
+              (plan.volumeName && localNovel.volumes?.some(v => v.id === targetVolumeId && (v.title === plan.volumeName || v.title === plan.folderName)))
+            );
+            if (volumePlan) {
+              currentVolumeName = volumePlan.volumeName || volumePlan.folderName || '';
+              terminal.log(`[OutlineAndChapter] 使用 volumePlan 中的名称: ${currentVolumeName}`);
+            }
           }
 
           // 生成大纲和正文
@@ -2726,29 +2760,40 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
           // 预获取或创建大纲集，确保整个循环使用同一个大纲集
           let outlineSet: any = null;
-          if (currentVolumeName) {
-            // 确保 localNovel.outlineSets 存在
-            if (!localNovel.outlineSets) {
-              localNovel.outlineSets = [];
+          
+          // 最终兜底方案：如果仍然没有获取到卷名称，尝试从第一个卷获取或使用默认名称
+          if (!currentVolumeName && localNovel.volumes && localNovel.volumes.length > 0) {
+            // 尝试从第一个卷获取
+            const firstVolume = localNovel.volumes.find(v => v.title) || localNovel.volumes[0];
+            if (firstVolume) {
+              currentVolumeName = firstVolume.title || `第${workflowManager.getCurrentVolumeIndex() + 1}卷`;
+              terminal.log(`[OutlineAndChapter] 使用兜底方案获取卷名称: ${currentVolumeName}`);
             }
-            
-            // 查找或创建大纲集
-            outlineSet = localNovel.outlineSets.find(s => s.name === currentVolumeName);
-            if (!outlineSet) {
-              outlineSet = {
-                id: `outline_set_${Date.now()}`,
-                name: currentVolumeName,
-                items: []
-              };
-              localNovel.outlineSets.push(outlineSet);
-              terminal.log(`[OutlineAndChapter] 创建新大纲集: ${currentVolumeName}`);
-            } else {
-              terminal.log(`[OutlineAndChapter] 使用现有大纲集: ${currentVolumeName}`);
-            }
+          }
+          
+          // 如果还是没有，使用默认名称
+          if (!currentVolumeName) {
+            currentVolumeName = `默认大纲集_${Date.now()}`;
+            terminal.log(`[OutlineAndChapter] 使用默认大纲集名称: ${currentVolumeName}`);
+          }
+          
+          // 确保 localNovel.outlineSets 存在
+          if (!localNovel.outlineSets) {
+            localNovel.outlineSets = [];
+          }
+          
+          // 查找或创建大纲集
+          outlineSet = localNovel.outlineSets.find(s => s.name === currentVolumeName);
+          if (!outlineSet) {
+            outlineSet = {
+              id: `outline_set_${Date.now()}`,
+              name: currentVolumeName,
+              items: []
+            };
+            localNovel.outlineSets.push(outlineSet);
+            terminal.log(`[OutlineAndChapter] 创建新大纲集: ${currentVolumeName}`);
           } else {
-            await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_3', title: '错误', content: '未找到当前卷名称，无法创建大纲集' }] }, i);
-            setEdgeAnimation(node.id, false);
-            continue;
+            terminal.log(`[OutlineAndChapter] 使用现有大纲集: ${currentVolumeName}`);
           }
 
           for (let chapterIndex = 0; chapterIndex < chapterCount; chapterIndex++) {
