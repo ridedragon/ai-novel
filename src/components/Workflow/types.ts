@@ -109,6 +109,14 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   startChapterIndex?: number; // 起始章节索引 (0-based)，用于从指定章节开始生成
   startChapterMode?: 'auto' | 'continue' | 'restart'; // 起始章节模式: auto=自动检测, continue=继续写, restart=从头开始
   enableAutoDetect?: boolean; // 是否启用自动检测跳过已完成章节（默认 true）
+
+  // 大纲与正文复合节点特定设置
+  outlinePresetId?: string; // 大纲预设ID
+  outlinePresetName?: string; // 大纲预设名称
+  chapterPresetId?: string; // 正文预设ID
+  chapterPresetName?: string; // 正文预设名称
+  outlineInstruction?: string; // 大纲AI指令
+  chapterInstruction?: string; // 正文AI指令
 }
 
 export type WorkflowNode = Node<WorkflowNodeData>;
@@ -152,6 +160,7 @@ export type NodeTypeKey =
   | 'plotOutline'
   | 'outline'
   | 'chapter'
+  | 'outlineAndChapter'
   | 'workflowGenerator'
   | 'loopNode'
   | 'loopConfigurator'

@@ -2641,6 +2641,178 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           }
         }
 
+        // --- Outline and Chapter Node ---
+        if (node.data.typeKey === 'outlineAndChapter') {
+          await syncNodeStatus(node.id, { status: 'executing' }, i);
+          setEdgeAnimation(node.id, true);
+
+          // 获取目标卷信息
+          let targetVolumeId = node.data.targetVolumeId as string;
+          if (!targetVolumeId) {
+            targetVolumeId = workflowManager.getActiveVolumeAnchor() || localNovel.volumes?.[0]?.id || '';
+          }
+          if (!targetVolumeId) {
+            await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_1', title: '错误', content: '未找到目标卷' }] }, i);
+            setEdgeAnimation(node.id, false);
+            continue;
+          }
+
+          // 获取分卷规划信息，计算需要生成的章节数
+          let chapterCount = 1;
+          const volumePlans = workflowManager.getVolumePlans();
+          const activeVolume = localNovel.volumes?.find(v => v.id === targetVolumeId);
+          if (activeVolume) {
+            const volumePlan = volumePlans.find((plan: any) => plan.volumeName === activeVolume.title || plan.folderName === activeVolume.title);
+            if (volumePlan && volumePlan.startChapter !== undefined && volumePlan.endChapter !== undefined) {
+              chapterCount = (volumePlan.endChapter - volumePlan.startChapter) + 1;
+            }
+          }
+
+          // 获取大纲和正文的预设
+          const outlinePresets = allPresets['outline'] || [];
+          const chapterPresets = allPresets['completion'] || [];
+          const outlinePreset = outlinePresets.find(p => p.id === node.data.outlinePresetId) || outlinePresets[0];
+          const chapterPreset = chapterPresets.find(p => p.id === node.data.chapterPresetId) || chapterPresets[0];
+
+          if (!outlinePreset || !chapterPreset) {
+            await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_2', title: '错误', content: '缺少大纲或正文预设' }] }, i);
+            setEdgeAnimation(node.id, false);
+            continue;
+          }
+
+          // 构建上下文信息
+          const { dynamicContextMessages, dynamicFolder } = buildDynamicContext(i);
+          const currentVolumeName = dynamicFolder || activeVolume?.title || '';
+
+          // 生成大纲和正文
+          const outputEntries: OutputEntry[] = [];
+          let lastChapterContent = '';
+
+          for (let chapterIndex = 0; chapterIndex < chapterCount; chapterIndex++) {
+            if (!checkActive()) break;
+
+            // 1. 生成大纲
+            const outlineOpenai = new OpenAI({
+              apiKey: outlinePreset.apiConfig?.apiKey || globalConfig.apiKey,
+              baseURL: outlinePreset.apiConfig?.baseUrl || globalConfig.baseUrl,
+              dangerouslyAllowBrowser: true,
+            });
+
+            let outlineMessages: any[] = [
+              { role: 'system', content: localNovel.systemPrompt || '你是一名专业的小说大纲作者。' },
+              ...dynamicContextMessages,
+            ];
+
+            if (lastChapterContent) {
+              outlineMessages.push({
+                role: 'system',
+                content: `【前文回顾】：\n${lastChapterContent.substring(0, 1000)}...`
+              });
+            }
+
+            outlineMessages.push({
+              role: 'user',
+              content: `请生成第${chapterIndex + 1}章的大纲。${node.data.outlineInstruction || ''}`
+            });
+
+            let outlineResponse = '';
+            try {
+              const outlineCompletion = await outlineOpenai.chat.completions.create({
+                model: outlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
+                messages: outlineMessages,
+                temperature: outlinePreset.temperature || 0.7,
+              });
+              outlineResponse = outlineCompletion.choices[0]?.message?.content || '';
+            } catch (err) {
+              terminal.error(`[OutlineAndChapter] 大纲生成失败: ${err}`);
+              continue;
+            }
+
+            // 保存大纲到对应文件夹
+            if (currentVolumeName) {
+              let outlineSet = localNovel.outlineSets?.find(s => s.name === currentVolumeName);
+              if (!outlineSet) {
+                outlineSet = {
+                  id: `outline_set_${Date.now()}_${chapterIndex}`,
+                  name: currentVolumeName,
+                  items: []
+                };
+                localNovel.outlineSets = [...(localNovel.outlineSets || []), outlineSet];
+              }
+
+              outlineSet.items.push({
+                title: `第${chapterIndex + 1}章`,
+                summary: outlineResponse
+              });
+            }
+
+            // 添加大纲到输出条目
+            outputEntries.push({
+              id: `outline_${chapterIndex}_${Date.now()}`,
+              title: `第${chapterIndex + 1}章大纲`,
+              content: outlineResponse
+            });
+
+            // 2. 生成正文
+            const chapterOpenai = new OpenAI({
+              apiKey: chapterPreset.apiConfig?.apiKey || globalConfig.apiKey,
+              baseURL: chapterPreset.apiConfig?.baseUrl || globalConfig.baseUrl,
+              dangerouslyAllowBrowser: true,
+            });
+
+            let chapterMessages: any[] = [
+              { role: 'system', content: localNovel.systemPrompt || '你是一名专业的小说作者。' },
+              ...dynamicContextMessages,
+              {
+                role: 'system',
+                content: `【本章大纲】：\n${outlineResponse}`
+              }
+            ];
+
+            if (lastChapterContent) {
+              chapterMessages.push({
+                role: 'system',
+                content: `【前文回顾】：\n${lastChapterContent.substring(0, 1000)}...`
+              });
+            }
+
+            chapterMessages.push({
+              role: 'user',
+              content: `请根据大纲生成第${chapterIndex + 1}章的正文。${node.data.chapterInstruction || ''}`
+            });
+
+            let chapterResponse = '';
+            try {
+              const chapterCompletion = await chapterOpenai.chat.completions.create({
+                model: chapterPreset.apiConfig?.model || globalConfig.model,
+                messages: chapterMessages,
+                temperature: chapterPreset.temperature || 0.7,
+              });
+              chapterResponse = chapterCompletion.choices[0]?.message?.content || '';
+            } catch (err) {
+              terminal.error(`[OutlineAndChapter] 正文生成失败: ${err}`);
+              continue;
+            }
+
+            // 保存正文到章节
+            const newChapter: Chapter = {
+              id: Date.now() + chapterIndex,
+              title: `第${chapterIndex + 1}章`,
+              content: chapterResponse,
+              volumeId: targetVolumeId
+            };
+            localNovel.chapters = [...(localNovel.chapters || []), newChapter];
+            lastChapterContent = chapterResponse;
+
+            // 更新本地小说数据
+            await updateLocalAndGlobal(localNovel);
+          }
+
+          await syncNodeStatus(node.id, { status: 'completed', outputEntries }, i);
+          setEdgeAnimation(node.id, false);
+          continue;
+        }
+
         // --- Standard AI Call ---
         let typePresets = allPresets[node.data.presetType as string] || [];
         if (node.data.typeKey === 'aiChat') typePresets = Object.values(allPresets).flat();
