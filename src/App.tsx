@@ -1237,9 +1237,9 @@ function App() {
               );
             setIsEditingChapter(!isEditingChapter);
           }}
-          onChapterContentChange={e =>
+          onChapterContentChange={content =>
             novelData.setChapters(prev =>
-              prev.map(c => (c.id === novelData.activeChapterId ? { ...c, content: e.target.value } : c)),
+              prev.map(c => (c.id === novelData.activeChapterId ? { ...c, content } : c)),
             )
           }
           onOptimize={(tid, content) =>
