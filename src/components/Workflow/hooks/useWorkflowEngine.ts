@@ -2649,8 +2649,40 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           // 获取目标卷信息
           let targetVolumeId = node.data.targetVolumeId as string;
           if (!targetVolumeId) {
-            targetVolumeId = workflowManager.getActiveVolumeAnchor() || localNovel.volumes?.[0]?.id || '';
+            targetVolumeId = workflowManager.getActiveVolumeAnchor() || '';
           }
+          
+          // 增强：如果仍然没有目标卷，尝试从当前工作流文件夹或分卷规划中获取
+          if (!targetVolumeId && localNovel.volumes && localNovel.volumes.length > 0) {
+            // 尝试从当前工作流文件夹匹配
+            if (currentWorkflowFolder) {
+              const volByFolder = localNovel.volumes.find(v => v.title === currentWorkflowFolder);
+              if (volByFolder) {
+                targetVolumeId = volByFolder.id;
+              }
+            }
+            
+            // 尝试从分卷规划中获取
+            if (!targetVolumeId) {
+              const volumePlans = workflowManager.getVolumePlans();
+              const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
+              if (volumePlans[currentVolumeIndex]) {
+                const volumePlan = volumePlans[currentVolumeIndex];
+                const volByName = localNovel.volumes.find(v => 
+                  v.title === volumePlan.volumeName || v.title === volumePlan.folderName
+                );
+                if (volByName) {
+                  targetVolumeId = volByName.id;
+                }
+              }
+            }
+            
+            // 兜底：使用第一个卷
+            if (!targetVolumeId) {
+              targetVolumeId = localNovel.volumes[0].id;
+            }
+          }
+          
           if (!targetVolumeId) {
             await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_1', title: '错误', content: '未找到目标卷' }] }, i);
             setEdgeAnimation(node.id, false);
@@ -2682,11 +2714,26 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
           // 构建上下文信息
           const { dynamicContextMessages, dynamicFolder } = buildDynamicContext(i);
-          const currentVolumeName = dynamicFolder || activeVolume?.title || '';
+          // 增强：优先使用activeVolume的标题，确保大纲保存到正确的卷文件夹
+          const currentVolumeName = activeVolume?.title || dynamicFolder || '';
 
           // 生成大纲和正文
           const outputEntries: OutputEntry[] = [];
           let lastChapterContent = '';
+
+          // 预获取或创建大纲集，确保整个循环使用同一个大纲集
+          let outlineSet: any = null;
+          if (currentVolumeName) {
+            outlineSet = localNovel.outlineSets?.find(s => s.name === currentVolumeName);
+            if (!outlineSet) {
+              outlineSet = {
+                id: `outline_set_${Date.now()}`,
+                name: currentVolumeName,
+                items: []
+              };
+              localNovel.outlineSets = [...(localNovel.outlineSets || []), outlineSet];
+            }
+          }
 
           for (let chapterIndex = 0; chapterIndex < chapterCount; chapterIndex++) {
             if (!checkActive()) break;
@@ -2754,17 +2801,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             }
 
             // 保存大纲到对应文件夹
-            if (currentVolumeName) {
-              let outlineSet = localNovel.outlineSets?.find(s => s.name === currentVolumeName);
-              if (!outlineSet) {
-                outlineSet = {
-                  id: `outline_set_${Date.now()}_${chapterIndex}`,
-                  name: currentVolumeName,
-                  items: []
-                };
-                localNovel.outlineSets = [...(localNovel.outlineSets || []), outlineSet];
-              }
-
+            if (outlineSet) {
               outlineSet.items.push({
                 title: `第${chapterIndex + 1}章`,
                 summary: outlineResponse
