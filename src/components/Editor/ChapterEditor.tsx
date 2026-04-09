@@ -23,7 +23,7 @@ interface ChapterEditorProps {
   activeChapterId: number | null;
   isEditingChapter: boolean;
   onToggleEdit: (content?: string) => void;
-  onChapterContentChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onChapterContentChange: (content: string) => void;
   onOptimize: (targetId?: number, initialContent?: string) => Promise<void>;
   onStopOptimize: (chapterId: number) => void;
   optimizingChapterIds: Set<number>;
@@ -118,7 +118,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       syncTimeoutRef.current = setTimeout(() => {
         terminal.log(`[EDITOR] 正在同步内容到全局状态: ${activeChapter?.title} (字数: ${newValue.length})`);
-        onChapterContentChange(e);
+        onChapterContentChange(newValue);
         isDirtyRef.current = false;
         setHasUnsavedChanges(false);
         setLastSavedTime(new Date());
