@@ -3825,6 +3825,15 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 ['outline', 'plotOutline', 'characters', 'worldview'].includes(node.data.typeKey as string) &&
                 retry < 2
               ) {
+                // 向AI发送错误信息，让其修正格式
+                currMsgs = [
+                  ...currMsgs,
+                  { role: 'assistant', content: aiRes },
+                  {
+                    role: 'user',
+                    content: `(系统提示：你生成的内容格式有误，无法解析为JSON。请修正错误，仅输出正确的JSON格式内容，不要添加任何其他说明文字。确保JSON格式严格正确，包括正确的引号、逗号和括号。)`,
+                  },
+                ];
                 retry++;
                 continue;
               }
