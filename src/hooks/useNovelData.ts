@@ -393,52 +393,60 @@ export function useNovelData() {
         title: name.trim(),
         collapsed: false,
       };
-      setVolumes([...volumes, newVolume]);
+      setVolumes(prev => [...prev, newVolume]);
       return newVolume.id;
     },
-    [volumes, setVolumes],
+    [setVolumes],
   );
 
   const deleteVolume = useCallback(
     (volumeId: string) => {
-      setVolumes(volumes.filter(v => v.id !== volumeId));
+      setVolumes(prev => prev.filter(v => v.id !== volumeId));
 
-      const chaptersInVolume = chapters.filter(c => c.volumeId === volumeId);
-      const chapterIdsToDelete = new Set(chaptersInVolume.map(c => c.id));
-      const storyChapters = chapters.filter(c => !c.subtype || c.subtype === 'story');
-      const orphanSummaryIds = new Set<number>();
+      setChapters(prev => {
+        const chaptersInVolume = prev.filter(c => c.volumeId === volumeId);
+        const chapterIdsToDelete = new Set(chaptersInVolume.map(c => c.id));
+        const storyChapters = prev.filter(c => !c.subtype || c.subtype === 'story');
+        const orphanSummaryIds = new Set<number>();
 
-      chapters.forEach(c => {
-        if (c.subtype === 'small_summary' || c.subtype === 'big_summary') {
-          const range = c.summaryRange?.split('-').map(Number);
-          if (range && range.length === 2) {
-            const lastStoryIdx = range[1] - 1;
-            const targetStoryChapter = storyChapters[lastStoryIdx];
-            if (targetStoryChapter && chapterIdsToDelete.has(targetStoryChapter.id)) {
-              orphanSummaryIds.add(c.id);
+        prev.forEach(c => {
+          if (c.subtype === 'small_summary' || c.subtype === 'big_summary') {
+            const range = c.summaryRange?.split('-').map(Number);
+            if (range && range.length === 2) {
+              const lastStoryIdx = range[1] - 1;
+              const targetStoryChapter = storyChapters[lastStoryIdx];
+              if (targetStoryChapter && chapterIdsToDelete.has(targetStoryChapter.id)) {
+                orphanSummaryIds.add(c.id);
+              }
             }
           }
-        }
-      });
+        });
 
-      const allIdsToDelete = new Set([...chapterIdsToDelete, ...orphanSummaryIds]);
-      allIdsToDelete.forEach(id => deletedChapterIdsRef.current.add(id));
-      allIdsToDelete.forEach(id => {
-        storage.deleteChapterContent(id).catch(() => {});
-        storage.deleteChapterVersions(id).catch(() => {});
-      });
+        const allIdsToDelete = new Set([...chapterIdsToDelete, ...orphanSummaryIds]);
+        allIdsToDelete.forEach(id => deletedChapterIdsRef.current.add(id));
+        allIdsToDelete.forEach(id => {
+          storage.deleteChapterContent(id).catch(() => {});
+          storage.deleteChapterVersions(id).catch(() => {});
+        });
 
-      const newChapters = chapters.filter(c => !allIdsToDelete.has(c.id));
-      setChapters(newChapters);
+        return prev.filter(c => !allIdsToDelete.has(c.id));
+      });
 
       setActiveChapterId(prev => {
-        if (prev && chapters.find(c => c.id === prev)?.volumeId === volumeId) {
-          return newChapters.length > 0 ? newChapters[0].id : null;
+        // Bug 2 修复：检查当前活跃章节是否属于被删卷
+        // 从 novelsRef 读取章节列表（此时 setChapters 的更新可能还未反映到 novelsRef）
+        const currentNovel = novelsRef.current.find(n => n.id === activeNovelIdRef.current);
+        const currentChapters = currentNovel?.chapters || [];
+        const currentChapter = currentChapters.find(c => c.id === prev);
+        // 如果当前活跃章节属于被删卷，切换到第一个不属于被删卷的章节
+        if (!currentChapter || currentChapter.volumeId === volumeId) {
+          const remaining = currentChapters.filter(c => c.volumeId !== volumeId);
+          return remaining.length > 0 ? remaining[0].id : null;
         }
         return prev;
       });
     },
-    [volumes, chapters, setVolumes, setChapters],
+    [setVolumes, setChapters],
   );
 
   const addNovel = useCallback(

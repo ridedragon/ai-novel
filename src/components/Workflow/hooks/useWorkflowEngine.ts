@@ -2,7 +2,7 @@ import { Edge } from '@xyflow/react';
 import OpenAI from 'openai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
-import { GeneratorPreset, GeneratorPrompt, LoopInstruction, Novel, ReferenceFolder, Chapter } from '../../../types';
+import { GeneratorPreset, GeneratorPrompt, LoopInstruction, Novel, ReferenceFolder, Chapter, NovelVolume } from '../../../types';
 import { AutoWriteEngine, getChapterContextMessages } from '../../../utils/auto-write';
 import { keepAliveManager } from '../../../utils/KeepAliveManager';
 import { storage } from '../../../utils/storage';
@@ -2646,12 +2646,21 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           await syncNodeStatus(node.id, { status: 'executing' }, i);
           setEdgeAnimation(node.id, true);
 
-          // 获取目标卷信息
+          // 获取目标卷信息（Bug1 终修：必须校验 targetVolumeId 是否真实存在）
+          const hasValidVolume = (vid?: string) =>
+            !!vid && !!localNovel.volumes?.some(v => String(v.id) === String(vid));
+
           let targetVolumeId = node.data.targetVolumeId as string;
           if (!targetVolumeId) {
             targetVolumeId = workflowManager.getActiveVolumeAnchor() || '';
           }
-          
+
+          // 非空不代表有效：如果是陈旧卷 ID（例如卷被删除后残留），必须清空并走兜底链路
+          if (targetVolumeId && !hasValidVolume(targetVolumeId)) {
+            terminal.warn(`[OutlineAndChapter] 检测到无效 targetVolumeId=${targetVolumeId}，将重新解析目标分卷`);
+            targetVolumeId = '';
+          }
+
           // 增强：如果仍然没有目标卷，尝试从当前工作流文件夹或分卷规划中获取
           if (!targetVolumeId && localNovel.volumes && localNovel.volumes.length > 0) {
             // 尝试从当前工作流文件夹匹配
@@ -2661,14 +2670,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 targetVolumeId = volByFolder.id;
               }
             }
-            
+
             // 尝试从分卷规划中获取
             if (!targetVolumeId) {
               const volumePlans = workflowManager.getVolumePlans();
               const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
               if (volumePlans[currentVolumeIndex]) {
                 const volumePlan = volumePlans[currentVolumeIndex];
-                const volByName = localNovel.volumes.find(v => 
+                const volByName = localNovel.volumes.find(v =>
                   v.title === volumePlan.volumeName || v.title === volumePlan.folderName
                 );
                 if (volByName) {
@@ -2676,17 +2685,28 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 }
               }
             }
-            
-            // 兜底：使用第一个卷
-            if (!targetVolumeId) {
+
+            // 兜底：使用第一个卷（Bug1修复：增加空数组保护）
+            if (!targetVolumeId && localNovel.volumes && localNovel.volumes.length > 0) {
               targetVolumeId = localNovel.volumes[0].id;
             }
           }
-          
+
           if (!targetVolumeId) {
-            await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_1', title: '错误', content: '未找到目标卷' }] }, i);
-            setEdgeAnimation(node.id, false);
-            continue;
+            const defaultVolumeName = currentWorkflowFolder || node.data.folderName || `第1卷`;
+            const defaultVolume: NovelVolume = {
+              id: `vol_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+              title: defaultVolumeName,
+              collapsed: false,
+            };
+            localNovel.volumes = [...(localNovel.volumes || []), defaultVolume];
+            targetVolumeId = defaultVolume.id;
+            await updateLocalAndGlobal(localNovel);
+            terminal.log(`[OutlineAndChapter] 自动创建默认分卷: ${defaultVolumeName}, id=${targetVolumeId}`);
+          }
+
+          if (targetVolumeId) {
+            workflowManager.setActiveVolumeAnchor(targetVolumeId);
           }
 
           // 获取分卷规划信息，计算需要生成的章节数
@@ -2800,6 +2820,21 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             terminal.log(`[OutlineAndChapter] 使用现有大纲集: ${currentVolumeName}`);
           }
 
+          // 预创建章节占位符，确保章节立即显示在分卷下
+          const chapterPlaceholders: Chapter[] = [];
+          for (let pi = 0; pi < chapterCount; pi++) {
+            chapterPlaceholders.push({
+              id: Date.now() + pi,
+              title: `第${pi + 1}章`,
+              content: '',
+              volumeId: targetVolumeId,
+              subtype: 'story',
+            });
+          }
+          localNovel.chapters = [...(localNovel.chapters || []), ...chapterPlaceholders];
+          await updateLocalAndGlobal(localNovel);
+          terminal.log(`[OutlineAndChapter] 已创建 ${chapterCount} 个章节占位符, volumeId=${targetVolumeId}`);
+
           for (let chapterIndex = 0; chapterIndex < chapterCount; chapterIndex++) {
             if (!checkActive()) break;
 
@@ -2837,7 +2872,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             
             outlineMessages.push({
               role: 'user',
-              content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成第${chapterIndex + 1}章的大纲。${outlineInstruction}`
+              content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成第${chapterIndex + 1}章的大纲。请以JSON格式输出，包含title和summary字段。${outlineInstruction}`
             });
 
             let outlineResponse = '';
@@ -2886,24 +2921,96 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               continue;
             }
 
-            // 保存大纲到对应文件夹
+            // 使用与大纲节点一致的解析逻辑（含 JSON 修复重试）
+            let outlineEntries: { title: string; content: string }[] = [];
+            let parsedOutlineResponse = outlineResponse;
+            let parseRetry = 0;
+            let parseMessages = [...outlineMessages];
+
+            while (parseRetry <= 2) {
+              try {
+                const parsed = await cleanAndParseJSON(parsedOutlineResponse);
+                outlineEntries = await extractEntries(parsed);
+                break;
+              } catch (parseError: any) {
+                terminal.warn(`[OutlineAndChapter] 大纲JSON解析失败(重试${parseRetry}/2): ${parseError.message}`);
+
+                if (parseRetry >= 2) {
+                  outlineEntries = [{
+                    title: `第${chapterIndex + 1}章`,
+                    content: parsedOutlineResponse || outlineResponse,
+                  }];
+                  break;
+                }
+
+                parseMessages = [
+                  ...parseMessages,
+                  { role: 'assistant', content: parsedOutlineResponse },
+                  {
+                    role: 'user',
+                    content:
+                      '(系统提示：你生成的大纲 JSON 格式有误，无法解析。请仅输出严格合法的 JSON，保持原有语义，不要输出任何解释文字。)',
+                  },
+                ];
+
+                const repairCompletionParams: any = {
+                  model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
+                  messages: parseMessages,
+                  temperature: finalOutlinePreset.temperature,
+                  top_p: finalOutlinePreset.topP,
+                };
+                if ((finalOutlinePreset as any).maxTokens)
+                  repairCompletionParams.max_tokens = (finalOutlinePreset as any).maxTokens;
+                if ((finalOutlinePreset as any).frequencyPenalty)
+                  repairCompletionParams.frequency_penalty = (finalOutlinePreset as any).frequencyPenalty;
+                if ((finalOutlinePreset as any).presencePenalty)
+                  repairCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
+
+                const repairedCompletion = await outlineOpenai.chat.completions.create(repairCompletionParams);
+                parsedOutlineResponse = repairedCompletion.choices[0]?.message?.content || parsedOutlineResponse;
+                parseRetry++;
+              }
+            }
+
+            outlineResponse = parsedOutlineResponse;
+
+            // 保存大纲到对应文件夹（与大纲节点的 upSets 逻辑一致）
             if (outlineSet) {
-              outlineSet.items.push({
-                title: `第${chapterIndex + 1}章`,
-                summary: outlineResponse
+              outlineEntries.forEach(entry => {
+                const existingIdx = outlineSet.items.findIndex((ni: any) => ni.title === entry.title);
+                const ni = { title: entry.title, summary: entry.content };
+                if (existingIdx !== -1) {
+                  outlineSet.items[existingIdx] = { ...outlineSet.items[existingIdx], ...ni };
+                } else {
+                  outlineSet.items.push(ni);
+                }
               });
               
-              // 显式更新 localNovel.outlineSets，确保大纲集的更新能够反映到 localNovel 中
+              outlineSet.items.sort((a: any, b: any) => (parseAnyNumber(a.title) || 0) - (parseAnyNumber(b.title) || 0));
+              
               localNovel.outlineSets = localNovel.outlineSets.map(s => 
                 s.id === outlineSet.id ? outlineSet : s
               );
             }
 
+            // 使用解析后的标题更新占位符章节标题
+            const resolvedTitle = outlineEntries.length > 0 ? outlineEntries[0].title : `第${chapterIndex + 1}章`;
+            const placeholderChapter = chapterPlaceholders[chapterIndex]
+              ? localNovel.chapters.find(c => c.id === chapterPlaceholders[chapterIndex].id)
+              : null;
+            if (placeholderChapter) {
+              placeholderChapter.title = resolvedTitle;
+              // Bug1修复：更新占位符标题后立即刷新UI，确保章节名称在分卷下立即更新
+              await updateLocalAndGlobal(localNovel);
+            }
+
             // 添加大纲到输出条目
-            outputEntries.push({
-              id: `outline_${chapterIndex}_${Date.now()}`,
-              title: `第${chapterIndex + 1}章大纲`,
-              content: outlineResponse
+            outlineEntries.forEach((entry, eIdx) => {
+              outputEntries.push({
+                id: `outline_${chapterIndex}_${eIdx}_${Date.now()}`,
+                title: entry.title,
+                content: entry.content
+              });
             });
 
             // 及时更新节点的 outputEntries，以便大纲能够及时显示在自动化创作中心的大纲文件夹中
@@ -2931,9 +3038,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               ];
             }
 
+            const outlineContentForChapter = outlineEntries.length > 0
+              ? outlineEntries.map(e => `${e.title}: ${e.content}`).join('\n')
+              : outlineResponse;
             chapterMessages.push({
               role: 'system',
-              content: `【本章大纲】：\n${outlineResponse}`
+              content: `【本章大纲】：\n${outlineContentForChapter}`
             });
 
             if (lastChapterContent) {
@@ -2948,7 +3058,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             
             chapterMessages.push({
               role: 'user',
-              content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成第${chapterIndex + 1}章的正文。${chapterInstruction}`
+              content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成${resolvedTitle}的正文。${chapterInstruction}`
             });
 
             let chapterResponse = '';
@@ -2997,36 +3107,37 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               continue;
             }
 
-            // 确保 targetVolumeId 不为空
-            if (!targetVolumeId) {
-              // 尝试获取默认分卷 ID
+            // 确保 targetVolumeId 不为空且有效（防止落到未分卷）
+            if (!targetVolumeId || !localNovel.volumes?.some(v => String(v.id) === String(targetVolumeId))) {
               targetVolumeId = localNovel.volumes?.[0]?.id || '';
               terminal.warn(`[OutlineAndChapter] 警告: 使用默认分卷 ID: ${targetVolumeId}`);
             }
             
-            // 保存正文到章节
-            const newChapter: Chapter = {
-              id: Date.now() + chapterIndex,
-              title: `第${chapterIndex + 1}章`,
-              content: chapterResponse,
-              volumeId: targetVolumeId,
-              subtype: 'story' // 确保章节类型为故事章节
-            };
+            // 更新占位符章节的内容（而非创建新章节）
+            const placeholderId = chapterPlaceholders[chapterIndex]?.id;
+            const existingChapter = placeholderId 
+              ? localNovel.chapters.find(c => c.id === placeholderId) 
+              : null;
             
-            // 调试：打印章节创建信息
-            terminal.log(`[OutlineAndChapter] 创建新章节: id=${newChapter.id}, title=${newChapter.title}, volumeId=${newChapter.volumeId}, targetVolumeId=${targetVolumeId}`);
+            if (existingChapter) {
+              existingChapter.content = chapterResponse;
+              terminal.log(`[OutlineAndChapter] 更新占位符章节: id=${existingChapter.id}, volumeId=${existingChapter.volumeId}`);
+            } else {
+              const fallbackChapter: Chapter = {
+                id: Date.now() + chapterIndex,
+                title: `第${chapterIndex + 1}章`,
+                content: chapterResponse,
+                volumeId: targetVolumeId,
+                subtype: 'story',
+              };
+              localNovel.chapters = [...(localNovel.chapters || []), fallbackChapter];
+              terminal.log(`[OutlineAndChapter] 创建回退章节: id=${fallbackChapter.id}, volumeId=${targetVolumeId}`);
+            }
             
-            localNovel.chapters = [...(localNovel.chapters || []), newChapter];
             lastChapterContent = chapterResponse;
 
-            // 更新本地小说数据，确保大纲和正文都被保存
             await updateLocalAndGlobal(localNovel);
-            // 增加更长的等待时间，确保 UI 更新
-            await new Promise(resolve => setTimeout(resolve, 300));
-            
-            // 验证章节是否正确保存
-            const savedChapter = localNovel.chapters.find(ch => ch.id === newChapter.id);
-            terminal.log(`[OutlineAndChapter] 章节保存验证: id=${savedChapter?.id}, volumeId=${savedChapter?.volumeId}, exists=${!!savedChapter}`);
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
 
           await syncNodeStatus(node.id, { status: 'completed', outputEntries }, i);
