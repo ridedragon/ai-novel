@@ -234,6 +234,13 @@ export const NODE_CONFIGS: Record<NodeTypeKey, any> = {
     defaultLabel: '生成章节正文',
     presetType: 'completion',
   },
+  outlineAndChapter: {
+    typeLabel: '大纲与正文',
+    icon: BookOpen,
+    color: '#ec4899',
+    defaultLabel: '大纲与正文生成',
+    presetType: null,
+  },
 };
 
 export const WORKFLOW_DSL_PROMPT = `你是一个顶级的 AI 小说工作流架构师。

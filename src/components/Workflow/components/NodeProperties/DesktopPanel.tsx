@@ -329,7 +329,107 @@ export const DesktopPanel = ({
             </div>
           )}
 
-          {node.data.typeKey === 'chapter' ? (
+          {node.data.typeKey === 'outlineAndChapter' ? (
+            <>
+              <div className="space-y-6 pt-6 border-t border-gray-700/30">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                    <BookOpen className="w-3.5 h-3.5" /> 大纲预设
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={node.data.outlinePresetId as string || ''}
+                      onChange={e => {
+                        const outlinePresets = allPresets['outline'] || [];
+                        const preset = outlinePresets.find(p => p.id === e.target.value);
+                        handleUpdate({
+                          outlinePresetId: e.target.value,
+                          outlinePresetName: preset?.name || '',
+                        });
+                      }}
+                      className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none appearance-none cursor-pointer transition-all"
+                    >
+                      <option value="">-- 选择大纲预设 --</option>
+                      {(allPresets['outline'] || []).map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.apiConfig?.model || '默认'})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                    <FileText className="w-3.5 h-3.5" /> 正文预设
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={node.data.chapterPresetId as string || ''}
+                      onChange={e => {
+                        const chapterPresets = allPresets['completion'] || [];
+                        const preset = chapterPresets.find(p => p.id === e.target.value);
+                        handleUpdate({
+                          chapterPresetId: e.target.value,
+                          chapterPresetName: preset?.name || '',
+                        });
+                      }}
+                      className="w-full bg-[#161922] border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none appearance-none cursor-pointer transition-all"
+                    >
+                      <option value="">-- 选择正文预设 --</option>
+                      {(allPresets['completion'] || []).map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.apiConfig?.model || '默认'})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                    大纲AI指令
+                  </label>
+                  <textarea
+                    value={node.data.outlineInstruction || ''}
+                    onChange={e => handleUpdate({ outlineInstruction: e.target.value })}
+                    placeholder="输入给大纲AI的特定指令..."
+                    className="w-full h-24 bg-[#161922] border border-gray-700/80 rounded-lg p-4 text-sm text-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none font-mono leading-relaxed transition-all"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                    正文AI指令
+                  </label>
+                  <textarea
+                    value={node.data.chapterInstruction || ''}
+                    onChange={e => handleUpdate({ chapterInstruction: e.target.value })}
+                    placeholder="输入给正文AI的特定指令..."
+                    className="w-full h-24 bg-[#161922] border border-gray-700/80 rounded-lg p-4 text-sm text-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none font-mono leading-relaxed transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4 pt-6 border-t border-gray-700/30">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5 text-indigo-400" /> 生成产物说明
+                </label>
+                <div className="text-center py-12 bg-[#161922] rounded-xl border border-dashed border-gray-700">
+                  <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
+                    <BookOpen className="w-6 h-6 text-indigo-500" />
+                  </div>
+                  <p className="text-sm text-gray-300">大纲和正文已实时保存</p>
+                  <p className="text-xs text-gray-500 mt-2 px-10 leading-relaxed">
+                    工作流执行过程中生成的大纲会保存到对应文件夹，正文会直接写入小说对应的分卷中。您可以在主界面左侧的目录树中点击查看、编辑或手动优化这些内容。
+                  </p>
+                </div>
+              </div>
+              <OutputList data={node.data} onUpdate={handleUpdate} />
+            </>
+          ) : node.data.typeKey === 'chapter' ? (
             <>
               <ChapterStartSelector 
                 data={node.data} 
