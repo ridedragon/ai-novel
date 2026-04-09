@@ -2810,10 +2810,20 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               dangerouslyAllowBrowser: true,
             });
 
-            let outlineMessages: any[] = [
-              { role: 'system', content: localNovel.systemPrompt || '你是一名专业的小说大纲作者。' },
-              ...dynamicContextMessages,
-            ];
+            // Build outline messages using preset prompts if available
+            let outlineMessages: any[] = [];
+            const outlineBasePrompts = (finalOutlinePreset as any)?.prompts?.filter((p: any) => p.enabled || p.active) || [];
+            if (outlineBasePrompts.length > 0) {
+              outlineBasePrompts.forEach((p: any) => {
+                const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), macroCtx);
+                outlineMessages.push({ role: p.role, content: c });
+              });
+            } else {
+              outlineMessages = [
+                { role: 'system', content: localNovel.systemPrompt || '你是一名专业的小说大纲作者。' },
+                ...dynamicContextMessages,
+              ];
+            }
 
             if (lastChapterContent) {
               outlineMessages.push({
@@ -2838,8 +2848,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               console.log('Messages:', outlineMessages);
               console.log('Config:', {
                 model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
-                temperature: finalOutlinePreset.temperature || 0.7,
-                top_p: finalOutlinePreset.topP || undefined,
+                temperature: finalOutlinePreset.temperature,
+                top_p: finalOutlinePreset.topP,
               });
               console.groupEnd();
 
@@ -2847,16 +2857,22 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 >> AI REQUEST [工作流: 大纲生成] 第${chapterIndex + 1}章
 >> -----------------------------------------------------------
 >> Model:       ${finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model}
->> Temperature: ${finalOutlinePreset.temperature || 0.7}
+>> Temperature: ${finalOutlinePreset.temperature}
 >> -----------------------------------------------------------
 `);
 
-              const outlineCompletion = await outlineOpenai.chat.completions.create({
+              const outlineCompletionParams: any = {
                 model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
                 messages: outlineMessages,
-                temperature: finalOutlinePreset.temperature || 0.7,
-                top_p: finalOutlinePreset.topP || undefined,
-              });
+                temperature: finalOutlinePreset.temperature,
+                top_p: finalOutlinePreset.topP,
+              };
+              // Add optional parameters if they exist
+              if ((finalOutlinePreset as any).maxTokens) outlineCompletionParams.max_tokens = (finalOutlinePreset as any).maxTokens;
+              if ((finalOutlinePreset as any).frequencyPenalty) outlineCompletionParams.frequency_penalty = (finalOutlinePreset as any).frequencyPenalty;
+              if ((finalOutlinePreset as any).presencePenalty) outlineCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
+
+              const outlineCompletion = await outlineOpenai.chat.completions.create(outlineCompletionParams);
               outlineResponse = outlineCompletion.choices[0]?.message?.content || '';
               
               terminal.log(`
@@ -2900,14 +2916,25 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               dangerouslyAllowBrowser: true,
             });
 
-            let chapterMessages: any[] = [
-              { role: 'system', content: localNovel.systemPrompt || '你是一名专业的小说作者。' },
-              ...dynamicContextMessages,
-              {
-                role: 'system',
-                content: `【本章大纲】：\n${outlineResponse}`
-              }
-            ];
+            // Build chapter messages using preset prompts if available
+            let chapterMessages: any[] = [];
+            const chapterBasePrompts = (finalChapterPreset as any)?.prompts?.filter((p: any) => p.enabled || p.active) || [];
+            if (chapterBasePrompts.length > 0) {
+              chapterBasePrompts.forEach((p: any) => {
+                const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), macroCtx);
+                chapterMessages.push({ role: p.role, content: c });
+              });
+            } else {
+              chapterMessages = [
+                { role: 'system', content: localNovel.systemPrompt || '你是一名专业的小说作者。' },
+                ...dynamicContextMessages,
+              ];
+            }
+
+            chapterMessages.push({
+              role: 'system',
+              content: `【本章大纲】：\n${outlineResponse}`
+            });
 
             if (lastChapterContent) {
               chapterMessages.push({
@@ -2932,8 +2959,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               console.log('Messages:', chapterMessages);
               console.log('Config:', {
                 model: finalChapterPreset.apiConfig?.model || globalConfig.model,
-                temperature: finalChapterPreset.temperature || 0.7,
-                top_p: finalChapterPreset.topP || undefined,
+                temperature: finalChapterPreset.temperature,
+                top_p: finalChapterPreset.topP,
               });
               console.groupEnd();
 
@@ -2941,16 +2968,22 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 >> AI REQUEST [工作流: 正文生成] 第${chapterIndex + 1}章
 >> -----------------------------------------------------------
 >> Model:       ${finalChapterPreset.apiConfig?.model || globalConfig.model}
->> Temperature: ${finalChapterPreset.temperature || 0.7}
+>> Temperature: ${finalChapterPreset.temperature}
 >> -----------------------------------------------------------
 `);
 
-              const chapterCompletion = await chapterOpenai.chat.completions.create({
+              const chapterCompletionParams: any = {
                 model: finalChapterPreset.apiConfig?.model || globalConfig.model,
                 messages: chapterMessages,
-                temperature: finalChapterPreset.temperature || 0.7,
-                top_p: finalChapterPreset.topP || undefined,
-              });
+                temperature: finalChapterPreset.temperature,
+                top_p: finalChapterPreset.topP,
+              };
+              // Add optional parameters if they exist
+              if ((finalChapterPreset as any).maxTokens) chapterCompletionParams.max_tokens = (finalChapterPreset as any).maxTokens;
+              if ((finalChapterPreset as any).frequencyPenalty) chapterCompletionParams.frequency_penalty = (finalChapterPreset as any).frequencyPenalty;
+              if ((finalChapterPreset as any).presencePenalty) chapterCompletionParams.presence_penalty = (finalChapterPreset as any).presencePenalty;
+
+              const chapterCompletion = await chapterOpenai.chat.completions.create(chapterCompletionParams);
               chapterResponse = chapterCompletion.choices[0]?.message?.content || '';
               
               terminal.log(`

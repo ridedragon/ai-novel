@@ -33,6 +33,15 @@ import {
   X,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  defaultOutlinePresets,
+  defaultCharacterPresets,
+  defaultWorldviewPresets,
+  defaultInspirationPresets,
+  defaultPlotOutlinePresets,
+  defaultOptimizePresets,
+  defaultAnalysisPresets,
+} from '../constants/aiPresets';
 import { GeneratorPreset } from '../types';
 import { storage } from '../utils/storage';
 import { workflowManager } from '../utils/WorkflowManager';
@@ -270,13 +279,25 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
       'chat',
       'generator',
     ];
+    const defaultPresetsMap: Record<string, GeneratorPreset[]> = {
+      outline: defaultOutlinePresets,
+      character: defaultCharacterPresets,
+      worldview: defaultWorldviewPresets,
+      inspiration: defaultInspirationPresets,
+      plotOutline: defaultPlotOutlinePresets,
+      optimize: defaultOptimizePresets,
+      analysis: defaultAnalysisPresets,
+      completion: [],
+      chat: [],
+      generator: [],
+    };
     const loaded: Record<string, GeneratorPreset[]> = {};
     types.forEach(t => {
       try {
         const saved = localStorage.getItem(`${t}Presets`);
-        loaded[t] = saved ? JSON.parse(saved) : [];
+        loaded[t] = saved ? JSON.parse(saved) : (defaultPresetsMap[t] || []);
       } catch (e) {
-        loaded[t] = [];
+        loaded[t] = defaultPresetsMap[t] || [];
       }
     });
     setAllPresets(loaded);
