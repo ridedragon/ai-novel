@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, ChevronUp, Download, Edit3, FileText, Folder
 import React from 'react';
 import { Chapter, NovelVolume } from '../../types';
 import { ChapterNumberingModeSwitch } from '../ChapterNumberingModeSwitch';
+import { extractChapterName } from '../../utils/chapterNumbering';
 
 interface AppSidebarLeftProps {
   chapters: Chapter[];
@@ -49,7 +50,8 @@ export const AppSidebarLeft: React.FC<AppSidebarLeftProps> = ({
       const prefix = chapter.subtype === 'small_summary' ? '🔹小总结' : '🔸大总结';
       return `${prefix} (${targetRange})`;
     }
-    return chapter.title;
+    const name = extractChapterName(chapter.title);
+    return name || chapter.title;
   };
   return (
     <>
