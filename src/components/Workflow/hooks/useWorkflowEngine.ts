@@ -856,7 +856,7 @@ export const useWorkflowEngine = (options: {
         }
 
         const node = nodesRef.current.find(n => n.id === sortedNodes[i].id) || sortedNodes[i];
-        workflowManager.updateProgress(i);
+        workflowManager.updateProgress(i, node.id);
         logMemory();
 
         // --- Pause Node ---
@@ -4598,7 +4598,25 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
   };
 
   const resumeWorkflow = () => {
-    if (currentNodeIndex !== -1) runWorkflow({ startIndex: currentNodeIndex });
+    const savedNodeId = workflowManager.getCurrentNodeId();
+    const orderedNodes = getOrderedNodes();
+    
+    let actualStartIndex = currentNodeIndex;
+    
+    // 如果保存了节点ID，优先使用节点ID查找正确的索引
+    if (savedNodeId) {
+      const nodeIndex = orderedNodes.findIndex(node => node.id === savedNodeId);
+      if (nodeIndex !== -1) {
+        actualStartIndex = nodeIndex;
+        terminal.log(`[Workflow Engine] Resuming from saved node ID ${savedNodeId} at index ${actualStartIndex}`);
+      } else {
+        terminal.warn(`[Workflow Engine] Saved node ID ${savedNodeId} not found, falling back to index ${currentNodeIndex}`);
+      }
+    }
+    
+    if (actualStartIndex !== -1) {
+      runWorkflow({ startIndex: actualStartIndex });
+    }
   };
 
   const resetWorkflowStatus = async () => {

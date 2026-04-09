@@ -18,6 +18,7 @@ interface WorkflowState {
   isRunning: boolean;
   isPaused: boolean;
   currentNodeIndex: number;
+  currentNodeId: string | null; // 新增：保存当前执行节点的 ID
   activeWorkflowId: string | null;
   error: string | null;
   globalContext: WorkflowGlobalContext;
@@ -45,6 +46,7 @@ class WorkflowManager {
     isRunning: false,
     isPaused: false,
     currentNodeIndex: -1,
+    currentNodeId: null,
     activeWorkflowId: null,
     error: null,
     totalVolumes: 0,
@@ -165,6 +167,10 @@ class WorkflowManager {
     return { ...this.state };
   }
 
+  public getCurrentNodeId(): string | null {
+    return this.state.currentNodeId;
+  }
+
   public subscribe(listener: StateListener) {
     this.listeners.add(listener);
     // 立即发送当前状态
@@ -278,9 +284,12 @@ class WorkflowManager {
     return runId;
   }
 
-  public updateProgress(index: number) {
-    if (this.state.currentNodeIndex !== index) {
+  public updateProgress(index: number, nodeId?: string) {
+    if (this.state.currentNodeIndex !== index || this.state.currentNodeId !== nodeId) {
       this.state.currentNodeIndex = index;
+      if (nodeId !== undefined) {
+        this.state.currentNodeId = nodeId;
+      }
       
       // 保存状态
       this.debouncedSaveExecutionState();
@@ -1110,6 +1119,7 @@ class WorkflowManager {
       isRunning: false,
       isPaused: false,
       currentNodeIndex: -1,
+      currentNodeId: null,
       totalVolumes: 0,
       lockedStartVolumeId: undefined,
       lockedStartVolumeIndex: undefined,
