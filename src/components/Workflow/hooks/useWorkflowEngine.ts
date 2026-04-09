@@ -929,7 +929,12 @@ export const useWorkflowEngine = (options: {
             }
             if (targetVolumeId) workflowManager.setActiveVolumeAnchor(targetVolumeId);
             const rules = (node.data.splitRules as any[]) || [];
+            const volumes = (node.data.volumes as any[]) || [];
             if (rules.length > 0) workflowManager.setPendingSplits(rules);
+            // 修复：非AI模式下也需要保存完整的分卷规划信息到 workflowManager
+            if (volumes.length > 0) {
+              workflowManager.setVolumePlans(volumes);
+            }
             
             // 修复：非AI模式下也需要设置 outputEntries，确保节点内容能传递给后续节点
             // 如果用户在 UI 中手动编辑了 volumeContent，使用它作为输出
