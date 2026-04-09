@@ -589,19 +589,23 @@ class WorkflowManager {
         // 由于 currentChapterGlobalIndex > endChapter，会被误触发，导致当前章节写入错误分卷。
         const startLock = this.getStartVolumeLock();
         const lockIndex = startLock.volumeIndex;
-        if (
-          lockIndex !== undefined &&
-          lockIndex > 0 &&
-          currentChapterGlobalIndex !== undefined &&
-          rule.startChapter !== undefined &&
-          currentChapterGlobalIndex >= rule.startChapter
-        ) {
+        if (lockIndex !== undefined && lockIndex >= 0) {
+          // 只要设置了启动卷锁，就检查是否要切换到更早的卷
           const targetRuleVolumeIndex = (context.volumePlans || []).findIndex(
             (v: any) => (v.volumeName || v.folderName) === rule.nextVolumeName,
           );
           if (targetRuleVolumeIndex !== -1 && targetRuleVolumeIndex < lockIndex) {
             terminal.warn(
               `[WorkflowManager]   Split suppressed by start volume lock: targetRuleVolumeIndex=${targetRuleVolumeIndex} < lockIndex=${lockIndex}`,
+            );
+            return null;
+          }
+          // 额外保护：如果有启动卷锁，且规则没有明确的 volumePlans 匹配，
+          // 但规则看起来是要切换到更早的卷（如 endChapter 检查会触发），
+          // 我们也应该禁止，以确保安全
+          if (targetRuleVolumeIndex === -1 && (rule.endChapter !== undefined || rule.chapterTitle !== undefined)) {
+            terminal.warn(
+              `[WorkflowManager]   Split suppressed by start volume lock: ambiguous rule, lockIndex=${lockIndex}`,
             );
             return null;
           }

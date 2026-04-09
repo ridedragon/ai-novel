@@ -3464,6 +3464,13 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 return localNovel;
               },
               async title => {
+                // 核心修复：单卷重写模式下，禁止在 onBeforeChapter 中进行分卷切换
+                // 单卷重写模式的目的是专注重写当前卷，不应自动进入下一卷
+                if (userSpecifiedTargetVolumeId && mode) {
+                  terminal.log(`[WORKFLOW] 单卷重写模式：onBeforeChapter 禁止分卷切换`);
+                  return;
+                }
+                
                 // 计算即将创建的下一个章节的全局索引
                 const storyChaptersCount = (localNovel.chapters || []).filter(
                   c => !c.subtype || c.subtype === 'story'
