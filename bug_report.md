@@ -285,6 +285,13 @@ if (node.data.typeKey === 'outlineAndChapter') {
 
 ## 问题原因分析
 
+### 新增问题：currentVolumeName 获取失败
+6. **currentVolumeName 获取失败**（最新发现）：
+   - **问题代码**：原代码使用 `const currentVolumeName = activeVolume?.title || dynamicFolder || '';` 获取当前卷名称
+   - **问题根因**：当 `activeVolume?.title` 为空时，即使卷已经被创建并存在，也会导致 `currentVolumeName` 为空
+   - **代码佐证**：在 [useWorkflowEngine.ts](file:///workspace/src/components/Workflow/hooks/useWorkflowEngine.ts#L2695) 中，`activeVolume` 是通过 `localNovel.volumes?.find(v => v.id === targetVolumeId)` 获取的，但该卷的 `title` 字段可能为空
+   - **影响**：当 `currentVolumeName` 为空时，代码会直接报错"未找到当前卷名称，无法创建大纲集"，即使卷已经被创建并存在
+
 1. **大纲集更新问题**：
    - 代码在第2724-2745行创建或获取大纲集，使用的是 `currentVolumeName` 作为大纲集的名称。
    - 然后在第2813-2818行，将生成的大纲添加到大纲集的 `items` 数组中。
@@ -305,6 +312,19 @@ if (node.data.typeKey === 'outlineAndChapter') {
    - 代码在第2721行初始化 `outputEntries` 数组，然后在第2821-2825行，将生成的大纲添加到 `outputEntries` 数组中，最后在第2907行，调用 `syncNodeStatus(node.id, { status: 'completed', outputEntries }, i)`，将 `outputEntries` 设置为节点的 `outputEntries`。但可能存在的问题是，在循环过程中，`outputEntries` 没有被及时更新，导致大纲没有及时显示在自动化创作中心的大纲文件夹中。
 
 ## 解决方案
+
+### 新增问题解决方案：currentVolumeName 获取失败
+6. **解决 currentVolumeName 获取失败问题**（最新修复）：
+   - **问题根因**：原代码只使用 `activeVolume?.title || dynamicFolder || ''` 获取卷名称，当 `activeVolume?.title` 为空时无法获取卷名称
+   - **解决方案**：实现多优先级的卷名称获取策略
+   - **优先级1**：`activeVolume?.title` - 优先使用活动卷的标题
+   - **优先级2**：`node.data.folderName` - 使用节点的 folderName 属性
+   - **优先级3**：`currentWorkflowFolder` - 使用当前工作流文件夹
+   - **优先级4**：`dynamicFolder` - 使用动态扫描到的文件夹
+   - **优先级5**：从 `volumePlans` 中获取 - 通过 `targetVolumeId` 匹配分卷规划
+   - **最终兜底1**：从第一个卷获取标题或使用默认名称
+   - **最终兜底2**：使用时间戳生成默认大纲集名称
+   - **代码佐证**：新代码会依次尝试这些方案，确保即使 `activeVolume?.title` 为空，也能获取到卷名称
 
 1. **确保大纲集正确更新**：
    - 确保在循环中，每次生成大纲后，都及时更新大纲集，并确保大纲集的更新能够反映到 `localNovel.outlineSets` 中。
