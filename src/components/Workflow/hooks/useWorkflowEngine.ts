@@ -2818,9 +2818,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               });
             }
 
+            // 处理大纲指令中的宏
+            const outlineInstruction = node.data.outlineInstruction ? workflowManager.interpolateWithMacros(node.data.outlineInstruction, macroCtx) : '';
+            
             outlineMessages.push({
               role: 'user',
-              content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成第${chapterIndex + 1}章的大纲。${node.data.outlineInstruction || ''}`
+              content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成第${chapterIndex + 1}章的大纲。${outlineInstruction}`
             });
 
             let outlineResponse = '';
@@ -2907,9 +2910,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               });
             }
 
+            // 处理正文指令中的宏
+            const chapterInstruction = node.data.chapterInstruction ? workflowManager.interpolateWithMacros(node.data.chapterInstruction, macroCtx) : '';
+            
             chapterMessages.push({
               role: 'user',
-              content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成第${chapterIndex + 1}章的正文。${node.data.chapterInstruction || ''}`
+              content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成第${chapterIndex + 1}章的正文。${chapterInstruction}`
             });
 
             let chapterResponse = '';
@@ -2955,15 +2961,29 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               id: Date.now() + chapterIndex,
               title: `第${chapterIndex + 1}章`,
               content: chapterResponse,
-              volumeId: targetVolumeId
+              volumeId: targetVolumeId,
+              subtype: 'story' // 确保章节类型为故事章节
             };
+            
+            // 调试：打印章节创建信息
+            terminal.log(`[OutlineAndChapter] 创建新章节: id=${newChapter.id}, title=${newChapter.title}, volumeId=${newChapter.volumeId}, targetVolumeId=${targetVolumeId}`);
+            
             localNovel.chapters = [...(localNovel.chapters || []), newChapter];
             lastChapterContent = chapterResponse;
+
+            // 确保 targetVolumeId 不为空
+            if (!targetVolumeId) {
+              terminal.warn(`[OutlineAndChapter] 警告: 章节创建时 targetVolumeId 为空`);
+            }
 
             // 更新本地小说数据，确保大纲和正文都被保存
             await updateLocalAndGlobal(localNovel);
             // 等待状态更新完成
             await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // 调试：验证章节是否正确保存
+            const savedChapter = localNovel.chapters.find(ch => ch.id === newChapter.id);
+            terminal.log(`[OutlineAndChapter] 章节保存验证: id=${savedChapter?.id}, volumeId=${savedChapter?.volumeId}, exists=${!!savedChapter}`);
           }
 
           await syncNodeStatus(node.id, { status: 'completed', outputEntries }, i);

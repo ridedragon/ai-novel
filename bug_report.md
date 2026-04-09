@@ -326,6 +326,24 @@ if (node.data.typeKey === 'outlineAndChapter') {
    - **最终兜底2**：使用时间戳生成默认大纲集名称
    - **代码佐证**：新代码会依次尝试这些方案，确保即使 `activeVolume?.title` 为空，也能获取到卷名称
 
+### 新增问题：章节未放入对应卷中
+7. **解决章节未放入对应卷中问题**：
+   - **问题根因**：章节创建时可能存在 `volumeId` 未正确设置或为空的情况
+   - **解决方案**：
+     - 确保章节创建时 `volumeId` 被设置为 `targetVolumeId`
+     - 添加 `subtype: 'story'` 确保章节类型为故事章节
+     - 添加详细的调试日志，追踪章节创建和保存过程
+     - 添加验证步骤，确保章节被正确保存到 `localNovel.chapters` 中
+   - **代码佐证**：在 [useWorkflowEngine.ts](file:///workspace/src/components/Workflow/hooks/useWorkflowEngine.ts#L2960-L2986) 中，章节创建时会设置 `volumeId: targetVolumeId` 和 `subtype: 'story'`
+
+### 新增问题：宏不能在节点中使用
+8. **解决宏不能在节点中使用问题**：
+   - **问题根因**：原代码没有处理大纲和正文指令中的宏
+   - **解决方案**：
+     - 对 `node.data.outlineInstruction` 使用 `workflowManager.interpolateWithMacros` 处理宏
+     - 对 `node.data.chapterInstruction` 使用 `workflowManager.interpolateWithMacros` 处理宏
+   - **代码佐证**：在 [useWorkflowEngine.ts](file:///workspace/src/components/Workflow/hooks/useWorkflowEngine.ts#L2822-L2827) 和 [useWorkflowEngine.ts](file:///workspace/src/components/Workflow/hooks/useWorkflowEngine.ts#L2914-L2919) 中，分别对大纲和正文指令进行宏处理
+
 1. **确保大纲集正确更新**：
    - 确保在循环中，每次生成大纲后，都及时更新大纲集，并确保大纲集的更新能够反映到 `localNovel.outlineSets` 中。
    - 可以在每次添加大纲到大纲集后，显式更新 `localNovel.outlineSets`，确保大纲集的更新能够反映到 `localNovel` 中。
