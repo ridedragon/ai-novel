@@ -2,7 +2,7 @@ import { Edge } from '@xyflow/react';
 import OpenAI from 'openai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
-import { GeneratorPreset, GeneratorPrompt, LoopInstruction, Novel, ReferenceFolder } from '../../../types';
+import { GeneratorPreset, GeneratorPrompt, LoopInstruction, Novel, ReferenceFolder, Chapter } from '../../../types';
 import { AutoWriteEngine, getChapterContextMessages } from '../../../utils/auto-write';
 import { keepAliveManager } from '../../../utils/KeepAliveManager';
 import { storage } from '../../../utils/storage';
@@ -2803,6 +2803,13 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             };
             localNovel.chapters = [...(localNovel.chapters || []), newChapter];
             lastChapterContent = chapterResponse;
+
+            // 添加正文到输出条目
+            outputEntries.push({
+              id: `chapter_${chapterIndex}_${Date.now()}`,
+              title: `第${chapterIndex + 1}章正文`,
+              content: chapterResponse
+            });
 
             // 更新本地小说数据
             await updateLocalAndGlobal(localNovel);

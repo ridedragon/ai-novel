@@ -889,7 +889,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                 </button>
 
                 {showAddMenu && (
-                  <div className="absolute top-full left-0 mt-2 w-52 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl py-2 z-[110] animate-in slide-in-from-top-2 duration-200">
+                  <div className="absolute top-full left-0 mt-2 w-52 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl py-2 z-[110] animate-in slide-in-from-top-2 duration-200 max-h-[60vh] overflow-y-auto custom-scrollbar">
                     {(Object.keys(NODE_CONFIGS) as Array<NodeTypeKey>).map((type) => {
                       const config = NODE_CONFIGS[type];
                       const isGenerator = type === 'workflowGenerator';

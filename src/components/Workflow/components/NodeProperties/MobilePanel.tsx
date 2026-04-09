@@ -1,4 +1,4 @@
-import { ChevronDown, Cpu, Expand, FileText, PauseCircle, Trash2, Wand2, X } from 'lucide-react';
+import { ChevronDown, Cpu, Expand, FileText, PauseCircle, Trash2, Wand2, X, BookOpen } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { GeneratorPreset, Novel } from '../../../../types';
 import { workflowManager } from '../../../../utils/WorkflowManager';
@@ -246,7 +246,8 @@ export const MobilePanel = React.memo(
             editingNode.data.typeKey !== 'saveToVolume' &&
             editingNode.data.typeKey !== 'multiCreateFolder' &&
             editingNode.data.typeKey !== 'loopConfigurator' &&
-            editingNode.data.typeKey !== 'creationInfo' && (
+            editingNode.data.typeKey !== 'creationInfo' &&
+            editingNode.data.typeKey !== 'outlineAndChapter' && (
             <>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -312,7 +313,90 @@ export const MobilePanel = React.memo(
               />
             )}
 
-          {editingNode.data.typeKey === 'chapter' ? (
+          {editingNode.data.typeKey === 'outlineAndChapter' ? (
+            <div className="space-y-6 pt-4 border-t border-gray-800">
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                  <BookOpen className="w-3.5 h-3.5" /> 大纲预设
+                </label>
+                <div className="relative">
+                  <select
+                    value={editingNode.data.outlinePresetId as string || ''}
+                    onChange={e => {
+                      const outlinePresets = allPresets['outline'] || [];
+                      const preset = outlinePresets.find(p => p.id === e.target.value);
+                      handleUpdate({
+                        outlinePresetId: e.target.value,
+                        outlinePresetName: preset?.name || '',
+                      });
+                    }}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none"
+                  >
+                    <option value="">-- 选择大纲预设 --</option>
+                    {(allPresets['outline'] || []).map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.apiConfig?.model || '默认'})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5" /> 正文预设
+                </label>
+                <div className="relative">
+                  <select
+                    value={editingNode.data.chapterPresetId as string || ''}
+                    onChange={e => {
+                      const chapterPresets = allPresets['completion'] || [];
+                      const preset = chapterPresets.find(p => p.id === e.target.value);
+                      handleUpdate({
+                        chapterPresetId: e.target.value,
+                        chapterPresetName: preset?.name || '',
+                      });
+                    }}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 text-white text-sm outline-none appearance-none"
+                  >
+                    <option value="">-- 选择正文预设 --</option>
+                    {(allPresets['completion'] || []).map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.apiConfig?.model || '默认'})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                  大纲AI指令
+                </label>
+                <SharedTextarea
+                  value={editingNode.data.outlineInstruction || ''}
+                  onValueChange={(val: string) => handleUpdate({ outlineInstruction: val })}
+                  className="w-full h-40 bg-gray-800 border border-gray-700 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed"
+                  placeholder="输入给大纲AI的特定指令..."
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                  正文AI指令
+                </label>
+                <SharedTextarea
+                  value={editingNode.data.chapterInstruction || ''}
+                  onValueChange={(val: string) => handleUpdate({ chapterInstruction: val })}
+                  className="w-full h-40 bg-gray-800 border border-gray-700 rounded-2xl p-5 text-white text-sm outline-none resize-none font-mono leading-relaxed"
+                  placeholder="输入给正文AI的特定指令..."
+                />
+              </div>
+              <OutputList data={editingNode.data} onUpdate={handleUpdate} onPreview={onPreviewEntry} isMobile={true} />
+            </div>
+          ) : editingNode.data.typeKey === 'chapter' ? (
             <>
               <ChapterStartSelector 
                 data={editingNode.data} 
