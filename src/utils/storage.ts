@@ -578,15 +578,19 @@ export const storage = {
     }
 
     // --- 双轨兼容逻辑：如果新 Key 有值则优先使用，否则沿用 Metadata 里的旧值 (实现无损平滑迁移) ---
-    if (wv) novel.worldviewSets = wv;
-    if (char) novel.characterSets = char;
-    if (out) novel.outlineSets = out;
-    if (plot) novel.plotOutlineSets = plot;
+    // 核心修复：确保所有字段都有默认值，防止文件夹丢失
+    novel.worldviewSets = wv || novel.worldviewSets || [];
+    novel.characterSets = char || novel.characterSets || [];
+    novel.outlineSets = out || novel.outlineSets || [];
+    novel.plotOutlineSets = plot || novel.plotOutlineSets || [];
     if (ref) {
-      novel.referenceFiles = ref.f;
-      novel.referenceFolders = ref.d;
+      novel.referenceFiles = ref.f || [];
+      novel.referenceFolders = ref.d || [];
+    } else {
+      novel.referenceFiles = novel.referenceFiles || [];
+      novel.referenceFolders = novel.referenceFolders || [];
     }
-    if (insp) novel.inspirationSets = insp;
+    novel.inspirationSets = insp || novel.inspirationSets || [];
 
     // 初始化所有脏检查缓存，防止首次保存时触发误判
     lastSavedMetadataCache.set(novel.id, this._getNovelMetadataJson(novel));
@@ -747,79 +751,67 @@ export const storage = {
         }
 
         // 1.2 世界观拆分块 (Worldview)
-        if (novel.worldviewSets) {
-          const currentWvJson = this._getWorldviewJson(novel);
-          if (currentWvJson !== lastSavedWorldviewCache.get(novel.id)) {
-            tasks.push(set(`${WORLDVIEW_PREFIX}${novel.id}`, novel.worldviewSets));
-            tasks.push(saveToApi(`${WORLDVIEW_PREFIX}${novel.id}`, novel.worldviewSets));
-            lastSavedWorldviewCache.set(novel.id, currentWvJson);
-            metadataUpdateCount++;
-            terminal.log(`[STORAGE] 更新世界观: 《${novel.title}》`);
-          }
+        const currentWvJson = this._getWorldviewJson(novel);
+        if (currentWvJson !== lastSavedWorldviewCache.get(novel.id)) {
+          tasks.push(set(`${WORLDVIEW_PREFIX}${novel.id}`, novel.worldviewSets || []));
+          tasks.push(saveToApi(`${WORLDVIEW_PREFIX}${novel.id}`, novel.worldviewSets || []));
+          lastSavedWorldviewCache.set(novel.id, currentWvJson);
+          metadataUpdateCount++;
+          terminal.log(`[STORAGE] 更新世界观: 《${novel.title}》`);
         }
 
         // 1.3 角色集拆分块 (Characters)
-        if (novel.characterSets) {
-          const currentCharJson = this._getCharactersJson(novel);
-          if (currentCharJson !== lastSavedCharactersCache.get(novel.id)) {
-            tasks.push(set(`${CHARACTERS_PREFIX}${novel.id}`, novel.characterSets));
-            tasks.push(saveToApi(`${CHARACTERS_PREFIX}${novel.id}`, novel.characterSets));
-            lastSavedCharactersCache.set(novel.id, currentCharJson);
-            metadataUpdateCount++;
-            terminal.log(`[STORAGE] 更新角色集: 《${novel.title}》`);
-          }
+        const currentCharJson = this._getCharactersJson(novel);
+        if (currentCharJson !== lastSavedCharactersCache.get(novel.id)) {
+          tasks.push(set(`${CHARACTERS_PREFIX}${novel.id}`, novel.characterSets || []));
+          tasks.push(saveToApi(`${CHARACTERS_PREFIX}${novel.id}`, novel.characterSets || []));
+          lastSavedCharactersCache.set(novel.id, currentCharJson);
+          metadataUpdateCount++;
+          terminal.log(`[STORAGE] 更新角色集: 《${novel.title}》`);
         }
 
         // 1.4 大纲集拆分块 (Outline)
-        if (novel.outlineSets) {
-          const currentOutJson = this._getOutlineJson(novel);
-          if (currentOutJson !== lastSavedOutlineCache.get(novel.id)) {
-            tasks.push(set(`${OUTLINE_PREFIX}${novel.id}`, novel.outlineSets));
-            tasks.push(saveToApi(`${OUTLINE_PREFIX}${novel.id}`, novel.outlineSets));
-            lastSavedOutlineCache.set(novel.id, currentOutJson);
-            metadataUpdateCount++;
-            terminal.log(`[STORAGE] 更新大纲: 《${novel.title}》`);
-          }
+        const currentOutJson = this._getOutlineJson(novel);
+        if (currentOutJson !== lastSavedOutlineCache.get(novel.id)) {
+          tasks.push(set(`${OUTLINE_PREFIX}${novel.id}`, novel.outlineSets || []));
+          tasks.push(saveToApi(`${OUTLINE_PREFIX}${novel.id}`, novel.outlineSets || []));
+          lastSavedOutlineCache.set(novel.id, currentOutJson);
+          metadataUpdateCount++;
+          terminal.log(`[STORAGE] 更新大纲: 《${novel.title}》`);
         }
 
         // 1.5 剧情粗纲拆分块 (Plot Outline)
-        if (novel.plotOutlineSets) {
-          const currentPlotJson = this._getPlotOutlineJson(novel);
-          if (currentPlotJson !== lastSavedPlotOutlineCache.get(novel.id)) {
-            tasks.push(set(`${PLOT_OUTLINE_PREFIX}${novel.id}`, novel.plotOutlineSets));
-            tasks.push(saveToApi(`${PLOT_OUTLINE_PREFIX}${novel.id}`, novel.plotOutlineSets));
-            lastSavedPlotOutlineCache.set(novel.id, currentPlotJson);
-            metadataUpdateCount++;
-            terminal.log(`[STORAGE] 更新剧情粗纲: 《${novel.title}》`);
-          }
+        const currentPlotJson = this._getPlotOutlineJson(novel);
+        if (currentPlotJson !== lastSavedPlotOutlineCache.get(novel.id)) {
+          tasks.push(set(`${PLOT_OUTLINE_PREFIX}${novel.id}`, novel.plotOutlineSets || []));
+          tasks.push(saveToApi(`${PLOT_OUTLINE_PREFIX}${novel.id}`, novel.plotOutlineSets || []));
+          lastSavedPlotOutlineCache.set(novel.id, currentPlotJson);
+          metadataUpdateCount++;
+          terminal.log(`[STORAGE] 更新剧情粗纲: 《${novel.title}》`);
         }
 
         // 1.6 资料库拆分块 (Reference)
-        if (novel.referenceFiles || novel.referenceFolders) {
-          const currentRefJson = this._getReferenceJson(novel);
-          if (currentRefJson !== lastSavedReferenceCache.get(novel.id)) {
-            const data = {
-              f: novel.referenceFiles || [],
-              d: novel.referenceFolders || [],
-            };
-            tasks.push(set(`${REFERENCE_PREFIX}${novel.id}`, data));
-            tasks.push(saveToApi(`${REFERENCE_PREFIX}${novel.id}`, data));
-            lastSavedReferenceCache.set(novel.id, currentRefJson);
-            metadataUpdateCount++;
-            terminal.log(`[STORAGE] 更新资料库: 《${novel.title}》`);
-          }
+        const currentRefJson = this._getReferenceJson(novel);
+        if (currentRefJson !== lastSavedReferenceCache.get(novel.id)) {
+          const data = {
+            f: novel.referenceFiles || [],
+            d: novel.referenceFolders || [],
+          };
+          tasks.push(set(`${REFERENCE_PREFIX}${novel.id}`, data));
+          tasks.push(saveToApi(`${REFERENCE_PREFIX}${novel.id}`, data));
+          lastSavedReferenceCache.set(novel.id, currentRefJson);
+          metadataUpdateCount++;
+          terminal.log(`[STORAGE] 更新资料库: 《${novel.title}》`);
         }
 
         // 1.7 灵感集拆分块 (Inspiration)
-        if (novel.inspirationSets) {
-          const currentInspJson = this._getInspirationJson(novel);
-          if (currentInspJson !== lastSavedInspirationCache.get(novel.id)) {
-            tasks.push(set(`${INSPIRATION_PREFIX}${novel.id}`, novel.inspirationSets));
-            tasks.push(saveToApi(`${INSPIRATION_PREFIX}${novel.id}`, novel.inspirationSets));
-            lastSavedInspirationCache.set(novel.id, currentInspJson);
-            metadataUpdateCount++;
-            terminal.log(`[STORAGE] 更新灵感集: 《${novel.title}》`);
-          }
+        const currentInspJson = this._getInspirationJson(novel);
+        if (currentInspJson !== lastSavedInspirationCache.get(novel.id)) {
+          tasks.push(set(`${INSPIRATION_PREFIX}${novel.id}`, novel.inspirationSets || []));
+          tasks.push(saveToApi(`${INSPIRATION_PREFIX}${novel.id}`, novel.inspirationSets || []));
+          lastSavedInspirationCache.set(novel.id, currentInspJson);
+          metadataUpdateCount++;
+          terminal.log(`[STORAGE] 更新灵感集: 《${novel.title}》`);
         }
 
         // --- 2. 章节正文增量保存 (纳入并行清单) ---
