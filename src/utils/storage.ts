@@ -728,16 +728,14 @@ export const storage = {
       }
 
       for (const novel of novels) {
-        // 核心安全检查：只有加载过章节（非 Skeleton 状态）的书籍才触发原子化保存
-        if (!novel.chapters || novel.chapters.length === 0) continue;
-
         // --- 1. 原子化脏检查与异步任务分发 ---
+        // 注意：即使没有章节，也要保存其他数据（分卷、世界观、设定等）
 
         // 1.1 索引元数据 (Metadata: 章节索引、分卷)
         const currentMetaJson = this._getNovelMetadataJson(novel);
         if (currentMetaJson !== lastSavedMetadataCache.get(novel.id)) {
           const data = {
-            chapters: novel.chapters.map(({ versions, content, analysisResult, ...rest }) => ({
+            chapters: (novel.chapters || []).map(({ versions, content, analysisResult, ...rest }) => ({
               ...rest,
               analysisResult: analysisResult,
             })),
@@ -815,26 +813,29 @@ export const storage = {
         }
 
         // --- 2. 章节正文增量保存 (纳入并行清单) ---
-        for (const chapter of novel.chapters) {
-          // 修正隐患：版本历史现在也纳入并行保存队列
-          if (chapter.versions && chapter.versions.length > 0) {
-            const currentVersionsJson = JSON.stringify(chapter.versions);
-            if (currentVersionsJson !== lastSavedVersionsCache.get(chapter.id)) {
-              tasks.push(this.saveChapterVersions(chapter.id, chapter.versions));
-              lastSavedVersionsCache.set(chapter.id, currentVersionsJson);
-              versionsWriteCount++;
-              terminal.log(`[STORAGE] 更新章节版本: ChapterID=${chapter.id}`);
+        // 只有当有章节时才处理
+        if (novel.chapters && novel.chapters.length > 0) {
+          for (const chapter of novel.chapters) {
+            // 修正隐患：版本历史现在也纳入并行保存队列
+            if (chapter.versions && chapter.versions.length > 0) {
+              const currentVersionsJson = JSON.stringify(chapter.versions);
+              if (currentVersionsJson !== lastSavedVersionsCache.get(chapter.id)) {
+                tasks.push(this.saveChapterVersions(chapter.id, chapter.versions));
+                lastSavedVersionsCache.set(chapter.id, currentVersionsJson);
+                versionsWriteCount++;
+                terminal.log(`[STORAGE] 更新章节版本: ChapterID=${chapter.id}`);
+              }
             }
-          }
 
-          if (typeof chapter.content === 'string') {
-            const currentContent = chapter.content;
-            if (currentContent !== lastSavedContentCache.get(chapter.id)) {
-              tasks.push(set(`chapter_content_${chapter.id}`, currentContent));
-              tasks.push(saveToApi(`chapter_content_${chapter.id}`, currentContent));
-              lastSavedContentCache.set(chapter.id, currentContent);
-              contentWriteCount++;
-              terminal.log(`[STORAGE] 更新章节正文: ChapterID=${chapter.id}, 长度=${currentContent.length}`);
+            if (typeof chapter.content === 'string') {
+              const currentContent = chapter.content;
+              if (currentContent !== lastSavedContentCache.get(chapter.id)) {
+                tasks.push(set(`chapter_content_${chapter.id}`, currentContent));
+                tasks.push(saveToApi(`chapter_content_${chapter.id}`, currentContent));
+                lastSavedContentCache.set(chapter.id, currentContent);
+                contentWriteCount++;
+                terminal.log(`[STORAGE] 更新章节正文: ChapterID=${chapter.id}, 长度=${currentContent.length}`);
+              }
             }
           }
         }
