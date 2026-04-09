@@ -1116,13 +1116,6 @@ export const useWorkflowEngine = (options: {
 
           while (volRetryCount <= maxVolRetries && !volSuccess) {
             if (volRetryCount > 0) {
-              setNodes(nds =>
-                nds.map(n =>
-                  n.id === node.id
-                    ? { ...n, data: { ...n.data, label: `重试规划(${volRetryCount}/${maxVolRetries})...` } }
-                    : n,
-                ),
-              );
               await new Promise(res => setTimeout(res, 2000));
             }
 
@@ -2169,13 +2162,6 @@ ${node.data.instruction || '请智能生成适合的循环配置'}
 
             while (retryCount <= maxRetries && !success) {
               if (retryCount > 0) {
-                setNodes(nds =>
-                  nds.map(n =>
-                    n.id === node.id
-                      ? { ...n, data: { ...n.data, label: `重试配置(${retryCount}/${maxRetries})...` } }
-                      : n,
-                  ),
-                );
                 await new Promise(res => setTimeout(res, 2000));
               }
 
@@ -2222,13 +2208,6 @@ ${node.data.instruction || '请智能生成适合的循环配置'}
                     
                     if (supplementAttempts < maxSupplementAttempts) {
                       supplementAttempts++;
-                      setNodes(nds =>
-                        nds.map(n =>
-                          n.id === node.id
-                            ? { ...n, data: { ...n.data, label: `补足指令(${supplementAttempts}/${maxSupplementAttempts})...` } }
-                            : n,
-                        ),
-                      );
                       
                       // 构建补足请求
                       const existingInstructions = (globalLoopInstructions as any[]) || [];
@@ -2573,11 +2552,6 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           let genRetryCount = 0;
           while (genRetryCount <= 2 && !aiResponse) {
             if (genRetryCount > 0) {
-              setNodes(nds =>
-                nds.map(n =>
-                  n.id === node.id ? { ...n, data: { ...n.data, label: `重试架构(${genRetryCount}/2)...` } } : n,
-                ),
-              );
               await new Promise(res => setTimeout(res, 2000));
             }
             try {
@@ -3720,9 +3694,6 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
         while (retry <= 2 && !nodeDone) {
           if (retry > 0) {
-            setNodes(nds =>
-              nds.map(n => (n.id === node.id ? { ...n, data: { ...n.data, label: `重试中(${retry}/2)...` } } : n)),
-            );
             await new Promise(res => setTimeout(res, 1500 * Math.pow(2, retry - 1)));
           }
           try {
