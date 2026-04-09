@@ -3565,7 +3565,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           if (chapterResult && typeof chapterResult === 'object' && 'shouldPauseForVolumeSwitch' in chapterResult && chapterResult.shouldPauseForVolumeSwitch) {
             // 正常模式下，卷切换后继续执行工作流
             // 只有在重写模式下才停止工作流
-            if (userSpecifiedTargetVolumeId && mode) {
+            // 完全重写模式下，应该继续执行工作流以处理后续卷
+            if (userSpecifiedTargetVolumeId && mode && mode !== 'full') {
               terminal.log(`[WORKFLOW] AutoWriteEngine paused for volume switch, stopping workflow at node ${node.id}`);
               await syncNodeStatus(node.id, { label: NODE_CONFIGS.chapter.defaultLabel, status: 'completed' }, i);
               setEdgeAnimation(node.id, false);
@@ -3575,7 +3576,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               keepAliveManager.disable();
               return;
             } else {
-              // 正常模式下，继续执行工作流
+              // 正常模式和完全重写模式下，继续执行工作流
               terminal.log(`[WORKFLOW] AutoWriteEngine paused for volume switch, continuing workflow at node ${node.id}`);
               await syncNodeStatus(node.id, { label: NODE_CONFIGS.chapter.defaultLabel, status: 'completed' }, i);
               setEdgeAnimation(node.id, false);
