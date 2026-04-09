@@ -2724,14 +2724,23 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           // 预获取或创建大纲集，确保整个循环使用同一个大纲集
           let outlineSet: any = null;
           if (currentVolumeName) {
-            outlineSet = localNovel.outlineSets?.find(s => s.name === currentVolumeName);
+            // 确保 localNovel.outlineSets 存在
+            if (!localNovel.outlineSets) {
+              localNovel.outlineSets = [];
+            }
+            
+            // 查找或创建大纲集
+            outlineSet = localNovel.outlineSets.find(s => s.name === currentVolumeName);
             if (!outlineSet) {
               outlineSet = {
                 id: `outline_set_${Date.now()}`,
                 name: currentVolumeName,
                 items: []
               };
-              localNovel.outlineSets = [...(localNovel.outlineSets || []), outlineSet];
+              localNovel.outlineSets.push(outlineSet);
+              terminal.log(`[OutlineAndChapter] 创建新大纲集: ${currentVolumeName}`);
+            } else {
+              terminal.log(`[OutlineAndChapter] 使用现有大纲集: ${currentVolumeName}`);
             }
           }
 
@@ -2759,7 +2768,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             outlineMessages.push({
               role: 'user',
-              content: `请生成第${chapterIndex + 1}章的大纲。${node.data.outlineInstruction || ''}`
+              content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成第${chapterIndex + 1}章的大纲。${node.data.outlineInstruction || ''}`
             });
 
             let outlineResponse = '';
@@ -2840,7 +2849,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             chapterMessages.push({
               role: 'user',
-              content: `请根据大纲生成第${chapterIndex + 1}章的正文。${node.data.chapterInstruction || ''}`
+              content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成第${chapterIndex + 1}章的正文。${node.data.chapterInstruction || ''}`
             });
 
             let chapterResponse = '';
@@ -2891,14 +2900,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             localNovel.chapters = [...(localNovel.chapters || []), newChapter];
             lastChapterContent = chapterResponse;
 
-            // 添加正文到输出条目
-            outputEntries.push({
-              id: `chapter_${chapterIndex}_${Date.now()}`,
-              title: `第${chapterIndex + 1}章正文`,
-              content: chapterResponse
-            });
-
-            // 更新本地小说数据
+            // 更新本地小说数据，确保大纲和正文都被保存
             await updateLocalAndGlobal(localNovel);
           }
 
