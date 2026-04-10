@@ -1534,7 +1534,9 @@ function App() {
               }
             }}
             handleDeletePreset={() => completion.deletePreset(completion.activePresetId)}
-            handleSavePreset={completion.saveCurrentPreset}
+            handleSavePreset={() => completion.saveCurrentPreset(() => {
+              setDialog({ isOpen: true, type: 'alert', title: '保存成功', message: '预设已成功保存', onConfirm: closeDialog });
+            })}
             handleResetPreset={completion.resetPreset}
             handleOpenRenameModal={() => {
               setPresetModalMode('rename');
