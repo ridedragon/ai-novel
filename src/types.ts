@@ -228,6 +228,10 @@ export interface GeneratorPreset {
   temperature?: number;
   topP?: number;
   topK?: number;
+  maxReplyLength?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  stream?: boolean;
   apiConfig?: PresetApiConfig;
 }
 
