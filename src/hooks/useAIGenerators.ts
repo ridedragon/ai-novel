@@ -198,6 +198,9 @@ export function useAIGenerators() {
           if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
             requestParams.top_k = activePreset.topK;
           }
+          if ((activePreset as any).maxReplyLength) requestParams.max_tokens = (activePreset as any).maxReplyLength;
+          if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
+          if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
           let completion;
           try {
@@ -419,6 +422,9 @@ export function useAIGenerators() {
         if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
           requestParams.top_k = activePreset.topK;
         }
+        if ((activePreset as any).maxReplyLength) requestParams.max_tokens = (activePreset as any).maxReplyLength;
+        if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
+        if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
         
         let completion;
         try {
@@ -613,6 +619,9 @@ export function useAIGenerators() {
           if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
             requestParams.top_k = activePreset.topK;
           }
+          if ((activePreset as any).maxReplyLength) requestParams.max_tokens = (activePreset as any).maxReplyLength;
+          if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
+          if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
           let completion;
           try {
@@ -851,6 +860,9 @@ export function useAIGenerators() {
           if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
             requestParams.top_k = activePreset.topK;
           }
+          if ((activePreset as any).maxReplyLength) requestParams.max_tokens = (activePreset as any).maxReplyLength;
+          if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
+          if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
           let completion;
           try {
@@ -1090,6 +1102,9 @@ export function useAIGenerators() {
           if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
             requestParams.top_k = activePreset.topK;
           }
+          if ((activePreset as any).maxReplyLength) requestParams.max_tokens = (activePreset as any).maxReplyLength;
+          if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
+          if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
           let completion;
           try {
@@ -1313,6 +1328,9 @@ export function useAIGenerators() {
           if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
             requestParams.top_k = activePreset.topK;
           }
+          if ((activePreset as any).maxReplyLength) requestParams.max_tokens = (activePreset as any).maxReplyLength;
+          if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
+          if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
           let completion;
           try {

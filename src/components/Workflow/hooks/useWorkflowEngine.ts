@@ -2953,7 +2953,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 top_p: finalOutlinePreset.topP,
               };
               // Add optional parameters if they exist
-              if ((finalOutlinePreset as any).maxTokens) outlineCompletionParams.max_tokens = (finalOutlinePreset as any).maxTokens;
+              if ((finalOutlinePreset as any).maxReplyLength) outlineCompletionParams.max_tokens = (finalOutlinePreset as any).maxReplyLength;
               if ((finalOutlinePreset as any).frequencyPenalty) outlineCompletionParams.frequency_penalty = (finalOutlinePreset as any).frequencyPenalty;
               if ((finalOutlinePreset as any).presencePenalty) outlineCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
 
@@ -3027,8 +3027,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     temperature: finalOutlinePreset.temperature,
                     top_p: finalOutlinePreset.topP,
                   };
-                  if ((finalOutlinePreset as any).maxTokens)
-                    repairCompletionParams.max_tokens = (finalOutlinePreset as any).maxTokens;
+                  if ((finalOutlinePreset as any).maxReplyLength)
+                    repairCompletionParams.max_tokens = (finalOutlinePreset as any).maxReplyLength;
                   if ((finalOutlinePreset as any).frequencyPenalty)
                     repairCompletionParams.frequency_penalty = (finalOutlinePreset as any).frequencyPenalty;
                   if ((finalOutlinePreset as any).presencePenalty)
@@ -3164,7 +3164,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 stream: true, // 启用流式输出
               };
               // Add optional parameters if they exist
-              if ((finalChapterPreset as any).maxTokens) chapterCompletionParams.max_tokens = (finalChapterPreset as any).maxTokens;
+              if ((finalChapterPreset as any).maxReplyLength) chapterCompletionParams.max_tokens = (finalChapterPreset as any).maxReplyLength;
               if ((finalChapterPreset as any).frequencyPenalty) chapterCompletionParams.frequency_penalty = (finalChapterPreset as any).frequencyPenalty;
               if ((finalChapterPreset as any).presencePenalty) chapterCompletionParams.presence_penalty = (finalChapterPreset as any).presencePenalty;
 
