@@ -77,7 +77,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     const syncTimeoutRef = useRef<number | null>(null);
     const isDirtyRef = useRef(false);
 
-    // 当章节切换或进入编辑模式时，初始化本地状态
+    // 当章节切换、进入编辑模式或章节内容变化时，初始化本地状态
     useEffect(() => {
       if (activeChapter) {
         setLocalContent(activeChapter.content || '');
@@ -94,7 +94,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
           textareaRef.current.scrollTop = 0;
         }
       });
-    }, [activeChapterId, isEditingChapter]);
+    }, [activeChapterId, isEditingChapter, activeChapter?.content]);
 
     // 添加 beforeunload 事件，防止意外关闭丢失数据
     useEffect(() => {
