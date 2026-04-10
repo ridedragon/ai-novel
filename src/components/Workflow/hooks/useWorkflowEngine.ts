@@ -945,6 +945,8 @@ export const useWorkflowEngine = (options: {
           await syncNodeStatus(node.id, { status: 'executing' }, i);
           setEdgeAnimation(node.id, true);
 
+          let updatedMacroCtxForSaveToVolume = buildMacroContext(i);
+
           if (!node.data.overrideAiConfig) {
             let targetVolumeId = node.data.targetVolumeId as string;
             if (targetVolumeId === 'NEW_VOLUME' && node.data.targetVolumeName) {
@@ -961,7 +963,7 @@ export const useWorkflowEngine = (options: {
             if (targetVolumeId) workflowManager.setActiveVolumeAnchor(targetVolumeId);
             
             // 修复：在设置完 activeVolumeAnchor 后重新构建 macroCtx，确保宏能获取最新状态
-            const updatedMacroCtxForSaveToVolume = buildMacroContext(i);
+            updatedMacroCtxForSaveToVolume = buildMacroContext(i);
             
             const rules = (node.data.splitRules as any[]) || [];
             const volumes = (node.data.volumes as any[]) || [];
