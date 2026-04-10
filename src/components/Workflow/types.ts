@@ -137,7 +137,10 @@ export interface WorkflowStartOptions {
   startIndex: number;
   targetVolumeId?: string;
   mode?: WorkflowRestartMode;
-  keepContent?: boolean; // 是否保持现有内容不清除，检查内容不为空时跳过节点
+  keepContent?: {
+    enabled: boolean; // 是否启用保持内容模式
+    types: string[]; // 要保持内容的节点类型，如 ['worldview', 'characters', 'plotOutline', 'outline', 'chapter', 'outlineAndChapter']
+  };
 }
 
 export interface ExecutionNode {

@@ -200,7 +200,7 @@ export const useWorkflowEngine = (options: {
       startIndex: input?.startIndex ?? 0,
       targetVolumeId: input?.targetVolumeId,
       mode: input?.mode,
-      keepContent: input?.keepContent ?? false,
+      keepContent: input?.keepContent ?? { enabled: false, types: [] },
     };
   };
 
@@ -287,7 +287,7 @@ export const useWorkflowEngine = (options: {
     const startIndex = normalizedOpts.startIndex ?? workflowManager.getState().currentNodeIndex ?? 0;
     const mode = normalizedOpts.mode;
     const targetVolumeId = normalizedOpts.targetVolumeId;
-    const keepContent = normalizedOpts.keepContent ?? false;
+    const keepContent = normalizedOpts.keepContent ?? { enabled: false, types: [] };
     const logPrefix = isMobile ? '[Mobile Workflow]' : '[WORKFLOW]';
     terminal.log(
       `${logPrefix} 准备执行工作流, 起始索引: ${startIndex}, 模式: ${mode || 'normal'}, 目标卷: ${targetVolumeId || '未指定'}`,
@@ -381,13 +381,13 @@ export const useWorkflowEngine = (options: {
         workflowManager.clearStartVolumeLock();
       }
 
-      if (userSpecifiedTargetVolumeId && mode && !keepContent) {
+      if (userSpecifiedTargetVolumeId && mode && !keepContent.enabled) {
         localNovel = clearNovelContentByVolumes(localNovel, [userSpecifiedTargetVolumeId], mode === 'full');
         await updateLocalAndGlobal(localNovel);
       }
       
-      if (keepContent) {
-        terminal.log(`${logPrefix} 保持现有内容模式已启用，不会清除文件夹内容`);
+      if (keepContent.enabled) {
+        terminal.log(`${logPrefix} 保持现有内容模式已启用，不会清除文件夹内容，类型: ${keepContent.types.join(', ')}`);
       }
 
       const checkActive = () => {
@@ -887,7 +887,7 @@ export const useWorkflowEngine = (options: {
         const node = nodesRef.current.find(n => n.id === sortedNodes[i].id) || sortedNodes[i];
         
         // 保持内容模式：检查节点是否已有内容，有则跳过
-        if (keepContent) {
+        if (keepContent.enabled && keepContent.types.includes(node.data.typeKey)) {
           const hasContent = checkNodeHasContent(node, localNovel);
           if (hasContent) {
             terminal.log(`${logPrefix} 节点已有内容，跳过执行: ${node.data.label} (类型: ${node.data.typeKey})`);
