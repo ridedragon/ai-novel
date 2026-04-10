@@ -2979,6 +2979,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
           for (let chapterIndex = startChapterIndex; chapterIndex < chapterCount; chapterIndex++) {
             if (!checkActive()) break;
+            currentChapterIndex = chapterIndex;
 
             // 1. 生成大纲
             const outlineOpenai = new OpenAI({
