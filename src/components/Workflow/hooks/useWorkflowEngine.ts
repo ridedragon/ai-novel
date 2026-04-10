@@ -890,7 +890,14 @@ export const useWorkflowEngine = (options: {
         const node = nodesRef.current.find(n => n.id === sortedNodes[i].id) || sortedNodes[i];
         
         // 保持内容模式：检查节点是否已有内容，有则跳过
-        if (keepContent.enabled && keepContent.types.includes(node.data.typeKey)) {
+        const shouldSkip = (
+          // 全局设置
+          (keepContent.enabled && keepContent.types.includes(node.data.typeKey)) ||
+          // 节点级别设置
+          (node.data.keepContentOptions?.[node.data.typeKey as keyof typeof node.data.keepContentOptions] || false)
+        );
+        
+        if (shouldSkip) {
           const hasContent = checkNodeHasContent(node, localNovel);
           if (hasContent) {
             terminal.log(`${logPrefix} 节点已有内容，跳过执行: ${node.data.label} (类型: ${node.data.typeKey})`);

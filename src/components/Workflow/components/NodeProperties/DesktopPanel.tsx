@@ -274,6 +274,48 @@ export const DesktopPanel = ({
               />
             )}
 
+          {/* 不清除选项 */}
+          {node.data.typeKey !== 'pauseNode' &&
+            node.data.typeKey !== 'saveToVolume' &&
+            node.data.typeKey !== 'creationInfo' && (
+              <div className="space-y-4 pt-6 border-t border-gray-700/30">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                    不清除选项
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { key: 'worldview', label: '世界观' },
+                    { key: 'characters', label: '角色集' },
+                    { key: 'plotOutline', label: '粗纲' },
+                    { key: 'outline', label: '大纲' }
+                  ].map((item) => (
+                    <label key={item.key} className="flex items-center gap-2 p-2 rounded-lg border border-gray-700 hover:border-gray-600 cursor-pointer transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={node.data.keepContentOptions?.[item.key as keyof typeof node.data.keepContentOptions] || false}
+                        onChange={(e) => {
+                          const currentOptions = node.data.keepContentOptions || {};
+                          handleUpdate({
+                            keepContentOptions: {
+                              ...currentOptions,
+                              [item.key]: e.target.checked
+                            }
+                          });
+                        }}
+                        className="w-4 h-4 rounded border-gray-600 text-blue-500 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-300">{item.label}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-500 leading-relaxed">
+                  选择对应选项则不清除对应文件夹内容和节点内容，帮助节省 token。
+                </p>
+              </div>
+            )}
+
           {node.data.typeKey !== 'pauseNode' && 
             node.data.typeKey !== 'saveToVolume' && 
             node.data.typeKey !== 'creationInfo' &&

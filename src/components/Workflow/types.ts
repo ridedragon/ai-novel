@@ -99,6 +99,14 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   currentVolumeIndex?: number; // 当前正在处理的分卷索引
   volumeEndChapters?: VolumeEndChapter[]; // 分卷终止章配置
 
+  // 不清除选项
+  keepContentOptions?: {
+    worldview?: boolean; // 不清除世界观文件夹内容
+    characters?: boolean; // 不清除角色集文件夹内容
+    plotOutline?: boolean; // 不清除粗纲文件夹内容
+    outline?: boolean; // 不清除大纲文件夹内容
+  };
+
   // 循环配置器节点特定设置
   globalLoopConfig?: LoopConfig; // 全局循环配置
   globalLoopInstructions?: LoopInstruction[]; // 全局循环指令
