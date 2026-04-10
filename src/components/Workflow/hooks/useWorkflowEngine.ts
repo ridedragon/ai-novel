@@ -959,6 +959,10 @@ export const useWorkflowEngine = (options: {
               await syncNodeStatus(node.id, { targetVolumeId, targetVolumeName: '', status: 'completed' }, i);
             }
             if (targetVolumeId) workflowManager.setActiveVolumeAnchor(targetVolumeId);
+            
+            // 修复：在设置完 activeVolumeAnchor 后重新构建 macroCtx，确保宏能获取最新状态
+            const updatedMacroCtxForSaveToVolume = buildMacroContext(i);
+            
             const rules = (node.data.splitRules as any[]) || [];
             const volumes = (node.data.volumes as any[]) || [];
             if (rules.length > 0) workflowManager.setPendingSplits(rules);
@@ -1111,7 +1115,7 @@ export const useWorkflowEngine = (options: {
               .map(p => {
                 // 如果有 {{context}} 占位符，这里简单替换为空，因为我们会单独注入 Context 消息
                 // 或者我们可以保留它，但这比较复杂。现在的逻辑是将 Context 放在 System 之后。
-                const content = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), macroCtx);
+                const content = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), updatedMacroCtxForSaveToVolume);
                 return { role: p.role, content: p.role === 'user' ? formatAtts(content) : content };
               });
             planningMessages.push(...customPrompts);
@@ -1135,7 +1139,7 @@ export const useWorkflowEngine = (options: {
           if (node.data.instruction) {
             planningMessages.push({
               role: 'user',
-              content: formatAtts(workflowManager.interpolateWithMacros(node.data.instruction, macroCtx)),
+              content: formatAtts(workflowManager.interpolateWithMacros(node.data.instruction, updatedMacroCtxForSaveToVolume)),
             });
           } else if (planningMessages.length === 0 || planningMessages[planningMessages.length - 1].role !== 'user') {
             // 确保最后有一条 User 消息
@@ -2745,6 +2749,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             workflowManager.setActiveVolumeAnchor(targetVolumeId);
           }
 
+          // 修复：在设置完 activeVolumeAnchor 后重新构建 macroCtx，确保宏能获取最新状态
+          const updatedMacroCtx = buildMacroContext(i);
+
           // 获取分卷规划信息，计算需要生成的章节数
           let chapterCount = 1;
           const volumePlans = workflowManager.getVolumePlans();
@@ -2901,7 +2908,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             const outlineBasePrompts = (finalOutlinePreset as any)?.prompts?.filter((p: any) => p.enabled || p.active) || [];
             if (outlineBasePrompts.length > 0) {
               outlineBasePrompts.forEach((p: any) => {
-                const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), macroCtx);
+                const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), updatedMacroCtx);
                 outlineMessages.push({ role: p.role, content: c });
               });
               // 插入前序节点上下文，确保 AI 能获取到之前的内容
@@ -2914,7 +2921,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             }
 
             // 处理大纲指令中的宏
-            const outlineInstruction = node.data.outlineInstruction ? workflowManager.interpolateWithMacros(node.data.outlineInstruction, macroCtx) : '';
+            const outlineInstruction = node.data.outlineInstruction ? workflowManager.interpolateWithMacros(node.data.outlineInstruction, updatedMacroCtx) : '';
             if (outlineInstruction) {
               outlineMessages.push({
                 role: 'system',
@@ -3103,7 +3110,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             const chapterBasePrompts = (finalChapterPreset as any)?.prompts?.filter((p: any) => p.enabled || p.active) || [];
             if (chapterBasePrompts.length > 0) {
               chapterBasePrompts.forEach((p: any) => {
-                const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), macroCtx);
+                const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), updatedMacroCtx);
                 chapterMessages.push({ role: p.role, content: c });
               });
               // 插入前序节点上下文，确保 AI 能获取到之前的内容
@@ -3116,7 +3123,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             }
 
             // 处理正文指令中的宏
-            const chapterInstruction = node.data.chapterInstruction ? workflowManager.interpolateWithMacros(node.data.chapterInstruction, macroCtx) : '';
+            const chapterInstruction = node.data.chapterInstruction ? workflowManager.interpolateWithMacros(node.data.chapterInstruction, updatedMacroCtx) : '';
             if (chapterInstruction) {
               chapterMessages.push({
                 role: 'system',
