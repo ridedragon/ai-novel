@@ -405,6 +405,10 @@ export const useWorkflowEngine = (options: {
           updates.globalLoopInstructions = [];
           updates.generatedLoopConfig = '';
         }
+        // Fix: Reset currentChapterIndex for outlineAndChapter nodes to start from chapter 1
+        if (n.data.typeKey === 'outlineAndChapter') {
+          updates.currentChapterIndex = 0;
+        }
         return { ...n, data: { ...n.data, ...updates } };
       };
 
