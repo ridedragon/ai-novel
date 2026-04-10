@@ -534,6 +534,11 @@ export const useWorkflowEngine = (options: {
               role: 'user',
               content: `【用户全局输入】：\n${pNode.data.instruction}`,
             });
+          } else if (pNode.data.typeKey !== 'creationInfo' && pNode.data.instruction) {
+            dynamicContextMessages.push({
+              role: 'system',
+              content: `【${pNode.data.typeLabel || pNode.data.label || pNode.data.typeKey} 额外指令】：\n${pNode.data.instruction}`,
+            });
           } else if (pNode.data.typeKey === 'creationInfo') {
             const activeVolumeId = workflowManager.getActiveVolumeAnchor();
             const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
@@ -2900,6 +2905,15 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               ];
             }
 
+            // 处理大纲指令中的宏
+            const outlineInstruction = node.data.outlineInstruction ? workflowManager.interpolateWithMacros(node.data.outlineInstruction, macroCtx) : '';
+            if (outlineInstruction) {
+              outlineMessages.push({
+                role: 'system',
+                content: `【大纲AI指令】：\n${outlineInstruction}`,
+              });
+            }
+
             if (lastChapterContent) {
               outlineMessages.push({
                 role: 'system',
@@ -2907,12 +2921,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               });
             }
 
-            // 处理大纲指令中的宏
-            const outlineInstruction = node.data.outlineInstruction ? workflowManager.interpolateWithMacros(node.data.outlineInstruction, macroCtx) : '';
-            
             outlineMessages.push({
               role: 'user',
-              content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成第${chapterIndex + 1}章的大纲。请以JSON格式输出，包含title和summary字段。${outlineInstruction}`
+              content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成第${chapterIndex + 1}章的大纲。请以JSON格式输出，包含title和summary字段。`
             });
 
             let outlineResponse = '';
@@ -3030,6 +3041,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               
               outlineSet.items.sort((a: any, b: any) => (parseAnyNumber(a.title) || 0) - (parseAnyNumber(b.title) || 0));
               
+              // 确保 localNovel.outlineSets 存在
+              if (!localNovel.outlineSets) {
+                localNovel.outlineSets = [];
+              }
+              
               localNovel.outlineSets = localNovel.outlineSets.map(s => 
                 s.id === outlineSet.id ? outlineSet : s
               );
@@ -3088,6 +3104,15 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               ];
             }
 
+            // 处理正文指令中的宏
+            const chapterInstruction = node.data.chapterInstruction ? workflowManager.interpolateWithMacros(node.data.chapterInstruction, macroCtx) : '';
+            if (chapterInstruction) {
+              chapterMessages.push({
+                role: 'system',
+                content: `【正文AI指令】：\n${chapterInstruction}`,
+              });
+            }
+
             const outlineContentForChapter = outlineEntries.length > 0
               ? outlineEntries.map(e => `${e.title}: ${e.content}`).join('\n')
               : outlineResponse;
@@ -3103,12 +3128,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               });
             }
 
-            // 处理正文指令中的宏
-            const chapterInstruction = node.data.chapterInstruction ? workflowManager.interpolateWithMacros(node.data.chapterInstruction, macroCtx) : '';
-            
             chapterMessages.push({
               role: 'user',
-              content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成${resolvedTitle}的正文。${chapterInstruction}`
+              content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成${resolvedTitle}的正文。`
             });
 
             let chapterResponse = '';
