@@ -393,6 +393,48 @@ export const storage = {
       if (novels) {
         // 初始化全局书籍列表缓存
         lastSavedNovelsJson = JSON.stringify(novels);
+        
+        // 【关键修复】初始化每本书的脏检查缓存，防止首次自动保存用骨架数据覆盖完整数据
+        for (const novel of novels) {
+          const nid = novel.id;
+          
+          // 并行读取所有存储块来初始化缓存
+          const [meta, wv, char, out, plot, ref, insp] = await Promise.all([
+            get<any>(`${METADATA_PREFIX}${nid}`),
+            get<any>(`${WORLDVIEW_PREFIX}${nid}`),
+            get<any>(`${CHARACTERS_PREFIX}${nid}`),
+            get<any>(`${OUTLINE_PREFIX}${nid}`),
+            get<any>(`${PLOT_OUTLINE_PREFIX}${nid}`),
+            get<any>(`${REFERENCE_PREFIX}${nid}`),
+            get<any>(`${INSPIRATION_PREFIX}${nid}`),
+          ]);
+          
+          // 创建一个临时小说对象用于生成缓存 JSON
+          const tempNovel = { ...novel };
+          if (meta) {
+            tempNovel.chapters = meta.chapters || [];
+            tempNovel.volumes = meta.volumes || [];
+          }
+          if (wv) tempNovel.worldviewSets = wv;
+          if (char) tempNovel.characterSets = char;
+          if (out) tempNovel.outlineSets = out;
+          if (plot) tempNovel.plotOutlineSets = plot;
+          if (ref) {
+            tempNovel.referenceFiles = ref.f || [];
+            tempNovel.referenceFolders = ref.d || [];
+          }
+          if (insp) tempNovel.inspirationSets = insp;
+          
+          // 初始化所有缓存
+          lastSavedMetadataCache.set(nid, this._getNovelMetadataJson(tempNovel));
+          lastSavedWorldviewCache.set(nid, this._getWorldviewJson(tempNovel));
+          lastSavedCharactersCache.set(nid, this._getCharactersJson(tempNovel));
+          lastSavedOutlineCache.set(nid, this._getOutlineJson(tempNovel));
+          lastSavedPlotOutlineCache.set(nid, this._getPlotOutlineJson(tempNovel));
+          lastSavedReferenceCache.set(nid, this._getReferenceJson(tempNovel));
+          lastSavedInspirationCache.set(nid, this._getInspirationJson(tempNovel));
+        }
+        
         return novels;
       }
 
@@ -692,6 +734,51 @@ export const storage = {
       for (const novel of novels) {
         // --- 1. 原子化脏检查与异步任务分发 ---
         // 注意：即使没有章节，也要保存其他数据（分卷、世界观、设定等）
+        
+        // 【关键安全检查】如果缓存未初始化，先检查存储中是否有数据，
+        // 避免用只有骨架的数据覆盖完整存储数据
+        const isCacheUninitialized = !lastSavedMetadataCache.has(novel.id);
+        if (isCacheUninitialized) {
+          terminal.log(`[STORAGE] 《${novel.title}》缓存未初始化，先检查现有存储数据...`);
+          
+          // 从存储读取现有数据来初始化缓存
+          const [existingMeta, existingWv, existingChar, existingOut, existingPlot, existingRef, existingInsp] = await Promise.all([
+            get<any>(`${METADATA_PREFIX}${novel.id}`),
+            get<any>(`${WORLDVIEW_PREFIX}${novel.id}`),
+            get<any>(`${CHARACTERS_PREFIX}${novel.id}`),
+            get<any>(`${OUTLINE_PREFIX}${novel.id}`),
+            get<any>(`${PLOT_OUTLINE_PREFIX}${novel.id}`),
+            get<any>(`${REFERENCE_PREFIX}${novel.id}`),
+            get<any>(`${INSPIRATION_PREFIX}${novel.id}`),
+          ]);
+          
+          // 构建用于缓存的临时小说对象
+          const tempNovelForCache = { ...novel };
+          if (existingMeta) {
+            tempNovelForCache.chapters = existingMeta.chapters || [];
+            tempNovelForCache.volumes = existingMeta.volumes || [];
+          }
+          if (existingWv) tempNovelForCache.worldviewSets = existingWv;
+          if (existingChar) tempNovelForCache.characterSets = existingChar;
+          if (existingOut) tempNovelForCache.outlineSets = existingOut;
+          if (existingPlot) tempNovelForCache.plotOutlineSets = existingPlot;
+          if (existingRef) {
+            tempNovelForCache.referenceFiles = existingRef.f || [];
+            tempNovelForCache.referenceFolders = existingRef.d || [];
+          }
+          if (existingInsp) tempNovelForCache.inspirationSets = existingInsp;
+          
+          // 初始化缓存
+          lastSavedMetadataCache.set(novel.id, this._getNovelMetadataJson(tempNovelForCache));
+          lastSavedWorldviewCache.set(novel.id, this._getWorldviewJson(tempNovelForCache));
+          lastSavedCharactersCache.set(novel.id, this._getCharactersJson(tempNovelForCache));
+          lastSavedOutlineCache.set(novel.id, this._getOutlineJson(tempNovelForCache));
+          lastSavedPlotOutlineCache.set(novel.id, this._getPlotOutlineJson(tempNovelForCache));
+          lastSavedReferenceCache.set(novel.id, this._getReferenceJson(tempNovelForCache));
+          lastSavedInspirationCache.set(novel.id, this._getInspirationJson(tempNovelForCache));
+          
+          terminal.log(`[STORAGE] 《${novel.title}》缓存已从存储恢复`);
+        }
 
         // 1.1 索引元数据 (Metadata: 章节索引、分卷)
         const currentMetaJson = this._getNovelMetadataJson(novel);
