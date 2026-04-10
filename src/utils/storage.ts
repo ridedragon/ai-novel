@@ -229,9 +229,6 @@ export const storage = {
 
     const mergedChapters = [
       ...incomingChapters.map(chapter => chapterMap.get(chapter.id)),
-      ...existingChapters
-        .filter(chapter => !incomingChapters.some(incomingChapter => incomingChapter.id === chapter.id))
-        .map(chapter => chapterMap.get(chapter.id)),
     ];
 
     const mergedVolumesMap = new Map<string, any>();
