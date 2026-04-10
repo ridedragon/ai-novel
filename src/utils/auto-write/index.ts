@@ -448,10 +448,11 @@ export class AutoWriteEngine {
           console.log('Messages Structure:', messages);
           console.groupEnd();
 
+          const baseMaxTokens = this.config.max_tokens || this.config.maxReplyLength;
           const batchMaxTokens =
-            this.config.maxReplyLength * batchItems.length > 128000
+            baseMaxTokens * batchItems.length > 128000
               ? 128000
-              : this.config.maxReplyLength * (batchItems.length > 1 ? 1.5 : 1);
+              : baseMaxTokens * (batchItems.length > 1 ? 1.5 : 1);
 
           let requestParams: any = {
               model: this.config.model,

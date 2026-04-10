@@ -229,6 +229,7 @@ export interface GeneratorPreset {
   topP?: number;
   topK?: number;
   maxReplyLength?: number;
+  max_tokens?: number;
   frequencyPenalty?: number;
   presencePenalty?: number;
   stream?: boolean;
@@ -256,6 +257,7 @@ export interface CompletionPreset {
   name: string;
   contextLength: number;
   maxReplyLength: number;
+  max_tokens?: number;
   temperature: number;
   frequencyPenalty: number;
   presencePenalty: number;

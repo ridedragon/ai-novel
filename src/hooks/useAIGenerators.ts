@@ -423,7 +423,8 @@ export function useAIGenerators() {
         if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
           requestParams.top_k = activePreset.topK;
         }
-        if ((activePreset as any).maxReplyLength) requestParams.max_tokens = (activePreset as any).maxReplyLength;
+        const presetMaxTokens = (activePreset as any).max_tokens || (activePreset as any).maxReplyLength;
+        if (presetMaxTokens) requestParams.max_tokens = presetMaxTokens;
         if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
         if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
         
@@ -1495,6 +1496,7 @@ export function useAIGenerators() {
         presencePenalty: number;
         frequencyPenalty: number;
         maxReplyLength: number;
+        max_tokens?: number;
         maxRetries: number;
         outlineModel: string;
         model: string;
@@ -1640,7 +1642,7 @@ export function useAIGenerators() {
               top_p: params.topP,
               presence_penalty: params.presencePenalty,
               frequency_penalty: params.frequencyPenalty,
-              max_tokens: params.maxReplyLength,
+              max_tokens: params.max_tokens || params.maxReplyLength,
             };
             let fallbackMode = 0;
             if (params.topK && params.topK > 0 && fallbackMode < 1) {
