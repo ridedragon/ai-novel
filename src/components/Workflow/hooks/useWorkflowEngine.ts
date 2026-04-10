@@ -4654,7 +4654,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
     stopRequestedRef.current = true;
     abortControllerRef.current?.abort();
-    workflowManager.pause(realIdx);
+    workflowManager.stop();
     setNodes(nds =>
       nds.map(n => ({
         ...n,
