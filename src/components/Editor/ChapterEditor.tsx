@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Edit,
   FileText,
+  RefreshCw,
   Save,
   Settings,
   Sparkles,
@@ -26,6 +27,7 @@ interface ChapterEditorProps {
   onChapterContentChange: (content: string) => void;
   onOptimize: (targetId?: number, initialContent?: string) => Promise<void>;
   onStopOptimize: (chapterId: number) => void;
+  onRegenerate: (chapterId: number) => Promise<void>;
   optimizingChapterIds: Set<number>;
   activeOptimizePresetId: string;
   autoOptimize: boolean;
@@ -44,14 +46,14 @@ interface ChapterEditorProps {
 }
 
 export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
-  ({
-    activeChapter,
+  ({    activeChapter,
     activeChapterId,
     isEditingChapter,
     onToggleEdit,
     onChapterContentChange,
     onOptimize,
     onStopOptimize,
+    onRegenerate,
     optimizingChapterIds,
     autoOptimize,
     setAutoOptimize,
@@ -274,6 +276,18 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                 title="润色设置"
               >
                 <Settings className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* 重新生成按钮 */}
+            <div className="flex items-center h-9 md:h-10 overflow-hidden shrink-0">
+              <button
+                onClick={() => activeChapter && onRegenerate(activeChapter.id)}
+                className="bg-indigo-600 hover:bg-indigo-500 h-full text-white transition-all flex items-center justify-center px-2 rounded-lg text-[10px] font-bold gap-1 shadow-lg shadow-indigo-900/10"
+                title="重新生成本章内容"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span className="hidden md:inline whitespace-nowrap">重新生成</span>
               </button>
             </div>
 
