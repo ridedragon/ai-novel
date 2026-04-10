@@ -239,7 +239,19 @@ export function useNovelData() {
         return chapter;
       });
 
-      return sortChapters(recalibrateSummaries(renumberedTitles));
+      const result = sortChapters(recalibrateSummaries(renumberedTitles));
+      
+      // 确保所有原始章节都被保留
+      if (result.length < chapterList.length) {
+        const resultIds = new Set(result.map(c => c.id));
+        const missingChapters = chapterList.filter(c => !resultIds.has(c.id));
+        if (missingChapters.length > 0) {
+          terminal.warn(`[DATA SAFETY] 检测到 ${missingChapters.length} 个章节在处理过程中丢失，正在恢复...`);
+          result.push(...missingChapters);
+        }
+      }
+      
+      return result;
     },
     [activeNovel],
   );
