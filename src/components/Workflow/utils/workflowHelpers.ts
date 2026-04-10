@@ -118,7 +118,14 @@ export const cleanAndParseJSON = async (text: string) => {
       .replace(/(:\s*)\u201C/g, '$1"')       // 替换 : 后面的左中文引号为英文引号（value 开头）
       .replace(/\u201D(\s*[,\]}:])/g, '"$1') // 替换 , } ] : 前面的右中文引号为英文引号（key/value 结尾）
       .replace(/^\s*\u201C/g, '"')           // 处理 JSON 字符串开头的左中文引号
-      .replace(/\u201D\s*$/g, '"');          // 处理 JSON 字符串结尾的右中文引号
+      .replace(/\u201D\s*$/g, '"')          // 处理 JSON 字符串结尾的右中文引号
+      // 修复未转义的引号
+      .replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match, content) => {
+        return '"' + content.replace(/"/g, '\\"') + '"';
+      })
+      // 修复未闭合的括号
+      .replace(/\{([^}]*)$/s, '{$1}')
+      .replace(/\[([^\]]*)$/s, '[$1]');
   };
 
   try {
@@ -128,7 +135,21 @@ export const cleanAndParseJSON = async (text: string) => {
     try {
       return JSON.parse(fixed);
     } catch (e2: any) {
-      throw e2;
+      // 核心修复：尝试更激进的修复策略
+      const moreAggressiveFix = (jsonStr: string) => {
+        // 移除所有非ASCII字符，保留基本的JSON结构
+        return jsonStr
+          .replace(/[^\x20-\x7E]/g, '')
+          .replace(/,\s*$/g, '')
+          .replace(/\{\s*$/g, '{}')
+          .replace(/\[\s*$/g, '[]');
+      };
+      const moreFixed = moreAggressiveFix(processed);
+      try {
+        return JSON.parse(moreFixed);
+      } catch (e3: any) {
+        throw e3;
+      }
     }
   }
 };
