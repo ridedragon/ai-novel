@@ -75,8 +75,19 @@ export function useNovelData() {
 
   // 初始加载
   useEffect(() => {
-    storage.getNovels().then(loaded => {
-      setNovels(loaded);
+    storage.getNovels().then(async loaded => {
+      // 加载所有小说的完整内容，包括章节
+      const novelsWithContent = await Promise.all(
+        loaded.map(async novel => {
+          try {
+            return await storage.loadNovelContent(novel);
+          } catch (error) {
+            terminal.error(`[STORAGE] 加载小说 ${novel.title} 内容失败: ${error.message}`);
+            return novel;
+          }
+        })
+      );
+      setNovels(novelsWithContent);
       // 【关键修复】初始加载完成后标记，允许自动保存
       setTimeout(() => {
         isInitialLoadCompleteRef.current = true;
