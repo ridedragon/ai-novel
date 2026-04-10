@@ -3394,7 +3394,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             }
           }
           
-          if (shouldStopForVolumeComplete && mode !== 'full') {
+          if (shouldStopForVolumeComplete && mode && mode !== 'full') {
             terminal.log(`[WORKFLOW] Volume complete (no next volume), stopping workflow at node ${node.id}`);
             setEdgeAnimation(node.id, false);
             workflowManager.stop();
@@ -3928,7 +3928,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
                 // 核心修复：重写卷模式下，禁止切换到下一卷
                 // 重写卷模式的目的是专注重写当前卷，不应自动进入下一卷
-                if (userSpecifiedTargetVolumeId && mode) {
+                // 但完全重写模式（full）应该允许切换到下一卷
+                if (userSpecifiedTargetVolumeId && mode && mode !== 'full') {
                   shouldSwitch = false;
                   nextVolumeName = '';
                   terminal.log(`[WORKFLOW] 单卷重写模式：禁止切换到下一卷，shouldSwitch 强制为 false`);
