@@ -431,22 +431,19 @@ export const getChapterContextMessages = (
       });
       const uniqueSummaries = Array.from(rangeMap.values());
 
-      // 获取范围内最近的一个大总结
-      const latestBigSummary = uniqueSummaries
+      // 分离小总结和大总结
+      const smallSummaries = uniqueSummaries
+        .filter(s => s.subtype === 'small_summary' || (typeof s.title === 'string' && s.title.includes('小总结')))
+        .sort((a, b) => parseRange(a.summaryRange!).end - parseRange(b.summaryRange!).end);
+
+      const bigSummaries = uniqueSummaries
         .filter(s => s.subtype === 'big_summary' || (typeof s.title === 'string' && s.title.includes('大总结')))
-        .sort((a, b) => parseRange(b.summaryRange!).end - parseRange(a.summaryRange!).end)[0];
+        .sort((a, b) => parseRange(a.summaryRange!).end - parseRange(b.summaryRange!).end);
 
-      // 计算正文回看起点
-      // 规则：最近一次大总结结束位置 - 上下文参考章节数 + 1
-      // 核心修复：如果没有大总结，则发送本 Scope 内的所有章节（满足用户“发送全部章节”需求）
-      let contextStartNum = scopeStartNum;
-      if (latestBigSummary) {
-        const bigSumEnd = parseRange(latestBigSummary.summaryRange!).end;
-        // 如果有大总结，起点设为大总结结束前 N 章 (Context Depth)，确保包含大总结之后的所有章节
-        contextStartNum = Math.max(scopeStartNum, bigSumEnd - contextChapterCount + 1);
-      }
+      // 获取最新的大总结
+      const latestBigSummary = bigSummaries[bigSummaries.length - 1];
 
-      // 收集所有要发送的 Item (按时间线混合)
+      // 收集所有要发送的 Item
       interface ContextItem {
         type: 'big_summary' | 'small_summary' | 'story';
         end: number;
@@ -454,44 +451,125 @@ export const getChapterContextMessages = (
       }
       const itemsToSend: ContextItem[] = [];
 
-      // A. 添加大总结 (Always)
-      if (latestBigSummary) {
-        itemsToSend.push({
-          type: 'big_summary',
-          end: parseRange(latestBigSummary.summaryRange!).end,
-          data: latestBigSummary,
+      // 情况判断
+      if (isVolumeScope) {
+        // 情况1：本卷模式，若没有总结在本卷出现则发送全部正文内容
+        if (uniqueSummaries.length === 0) {
+          // 发送本卷所有正文内容
+          storyChapters.forEach((c, idx) => {
+            const cNum = idx + 1;
+            if (cNum >= scopeStartNum && cNum < currentNum) {
+              itemsToSend.push({ type: 'story', end: cNum, data: c });
+            }
+          });
+        } else if (bigSummaries.length === 0 && smallSummaries.length > 0) {
+          // 情况2：存在小总结但不存在大总结
+          // 发送小总结的前一章内容，小总结本身、小总结后面的全部章节
+          smallSummaries.forEach(summary => {
+            const sumEnd = parseRange(summary.summaryRange!).end;
+            // 小总结的前一章
+            const prevChapterNum = sumEnd - 1;
+            if (prevChapterNum >= scopeStartNum) {
+              const prevChapter = storyChapters[prevChapterNum - 1];
+              if (prevChapter) {
+                itemsToSend.push({ type: 'story', end: prevChapterNum, data: prevChapter });
+              }
+            }
+            // 小总结本身
+            itemsToSend.push({ type: 'small_summary', end: sumEnd, data: summary });
+            // 小总结后面的全部章节
+            storyChapters.forEach((c, idx) => {
+              const cNum = idx + 1;
+              if (cNum > sumEnd && cNum < currentNum) {
+                itemsToSend.push({ type: 'story', end: cNum, data: c });
+              }
+            });
+          });
+        } else if (bigSummaries.length > 0 && smallSummaries.length > 0) {
+          // 情况3：存在小总结，也存在大总结
+          // 按顺序发送全部小总结、全部大总结、最新大总结的前一章，最新大总结的全部后续章节
+          // 1. 全部小总结
+          smallSummaries.forEach(summary => {
+            itemsToSend.push({ type: 'small_summary', end: parseRange(summary.summaryRange!).end, data: summary });
+          });
+          // 2. 全部大总结
+          bigSummaries.forEach(summary => {
+            itemsToSend.push({ type: 'big_summary', end: parseRange(summary.summaryRange!).end, data: summary });
+          });
+          // 3. 最新大总结的前一章
+          if (latestBigSummary) {
+            const bigSumEnd = parseRange(latestBigSummary.summaryRange!).end;
+            const prevChapterNum = bigSumEnd - 1;
+            if (prevChapterNum >= scopeStartNum) {
+              const prevChapter = storyChapters[prevChapterNum - 1];
+              if (prevChapter) {
+                itemsToSend.push({ type: 'story', end: prevChapterNum, data: prevChapter });
+              }
+            }
+            // 4. 最新大总结的全部后续章节
+            storyChapters.forEach((c, idx) => {
+              const cNum = idx + 1;
+              if (cNum > bigSumEnd && cNum < currentNum) {
+                itemsToSend.push({ type: 'story', end: cNum, data: c });
+              }
+            });
+          }
+        } else if (bigSummaries.length > 0) {
+          // 只有大总结的情况
+          // 发送最新大总结，以及大总结结束前 N 章到当前章节的内容
+          if (latestBigSummary) {
+            const bigSumEnd = parseRange(latestBigSummary.summaryRange!).end;
+            // 计算正文回看起点
+            const contextStartNum = Math.max(scopeStartNum, bigSumEnd - contextChapterCount + 1);
+            // 添加大总结
+            itemsToSend.push({ type: 'big_summary', end: bigSumEnd, data: latestBigSummary });
+            // 添加正文章节
+            storyChapters.forEach((c, idx) => {
+              const cNum = idx + 1;
+              if (cNum >= contextStartNum && cNum < currentNum) {
+                itemsToSend.push({ type: 'story', end: cNum, data: c });
+              }
+            });
+          }
+        }
+      } else {
+        // 非本卷模式，保持原有逻辑
+        // 计算正文回看起点
+        let contextStartNum = scopeStartNum;
+        if (latestBigSummary) {
+          const bigSumEnd = parseRange(latestBigSummary.summaryRange!).end;
+          contextStartNum = Math.max(scopeStartNum, bigSumEnd - contextChapterCount + 1);
+        }
+
+        // A. 添加大总结 (Always)
+        if (latestBigSummary) {
+          itemsToSend.push({
+            type: 'big_summary',
+            end: parseRange(latestBigSummary.summaryRange!).end,
+            data: latestBigSummary,
+          });
+        }
+
+        // B. 添加相关的小总结
+        const bigSumEnd = latestBigSummary ? parseRange(latestBigSummary.summaryRange!).end : scopeStartNum - 1;
+        smallSummaries.forEach(s => {
+          const end = parseRange(s.summaryRange!).end;
+          if (end > bigSumEnd && end < currentNum) {
+            itemsToSend.push({ type: 'small_summary', end, data: s });
+          }
+        });
+
+        // C. 添加正文章节 (Context Window 范围内或之后)
+        storyChapters.forEach((c, idx) => {
+          const cNum = idx + 1;
+          if (cNum >= contextStartNum && cNum < currentNum) {
+            itemsToSend.push({ type: 'story', end: cNum, data: c });
+          }
         });
       }
 
-      // B. 添加相关的小总结
-      const bigSumEnd = latestBigSummary ? parseRange(latestBigSummary.summaryRange!).end : scopeStartNum - 1;
-      uniqueSummaries.forEach(s => {
-        const isSmall = s.subtype === 'small_summary' || (typeof s.title === 'string' && s.title.includes('小总结'));
-        if (isSmall) {
-          const end = parseRange(s.summaryRange!).end;
-          // 核心修复：在本卷模式下，不再过滤掉大总结覆盖范围内的小总结，确保本卷内细节参考不丢失
-          const isVolMode = config.contextScope === 'volume' || config.contextScope === 'currentVolume';
-          if ((isVolMode || end > bigSumEnd) && end < currentNum) {
-            itemsToSend.push({ type: 'small_summary', end, data: s });
-          }
-        }
-      });
-
-      // C. 添加正文章节 (Context Window 范围内或之后)
-      storyChapters.forEach((c, idx) => {
-        const cNum = idx + 1;
-        if (cNum >= contextStartNum && cNum < currentNum) {
-          itemsToSend.push({ type: 'story', end: cNum, data: c });
-        }
-      });
-
-      // 排序：按结束位置 -> 类型 (Story < Small < Big)
-      // 修复：调换 Story 和 Summary 的优先级
-      itemsToSend.sort((a, b) => {
-        if (a.end !== b.end) return a.end - b.end;
-        const typeOrder = { story: 0, small_summary: 1, big_summary: 2 };
-        return typeOrder[a.type] - typeOrder[b.type];
-      });
+      // 排序：按结束位置
+      itemsToSend.sort((a, b) => a.end - b.end);
 
       // 生成 Messages
       itemsToSend.forEach(item => {
