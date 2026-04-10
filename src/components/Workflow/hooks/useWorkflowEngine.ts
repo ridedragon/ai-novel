@@ -4282,7 +4282,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         const fMaxT =
           node.data.overrideAiConfig && node.data.maxTokens
             ? node.data.maxTokens
-            : (preset as any)?.maxReplyLength || globalConfig.maxReplyLength;
+            : (preset as any)?.maxReplyLength || (preset as any)?.max_tokens || globalConfig.maxReplyLength;
 
         const openai = new OpenAI({
           apiKey:
