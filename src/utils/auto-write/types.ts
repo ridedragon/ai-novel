@@ -6,6 +6,7 @@ export interface AutoWriteConfig {
   model: string;
   contextLength: number;
   maxReplyLength: number;
+  max_tokens?: number;
   temperature: number;
   topP?: number;
   topK?: number;

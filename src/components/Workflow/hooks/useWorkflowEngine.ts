@@ -3641,6 +3641,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               node.data.overrideAiConfig && node.data.temperature !== undefined
                 ? node.data.temperature
                 : ((preset as any)?.temperature ?? globalConfig.temperature),
+            maxReplyLength:
+              node.data.overrideAiConfig && node.data.maxReplyLength !== undefined
+                ? node.data.maxReplyLength
+                : ((preset as any)?.maxReplyLength ?? globalConfig.maxReplyLength),
+            max_tokens:
+              node.data.overrideAiConfig && node.data.max_tokens !== undefined
+                ? node.data.max_tokens
+                : ((preset as any)?.max_tokens ?? globalConfig.max_tokens),
             systemPrompt:
               (node.data.overrideAiConfig
                 ? node.data.promptItems

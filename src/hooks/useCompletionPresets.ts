@@ -37,6 +37,7 @@ export function useCompletionPresets() {
   // 2. 详细参数状态
   const [contextLength, setContextLength] = useState(() => getSetting('contextLength', 200000));
   const [maxReplyLength, setMaxReplyLength] = useState(() => getSetting('maxReplyLength', 64000));
+  const [max_tokens, setMaxTokens] = useState(() => getSetting('max_tokens', undefined));
   const [candidateCount, setCandidateCount] = useState(() => getSetting('candidateCount', 1));
   const [stream, setStream] = useState(() => getSetting('stream', true));
   const [temperature, setTemperature] = useState(() => getSetting('temperature', 1.0));
@@ -73,6 +74,7 @@ export function useCompletionPresets() {
 
       setContextLength(source.contextLength ?? 200000);
       setMaxReplyLength(source.maxReplyLength ?? 64000);
+      setMaxTokens((source as any).max_tokens ?? undefined);
       setTemperature(source.temperature ?? 1.0);
       setFrequencyPenalty(source.frequencyPenalty ?? 0.0);
       setPresencePenalty(source.presencePenalty ?? 0.0);
@@ -93,6 +95,7 @@ export function useCompletionPresets() {
     const draft = {
       contextLength,
       maxReplyLength,
+      max_tokens,
       temperature,
       frequencyPenalty,
       presencePenalty,
@@ -107,6 +110,7 @@ export function useCompletionPresets() {
   }, [
     contextLength,
     maxReplyLength,
+    max_tokens,
     temperature,
     frequencyPenalty,
     presencePenalty,
@@ -128,6 +132,7 @@ export function useCompletionPresets() {
           ...p,
           contextLength,
           maxReplyLength,
+          max_tokens,
           temperature,
           frequencyPenalty,
           presencePenalty,
@@ -150,6 +155,7 @@ export function useCompletionPresets() {
     const draft = {
       contextLength,
       maxReplyLength,
+      max_tokens,
       temperature,
       frequencyPenalty,
       presencePenalty,
@@ -169,6 +175,7 @@ export function useCompletionPresets() {
     activePresetId,
     contextLength,
     maxReplyLength,
+    max_tokens,
     temperature,
     frequencyPenalty,
     presencePenalty,
@@ -211,6 +218,7 @@ export function useCompletionPresets() {
       // 重新加载预设原始值
       setContextLength(preset.contextLength);
       setMaxReplyLength(preset.maxReplyLength);
+      setMaxTokens((preset as any).max_tokens ?? undefined);
       setTemperature(preset.temperature);
       setFrequencyPenalty(preset.frequencyPenalty);
       setPresencePenalty(preset.presencePenalty);
@@ -233,6 +241,7 @@ export function useCompletionPresets() {
         name,
         contextLength,
         maxReplyLength,
+        max_tokens,
         temperature,
         frequencyPenalty,
         presencePenalty,
@@ -250,6 +259,7 @@ export function useCompletionPresets() {
     [
       contextLength,
       maxReplyLength,
+      max_tokens,
       temperature,
       frequencyPenalty,
       presencePenalty,
@@ -276,6 +286,8 @@ export function useCompletionPresets() {
     setContextLength,
     maxReplyLength,
     setMaxReplyLength,
+    max_tokens,
+    setMaxTokens,
     candidateCount,
     setCandidateCount,
     stream,

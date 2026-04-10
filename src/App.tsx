@@ -1308,6 +1308,7 @@ function App() {
               presencePenalty: completion.presencePenalty,
               frequencyPenalty: completion.frequencyPenalty,
               maxReplyLength: completion.maxReplyLength,
+              max_tokens: completion.max_tokens,
               maxRetries: config.maxRetries,
               outlineModel: config.outlineModel || config.model,
               model: config.model,
