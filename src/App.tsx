@@ -1284,6 +1284,9 @@ function App() {
               }),
             );
 
+            // 立即保存当前状态，确保清空操作被持久化
+            await storage.saveNovels(novelData.novels);
+
             // 创建 abort controller ref
             const abortControllerRef = {
               current: null as AbortController | null
@@ -1319,8 +1322,10 @@ function App() {
               autoOptimize: config.autoOptimize,
               onNovelsUpdate: novelData.setNovels,
               setChapters: novelData.setChapters,
-              onSuccess: () => {
+              onSuccess: async () => {
                 terminal.log(`[Regenerate] 章节 ${regenerateChapter.title} 重新生成成功`);
+                // 重新生成完成后立即保存，确保新内容被持久化
+                await storage.saveNovels(novelData.novels);
               },
               onError: (msg: string) => {
                 terminal.error(`[Regenerate] 章节 ${regenerateChapter.title} 重新生成失败: ${msg}`);
@@ -1345,6 +1350,7 @@ function App() {
                 });
               },
               generateAbortControllerRef: abortControllerRef,
+              isRegenerating: true,
             });
           }}
           optimizingChapterIds={autoWrite.optimizingChapterIds}

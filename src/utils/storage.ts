@@ -180,31 +180,31 @@ export const storage = {
   _mergePendingChapter(existing: any, incoming: any) {
     const existingContent = typeof existing?.content === 'string' ? existing.content : '';
     const incomingContent = typeof incoming?.content === 'string' ? incoming.content : '';
-    const preferredContent = incomingContent.length >= existingContent.length ? incomingContent : existingContent;
+    
+    // 优先使用传入的内容，特别是当它是一个新生成的版本时
+    // 如果 incoming 有内容（即使更短），也优先使用 incoming
+    let preferredContent = incomingContent;
+    let preferredVersions = incoming?.versions;
+    let preferredActiveVersionId = incoming?.activeVersionId;
+    
+    // 只有当 incoming 没有内容时，才回退到 existing
+    if (!incomingContent || incomingContent.trim() === '') {
+      preferredContent = existingContent;
+      preferredVersions = existing?.versions;
+      preferredActiveVersionId = existing?.activeVersionId;
+    }
 
     return {
       ...existing,
       ...incoming,
       volumeId: incoming?.volumeId || existing?.volumeId,
       content: preferredContent,
-      sourceContent:
-        (incoming?.sourceContent?.length || 0) >= (existing?.sourceContent?.length || 0)
-          ? incoming?.sourceContent
-          : existing?.sourceContent,
-      optimizedContent:
-        (incoming?.optimizedContent?.length || 0) >= (existing?.optimizedContent?.length || 0)
-          ? incoming?.optimizedContent
-          : existing?.optimizedContent,
-      versions:
-        (incoming?.versions?.length || 0) >= (existing?.versions?.length || 0)
-          ? incoming?.versions
-          : existing?.versions,
-      analysisResult:
-        (incoming?.analysisResult?.length || 0) >= (existing?.analysisResult?.length || 0)
-          ? incoming?.analysisResult
-          : existing?.analysisResult,
+      sourceContent: incoming?.sourceContent ?? existing?.sourceContent,
+      optimizedContent: incoming?.optimizedContent ?? existing?.optimizedContent,
+      versions: preferredVersions,
+      analysisResult: incoming?.analysisResult ?? existing?.analysisResult,
       logicScore: incoming?.logicScore ?? existing?.logicScore,
-      activeVersionId: incoming?.activeVersionId ?? existing?.activeVersionId,
+      activeVersionId: preferredActiveVersionId,
       showingVersion: incoming?.showingVersion ?? existing?.showingVersion,
       summaryRange: incoming?.summaryRange ?? existing?.summaryRange,
       summaryRangeVolume: incoming?.summaryRangeVolume ?? existing?.summaryRangeVolume,
