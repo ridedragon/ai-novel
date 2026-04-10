@@ -698,6 +698,16 @@ export const getChapterContextMessages = (
         }
       });
 
+      // D. 添加后续一章内容（如果存在）
+      if (currentChapterIndex < storyChapters.length - 1) {
+        const nextChapter = storyChapters[currentChapterIndex + 1];
+        itemsToSend.push({
+          type: 'story',
+          end: currentChapterIndex + 2, // 下一章的序号
+          data: nextChapter
+        });
+      }
+
       // 排序：按结束位置 -> 类型 (Story < Small < Big)
       itemsToSend.sort((a, b) => {
         if (a.end !== b.end) return a.end - b.end;
@@ -709,10 +719,19 @@ export const getChapterContextMessages = (
       // 生成 Messages
       itemsToSend.forEach(item => {
         if (item.type === 'story') {
-          messages.push({
-            role: 'system',
-            content: `【前文回顾细节 - ${item.data.title}】：\n${getEffectiveChapterContent(item.data)}`,
-          });
+          // 检查是否是后续章节
+          const isNextChapter = item.end === currentChapterIndex + 2;
+          if (isNextChapter) {
+            messages.push({
+              role: 'system',
+              content: `【后一章内容 - ${item.data.title}】：\n${getEffectiveChapterContent(item.data)}\n\n提示：这是故事的后续章节内容，请保持故事的连续性和一致性。`,
+            });
+          } else {
+            messages.push({
+              role: 'system',
+              content: `【前文回顾细节 - ${item.data.title}】：\n${getEffectiveChapterContent(item.data)}`,
+            });
+          }
         } else if (item.type === 'big_summary') {
           messages.push({
             role: 'system',
@@ -727,18 +746,28 @@ export const getChapterContextMessages = (
       });
     }
   } else {
-    // 非长文模式：仅卷内前文
+    // 非长文模式：卷内前文 + 后续一章
     const volChapters = chapters.filter(
       c => c.volumeId === targetChapter.volumeId && (!c.subtype || c.subtype === 'story'),
     );
     const currentIdx = volChapters.findIndex(c => c.id === targetChapter.id);
     if (currentIdx !== -1) {
+      // 添加前文回顾
       volChapters.slice(0, currentIdx).forEach(c => {
         messages.push({
           role: 'system',
           content: `【前文回顾 - ${c.title}】：\n${getEffectiveChapterContent(c)}`,
         });
       });
+      
+      // 添加后续一章内容（如果存在）
+      if (currentIdx < volChapters.length - 1) {
+        const nextChapter = volChapters[currentIdx + 1];
+        messages.push({
+          role: 'system',
+          content: `【后一章内容 - ${nextChapter.title}】：\n${getEffectiveChapterContent(nextChapter)}\n\n提示：这是故事的后续章节内容，请保持故事的连续性和一致性。`,
+        });
+      }
     }
   }
 
