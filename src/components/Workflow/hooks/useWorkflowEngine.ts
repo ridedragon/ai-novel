@@ -4241,7 +4241,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   }
                   await updateLocalAndGlobal(localNovel);
                   workflowManager.setActiveVolumeAnchor(tid);
-                  workflowManager.markSplitProcessed(trg.chapterTitle, name);
+                  // 核心修复：传入 currentGlobalIndex 参数，确保过期规则被正确标记为 processed
+                  workflowManager.markSplitProcessed(trg.chapterTitle, name, nextGlobalIndex);
                   return { updatedNovel: localNovel, newVolumeId: tid };
                 }
                 
