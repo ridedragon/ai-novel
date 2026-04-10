@@ -22,6 +22,7 @@ import {
 export function useNovelData() {
   const [novels, _setNovels] = useState<Novel[]>([]);
   const novelsRef = useRef<Novel[]>([]);
+  const isInitialLoadCompleteRef = useRef(false); // 【关键修复】标记初始加载是否完成
 
   // 【BUG 修复】：章节复活黑名单
   const deletedChapterIdsRef = useRef<Set<number>>(new Set());
@@ -74,12 +75,19 @@ export function useNovelData() {
 
   // 初始加载
   useEffect(() => {
-    storage.getNovels().then(loaded => setNovels(loaded));
+    storage.getNovels().then(loaded => {
+      setNovels(loaded);
+      // 【关键修复】初始加载完成后标记，允许自动保存
+      setTimeout(() => {
+        isInitialLoadCompleteRef.current = true;
+      }, 1000); // 给足够的时间让数据完全加载
+    });
   }, [setNovels]);
 
   // 自动保存逻辑（添加防抖）
   useEffect(() => {
-    if (novels.length > 0) {
+    // 【关键修复】只有在初始加载完成后才允许自动保存
+    if (novels.length > 0 && isInitialLoadCompleteRef.current) {
       // 清除之前的定时器
       if (saveDebounceTimerRef.current) {
         clearTimeout(saveDebounceTimerRef.current);
