@@ -917,7 +917,7 @@ export const useWorkflowEngine = (options: {
         // 如果节点已经有内容或状态不是 pending，保留已有的进度
         if (i === startIndex && node.data.typeKey === 'outlineAndChapter') {
           // 检查节点是否已经有进度（currentChapterIndex > 0 或 已经有 outputEntries）
-          const hasExistingProgress = (node.data.currentChapterIndex && node.data.currentChapterIndex > 0) || 
+          const hasExistingProgress = ((node.data.currentChapterIndex as number) && (node.data.currentChapterIndex as number) > 0) || 
                                      (node.data.outputEntries && node.data.outputEntries.length > 0);
           const isNodePending = node.data.status === 'pending' || !node.data.status;
           
@@ -2973,7 +2973,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           const chapterMap: Map<number, Chapter> = new Map();
 
           // 获取已保存的循环进度
-          let startChapterIndex = node.data.currentChapterIndex || 0;
+          let startChapterIndex = (node.data.currentChapterIndex as number) || 0;
           let currentChapterIndex = startChapterIndex;
           terminal.log(`[OutlineAndChapter] 开始生成章节，从第 ${startChapterIndex + 1} 章开始`);
 

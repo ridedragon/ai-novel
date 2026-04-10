@@ -115,6 +115,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
 
   // 正文生成节点特定设置
   startChapterIndex?: number; // 起始章节索引 (0-based)，用于从指定章节开始生成
+  currentChapterIndex?: number; // 当前章节索引 (0-based)，用于跟踪生成进度
   startChapterMode?: 'auto' | 'continue' | 'restart'; // 起始章节模式: auto=自动检测, continue=继续写, restart=从头开始
   enableAutoDetect?: boolean; // 是否启用自动检测跳过已完成章节（默认 true）
 

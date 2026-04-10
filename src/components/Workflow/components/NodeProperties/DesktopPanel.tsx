@@ -1,5 +1,5 @@
 import { BookOpen, ChevronDown, Cpu, Expand, FileText, PauseCircle, Play, Trash2, Wand2, X } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { GeneratorPreset, Novel } from '../../../../types';
 import { workflowManager } from '../../../../utils/WorkflowManager';
 import { WorkflowNode, WorkflowNodeData } from '../../types';
@@ -73,7 +73,9 @@ export const DesktopPanel = ({
     const unsubscribe = workflowManager.subscribe(() => {
       forceUpdate({});
     });
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // 防抖更新函数
