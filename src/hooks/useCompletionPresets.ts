@@ -121,7 +121,7 @@ export function useCompletionPresets() {
 
   // --- 高级操作方法 ---
 
-  const saveCurrentPreset = useCallback(() => {
+  const saveCurrentPreset = useCallback((onSuccess?: () => void) => {
     const updatedPresets = completionPresets.map(p => {
       if (p.id === activePresetId) {
         return {
@@ -161,6 +161,9 @@ export function useCompletionPresets() {
       apiConfig: presetApiConfig,
     };
     localStorage.setItem(`completion_settings_draft_${activePresetId}`, JSON.stringify(draft));
+
+    // 调用成功回调
+    if (onSuccess) onSuccess();
   }, [
     completionPresets,
     activePresetId,
