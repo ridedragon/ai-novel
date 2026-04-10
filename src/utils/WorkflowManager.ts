@@ -697,6 +697,21 @@ class WorkflowManager {
           `[WorkflowManager]   Checking FIRST rule: "${rule.nextVolumeName}" (startChapter: ${rule.startChapter}, endChapter: ${rule.endChapter}, chapterTitle: ${rule.chapterTitle})`,
         );
 
+        // 核心增强：如果规则的 endChapter 已经小于当前 globalIndex，说明这是一个过期的规则，直接跳过
+        // 即使 markSplitProcessed 没有正确标记为 processed，也不会误触发
+        if (rule.endChapter !== undefined && currentChapterGlobalIndex !== undefined && currentChapterGlobalIndex > rule.endChapter) {
+          terminal.warn(
+            `[WorkflowManager]   Skipping stale rule: endChapter=${rule.endChapter} < globalIndex=${currentChapterGlobalIndex}`,
+          );
+          // 标记这个过期规则为 processed，避免下次再检查它
+          const newSplits = context.pendingSplits.map(r => 
+            r === rule ? { ...r, processed: true } : r
+          );
+          this.updateContext({ pendingSplits: newSplits });
+          terminal.log(`[WorkflowManager]   Marked stale rule as processed`);
+          return null;
+        }
+
         // 核心修复：从指定卷/指定位置启动时，禁止旧规则把执行回切到更早的卷。
         // 典型场景：用户从第二卷开始，但第一条未处理规则仍是“切到第二卷/第一卷之前的旧规则”，
         // 由于 currentChapterGlobalIndex > endChapter，会被误触发，导致当前章节写入错误分卷。
