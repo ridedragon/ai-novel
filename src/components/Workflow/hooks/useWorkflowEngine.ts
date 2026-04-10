@@ -2879,7 +2879,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           // 存储每章的章节对象，用于后续更新内容
           const chapterMap: Map<number, Chapter> = new Map();
 
-          for (let chapterIndex = 0; chapterIndex < chapterCount; chapterIndex++) {
+          // 获取已保存的循环进度
+          let startChapterIndex = node.data.currentChapterIndex || 0;
+          terminal.log(`[OutlineAndChapter] 开始生成章节，从第 ${startChapterIndex + 1} 章开始`);
+
+          for (let chapterIndex = startChapterIndex; chapterIndex < chapterCount; chapterIndex++) {
             if (!checkActive()) break;
 
             // 1. 生成大纲
@@ -2888,6 +2892,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               baseURL: finalOutlinePreset.apiConfig?.baseUrl || globalConfig.baseUrl,
               dangerouslyAllowBrowser: true,
             });
+
+            // 检查是否已经被中止
+            if (abortControllerRef.current?.signal.aborted) break;
 
             // Build outline messages using preset prompts if available
             let outlineMessages: any[] = [];
@@ -2962,7 +2969,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 >> -----------------------------------------------------------
 `);
 
-              const outlineCompletion = await outlineOpenai.chat.completions.create(outlineCompletionParams);
+              const outlineCompletion = await outlineOpenai.chat.completions.create({
+                ...outlineCompletionParams,
+                signal: abortControllerRef.current?.signal
+              });
               outlineResponse = outlineCompletion.choices[0]?.message?.content || '';
               
               terminal.log(`
@@ -3079,7 +3089,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             });
 
             // 及时更新节点的 outputEntries，以便大纲能够及时显示在自动化创作中心的大纲文件夹中
-            await syncNodeStatus(node.id, { outputEntries }, i);
+            await syncNodeStatus(node.id, { outputEntries, currentChapterIndex: chapterIndex + 1 }, i);
 
             // 2. 生成正文
             const chapterOpenai = new OpenAI({
@@ -3172,7 +3182,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 `);
 
               // 使用流式输出
-              const stream = await chapterOpenai.chat.completions.create(chapterCompletionParams);
+              const stream = await chapterOpenai.chat.completions.create({
+                ...chapterCompletionParams,
+                signal: abortControllerRef.current?.signal
+              });
               
               for await (const chunk of stream as any) {
                 const content = chunk.choices[0]?.delta?.content || '';
@@ -3253,7 +3266,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             }
           }
 
-          await syncNodeStatus(node.id, { status: 'completed', outputEntries }, i);
+          await syncNodeStatus(node.id, { status: 'completed', outputEntries, currentChapterIndex: undefined }, i);
           setEdgeAnimation(node.id, false);
           continue;
         }
@@ -4654,7 +4667,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
     stopRequestedRef.current = true;
     abortControllerRef.current?.abort();
-    workflowManager.stop();
+    workflowManager.pause(realIdx);
     setNodes(nds =>
       nds.map(n => ({
         ...n,
