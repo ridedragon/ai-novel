@@ -2891,6 +2891,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), macroCtx);
                 outlineMessages.push({ role: p.role, content: c });
               });
+              // 插入前序节点上下文，确保 AI 能获取到之前的内容
+              outlineMessages.push(...dynamicContextMessages);
             } else {
               outlineMessages = [
                 { role: 'system', content: localNovel.systemPrompt || '你是一名专业的小说大纲作者。' },
@@ -3077,6 +3079,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), macroCtx);
                 chapterMessages.push({ role: p.role, content: c });
               });
+              // 插入前序节点上下文，确保 AI 能获取到之前的内容
+              chapterMessages.push(...dynamicContextMessages);
             } else {
               chapterMessages = [
                 { role: 'system', content: localNovel.systemPrompt || '你是一名专业的小说作者。' },
