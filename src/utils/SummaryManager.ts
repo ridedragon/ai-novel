@@ -189,13 +189,22 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
     const hasChanged = newRange !== chapter.summaryRange || chapter.volumeId !== anchor.volumeId || newRangeVolume !== chapter.summaryRangeVolume;
 
     if (hasChanged) {
+      // Get actual chapter titles for the new range
+      const [newStart, newEnd] = newRange.split('-').map(Number);
+      const startChapter = storyChapters[newStart - 1];
+      const endChapter = storyChapters[newEnd - 1];
+      const startTitle = startChapter?.title || `Chapter ${newStart}`;
+      const endTitle = endChapter?.title || `Chapter ${newEnd}`;
+      
+      const newTitle = chapter.title.replace(/\s*\(\d+-\d+\)/, '').replace(/：.*$/, `：${startTitle} 到 ${endTitle}`);
+      
       terminal.log(`[FIX] 校准章节: "${chapter.title}" 位置修正为分卷 [${anchor.volumeId}] 索引 [${newRange}] 本卷索引 [${newRangeVolume}]`);
       return {
         ...chapter,
         summaryRange: newRange,
         summaryRangeVolume: newRangeVolume,
         volumeId: anchor.volumeId, // 强制纠正分卷归属，防止 UI 渲染时的跨卷漂移
-        title: chapter.title.replace(/\(\d+-\d+\)/, `(${newRange})`),
+        title: newTitle,
       };
     }
     return chapter;
@@ -422,9 +431,15 @@ export const checkAndGenerateSummary = async (
             content: summaryContent,
           };
         } else {
+          // Get actual chapter titles for the range
+          const startChapter = getSnapshotStoryChapters()[start - 1];
+          const endChapter = getSnapshotStoryChapters()[end - 1];
+          const startTitle = startChapter?.title || `Chapter ${start}`;
+          const endTitle = endChapter?.title || `Chapter ${end}`;
+          
           const newChapter: Chapter = {
             id: Date.now() + Math.floor(Math.random() * 10000),
-            title: `${type === 'small' ? '🔹小总结' : '🔸大总结'} (${rangeStr})`,
+            title: `${type === 'small' ? '🔹小总结' : '🔸大总结'}：${startTitle} 到 ${endTitle}`,
             content: summaryContent,
             subtype: subtype,
             summaryRange: rangeStr,
