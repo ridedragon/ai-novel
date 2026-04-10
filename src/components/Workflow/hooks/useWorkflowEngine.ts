@@ -1432,7 +1432,8 @@ export const useWorkflowEngine = (options: {
             // 核心修复：重写卷模式（单卷模式）下，不进行循环回跳
             // 当用户指定了目标卷且有 mode（重写/全量模式），说明是"重写单卷"，只处理一卷
             // 此时不应回跳到循环起点继续下一卷，而是在当前卷完成后直接完成循环
-            if (userSpecifiedTargetVolumeId && mode) {
+            // 但完全重写模式（full）应该允许循环回跳，以便处理所有分卷
+            if (userSpecifiedTargetVolumeId && mode && mode !== 'full') {
               console.log('[LOOP_NODE] 单卷重写模式：跳过循环回跳，直接完成循环', {
                 userSpecifiedTargetVolumeId,
                 mode,
