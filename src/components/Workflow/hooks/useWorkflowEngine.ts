@@ -3014,7 +3014,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 top_p: finalOutlinePreset.topP,
               };
               // Add optional parameters if they exist
-              const outlineMaxTokens = (finalOutlinePreset as any).maxReplyLength || (finalOutlinePreset as any).max_tokens;
+              const outlineMaxTokens = node.data.maxTokens || (finalOutlinePreset as any).maxReplyLength || (finalOutlinePreset as any).max_tokens;
               if (outlineMaxTokens) outlineCompletionParams.max_tokens = outlineMaxTokens;
               if ((finalOutlinePreset as any).frequencyPenalty) outlineCompletionParams.frequency_penalty = (finalOutlinePreset as any).frequencyPenalty;
               if ((finalOutlinePreset as any).presencePenalty) outlineCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
@@ -3089,7 +3089,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     temperature: finalOutlinePreset.temperature,
                     top_p: finalOutlinePreset.topP,
                   };
-                  const repairMaxTokens = (finalOutlinePreset as any).maxReplyLength || (finalOutlinePreset as any).max_tokens;
+                  const repairMaxTokens = node.data.maxTokens || (finalOutlinePreset as any).maxReplyLength || (finalOutlinePreset as any).max_tokens;
                   if (repairMaxTokens)
                     repairCompletionParams.max_tokens = repairMaxTokens;
                   if ((finalOutlinePreset as any).frequencyPenalty)
@@ -3227,7 +3227,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 stream: true, // 启用流式输出
               };
               // Add optional parameters if they exist
-              const chapterMaxTokens = (finalChapterPreset as any).maxReplyLength || (finalChapterPreset as any).max_tokens;
+              const chapterMaxTokens = node.data.maxTokens || (finalChapterPreset as any).maxReplyLength || (finalChapterPreset as any).max_tokens;
               if (chapterMaxTokens) chapterCompletionParams.max_tokens = chapterMaxTokens;
               if ((finalChapterPreset as any).frequencyPenalty) chapterCompletionParams.frequency_penalty = (finalChapterPreset as any).frequencyPenalty;
               if ((finalChapterPreset as any).presencePenalty) chapterCompletionParams.presence_penalty = (finalChapterPreset as any).presencePenalty;
