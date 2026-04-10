@@ -1521,6 +1521,7 @@ export function useAIGenerators() {
         ) => Promise<any>;
         handleOptimize: (id: number, content: string) => Promise<void>;
         generateAbortControllerRef: React.MutableRefObject<AbortController | null>;
+        isRegenerating?: boolean;
       }) => {
         const { apiKey, activeChapter, activeNovel, generateAbortControllerRef } = params;
 
@@ -1754,7 +1755,7 @@ export function useAIGenerators() {
               }),
             );
 
-            if (params.longTextMode) {
+            if (params.longTextMode && !params.isRegenerating) {
               const continueRunId = workflowManager.registerManualRun('continue');
               params.checkAndGenerateSummary(
                 activeChapter.id,
@@ -1764,6 +1765,16 @@ export function useAIGenerators() {
                 generateAbortControllerRef.current?.signal,
                 false,
                 continueRunId,
+              );
+            } else if (params.longTextMode && params.isRegenerating) {
+              params.checkAndGenerateSummary(
+                activeChapter.id,
+                processedFullContent,
+                params.activeNovel?.id || '',
+                undefined,
+                generateAbortControllerRef.current?.signal,
+                false,
+                null,
               );
             }
 
