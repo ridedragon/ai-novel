@@ -529,14 +529,14 @@ export const storage = {
       }
     }
 
-    // 核心修复：如果 metadata 不存在，需要初始化基础结构
-    if (!metadata) {
-      terminal.warn(`[STORAGE] 《${novel.title}》元数据完全缺失，使用初始结构`);
-      metadata = {
-        chapters: novel.chapters || [],
-        volumes: novel.volumes || [],
-      };
-    }
+    // 核心修复：如果 metadata 不存在，使用传入的 novel 对象的完整数据
+          if (!metadata) {
+            terminal.warn(`[STORAGE] 《${novel.title}》元数据完全缺失，使用传入的完整数据`);
+            metadata = {
+              chapters: novel.chapters || [],
+              volumes: novel.volumes || [],
+            };
+          }
 
     // 安全合并：只更新存在的字段，保留目标对象的现有属性
     const safeMerge = (target: any, source: any) => {
