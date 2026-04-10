@@ -7,9 +7,7 @@ import { Chapter, Novel } from '../types';
  */
 export const isSummaryChapter = (c: Chapter): boolean =>
   c.subtype === 'small_summary' ||
-  c.subtype === 'big_summary' ||
-  (typeof c.title === 'string' &&
-    (c.title.includes('🔹小总结') || c.title.includes('🔸大总结') || c.title.includes('总结')));
+  c.subtype === 'big_summary';
 
 /**
  * 核心章节排序引擎 (V5 - 物理隔离与分卷强校验版)
@@ -93,6 +91,16 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
   const remaining = chapters.filter(c => !processedIds.has(c.id));
   if (remaining.length > 0) {
     finalResult.push(...remaining);
+  }
+  
+  // 6. 确保所有原始章节都被包含
+  if (finalResult.length < chapters.length) {
+    const resultIds = new Set(finalResult.map(c => c.id));
+    const missingChapters = chapters.filter(c => !resultIds.has(c.id));
+    if (missingChapters.length > 0) {
+      terminal.warn(`[SORT SAFETY] 检测到 ${missingChapters.length} 个章节在排序过程中丢失，正在恢复...`);
+      finalResult.push(...missingChapters);
+    }
   }
 
   // 6. 防护盾：如果结果列表第一项是总结，强行将其下移
