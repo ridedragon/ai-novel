@@ -2918,7 +2918,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             if (lastChapterContent) {
               outlineMessages.push({
                 role: 'system',
-                content: `【前文回顾】：\n章节标题：${lastChapterTitle}\n\n${lastChapterContent.substring(0, 3000)}${lastChapterContent.length > 3000 ? '...' : ''}`
+                content: `【前文回顾】：\n章节标题：${lastChapterTitle}\n\n${lastChapterContent}`
               });
             }
 
@@ -3125,7 +3125,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             if (lastChapterContent) {
               chapterMessages.push({
                 role: 'system',
-                content: `【前文回顾】：\n章节标题：${lastChapterTitle}\n\n${lastChapterContent.substring(0, 3000)}${lastChapterContent.length > 3000 ? '...' : ''}`
+                content: `【前文回顾】：\n章节标题：${lastChapterTitle}\n\n${lastChapterContent}`
               });
             }
 
