@@ -137,6 +137,7 @@ export interface WorkflowStartOptions {
   startIndex: number;
   targetVolumeId?: string;
   mode?: WorkflowRestartMode;
+  keepContent?: boolean; // 是否保持现有内容不清除，检查内容不为空时跳过节点
 }
 
 export interface ExecutionNode {

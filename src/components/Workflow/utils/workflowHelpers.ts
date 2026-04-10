@@ -1,6 +1,112 @@
+import { Novel } from '../../../types';
+import { WorkflowNode } from '../types';
+
 /**
  * 共享工作流工具函数
  */
+
+/**
+ * 检查节点是否已有内容
+ * @param node 工作流节点
+ * @param novel 当前小说数据
+ * @param targetOutlineCount 大纲与正文节点预期的大纲条目数
+ * @returns 是否有内容可以跳过
+ */
+export const checkNodeHasContent = (
+  node: WorkflowNode, 
+  novel: Novel | undefined,
+  targetOutlineCount?: number
+): boolean => {
+  const { typeKey, outputEntries, folderName } = node.data;
+  
+  switch (typeKey) {
+    case 'worldview':
+      // 检查世界观节点是否有输出条目
+      if (outputEntries && outputEntries.length > 0) {
+        const hasValidContent = outputEntries.some(e => e.content && e.content.trim() !== '');
+        if (hasValidContent) return true;
+      }
+      // 同时检查小说数据中的世界观集合
+      if (novel?.worldviewSets && folderName) {
+        const matchingSet = novel.worldviewSets.find(s => s.name === folderName);
+        if (matchingSet && matchingSet.entries && matchingSet.entries.length > 0) {
+          return true;
+        }
+      }
+      break;
+
+    case 'characters':
+      // 检查角色节点是否有输出条目
+      if (outputEntries && outputEntries.length > 0) {
+        const hasValidContent = outputEntries.some(e => e.content && e.content.trim() !== '');
+        if (hasValidContent) return true;
+      }
+      // 同时检查小说数据中的角色集合
+      if (novel?.characterSets && folderName) {
+        const matchingSet = novel.characterSets.find(s => s.name === folderName);
+        if (matchingSet && matchingSet.characters && matchingSet.characters.length > 0) {
+          return true;
+        }
+      }
+      break;
+
+    case 'plotOutline':
+      // 检查粗纲节点是否有输出条目
+      if (outputEntries && outputEntries.length > 0) {
+        const hasValidContent = outputEntries.some(e => e.content && e.content.trim() !== '');
+        if (hasValidContent) return true;
+      }
+      // 同时检查小说数据中的粗纲集合
+      if (novel?.plotOutlineSets && folderName) {
+        const matchingSet = novel.plotOutlineSets.find(s => s.name === folderName);
+        if (matchingSet && matchingSet.items && matchingSet.items.length > 0) {
+          return true;
+        }
+      }
+      break;
+
+    case 'outline':
+      // 检查大纲节点是否有输出条目
+      if (outputEntries && outputEntries.length > 0) {
+        const hasValidContent = outputEntries.some(e => e.content && e.content.trim() !== '');
+        if (hasValidContent) return true;
+      }
+      // 同时检查小说数据中的大纲集合
+      if (novel?.outlineSets && folderName) {
+        const matchingSet = novel.outlineSets.find(s => s.name === folderName);
+        if (matchingSet && matchingSet.items && matchingSet.items.length > 0) {
+          return true;
+        }
+      }
+      break;
+
+    case 'chapter':
+      // 检查正文节点：检查是否有章节内容
+      if (outputEntries && outputEntries.length > 0) {
+        const hasValidContent = outputEntries.some(e => e.content && e.content.trim() !== '');
+        if (hasValidContent) return true;
+      }
+      break;
+
+    case 'outlineAndChapter':
+      // 大纲与正文复合节点：检查大纲条目数是否符合预期
+      if (targetOutlineCount !== undefined) {
+        if (outputEntries && outputEntries.length >= targetOutlineCount) {
+          const hasValidContent = outputEntries.some(e => e.content && e.content.trim() !== '');
+          if (hasValidContent) return true;
+        }
+      } else {
+        // 如果没有指定目标数量，只要有内容就可以跳过
+        if (outputEntries && outputEntries.length > 0) {
+          const hasValidContent = outputEntries.some(e => e.content && e.content.trim() !== '');
+          if (hasValidContent) return true;
+        }
+      }
+      break;
+  }
+  
+  return false;
+};
 
 /**
  * 数字解析工具 - 支持阿拉伯数字和中文数字

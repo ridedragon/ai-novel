@@ -18,7 +18,7 @@ import {
   WorkflowNodeData,
   WorkflowStartOptions,
 } from '../types';
-import { cleanAndParseJSON, extractEntries, extractTargetEndChapter, parseAnyNumber } from '../utils/workflowHelpers';
+import { cleanAndParseJSON, extractEntries, extractTargetEndChapter, parseAnyNumber, checkNodeHasContent } from '../utils/workflowHelpers';
 
 export const useWorkflowEngine = (options: {
   activeNovel: Novel | undefined;
@@ -200,6 +200,7 @@ export const useWorkflowEngine = (options: {
       startIndex: input?.startIndex ?? 0,
       targetVolumeId: input?.targetVolumeId,
       mode: input?.mode,
+      keepContent: input?.keepContent ?? false,
     };
   };
 
@@ -286,6 +287,7 @@ export const useWorkflowEngine = (options: {
     const startIndex = normalizedOpts.startIndex ?? workflowManager.getState().currentNodeIndex ?? 0;
     const mode = normalizedOpts.mode;
     const targetVolumeId = normalizedOpts.targetVolumeId;
+    const keepContent = normalizedOpts.keepContent ?? false;
     const logPrefix = isMobile ? '[Mobile Workflow]' : '[WORKFLOW]';
     terminal.log(
       `${logPrefix} 准备执行工作流, 起始索引: ${startIndex}, 模式: ${mode || 'normal'}, 目标卷: ${targetVolumeId || '未指定'}`,
@@ -379,9 +381,13 @@ export const useWorkflowEngine = (options: {
         workflowManager.clearStartVolumeLock();
       }
 
-      if (userSpecifiedTargetVolumeId && mode) {
+      if (userSpecifiedTargetVolumeId && mode && !keepContent) {
         localNovel = clearNovelContentByVolumes(localNovel, [userSpecifiedTargetVolumeId], mode === 'full');
         await updateLocalAndGlobal(localNovel);
+      }
+      
+      if (keepContent) {
+        terminal.log(`${logPrefix} 保持现有内容模式已启用，不会清除文件夹内容`);
       }
 
       const checkActive = () => {
@@ -879,6 +885,17 @@ export const useWorkflowEngine = (options: {
         }
 
         const node = nodesRef.current.find(n => n.id === sortedNodes[i].id) || sortedNodes[i];
+        
+        // 保持内容模式：检查节点是否已有内容，有则跳过
+        if (keepContent) {
+          const hasContent = checkNodeHasContent(node, localNovel);
+          if (hasContent) {
+            terminal.log(`${logPrefix} 节点已有内容，跳过执行: ${node.data.label} (类型: ${node.data.typeKey})`);
+            await syncNodeStatus(node.id, { status: 'completed' }, i);
+            setEdgeAnimation(node.id, false);
+            continue;
+          }
+        }
         
         // 补丁：如果是从 outlineAndChapter 节点开始执行，强制重置 currentChapterIndex 为 0
         if (i === startIndex && node.data.typeKey === 'outlineAndChapter') {
