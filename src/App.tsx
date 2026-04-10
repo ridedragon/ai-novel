@@ -1261,9 +1261,27 @@ function App() {
             const chapter = novelData.chapters.find(c => c.id === chapterId);
             if (!chapter || !novelData.activeNovel) return;
 
-            // 清空当前章节内容，准备重新生成
+            // 创建一个清空了内容的章节对象，专门用于重新生成
+            const regenerateChapter = {
+              ...chapter,
+              content: '',
+              versions: undefined,
+              activeVersionId: undefined
+            };
+
+            // 先更新章节状态，清空内容和版本
             novelData.setChapters(prev =>
-              prev.map(c => (c.id === chapterId ? { ...c, content: '' } : c)),
+              prev.map(c => {
+                if (c.id === chapterId) {
+                  return {
+                    ...c,
+                    content: '',
+                    versions: undefined,
+                    activeVersionId: undefined
+                  };
+                }
+                return c;
+              }),
             );
 
             // 创建 abort controller ref
@@ -1271,9 +1289,9 @@ function App() {
               current: null as AbortController | null
             };
 
-            // 使用 AI 生成新内容
+            // 使用 AI 生成新内容，传递清空了内容的章节对象
             await aiGenerators.handleGenerate({
-              activeChapter: chapter,
+              activeChapter: regenerateChapter,
               activeNovel: novelData.activeNovel,
               activeOutlineSetId: novelData.activeOutlineSetId,
               apiKey: config.apiKey,
@@ -1282,7 +1300,7 @@ function App() {
               includeFullOutlineInAutoWrite: false,
               systemPrompt: novelData.activeNovel.systemPrompt || '',
               prompts: completion.prompts,
-              userPrompt: `请重新生成 ${chapter.title} 的内容，保持风格一致，内容连贯。`,
+              userPrompt: `请重新生成 ${regenerateChapter.title} 的内容，保持风格一致，内容连贯。`,
               temperature: completion.temperature,
               topP: completion.topP,
               topK: completion.topK,
@@ -1301,10 +1319,10 @@ function App() {
               onNovelsUpdate: novelData.setNovels,
               setChapters: novelData.setChapters,
               onSuccess: () => {
-                terminal.log(`[Regenerate] 章节 ${chapter.title} 重新生成成功`);
+                terminal.log(`[Regenerate] 章节 ${regenerateChapter.title} 重新生成成功`);
               },
               onError: (msg: string) => {
-                terminal.error(`[Regenerate] 章节 ${chapter.title} 重新生成失败: ${msg}`);
+                terminal.error(`[Regenerate] 章节 ${regenerateChapter.title} 重新生成失败: ${msg}`);
                 setDialog({ isOpen: true, type: 'alert', title: '错误', message: msg, onConfirm: closeDialog });
               },
               getActiveScripts,
