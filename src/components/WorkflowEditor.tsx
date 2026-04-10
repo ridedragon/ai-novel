@@ -84,6 +84,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const [selectedStartIndex, setSelectedStartIndex] = useState(0);
   const [selectedStartVolumeId, setSelectedStartVolumeId] = useState('');
   const [restartMode, setRestartMode] = useState<WorkflowRestartMode>('volume');
+  const [keepContent, setKeepContent] = useState(false);
   const lastClickTimeRef = useRef<number>(0);
 
   const nodesRef = useRef<WorkflowNode[]>([]);
@@ -263,9 +264,12 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       alert('当前工作流没有可执行节点。');
       return;
     }
-    setSelectedStartIndex(Math.min(selectedStartIndex, Math.max(orderedNodes.length - 1, 0)));
+    const maxIndex = Math.max(orderedNodes.length - 1, 0);
+    const newIndex = Math.min(selectedStartIndex, maxIndex);
+    setSelectedStartIndex(newIndex);
     setSelectedStartVolumeId(activeNovel?.volumes?.[0]?.id || '');
     setRestartMode(hasLoopNode ? 'volume' : 'volume');
+    setKeepContent(false);
     setShowStartWorkflowModal(true);
   }, [nodes.length, orderedNodes, selectedStartIndex, activeNovel, hasLoopNode]);
 
@@ -284,6 +288,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         startIndex: firstLoopRestartIndex,
         targetVolumeId: selectedStartVolumeId,
         mode: 'full',
+        keepContent: keepContent,
       });
       setShowStartWorkflowModal(false);
       return;
@@ -293,9 +298,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       startIndex: selectedStartIndex,
       targetVolumeId: selectedStartVolumeId,
       mode: 'volume',
+      keepContent: keepContent,
     });
     setShowStartWorkflowModal(false);
-  }, [selectedStartVolumeId, restartMode, hasLoopNode, firstLoopRestartIndex, runWorkflow, selectedStartIndex]);
+  }, [selectedStartVolumeId, restartMode, hasLoopNode, firstLoopRestartIndex, runWorkflow, selectedStartIndex, keepContent]);
 
   // 加载预设
   useEffect(() => {
@@ -1134,6 +1140,32 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                       </div>
                     </div>
                   )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">内容处理</label>
+                  <button
+                    type="button"
+                    onClick={() => setKeepContent(!keepContent)}
+                    className={`w-full text-left rounded-2xl border px-4 py-4 transition-colors ${
+                      keepContent
+                        ? 'border-blue-500 bg-blue-500/10'
+                        : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-sm font-bold text-gray-100">保持现有内容</div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          不清除文件夹内容，检查节点内容不为空时跳过执行，帮助节省 token。
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          支持：世界观、角色集、粗纲、大纲、正文、大纲与正文生成节点
+                        </p>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border ${keepContent ? 'border-blue-400 bg-blue-400' : 'border-gray-500'}`} />
+                    </div>
+                  </button>
                 </div>
               </div>
 
