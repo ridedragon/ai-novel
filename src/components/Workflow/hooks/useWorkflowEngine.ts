@@ -3391,9 +3391,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           }).length;
           
           // 检查是否所有卷都已完成
-          const volumePlans = workflowManager.getVolumePlans();
+          const volumePlans3 = workflowManager.getVolumePlans();
           const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
-          const isLastVolume = currentVolumeIndex >= volumePlans.length - 1;
+          const isLastVolume = currentVolumeIndex >= volumePlans3.length - 1;
           
           // 重写卷模式：当前卷完成后停止
           if (userSpecifiedTargetVolumeId && mode && mode !== 'full' && outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
@@ -4006,8 +4006,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 }).length;
                 
                 // 检查是否所有卷都已完成
-                const volumePlans = workflowManager.getVolumePlans();
-                const isLastVolume = currentVolumeIndex >= volumePlans.length - 1;
+                const volumePlans2 = workflowManager.getVolumePlans();
+                const isLastVolume = currentVolumeIndex >= volumePlans2.length - 1;
                 
                 if (!shouldSwitch) {
                   // 重写卷模式：当前卷完成后停止
