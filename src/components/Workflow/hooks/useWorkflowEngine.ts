@@ -2951,6 +2951,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
           // 获取已保存的循环进度
           let startChapterIndex = node.data.currentChapterIndex || 0;
+          let currentChapterIndex = startChapterIndex;
           terminal.log(`[OutlineAndChapter] 开始生成章节，从第 ${startChapterIndex + 1} 章开始`);
 
           for (let chapterIndex = startChapterIndex; chapterIndex < chapterCount; chapterIndex++) {
@@ -3161,7 +3162,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             });
 
             // 及时更新节点的 outputEntries，以便大纲能够及时显示在自动化创作中心的大纲文件夹中
-            await syncNodeStatus(node.id, { outputEntries, currentChapterIndex: chapterIndex + 1 }, i);
+            currentChapterIndex = chapterIndex + 1;
+            await syncNodeStatus(node.id, { outputEntries, currentChapterIndex }, i);
 
             // 2. 生成正文
             const chapterOpenai = new OpenAI({
@@ -3339,7 +3341,13 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             }
           }
 
-          await syncNodeStatus(node.id, { status: 'completed', outputEntries, currentChapterIndex: undefined }, i);
+          // 只有在所有章节都完成时才清除currentChapterIndex
+          if (currentChapterIndex >= chapterCount) {
+            await syncNodeStatus(node.id, { status: 'completed', outputEntries, currentChapterIndex: undefined }, i);
+          } else {
+            // 保留当前进度，以便下次继续
+            await syncNodeStatus(node.id, { status: 'completed', outputEntries, currentChapterIndex }, i);
+          }
           setEdgeAnimation(node.id, false);
           continue;
         }
