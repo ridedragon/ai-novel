@@ -689,6 +689,9 @@ export const useWorkflowEngine = (options: {
             if (prevNode.data.splitRules && (prevNode.data.splitRules as any[]).length > 0) {
               workflowManager.setPendingSplits(prevNode.data.splitRules as any[]);
             }
+            if (prevNode.data.volumes && (prevNode.data.volumes as any[]).length > 0) {
+              workflowManager.setVolumePlans(prevNode.data.volumes as any[]);
+            }
             // 只有当用户没有指定目标卷时，才使用节点的 targetVolumeId
             if (prevNode.data.targetVolumeId && !userSpecifiedTargetVolumeId) {
               workflowManager.setActiveVolumeAnchor(prevNode.data.targetVolumeId as string);
@@ -897,19 +900,28 @@ export const useWorkflowEngine = (options: {
           }
         }
         
-        // 补丁：如果是从 outlineAndChapter 节点开始执行，强制重置 currentChapterIndex 为 0
+        // 修复：如果是从 outlineAndChapter 节点开始执行，只在节点状态是 pending 时才重置 currentChapterIndex
+        // 如果节点已经有内容或状态不是 pending，保留已有的进度
         if (i === startIndex && node.data.typeKey === 'outlineAndChapter') {
-          terminal.log(`[PATCH] 从大纲与正文节点开始执行，强制重置 currentChapterIndex 为 0`);
-          // 更新 nodesRef.current 中的节点
-          nodesRef.current = nodesRef.current.map(n => 
-            n.id === node.id ? { ...n, data: { ...n.data, currentChapterIndex: 0 } } : n
-          );
-          // 更新 sortedNodes 中的节点
-          sortedNodes = sortedNodes.map(sn => 
-            sn.id === node.id ? { ...sn, data: { ...sn.data, currentChapterIndex: 0 } } : sn
-          );
-          // 同时也更新 setNodes
-          setNodes(nodesRef.current);
+          // 检查节点是否已经有进度（currentChapterIndex > 0 或 已经有 outputEntries）
+          const hasExistingProgress = (node.data.currentChapterIndex && node.data.currentChapterIndex > 0) || 
+                                     (node.data.outputEntries && node.data.outputEntries.length > 0);
+          const isNodePending = node.data.status === 'pending' || !node.data.status;
+          
+          if (isNodePending && !hasExistingProgress) {
+            // 只有当节点是全新的（pending且无进度）时，才重置为0
+            terminal.log(`[PATCH] 从全新的大纲与正文节点开始执行，重置 currentChapterIndex 为 0`);
+            nodesRef.current = nodesRef.current.map(n => 
+              n.id === node.id ? { ...n, data: { ...n.data, currentChapterIndex: 0 } } : n
+            );
+            sortedNodes = sortedNodes.map(sn => 
+              sn.id === node.id ? { ...sn, data: { ...sn.data, currentChapterIndex: 0 } } : sn
+            );
+            setNodes(nodesRef.current);
+          } else if (hasExistingProgress) {
+            // 如果已经有进度，保留原有进度
+            terminal.log(`[PATCH] 从大纲与正文节点继续执行，保留 currentChapterIndex = ${node.data.currentChapterIndex || 0}`);
+          }
         }
         
         workflowManager.updateProgress(i, node.id);
