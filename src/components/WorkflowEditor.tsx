@@ -309,7 +309,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       plotOutline: defaultPlotOutlinePresets,
       optimize: defaultOptimizePresets,
       analysis: defaultAnalysisPresets,
-      completion: [],
+      completion: defaultPresets,
       chat: [],
       generator: [],
     };
