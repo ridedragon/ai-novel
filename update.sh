@@ -32,7 +32,8 @@ if git pull; then
     echo -e "${YELLOW}正在检查并更新依赖...${NC}"
     if npm install; then
         echo -e "${GREEN}依赖更新完成！${NC}"
-        echo -e "${GREEN}现在你可以运行 ./start.sh 来启动程序了。${NC}"
+        echo -e "${YELLOW}正在自动启动程序...${NC}"
+        ./start.sh
     else
         echo -e "${RED}依赖更新失败。请检查网络连接或 npm 配置。${NC}"
     fi
@@ -53,7 +54,8 @@ else
         echo -e "${YELLOW}正在检查并更新依赖...${NC}"
         if npm install; then
             echo -e "${GREEN}依赖更新完成！${NC}"
-            echo -e "${GREEN}现在你可以运行 ./start.sh 来启动程序了。${NC}"
+            echo -e "${YELLOW}正在自动启动程序...${NC}"
+            ./start.sh
         else
             echo -e "${RED}依赖更新失败。请检查网络连接或 npm 配置。${NC}"
         fi
@@ -75,9 +77,13 @@ else
                 echo -e "${GREEN}强制重置成功。${NC}"
                 
                 echo -e "${YELLOW}正在更新依赖...${NC}"
-                npm install
-                
-                echo -e "${GREEN}更新完成！请运行 ./start.sh 启动。${NC}"
+                if npm install; then
+                    echo -e "${GREEN}依赖更新完成！${NC}"
+                    echo -e "${YELLOW}正在自动启动程序...${NC}"
+                    ./start.sh
+                else
+                    echo -e "${RED}依赖更新失败。请检查网络连接或 npm 配置。${NC}"
+                fi
             else
                 echo -e "${YELLOW}原始地址重置失败，尝试使用国内镜像...${NC}"
                 # 尝试使用 Gitee 镜像
@@ -88,9 +94,13 @@ else
                     git remote set-url origin "$REMOTE_URL"
                     
                     echo -e "${YELLOW}正在更新依赖...${NC}"
-                    npm install
-                    
-                    echo -e "${GREEN}更新完成！请运行 ./start.sh 启动。${NC}"
+                    if npm install; then
+                        echo -e "${GREEN}依赖更新完成！${NC}"
+                        echo -e "${YELLOW}正在自动启动程序...${NC}"
+                        ./start.sh
+                    else
+                        echo -e "${RED}依赖更新失败。请检查网络连接或 npm 配置。${NC}"
+                    fi
                 else
                     echo -e "${RED}强制重置失败。请尝试手动删除项目并重新 clone。${NC}"
                 fi
