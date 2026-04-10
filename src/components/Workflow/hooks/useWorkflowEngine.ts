@@ -3185,7 +3185,44 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             // 章节内容已经在流式输出时实时更新
             lastChapterContent = chapterResponse;
 
+            // 触发章节完成回调，以支持总结生成
+            if (globalConfig.onChapterComplete) {
+              const currentChapter = chapterMap.get(chapterIndex);
+              if (currentChapter) {
+                terminal.log(`[OutlineAndChapter] 触发章节完成回调: id=${currentChapter.id}, title=${currentChapter.title}`);
+                const summaryResult = await globalConfig.onChapterComplete(
+                  currentChapter.id,
+                  currentChapter.content,
+                  localNovel,
+                  false // forceFinal = false，常规章节完成
+                );
+                if (summaryResult?.chapters) {
+                  localNovel = summaryResult;
+                  await updateLocalAndGlobal(localNovel);
+                }
+              }
+            }
+
             await new Promise(resolve => setTimeout(resolve, 100));
+          }
+
+          // 循环结束后，对最后一章触发一次强制总结检查
+          if (globalConfig.onChapterComplete && chapterMap.size > 0) {
+            const lastChapterIndex = chapterCount - 1;
+            const lastChapter = chapterMap.get(lastChapterIndex);
+            if (lastChapter) {
+              terminal.log(`[OutlineAndChapter] 触发最终总结检查: id=${lastChapter.id}, title=${lastChapter.title}`);
+              const summaryResult = await globalConfig.onChapterComplete(
+                lastChapter.id,
+                lastChapter.content,
+                localNovel,
+                true // forceFinal = true，强制触发总结检查
+              );
+              if (summaryResult?.chapters) {
+                localNovel = summaryResult;
+                await updateLocalAndGlobal(localNovel);
+              }
+            }
           }
 
           await syncNodeStatus(node.id, { status: 'completed', outputEntries }, i);
