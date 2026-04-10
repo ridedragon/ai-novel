@@ -1495,8 +1495,8 @@ export const useWorkflowEngine = (options: {
                     };
 
                     // 清除创作类节点的输出，以便重新生成
-                    // 修复：扩大清空范围，包含世界观、角色、粗纲、大纲和灵感节点
-                    if (['worldview', 'characters', 'plotOutline', 'outline', 'inspiration'].includes(typeKey)) {
+                    // 修复：扩大清空范围，包含世界观、角色、粗纲、大纲、灵感和大纲与正文节点
+                    if (['worldview', 'characters', 'plotOutline', 'outline', 'inspiration', 'outlineAndChapter'].includes(typeKey)) {
                       updates.outputEntries = [];
                     }
 
@@ -1504,6 +1504,11 @@ export const useWorkflowEngine = (options: {
                     if (typeKey === 'chapter' && nextVolumeId) {
                       updates.targetVolumeId = nextVolumeId;
                       updates.targetVolumeName = nextFolderName;
+                    }
+                    
+                    // 清除大纲与正文节点的 currentChapterIndex，让下一卷从头开始
+                    if (typeKey === 'outlineAndChapter') {
+                      updates.currentChapterIndex = 0;
                     }
 
                     // 更新节点的 folderName 为下一个分卷名称（适用于所有需要关联目录的节点）
