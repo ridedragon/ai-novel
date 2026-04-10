@@ -427,6 +427,9 @@ export const storage = {
     const startTime = Date.now();
     terminal.log(`[STORAGE] 正在按需加载《${novel.title}》的数据 (原子化并行模式)...`);
 
+    // 创建一个安全的小说副本，避免修改传入的原始对象
+    const loadedNovel = { ...novel };
+
     // 1. 并行读取所有潜在的存储块 (增加 API 回退)
     let [metadata, wv, char, out, plot, ref, insp] = await Promise.all([
       get<any>(`${METADATA_PREFIX}${novel.id}`),
@@ -519,7 +522,7 @@ export const storage = {
       }
     }
 
-    // 如果 metadata 缺失，尝试从远程获取，否则使用传入的章节数据
+    // 如果 metadata 缺失，尝试从远程获取
     if (!metadata) {
       terminal.log(`[STORAGE] 本地未找到《${novel.title}》的元数据，尝试从远程获取...`);
       metadata = await fetchFromApi<any>(`${METADATA_PREFIX}${novel.id}`);
@@ -529,89 +532,50 @@ export const storage = {
       }
     }
 
-    // 核心修复：如果 metadata 不存在，使用传入的 novel 对象的完整数据
-          if (!metadata) {
-            terminal.warn(`[STORAGE] 《${novel.title}》元数据完全缺失，使用传入的完整数据`);
-            metadata = {
-              chapters: novel.chapters || [],
-              volumes: novel.volumes || [],
-            };
-          }
+    // 应用数据到小说对象 - 关键修复：确保所有数据都正确加载
+    // 1. 首先初始化所有字段为默认值
+    loadedNovel.chapters = loadedNovel.chapters || [];
+    loadedNovel.volumes = loadedNovel.volumes || [];
+    loadedNovel.worldviewSets = loadedNovel.worldviewSets || [];
+    loadedNovel.characterSets = loadedNovel.characterSets || [];
+    loadedNovel.outlineSets = loadedNovel.outlineSets || [];
+    loadedNovel.plotOutlineSets = loadedNovel.plotOutlineSets || [];
+    loadedNovel.referenceFiles = loadedNovel.referenceFiles || [];
+    loadedNovel.referenceFolders = loadedNovel.referenceFolders || [];
+    loadedNovel.inspirationSets = loadedNovel.inspirationSets || [];
 
-    // 安全合并：只更新存在的字段，保留目标对象的现有属性
-    const safeMerge = (target: any, source: any) => {
-      if (!source || typeof source !== 'object') return;
-      Object.keys(source).forEach(key => {
-        if (source[key] !== undefined) {
-          target[key] = source[key];
-        }
-      });
-    };
-
-    // 保存原始章节数据用于后续加载
-    const originalChapters = novel.chapters || [];
-    const originalVolumes = novel.volumes || [];
-
-    // 创建章节ID到原始章节的映射
-    const originalChapterMap = new Map(originalChapters.map(ch => [ch.id, ch]));
-
-    // 应用元数据到小说对象，但不覆盖章节内容
-    if (metadata && metadata.chapters) {
-      // 合并章节信息，但保留原始章节的内容
-      novel.chapters = metadata.chapters.map((metaChapter: any) => {
-        const originalChapter = originalChapterMap.get(metaChapter.id);
-        if (originalChapter) {
-          // 保留原始章节的内容，只更新元数据字段
-          return {
-            ...originalChapter,
-            ...metaChapter,
-            content: originalChapter.content, // 关键：保留原始内容！
-          };
-        }
-        return metaChapter;
-      });
-    }
-    
-    // 合并其他元数据（volumes等）
-    if (metadata && metadata.volumes) {
-      novel.volumes = metadata.volumes;
+    // 2. 从 metadata 加载章节和分卷
+    if (metadata) {
+      if (metadata.chapters && metadata.chapters.length > 0) {
+        loadedNovel.chapters = metadata.chapters;
+      }
+      if (metadata.volumes && metadata.volumes.length > 0) {
+        loadedNovel.volumes = metadata.volumes;
+      }
     }
 
-    // --- 双轨兼容逻辑：如果新 Key 有值则优先使用，否则沿用 Metadata 里的旧值 (实现无损平滑迁移) ---
-    // 核心修复：确保所有字段都有默认值，防止文件夹丢失
-    novel.worldviewSets = wv || novel.worldviewSets || [];
-    novel.characterSets = char || novel.characterSets || [];
-    novel.outlineSets = out || novel.outlineSets || [];
-    novel.plotOutlineSets = plot || novel.plotOutlineSets || [];
+    // 3. 从拆分存储块加载其他数据
+    if (wv && wv.length > 0) loadedNovel.worldviewSets = wv;
+    if (char && char.length > 0) loadedNovel.characterSets = char;
+    if (out && out.length > 0) loadedNovel.outlineSets = out;
+    if (plot && plot.length > 0) loadedNovel.plotOutlineSets = plot;
     if (ref) {
-      novel.referenceFiles = ref.f || [];
-      novel.referenceFolders = ref.d || [];
-    } else {
-      novel.referenceFiles = novel.referenceFiles || [];
-      novel.referenceFolders = novel.referenceFolders || [];
+      if (ref.f && ref.f.length > 0) loadedNovel.referenceFiles = ref.f;
+      if (ref.d && ref.d.length > 0) loadedNovel.referenceFolders = ref.d;
     }
-    novel.inspirationSets = insp || novel.inspirationSets || [];
+    if (insp && insp.length > 0) loadedNovel.inspirationSets = insp;
 
     // 初始化所有脏检查缓存，防止首次保存时触发误判
-    lastSavedMetadataCache.set(novel.id, this._getNovelMetadataJson(novel));
-    lastSavedWorldviewCache.set(novel.id, this._getWorldviewJson(novel));
-    lastSavedCharactersCache.set(novel.id, this._getCharactersJson(novel));
-    lastSavedOutlineCache.set(novel.id, this._getOutlineJson(novel));
-    lastSavedPlotOutlineCache.set(novel.id, this._getPlotOutlineJson(novel));
-    lastSavedReferenceCache.set(novel.id, this._getReferenceJson(novel));
-    lastSavedInspirationCache.set(novel.id, this._getInspirationJson(novel));
+    lastSavedMetadataCache.set(loadedNovel.id, this._getNovelMetadataJson(loadedNovel));
+    lastSavedWorldviewCache.set(loadedNovel.id, this._getWorldviewJson(loadedNovel));
+    lastSavedCharactersCache.set(loadedNovel.id, this._getCharactersJson(loadedNovel));
+    lastSavedOutlineCache.set(loadedNovel.id, this._getOutlineJson(loadedNovel));
+    lastSavedPlotOutlineCache.set(loadedNovel.id, this._getPlotOutlineJson(loadedNovel));
+    lastSavedReferenceCache.set(loadedNovel.id, this._getReferenceJson(loadedNovel));
+    lastSavedInspirationCache.set(loadedNovel.id, this._getInspirationJson(loadedNovel));
 
     // 2. 加载章节正文 (保持并行，增加远程回退)
-    const contentPromises = (novel.chapters || []).map(async chapter => {
-      // 关键修改：如果内存中已经有内容，优先使用内存中的内容
-      // 但需要确保缓存是最新的
-      if (chapter.content && lastSavedContentCache.has(chapter.id)) {
-        // 如果缓存中的内容和内存中的内容一致，直接返回
-        if (lastSavedContentCache.get(chapter.id) === chapter.content) {
-          return;
-        }
-      }
-
+    const contentPromises = (loadedNovel.chapters || []).map(async chapter => {
       // 尝试从存储加载内容
       const localContent = await get<string>(`chapter_content_${chapter.id}`);
       let content: string = localContent || '';
@@ -637,19 +601,17 @@ export const storage = {
         });
       }
 
-      // 关键修改：只有当内存中没有内容时，才用存储中的内容覆盖
-      if (!chapter.content || chapter.content.length === 0) {
-        chapter.content = content;
-      }
+      // 应用内容到章节
+      chapter.content = content;
       // 更新缓存
       lastSavedContentCache.set(chapter.id, chapter.content);
     });
 
     await Promise.all(contentPromises);
     terminal.log(
-      `[STORAGE] 《${novel.title}》加载完成 (${novel.chapters?.length || 0} 章节)，耗时: ${Date.now() - startTime}ms`,
+      `[STORAGE] 《${loadedNovel.title}》加载完成 (${loadedNovel.chapters?.length || 0} 章节)，耗时: ${Date.now() - startTime}ms`,
     );
-    return novel;
+    return loadedNovel;
   },
 
   // 终极优化：原子化存储 + 真正并行化，目标将日常保存压缩至 30ms 以内
