@@ -3375,28 +3375,38 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             await syncNodeStatus(node.id, { status: 'completed', outputEntries, currentChapterIndex }, i);
           }
           
-          // 核心修复：完全重写模式下，即使当前卷的所有章节已生成，工作流也应该继续执行后续节点
-          // 只有在"重写卷模式"（mode !== 'full'）下，才主动停止工作流
+          // 核心修复：检查是否所有卷都已完成，无论模式如何
           let shouldStopForVolumeComplete = false;
-          if (userSpecifiedTargetVolumeId && mode && mode !== 'full') {
-            const effectiveOutlineSet = localNovel.outlineSets?.find(s => {
-              const volTitle = localNovel.volumes?.find(v => v.id === (workflowManager.getActiveVolumeAnchor() || ''))?.title;
-              return s.name === volTitle;
-            });
-            const outlineItemCount = effectiveOutlineSet?.items?.length || 0;
-            const currentVolumeChapters = (localNovel.chapters || []).filter(c => {
-              return c.volumeId === (workflowManager.getActiveVolumeAnchor() || '') && 
-                     (!c.subtype || c.subtype === 'story') && 
-                     c.content && c.content.trim().length > 0;
-            }).length;
-            
-            if (outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
-              shouldStopForVolumeComplete = true;
-              terminal.log(`[WORKFLOW] 重写卷模式: Volume ${workflowManager.getCurrentVolumeIndex()} complete: all ${currentVolumeChapters}/${outlineItemCount} outline items generated, stopping workflow`);
-            }
+          
+          // 检查当前卷是否完成
+          const effectiveOutlineSet = localNovel.outlineSets?.find(s => {
+            const volTitle = localNovel.volumes?.find(v => v.id === (workflowManager.getActiveVolumeAnchor() || ''))?.title;
+            return s.name === volTitle;
+          });
+          const outlineItemCount = effectiveOutlineSet?.items?.length || 0;
+          const currentVolumeChapters = (localNovel.chapters || []).filter(c => {
+            return c.volumeId === (workflowManager.getActiveVolumeAnchor() || '') && 
+                   (!c.subtype || c.subtype === 'story') && 
+                   c.content && c.content.trim().length > 0;
+          }).length;
+          
+          // 检查是否所有卷都已完成
+          const volumePlans = workflowManager.getVolumePlans();
+          const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
+          const isLastVolume = currentVolumeIndex >= volumePlans.length - 1;
+          
+          // 重写卷模式：当前卷完成后停止
+          if (userSpecifiedTargetVolumeId && mode && mode !== 'full' && outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
+            shouldStopForVolumeComplete = true;
+            terminal.log(`[WORKFLOW] 重写卷模式: Volume ${currentVolumeIndex} complete: all ${currentVolumeChapters}/${outlineItemCount} outline items generated, stopping workflow`);
+          }
+          // 完全重写模式：所有卷完成后停止
+          else if (mode === 'full' && isLastVolume && outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
+            shouldStopForVolumeComplete = true;
+            terminal.log(`[WORKFLOW] 完全重写模式: All volumes complete: Volume ${currentVolumeIndex} (last volume) finished, stopping workflow`);
           }
           
-          if (shouldStopForVolumeComplete && mode && mode !== 'full') {
+          if (shouldStopForVolumeComplete) {
             terminal.log(`[WORKFLOW] Volume complete (no next volume), stopping workflow at node ${node.id}`);
             setEdgeAnimation(node.id, false);
             workflowManager.stop();
@@ -3979,28 +3989,36 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
                 console.log(`[VOLUME_SWITCH_CHECK] Final result: shouldSwitch=${shouldSwitch}, nextVolumeName="${nextVolumeName}"`);
                 
-                // 核心修复：重写卷模式下的工作流停止检测
-                // 只有在"重写卷模式"（通过"从指定位置启动工作流"功能启用）下才主动停止工作流
-                // 正常模式下，即使当前卷的所有章节已生成，工作流仍应继续执行后续节点
+                // 核心修复：工作流停止检测
+                // 检查是否所有卷都已完成，无论模式如何
                 let shouldStopForVolumeComplete = false;
-                if (!shouldSwitch && userSpecifiedTargetVolumeId && mode && mode !== 'full') {
-                  // 仅在重写卷模式下检查：当前卷的所有大纲项是否都已生成完成
-                  // 使用 currentSet（通过 outlineSetId 找到的真正关联大纲集），而不是通过卷名称匹配
-                  const effectiveOutlineSet = currentSet || localNovel.outlineSets?.find(s => {
-                    const volTitle = localNovel.volumes?.find(v => v.id === (workflowManager.getActiveVolumeAnchor() || ''))?.title;
-                    return s.name === volTitle;
-                  });
-                  const outlineItemCount = effectiveOutlineSet?.items?.length || 0;
-                  const currentVolumeChapters = (localNovel.chapters || []).filter(c => {
-                    return c.volumeId === (workflowManager.getActiveVolumeAnchor() || '') && 
-                           (!c.subtype || c.subtype === 'story') && 
-                           c.content && c.content.trim().length > 0;
-                  }).length;
-                  
-                  // 重写卷模式下，当前卷的所有大纲项都已生成完成，主动停止工作流
-                  if (outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
+                
+                // 检查当前卷是否完成
+                const effectiveOutlineSet = currentSet || localNovel.outlineSets?.find(s => {
+                  const volTitle = localNovel.volumes?.find(v => v.id === (workflowManager.getActiveVolumeAnchor() || ''))?.title;
+                  return s.name === volTitle;
+                });
+                const outlineItemCount = effectiveOutlineSet?.items?.length || 0;
+                const currentVolumeChapters = (localNovel.chapters || []).filter(c => {
+                  return c.volumeId === (workflowManager.getActiveVolumeAnchor() || '') && 
+                         (!c.subtype || c.subtype === 'story') && 
+                         c.content && c.content.trim().length > 0;
+                }).length;
+                
+                // 检查是否所有卷都已完成
+                const volumePlans = workflowManager.getVolumePlans();
+                const isLastVolume = currentVolumeIndex >= volumePlans.length - 1;
+                
+                if (!shouldSwitch) {
+                  // 重写卷模式：当前卷完成后停止
+                  if (userSpecifiedTargetVolumeId && mode && mode !== 'full' && outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
                     shouldStopForVolumeComplete = true;
                     terminal.log(`[WORKFLOW] 重写卷模式: Volume ${currentVolumeIndex} complete: all ${currentVolumeChapters}/${outlineItemCount} outline items generated, stopping workflow`);
+                  }
+                  // 完全重写模式：所有卷完成后停止
+                  else if (mode === 'full' && isLastVolume && outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
+                    shouldStopForVolumeComplete = true;
+                    terminal.log(`[WORKFLOW] 完全重写模式: All volumes complete: Volume ${currentVolumeIndex} (last volume) finished, stopping workflow`);
                   }
                 }
                 
