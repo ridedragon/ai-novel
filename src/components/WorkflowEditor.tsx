@@ -84,7 +84,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
   const [selectedStartIndex, setSelectedStartIndex] = useState(0);
   const [selectedStartVolumeId, setSelectedStartVolumeId] = useState('');
   const [restartMode, setRestartMode] = useState<WorkflowRestartMode>('volume');
-  const [keepContent, setKeepContent] = useState(false);
+  const [keepContent, setKeepContent] = useState({
+    enabled: false,
+    types: [] as string[]
+  });
   const lastClickTimeRef = useRef<number>(0);
 
   const nodesRef = useRef<WorkflowNode[]>([]);
@@ -269,7 +272,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     setSelectedStartIndex(newIndex);
     setSelectedStartVolumeId(activeNovel?.volumes?.[0]?.id || '');
     setRestartMode(hasLoopNode ? 'volume' : 'volume');
-    setKeepContent(false);
+    setKeepContent({ enabled: false, types: [] });
     setShowStartWorkflowModal(true);
   }, [nodes.length, orderedNodes, selectedStartIndex, activeNovel, hasLoopNode]);
 
@@ -1144,28 +1147,63 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-300">内容处理</label>
-                  <button
-                    type="button"
-                    onClick={() => setKeepContent(!keepContent)}
-                    className={`w-full text-left rounded-2xl border px-4 py-4 transition-colors ${
-                      keepContent
-                        ? 'border-blue-500 bg-blue-500/10'
-                        : 'border-gray-700 bg-gray-800 hover:border-gray-600'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-4">
+                  <div className="rounded-2xl border border-gray-700 bg-gray-800 p-4">
+                    <div className="flex items-center justify-between gap-4 mb-4">
                       <div>
                         <div className="text-sm font-bold text-gray-100">保持现有内容</div>
                         <p className="text-xs text-gray-400 mt-1">
                           不清除文件夹内容，检查节点内容不为空时跳过执行，帮助节省 token。
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          支持：世界观、角色集、粗纲、大纲、正文、大纲与正文生成节点
-                        </p>
                       </div>
-                      <div className={`w-4 h-4 rounded-full border ${keepContent ? 'border-blue-400 bg-blue-400' : 'border-gray-500'}`} />
+                      <button
+                        type="button"
+                        onClick={() => setKeepContent({ enabled: !keepContent.enabled, types: keepContent.types })}
+                        className={`w-4 h-4 rounded-full border transition-colors ${
+                          keepContent.enabled
+                            ? 'border-blue-400 bg-blue-400'
+                            : 'border-gray-500'
+                        }`}
+                      />
                     </div>
-                  </button>
+                    
+                    {keepContent.enabled && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-gray-400">选择要保持内容的类型：</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { value: 'worldview', label: '世界观' },
+                            { value: 'characters', label: '角色集' },
+                            { value: 'plotOutline', label: '粗纲' },
+                            { value: 'outline', label: '大纲' },
+                            { value: 'chapter', label: '正文' },
+                            { value: 'outlineAndChapter', label: '大纲与正文' }
+                          ].map((type) => (
+                            <label key={type.value} className="flex items-center gap-2 p-2 rounded-lg border border-gray-700 hover:border-gray-600 cursor-pointer transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={keepContent.types.includes(type.value)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setKeepContent({ 
+                                      enabled: keepContent.enabled, 
+                                      types: [...keepContent.types, type.value] 
+                                    });
+                                  } else {
+                                    setKeepContent({ 
+                                      enabled: keepContent.enabled, 
+                                      types: keepContent.types.filter(t => t !== type.value) 
+                                    });
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-gray-600 text-blue-500 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-300">{type.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
