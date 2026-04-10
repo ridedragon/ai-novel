@@ -3435,12 +3435,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             terminal.log(`[ChapterNode] autoDetectStart: fVolId=${fVolId}, currentSet.items.length=${currentSet.items.length}`);
             terminal.log(`[ChapterNode] autoDetectStart: localNovel.chapters.length=${localNovel.chapters?.length || 0}`);
             
-            // Bug4 修复：重写自动检测逻辑
             // 增强逻辑：在循环场景下，确保正确匹配当前卷的章节
             let foundStart = false;
             for (let k = 0; k < currentSet.items.length; k++) {
               const item = currentSet.items[k];
-              // Bug4 修复：增强卷ID匹配逻辑
+              // 增强卷ID匹配逻辑
               const ex = localNovel.chapters?.find(c => {
                 // 标题匹配
                 if (c.title !== item.title) return false;
@@ -3456,7 +3455,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               
               const hasContent = ex && ex.content && ex.content.trim().length > 0;
               
-              // Bug4 修复：增加详细的日志，便于调试
+              // 增加详细的日志，便于调试
               if (ex) {
                 terminal.log(`[ChapterNode] autoDetect: k=${k}, title="${item.title}", exists=true, hasContent=${hasContent}, volMatch=${ex.volumeId === fVolId}, ex.volumeId=${ex.volumeId}`);
               } else {
@@ -3472,10 +3471,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               }
             }
             
-            // Bug4 修复：如果所有章节都已存在且有内容，输出警告但仍然从第一个开始
-            wStart = 0; // 强制从第一个开始，避免跳过执行
-            terminal.warn(`[ChapterNode] autoDetectEnd: ALL outline items seem completed, but forcing start from k=0 to avoid skipping`);
-            terminal.warn(`[ChapterNode] autoDetectEnd: This is a Bug4 fix to prevent workflow from stopping after first run`);
+            // 如果所有章节都已存在且有内容，跳过执行
+            wStart = currentSet.items.length; // 设置为超出范围，跳过执行
+            terminal.log(`[ChapterNode] autoDetectEnd: ALL outline items are completed, skipping execution`);
             terminal.log(`[ChapterNode] autoDetectEnd: wStart=${wStart}`);
           };
           
@@ -3496,15 +3494,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           terminal.log(`[ChapterNode] currentSet items: ${currentSet.items.map((item: any, idx: number) => `[${idx}] ${item.title}`).join(', ')}`);
           terminal.log(`[ChapterNode] fVolId=${fVolId}, loopIndex=${loopIndex}, startMode=${startMode}`);
           
-          // Bug4 修复：即使检测到所有大纲项都已完成，也不跳过执行
-          // 而是始终从第一个大纲项开始，让 AutoWriteEngine 自己决定哪些需要重新生成
+          // 如果所有章节都已完成，跳过执行
           if (wStart >= currentSet.items.length) {
-            terminal.warn(`[ChapterNode] DETECTED: wStart(${wStart}) >= items.length(${currentSet.items.length})`);
-            terminal.warn(`[ChapterNode] This means ALL outline items are detected as already completed`);
-            // Bug4 修复：不跳过执行，而是强制从第一个开始
-            wStart = 0;
-            terminal.warn(`[ChapterNode] Bug4 fix: Forcing start from wStart=0 instead of skipping`);
-            terminal.warn(`[ChapterNode] Letting AutoWriteEngine decide what to regenerate`);
+            terminal.log(`[ChapterNode] DETECTED: wStart(${wStart}) >= items.length(${currentSet.items.length})`);
+            terminal.log(`[ChapterNode] This means ALL outline items are detected as already completed, skipping execution`);
+            // 保持wStart不变，跳过执行
           }
           
           // 输出每个大纲项对应的章节是否存在，用于调试
