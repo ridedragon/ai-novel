@@ -808,6 +808,7 @@ export const useWorkflowEngine = (options: {
                 'creationInfo',
                 'saveToVolume',
                 'aiChat',
+                'outlineAndChapter',
               ]);
 
               let updatedChapterCount = 0;
@@ -847,11 +848,16 @@ export const useWorkflowEngine = (options: {
 
                   nextData.outputEntries = [
                     {
-                      id: `creation_info_start_${Date.now()}`,
+                      id: `creation_info_start_${Date.now()}_${loopIndex}`,
                       title: '创作信息',
                       content: newContent,
                     },
                   ];
+                }
+
+                // 修复：确保大纲与正文生成节点也更新targetVolumeId
+                if (n.data.typeKey === 'outlineAndChapter') {
+                  nextData.targetVolumeId = userSpecifiedTargetVolumeId;
                 }
 
                 return {
@@ -2571,7 +2577,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             workflowManager.processVariableBindings(node.data.variableBinding, interpolatedInput);
           
           const outputEntry = {
-            id: `creation_info_${Date.now()}`,
+            id: `creation_info_${Date.now()}_${loopIndex}`,
             title: '创作信息',
             content: `${volumeInfoMessage}${interpolatedInput ? '\n\n用户指令：' + interpolatedInput : ''}`
           };
