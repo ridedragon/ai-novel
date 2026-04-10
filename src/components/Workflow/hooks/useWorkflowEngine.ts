@@ -2817,6 +2817,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           // 生成大纲和正文
           const outputEntries: OutputEntry[] = [];
           let lastChapterContent = '';
+          let lastChapterTitle = '';
 
           // 预获取或创建大纲集，确保整个循环使用同一个大纲集
           let outlineSet: any = null;
@@ -2917,7 +2918,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             if (lastChapterContent) {
               outlineMessages.push({
                 role: 'system',
-                content: `【前文回顾】：\n${lastChapterContent.substring(0, 1000)}...`
+                content: `【前文回顾】：\n章节标题：${lastChapterTitle}\n\n${lastChapterContent}`
               });
             }
 
@@ -3124,7 +3125,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             if (lastChapterContent) {
               chapterMessages.push({
                 role: 'system',
-                content: `【前文回顾】：\n${lastChapterContent.substring(0, 1000)}...`
+                content: `【前文回顾】：\n章节标题：${lastChapterTitle}\n\n${lastChapterContent}`
               });
             }
 
@@ -3210,6 +3211,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             
             // 章节内容已经在流式输出时实时更新
             lastChapterContent = chapterResponse;
+            lastChapterTitle = resolvedTitle;
 
             // 触发章节完成回调，以支持总结生成
             if (globalConfig.onChapterComplete) {
