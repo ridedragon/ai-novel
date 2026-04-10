@@ -367,8 +367,8 @@ function App() {
           contextScope: config.contextScope,
           runId,
         },
-        msg => console.log(msg),
-        msg => console.error(msg),
+        msg => terminal.log(msg),
+        msg => terminal.error(msg),
         undefined,
         forceFinal,
       );
