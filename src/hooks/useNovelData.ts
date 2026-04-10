@@ -87,7 +87,7 @@ export function useNovelData() {
   // 自动保存逻辑（添加防抖）
   useEffect(() => {
     // 【关键修复】只有在初始加载完成后才允许自动保存
-    if (novels.length > 0 && isInitialLoadCompleteRef.current) {
+    if (isInitialLoadCompleteRef.current) {
       // 清除之前的定时器
       if (saveDebounceTimerRef.current) {
         clearTimeout(saveDebounceTimerRef.current);
