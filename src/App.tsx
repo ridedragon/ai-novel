@@ -1257,6 +1257,77 @@ function App() {
             })
           }
           onStopOptimize={autoWrite.stopOptimize}
+          onRegenerate={async (chapterId) => {
+            const chapter = novelData.chapters.find(c => c.id === chapterId);
+            if (!chapter || !novelData.activeNovel) return;
+
+            // 清空当前章节内容，准备重新生成
+            novelData.setChapters(prev =>
+              prev.map(c => (c.id === chapterId ? { ...c, content: '' } : c)),
+            );
+
+            // 创建 abort controller ref
+            const abortControllerRef = {
+              current: null as AbortController | null
+            };
+
+            // 使用 AI 生成新内容
+            await aiGenerators.handleGenerate({
+              activeChapter: chapter,
+              activeNovel: novelData.activeNovel,
+              activeOutlineSetId: novelData.activeOutlineSetId,
+              apiKey: config.apiKey,
+              baseUrl: config.baseUrl,
+              contextLength: activePreset?.contextLength || 4000,
+              includeFullOutlineInAutoWrite: false,
+              systemPrompt: novelData.activeNovel.systemPrompt || '',
+              prompts: completion.prompts,
+              userPrompt: `请重新生成 ${chapter.title} 的内容，保持风格一致，内容连贯。`,
+              temperature: completion.temperature,
+              topP: completion.topP,
+              topK: completion.topK,
+              stream: completion.stream,
+              presencePenalty: completion.presencePenalty,
+              frequencyPenalty: completion.frequencyPenalty,
+              maxReplyLength: completion.maxReplyLength,
+              maxRetries: config.maxRetries,
+              outlineModel: config.outlineModel || config.model,
+              model: config.model,
+              presetApiConfig: activePreset?.apiConfig,
+              longTextMode: config.longTextMode,
+              contextScope: config.contextScope,
+              contextChapterCount: Number(config.contextChapterCount) || 1,
+              autoOptimize: config.autoOptimize,
+              onNovelsUpdate: novelData.setNovels,
+              setChapters: novelData.setChapters,
+              onSuccess: () => {
+                terminal.log(`[Regenerate] 章节 ${chapter.title} 重新生成成功`);
+              },
+              onError: (msg: string) => {
+                terminal.error(`[Regenerate] 章节 ${chapter.title} 重新生成失败: ${msg}`);
+                setDialog({ isOpen: true, type: 'alert', title: '错误', message: msg, onConfirm: closeDialog });
+              },
+              getActiveScripts,
+              checkAndGenerateSummary: async (id, content, nid, updatedNovel, signal, forceFinal, rid) => {
+                return handleChapterComplete(id, content, updatedNovel, forceFinal, rid);
+              },
+              handleOptimize: async (id, content) => {
+                await autoWrite.handleOptimize({
+                  targetId: id,
+                  initialContent: content,
+                  ...config,
+                  ...generators,
+                  setChapters: novelData.setChapters,
+                  novelsRef: novelData.novelsRef,
+                  activeNovelId: novelData.activeNovelId,
+                  getActiveScripts,
+                  onError: m =>
+                    setDialog({ isOpen: true, type: 'alert', title: '错误', message: m, onConfirm: closeDialog }),
+                });
+              },
+              generateAbortControllerRef: abortControllerRef,
+            });
+          }}
           optimizingChapterIds={autoWrite.optimizingChapterIds}
           activeOptimizePresetId={generators.activeOptimizePresetId}
           autoOptimize={config.autoOptimize}
