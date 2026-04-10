@@ -408,9 +408,14 @@ export const useWorkflowEngine = (options: {
         return { ...n, data: { ...n.data, ...updates } };
       };
 
+      // 修复：只重置未执行的节点，保留已执行节点的状态
       const initialResetNodes = nodesRef.current.map(n => {
         const nodeInSorted = sortedNodes.findIndex(sn => sn.id === n.id);
-        return nodeInSorted >= startIndex ? resetNodeData(n) : n;
+        // 只有当节点在startIndex之后且状态为pending时才重置
+        if (nodeInSorted >= startIndex && n.data.status === 'pending') {
+          return resetNodeData(n);
+        }
+        return n;
       });
       nodesRef.current = initialResetNodes;
       setNodes(initialResetNodes);
@@ -418,7 +423,16 @@ export const useWorkflowEngine = (options: {
       // 初始化时清除所有连线动画
       clearAllEdgeAnimations();
 
-      sortedNodes = sortedNodes.map((sn, idx) => (idx >= startIndex ? resetNodeData(sn) : sn));
+      // 修复：只重置未执行的节点，保留已执行节点的状态
+      sortedNodes = sortedNodes.map((sn, idx) => {
+        if (idx >= startIndex) {
+          const node = nodesRef.current.find(n => n.id === sn.id);
+          if (node && node.data.status === 'pending') {
+            return resetNodeData(sn);
+          }
+        }
+        return sn;
+      });
 
       // 构建宏上下文：供 interpolateWithMacros 使用
       // 宏组件可以在任何节点的指令和提示词中使用，获取其他节点的全部内容
@@ -869,23 +883,26 @@ export const useWorkflowEngine = (options: {
             continue;
           }
           
-          // 核心修复：如果是从暂停状态恢复（startIndex > 0），并且当前节点是暂停节点，
-          // 说明该节点已经执行过暂停操作，应该直接跳过，继续执行下一个节点
-          if (startIndex > 0) {
+          // 修复：只有当工作流是从头开始执行时，才执行暂停操作
+          // 当从暂停状态恢复时，跳过暂停节点，直接执行下一个节点
+          if (startIndex === 0) {
+            await syncNodeStatus(node.id, { status: 'executing' }, i);
+            setEdgeAnimation(node.id, true);
+            await new Promise(resolve => setTimeout(resolve, 300));
+            await syncNodeStatus(node.id, { status: 'completed' }, i);
+            setEdgeAnimation(node.id, false);
+            // 保存暂停状态，记录当前节点的ID和下一个节点的索引
+            workflowManager.updateProgress(i, node.id);
+            workflowManager.pause(i + 1);
+            stopRequestedRef.current = true;
+            return;
+          } else {
+            // 从暂停状态恢复时，跳过暂停节点，继续执行下一个节点
             terminal.log(`${logPrefix} Pause node already processed, skipping: ${node.id}`);
             await syncNodeStatus(node.id, { status: 'completed' }, i);
             setEdgeAnimation(node.id, false);
             continue;
           }
-          
-          await syncNodeStatus(node.id, { status: 'executing' }, i);
-          setEdgeAnimation(node.id, true);
-          await new Promise(resolve => setTimeout(resolve, 300));
-          await syncNodeStatus(node.id, { status: 'completed' }, i);
-          setEdgeAnimation(node.id, false);
-          workflowManager.pause(i + 1);
-          stopRequestedRef.current = true;
-          return;
         }
 
         // 动态构建当前节点的上下文和宏上下文
