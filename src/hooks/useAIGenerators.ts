@@ -198,7 +198,8 @@ export function useAIGenerators() {
           if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
             requestParams.top_k = activePreset.topK;
           }
-          if ((activePreset as any).maxReplyLength) requestParams.max_tokens = (activePreset as any).maxReplyLength;
+          const presetMaxTokens = (activePreset as any).maxReplyLength || (activePreset as any).max_tokens;
+          if (presetMaxTokens) requestParams.max_tokens = presetMaxTokens;
           if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
@@ -619,7 +620,8 @@ export function useAIGenerators() {
           if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
             requestParams.top_k = activePreset.topK;
           }
-          if ((activePreset as any).maxReplyLength) requestParams.max_tokens = (activePreset as any).maxReplyLength;
+          const presetMaxTokens = (activePreset as any).maxReplyLength || (activePreset as any).max_tokens;
+          if (presetMaxTokens) requestParams.max_tokens = presetMaxTokens;
           if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
@@ -860,7 +862,8 @@ export function useAIGenerators() {
           if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
             requestParams.top_k = activePreset.topK;
           }
-          if ((activePreset as any).maxReplyLength) requestParams.max_tokens = (activePreset as any).maxReplyLength;
+          const presetMaxTokens = (activePreset as any).maxReplyLength || (activePreset as any).max_tokens;
+          if (presetMaxTokens) requestParams.max_tokens = presetMaxTokens;
           if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
@@ -1102,7 +1105,8 @@ export function useAIGenerators() {
           if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
             requestParams.top_k = activePreset.topK;
           }
-          if ((activePreset as any).maxReplyLength) requestParams.max_tokens = (activePreset as any).maxReplyLength;
+          const presetMaxTokens = (activePreset as any).maxReplyLength || (activePreset as any).max_tokens;
+          if (presetMaxTokens) requestParams.max_tokens = presetMaxTokens;
           if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
@@ -1328,7 +1332,8 @@ export function useAIGenerators() {
           if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
             requestParams.top_k = activePreset.topK;
           }
-          if ((activePreset as any).maxReplyLength) requestParams.max_tokens = (activePreset as any).maxReplyLength;
+          const presetMaxTokens = (activePreset as any).maxReplyLength || (activePreset as any).max_tokens;
+          if (presetMaxTokens) requestParams.max_tokens = presetMaxTokens;
           if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
