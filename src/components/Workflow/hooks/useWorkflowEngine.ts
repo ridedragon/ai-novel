@@ -1669,6 +1669,22 @@ export const useWorkflowEngine = (options: {
         if (node.data.typeKey === 'createFolder' || node.data.typeKey === 'reuseDirectory') {
           if (node.data.folderName) currentWorkflowFolder = node.data.folderName;
           if (node.data.typeKey === 'reuseDirectory') {
+            // 核心修复：reuseDirectory 节点也需要更新后续节点的 folderName，确保独立目录关联能够正确更新
+            if (node.data.folderName) {
+              nodesRef.current = nodesRef.current.map(n => {
+                const typeKey = n.data.typeKey;
+                // 排除不需要更新 folderName 的节点类型
+                if (typeKey !== 'createFolder' && typeKey !== 'multiCreateFolder' && 
+                    typeKey !== 'reuseDirectory' && typeKey !== 'saveToVolume' && 
+                    typeKey !== 'loopNode' && typeKey !== 'loopConfigurator' && 
+                    typeKey !== 'pauseNode' && typeKey !== 'userInput') {
+                  return { ...n, data: { ...n.data, folderName: node.data.folderName } };
+                }
+                return n;
+              });
+              setNodes([...nodesRef.current]);
+              terminal.log('[REUSE_DIRECTORY] Updated folderName for subsequent nodes:', { folderName: node.data.folderName });
+            }
             await syncNodeStatus(node.id, { status: 'completed' }, i);
             continue;
           }
@@ -3350,6 +3366,37 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             // 保留当前进度，以便下次继续
             await syncNodeStatus(node.id, { status: 'completed', outputEntries, currentChapterIndex }, i);
           }
+          
+          // 核心修复：完全重写模式下，即使当前卷的所有章节已生成，工作流也应该继续执行后续节点
+          // 只有在"重写卷模式"（mode !== 'full'）下，才主动停止工作流
+          let shouldStopForVolumeComplete = false;
+          if (userSpecifiedTargetVolumeId && mode && mode !== 'full') {
+            const effectiveOutlineSet = localNovel.outlineSets?.find(s => {
+              const volTitle = localNovel.volumes?.find(v => v.id === (workflowManager.getActiveVolumeAnchor() || ''))?.title;
+              return s.name === volTitle;
+            });
+            const outlineItemCount = effectiveOutlineSet?.items?.length || 0;
+            const currentVolumeChapters = (localNovel.chapters || []).filter(c => {
+              return c.volumeId === (workflowManager.getActiveVolumeAnchor() || '') && 
+                     (!c.subtype || c.subtype === 'story') && 
+                     c.content && c.content.trim().length > 0;
+            }).length;
+            
+            if (outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
+              shouldStopForVolumeComplete = true;
+              terminal.log(`[WORKFLOW] 重写卷模式: Volume ${workflowManager.getCurrentVolumeIndex()} complete: all ${currentVolumeChapters}/${outlineItemCount} outline items generated, stopping workflow`);
+            }
+          }
+          
+          if (shouldStopForVolumeComplete && mode !== 'full') {
+            terminal.log(`[WORKFLOW] Volume complete (no next volume), stopping workflow at node ${node.id}`);
+            setEdgeAnimation(node.id, false);
+            workflowManager.stop();
+            clearAllEdgeAnimations();
+            keepAliveManager.disable();
+            return;
+          }
+          
           setEdgeAnimation(node.id, false);
           continue;
         }

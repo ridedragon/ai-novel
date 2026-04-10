@@ -43,6 +43,7 @@ export const DesktopPanel = ({
   const debounceTimerRef = useRef<number | null>(null);
   const [isInstructionExpanded, setIsInstructionExpanded] = useState(false);
 
+  const [, forceUpdate] = useState({});
   const creationInfoVolumeInfo = useMemo(() => {
     const activeVolumeId = workflowManager.getActiveVolumeAnchor();
     const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
@@ -66,7 +67,14 @@ export const DesktopPanel = ({
       volumeIndex: currentVolumeIndex,
       totalVolumes,
     };
-  }, [activeNovel, node.id, nodes]);
+  }, [activeNovel, node.id, nodes, forceUpdate]);
+
+  useEffect(() => {
+    const unsubscribe = workflowManager.subscribe(() => {
+      forceUpdate({});
+    });
+    return unsubscribe;
+  }, []);
 
   // 防抖更新函数
   const debouncedUpdate = (updates: Partial<WorkflowNodeData>) => {
