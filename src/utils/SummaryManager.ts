@@ -285,6 +285,13 @@ export const checkAndGenerateSummary = async (
   const storyChapters = getSnapshotStoryChapters();
   const globalIndex = storyChapters.findIndex(c => c.id === targetChapterId);
   if (globalIndex === -1) return;
+  
+  // 检查目标章节内容是否为空，避免删除章节时意外触发总结
+  const targetChapter = storyChapters[globalIndex];
+  if (!targetChapter || !targetChapter.content || targetChapter.content.trim() === '') {
+    terminal.log(`[Summary] Skipped: target chapter ${targetChapterId} has empty content`);
+    return;
+  }
 
   const targetChapterObj = storyChapters[globalIndex];
   const targetVolumeId = targetChapterObj.volumeId;
