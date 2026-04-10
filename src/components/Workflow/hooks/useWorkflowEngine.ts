@@ -3310,7 +3310,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   currentChapter.id,
                   currentChapter.content,
                   localNovel,
-                  false // forceFinal = false，常规章节完成
+                  false, // forceFinal = false，常规章节完成
+                  startRunId // 传递 runId 以确保总结任务能正确校验
                 );
                 if (summaryResult?.chapters) {
                   localNovel = summaryResult;
@@ -3332,7 +3333,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 lastChapter.id,
                 lastChapter.content,
                 localNovel,
-                true // forceFinal = true，强制触发总结检查
+                true, // forceFinal = true，强制触发总结检查
+                startRunId // 传递 runId 以确保总结任务能正确校验
               );
               if (summaryResult?.chapters) {
                 localNovel = summaryResult;
