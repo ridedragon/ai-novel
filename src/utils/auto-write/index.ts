@@ -4,7 +4,7 @@ import { ChapterVersion, ChatMessage, Novel, OutlineItem, PromptItem, RegexScrip
 import { buildWorldInfoMessages, getChapterContextMessages, processTextWithRegex } from './core';
 import { AutoWriteConfig } from './types';
 
-export { buildWorldInfoMessages, getChapterContextMessages, processTextWithRegex } from './core';
+export { buildWorldInfoMessages, getChapterContextMessages, processTextWithRegex, getEffectiveChapterContent } from './core';
 
 export class AutoWriteEngine {
   private config: AutoWriteConfig;
