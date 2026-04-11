@@ -150,40 +150,71 @@ app.post('/api/ai/stream', async (req, res) => {
     }
     
     // 处理流式响应
-    const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
+    let buffer = '';
     
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    // 使用Node.js的流API
+    response.body.on('data', (chunk) => {
+      buffer += decoder.decode(chunk, { stream: true });
       
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
+      // 处理完整的行
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // 保留最后不完整的行
       
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           const data = line.slice(6);
           if (data === '[DONE]') {
             res.write(`data: [DONE]\n\n`);
-            break;
+            return;
           }
           try {
             const json = JSON.parse(data);
             const content = json.choices[0]?.delta?.content;
             if (content) {
               res.write(`data: ${content}\n\n`);
+              // 确保数据被及时发送
+              if (res.flushHeaders) {
+                res.flushHeaders();
+              }
             }
           } catch (e) {
             // 忽略解析错误
           }
         }
       }
-      
-      // 确保数据被及时发送
-      await new Promise(resolve => res.flushHeaders ? res.flushHeaders() : setImmediate(resolve));
-    }
+    });
     
-    res.end();
+    response.body.on('end', () => {
+      // 处理最后剩余的缓冲区内容
+      if (buffer) {
+        const lines = buffer.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              res.write(`data: [DONE]\n\n`);
+              break;
+            }
+            try {
+              const json = JSON.parse(data);
+              const content = json.choices[0]?.delta?.content;
+              if (content) {
+                res.write(`data: ${content}\n\n`);
+              }
+            } catch (e) {
+              // 忽略解析错误
+            }
+          }
+        }
+      }
+      res.end();
+    });
+    
+    response.body.on('error', (error) => {
+      console.error('流式响应错误:', error);
+      res.status(500).json({ error: '流式响应错误' });
+    });
   } catch (error) {
     console.error('流式API错误:', error);
     res.status(500).json({ error: '服务器内部错误' });
