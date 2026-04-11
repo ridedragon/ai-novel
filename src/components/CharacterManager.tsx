@@ -40,6 +40,7 @@ interface CharacterManagerProps {
   lastNonChatPresetId?: string
   onReturnToMainWithContent?: (content: string) => void
   onSetActivePresetId?: (id: string) => void
+  onUpdateActiveFolderId?: (id: string | null) => void
 
   // Reference Selection Props
   selectedWorldviewSetId: string | null
@@ -96,6 +97,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = React.memo(({
   lastNonChatPresetId,
   onReturnToMainWithContent,
   onSetActivePresetId,
+  onUpdateActiveFolderId,
   selectedWorldviewSetId,
   selectedWorldviewIndices,
   onSelectWorldviewSet,
@@ -385,6 +387,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = React.memo(({
                   key={set.id}
                   onClick={() => {
                      onSetActiveCharacterSetId(set.id)
+                     onUpdateActiveFolderId?.(set.id)
                      if (window.innerWidth < 768) setIsMobileListOpen(false)
                   }}
                   className={`group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${

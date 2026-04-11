@@ -777,6 +777,7 @@ function App() {
               novelData.setActiveInspirationSetId(id);
               setActiveFolderId(id);
             },
+            onUpdateActiveFolderId: updateActiveFolderId,
 
             // Reference Selectors Props
             // Reference Selectors Props
@@ -888,6 +889,7 @@ function App() {
               novelData.setActiveCharacterSetId(id);
               setActiveFolderId(id);
             },
+            onUpdateActiveFolderId: updateActiveFolderId,
 
             // Reference Selectors Props
             // Reference Selectors Props
@@ -999,6 +1001,7 @@ function App() {
               novelData.setActiveWorldviewSetId(id);
               setActiveFolderId(id);
             },
+            onUpdateActiveFolderId: updateActiveFolderId,
 
             // Reference Selectors Props
             // Reference Selectors Props
@@ -1218,7 +1221,11 @@ function App() {
               setGeneratorSettingsType('plotOutline');
               setShowGeneratorSettingsModal(true);
             },
-            onSetActivePlotOutlineSetId: novelData.setActivePlotOutlineSetId,
+            onSetActivePlotOutlineSetId: (id: string | null) => {
+              novelData.setActivePlotOutlineSetId(id);
+              setActiveFolderId(id);
+            },
+            onUpdateActiveFolderId: updateActiveFolderId,
 
             // Reference Selectors Props
             selectedWorldviewSetId,
