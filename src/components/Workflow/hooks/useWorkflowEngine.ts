@@ -2867,10 +2867,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           }
           
           // 修复：如果大纲集的章节数量大于分卷规划的章节数量，使用大纲集的数量
-          if (outlineSet?.items?.length > chapterCount) {
-            chapterCount = outlineSet.items.length;
-            terminal.log(`[OutlineAndChapter] 大纲集章节数量(${outlineSet.items.length})大于分卷规划章节数量，使用大纲集数量`);
-          }
+          // 暂时注释掉这部分，因为 outlineSet 还未声明
+          // if (outlineSet?.items?.length > chapterCount) {
+          //   chapterCount = outlineSet.items.length;
+          //   terminal.log(`[OutlineAndChapter] 大纲集章节数量(${outlineSet.items.length})大于分卷规划章节数量，使用大纲集数量`);
+          // }
 
           // 获取大纲和正文的预设
           const outlinePresets = allPresets['outline'] || [];
@@ -2978,6 +2979,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             terminal.log(`[OutlineAndChapter] 创建新大纲集: ${currentVolumeName}`);
           } else {
             terminal.log(`[OutlineAndChapter] 使用现有大纲集: ${currentVolumeName}`);
+          }
+
+          // 修复：如果大纲集的章节数量大于分卷规划的章节数量，使用大纲集的数量
+          if (outlineSet?.items?.length > chapterCount) {
+            chapterCount = outlineSet.items.length;
+            terminal.log(`[OutlineAndChapter] 大纲集章节数量(${outlineSet.items.length})大于分卷规划章节数量，使用大纲集数量`);
           }
 
           // Bug1修复：验证并确保 targetVolumeId 有效
