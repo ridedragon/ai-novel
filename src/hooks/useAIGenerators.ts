@@ -1732,14 +1732,30 @@ export function useAIGenerators() {
             if (params.stream) {
               let lastUpdateTime = 0;
               let chainOfThought = '';
+              terminal.log('[Stream] 开始流式传输');
+              
               for await (const chunk of response) {
                 if (generateAbortControllerRef.current?.signal.aborted) throw new Error('Aborted');
-                const content = chunk.choices[0]?.delta?.content || '';
-                if (content) hasReceivedContent = true;
-                newGeneratedContent += content;
+                
+                // 检查chunk格式
+                if (!chunk || !chunk.choices || !Array.isArray(chunk.choices) || chunk.choices.length === 0) {
+                  terminal.warn('[Stream] 无效的chunk格式:', chunk);
+                  continue;
+                }
+                
+                const choice = chunk.choices[0];
+                const delta = choice?.delta;
+                const content = delta?.content || '';
+                
+                terminal.log('[Stream] 收到chunk:', { content: content.substring(0, 50) + (content.length > 50 ? '...' : '') });
+                
+                if (content) {
+                  hasReceivedContent = true;
+                  newGeneratedContent += content;
+                }
                 
                 // 提取思维链内容（假设思维链在响应的某个字段中）
-                const chainContent = chunk.choices[0]?.delta?.chain_of_thought || chunk.choices[0]?.delta?.thought || '';
+                const chainContent = delta?.chain_of_thought || delta?.thought || '';
                 if (chainContent) {
                   chainOfThought += chainContent;
                   params.onChainOfThoughtUpdate?.(chainOfThought);
@@ -1750,6 +1766,8 @@ export function useAIGenerators() {
                 if (now - lastUpdateTime > 50) {
                   lastUpdateTime = now;
                   const fullRawContent = currentContent + newGeneratedContent;
+                  terminal.log('[Stream] 更新UI:', { contentLength: fullRawContent.length });
+                  
                   params.setChapters(prev =>
                     prev.map(c => {
                       if (c.id === activeChapter.id) {
@@ -1772,6 +1790,8 @@ export function useAIGenerators() {
                   );
                 }
               }
+              
+              terminal.log('[Stream] 流式传输结束');
             } else {
               if (generateAbortControllerRef.current?.signal.aborted) throw new Error('Aborted');
               newGeneratedContent = response.choices[0]?.message?.content || '';
