@@ -1233,6 +1233,7 @@ export const useWorkflowEngine = (options: {
           let volSuccess = false;
 
           while (volRetryCount <= maxVolRetries && !volSuccess) {
+            if (!checkActive()) break;
             if (volRetryCount > 0) {
               await new Promise(res => setTimeout(res, 2000));
             }
@@ -2301,6 +2302,7 @@ ${node.data.instruction || '请智能生成适合的循环配置'}
             const maxSupplementAttempts = 2;
 
             while (retryCount <= maxRetries && !success) {
+              if (!checkActive()) break;
               if (retryCount > 0) {
                 await new Promise(res => setTimeout(res, 2000));
               }
@@ -2691,6 +2693,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           let aiResponse = '';
           let genRetryCount = 0;
           while (genRetryCount <= 2 && !aiResponse) {
+            if (!checkActive()) break;
             if (genRetryCount > 0) {
               await new Promise(res => setTimeout(res, 2000));
             }
@@ -3223,6 +3226,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               let parseMessages = [...outlineMessages];
 
               while (parseRetry <= 2) {
+                if (!checkActive()) break;
                 try {
                   const parsed = await cleanAndParseJSON(parsedOutlineResponse);
                   outlineEntries = await extractEntries(parsed);
@@ -4952,6 +4956,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           (specificInstruction ? extractTargetEndChapter(specificInstruction) : null);
 
         while (retry <= 2 && !nodeDone) {
+          if (!checkActive()) break;
           if (retry > 0) {
             await new Promise(res => setTimeout(res, 1500 * Math.pow(2, retry - 1)));
           }
