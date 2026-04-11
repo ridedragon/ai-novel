@@ -3078,12 +3078,40 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             
             terminal.log(`[OutlineAndChapter] 处理批次: 第 ${startChapterIndex + 1} 章 到 第 ${batchEndIndex} 章 (共 ${batchSize} 章)`);
 
-            // 1. 批量生成大纲
-            const outlineOpenai = new OpenAI({
-              apiKey: finalOutlinePreset.apiConfig?.apiKey || globalConfig.apiKey,
-              baseURL: finalOutlinePreset.apiConfig?.baseUrl || globalConfig.baseUrl,
-              dangerouslyAllowBrowser: true,
-            });
+            // 检查当前批次的章节是否已有大纲
+            let outlineEntries: { title: string; content: string }[] = [];
+            let needGenerateOutline = false;
+            
+            for (let i = 0; i < batchSize; i++) {
+              const chapterIdx = startChapterIndex + i;
+              if (chapterIdx >= chapterCount) break;
+              
+              // 检查该章节的大纲是否已存在
+              const expectedChapterTitle = `第${chapterIdx + 1}章`;
+              const existingOutlineItem = outlineSet?.items?.find((item: any) => 
+                item.title === expectedChapterTitle || 
+                (parseAnyNumber(item.title) === chapterIdx + 1)
+              );
+              
+              if (existingOutlineItem) {
+                outlineEntries.push({
+                  title: existingOutlineItem.title,
+                  content: existingOutlineItem.summary
+                });
+                terminal.log(`[OutlineAndChapter] 第${chapterIdx + 1}章已有大纲，使用现有大纲`);
+              } else {
+                needGenerateOutline = true;
+                terminal.log(`[OutlineAndChapter] 第${chapterIdx + 1}章没有大纲，需要生成`);
+              }
+            }
+            
+            // 1. 批量生成大纲（仅在需要时生成）
+            if (needGenerateOutline) {
+              const outlineOpenai = new OpenAI({
+                apiKey: finalOutlinePreset.apiConfig?.apiKey || globalConfig.apiKey,
+                baseURL: finalOutlinePreset.apiConfig?.baseUrl || globalConfig.baseUrl,
+                dangerouslyAllowBrowser: true,
+              });
 
             // 检查是否已经被中止
             if (abortControllerRef.current?.signal.aborted) break;
@@ -3182,101 +3210,101 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               continue;
             }
 
-            // 使用与大纲节点一致的解析逻辑（含 JSON 修复重试）
-            let outlineEntries: { title: string; content: string }[] = [];
-            let parsedOutlineResponse = outlineResponse;
-            let parseRetry = 0;
-            let parseMessages = [...outlineMessages];
+              // 使用与大纲节点一致的解析逻辑（含 JSON 修复重试）
+              let parsedOutlineResponse = outlineResponse;
+              let parseRetry = 0;
+              let parseMessages = [...outlineMessages];
 
-            while (parseRetry <= 2) {
-              try {
-                const parsed = await cleanAndParseJSON(parsedOutlineResponse);
-                outlineEntries = await extractEntries(parsed);
-                break;
-              } catch (parseError: any) {
-                terminal.warn(`[WORKFLOW] JSON 解析失败 (outlineAndChapter): ${parseError.message}`);
-                console.warn(`[WORKFLOW] JSON 解析失败，完整原始响应:`, parsedOutlineResponse);
-
-                if (parseRetry < 2) {
-                  // Bug3修复：与大纲节点一致的错误提示
-                  parseMessages = [
-                    ...parseMessages,
-                    { role: 'assistant', content: parsedOutlineResponse },
-                    {
-                      role: 'user',
-                      content: `(系统提示：你生成的内容格式有误，无法解析为JSON。请修正错误，仅输出正确的JSON格式内容，不要添加任何其他说明文字。确保JSON格式严格正确，包括正确的引号、逗号和括号。)`,
-                    },
-                  ];
-
-                  const repairCompletionParams: any = {
-                    model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
-                    messages: parseMessages,
-                    temperature: finalOutlinePreset.temperature,
-                    top_p: finalOutlinePreset.topP,
-                  };
-                  const repairMaxTokens = node.data.maxTokens || (finalOutlinePreset as any).maxReplyLength || (finalOutlinePreset as any).max_tokens;
-                  if (repairMaxTokens)
-                    repairCompletionParams.max_tokens = repairMaxTokens;
-                  if ((finalOutlinePreset as any).frequencyPenalty)
-                    repairCompletionParams.frequency_penalty = (finalOutlinePreset as any).frequencyPenalty;
-                  if ((finalOutlinePreset as any).presencePenalty)
-                    repairCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
-
-                  const repairedCompletion = await outlineOpenai.chat.completions.create(repairCompletionParams);
-                  parsedOutlineResponse = repairedCompletion.choices[0]?.message?.content || parsedOutlineResponse;
-                  parseRetry++;
-                } else {
-                  // Bug3修复：与大纲节点一致的fallback逻辑
-                  outlineEntries = [{ title: `生成结果 ${new Date().toLocaleTimeString()}`, content: parsedOutlineResponse || outlineResponse }];
+              while (parseRetry <= 2) {
+                try {
+                  const parsed = await cleanAndParseJSON(parsedOutlineResponse);
+                  outlineEntries = await extractEntries(parsed);
                   break;
+                } catch (parseError: any) {
+                  terminal.warn(`[WORKFLOW] JSON 解析失败 (outlineAndChapter): ${parseError.message}`);
+                  console.warn(`[WORKFLOW] JSON 解析失败，完整原始响应:`, parsedOutlineResponse);
+
+                  if (parseRetry < 2) {
+                    // Bug3修复：与大纲节点一致的错误提示
+                    parseMessages = [
+                      ...parseMessages,
+                      { role: 'assistant', content: parsedOutlineResponse },
+                      {
+                        role: 'user',
+                        content: `(系统提示：你生成的内容格式有误，无法解析为JSON。请修正错误，仅输出正确的JSON格式内容，不要添加任何其他说明文字。确保JSON格式严格正确，包括正确的引号、逗号和括号。)`,
+                      },
+                    ];
+
+                    const repairCompletionParams: any = {
+                      model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
+                      messages: parseMessages,
+                      temperature: finalOutlinePreset.temperature,
+                      top_p: finalOutlinePreset.topP,
+                    };
+                    const repairMaxTokens = node.data.maxTokens || (finalOutlinePreset as any).maxReplyLength || (finalOutlinePreset as any).max_tokens;
+                    if (repairMaxTokens)
+                      repairCompletionParams.max_tokens = repairMaxTokens;
+                    if ((finalOutlinePreset as any).frequencyPenalty)
+                      repairCompletionParams.frequency_penalty = (finalOutlinePreset as any).frequencyPenalty;
+                    if ((finalOutlinePreset as any).presencePenalty)
+                      repairCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
+
+                    const repairedCompletion = await outlineOpenai.chat.completions.create(repairCompletionParams);
+                    parsedOutlineResponse = repairedCompletion.choices[0]?.message?.content || parsedOutlineResponse;
+                    parseRetry++;
+                  } else {
+                    // Bug3修复：与大纲节点一致的fallback逻辑
+                    outlineEntries = [{ title: `生成结果 ${new Date().toLocaleTimeString()}`, content: parsedOutlineResponse || outlineResponse }];
+                    break;
+                  }
                 }
               }
-            }
 
-            outlineResponse = parsedOutlineResponse;
+              outlineResponse = parsedOutlineResponse;
 
-            // 确保生成的大纲数量不超过批次大小，并且不超过剩余需要生成的章节数
-            const actualNeededCount = Math.min(batchSize, chapterCount - startChapterIndex);
-            if (outlineEntries.length < actualNeededCount) {
-              terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 少于需要的数量 (${actualNeededCount})，将使用默认标题`);
-              // 补充缺失的大纲，但不超过实际需要的数量
-              for (let i = outlineEntries.length; i < actualNeededCount; i++) {
-                const chapterIdx = startChapterIndex + i;
-                if (chapterIdx >= chapterCount) break; // 双重保险，确保不超出总数
-                outlineEntries.push({ 
-                  title: `第${chapterIdx + 1}章`, 
-                  content: `第${chapterIdx + 1}章的大纲内容` 
+              // 确保生成的大纲数量不超过批次大小，并且不超过剩余需要生成的章节数
+              const actualNeededCount = Math.min(batchSize, chapterCount - startChapterIndex);
+              if (outlineEntries.length < actualNeededCount) {
+                terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 少于需要的数量 (${actualNeededCount})，将使用默认标题`);
+                // 补充缺失的大纲，但不超过实际需要的数量
+                for (let i = outlineEntries.length; i < actualNeededCount; i++) {
+                  const chapterIdx = startChapterIndex + i;
+                  if (chapterIdx >= chapterCount) break; // 双重保险，确保不超出总数
+                  outlineEntries.push({ 
+                    title: `第${chapterIdx + 1}章`, 
+                    content: `第${chapterIdx + 1}章的大纲内容` 
+                  });
+                }
+              } else if (outlineEntries.length > actualNeededCount) {
+                // 如果生成的大纲数量超过需要的数量，截断多余的
+                terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 超过需要的数量 (${actualNeededCount})，将截断多余部分`);
+                outlineEntries = outlineEntries.slice(0, actualNeededCount);
+              }
+
+              // 保存大纲到对应文件夹（与大纲节点的 upSets 逻辑一致）
+              if (outlineSet) {
+                outlineEntries.forEach((entry, i) => {
+                  const chapterIdx = startChapterIndex + i;
+                  const existingIdx = outlineSet.items.findIndex((ni: any) => ni.title === entry.title);
+                  const ni = { title: entry.title, summary: entry.content };
+                  if (existingIdx !== -1) {
+                    outlineSet.items[existingIdx] = { ...outlineSet.items[existingIdx], ...ni };
+                  } else {
+                    outlineSet.items.push(ni);
+                  }
                 });
-              }
-            } else if (outlineEntries.length > actualNeededCount) {
-              // 如果生成的大纲数量超过需要的数量，截断多余的
-              terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 超过需要的数量 (${actualNeededCount})，将截断多余部分`);
-              outlineEntries = outlineEntries.slice(0, actualNeededCount);
-            }
-
-            // 保存大纲到对应文件夹（与大纲节点的 upSets 逻辑一致）
-            if (outlineSet) {
-              outlineEntries.forEach((entry, i) => {
-                const chapterIdx = startChapterIndex + i;
-                const existingIdx = outlineSet.items.findIndex((ni: any) => ni.title === entry.title);
-                const ni = { title: entry.title, summary: entry.content };
-                if (existingIdx !== -1) {
-                  outlineSet.items[existingIdx] = { ...outlineSet.items[existingIdx], ...ni };
-                } else {
-                  outlineSet.items.push(ni);
+                
+                outlineSet.items.sort((a: any, b: any) => (parseAnyNumber(a.title) || 0) - (parseAnyNumber(b.title) || 0));
+                
+                // 确保 localNovel.outlineSets 存在
+                if (!localNovel.outlineSets) {
+                  localNovel.outlineSets = [];
                 }
-              });
-              
-              outlineSet.items.sort((a: any, b: any) => (parseAnyNumber(a.title) || 0) - (parseAnyNumber(b.title) || 0));
-              
-              // 确保 localNovel.outlineSets 存在
-              if (!localNovel.outlineSets) {
-                localNovel.outlineSets = [];
+                
+                localNovel.outlineSets = localNovel.outlineSets.map(s => 
+                  s.id === outlineSet.id ? outlineSet : s
+                );
               }
-              
-              localNovel.outlineSets = localNovel.outlineSets.map(s => 
-                s.id === outlineSet.id ? outlineSet : s
-              );
             }
 
             // 批量创建或获取章节
@@ -3387,7 +3415,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             // 构建章节标题列表，用于提示AI
             const titlesForPrompt = outlineEntries
-              .slice(0, actualNeededCount)
+              .slice(0, batchSize)
               .map(entry => entry.title)
               .join('、');
 
