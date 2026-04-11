@@ -3649,8 +3649,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             await syncNodeStatus(node.id, { status: 'completed', outputEntries, currentChapterIndex }, i);
           }
           
-          // 核心修复：检查是否所有卷都已完成，无论模式如何
+          // 核心修复：检查是否所有卷都已完成，或者需要切换到下一卷
           let shouldStopForVolumeComplete = false;
+          let shouldSwitchVolume = false;
+          let nextVolumeName = '';
           
           // 检查当前卷是否完成
           const effectiveOutlineSet = localNovel.outlineSets?.find(s => {
@@ -3669,19 +3671,147 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
           const isLastVolume = currentVolumeIndex >= volumePlans3.length - 1;
           
-          // 重写卷模式：当前卷完成后停止
-          if (userSpecifiedTargetVolumeId && mode && mode !== 'full' && outlineItemCount > 0 && currentVolumeChapterCount >= outlineItemCount) {
-            shouldStopForVolumeComplete = true;
-            terminal.log(`[WORKFLOW] 重写卷模式: Volume ${currentVolumeIndex} complete: all ${currentVolumeChapterCount}/${outlineItemCount} outline items generated, stopping workflow`);
+          // 检查当前卷是否完成（大纲和章节都已生成完毕）
+          const isCurrentVolumeComplete = outlineItemCount > 0 && currentVolumeChapterCount >= outlineItemCount;
+          
+          if (isCurrentVolumeComplete) {
+            terminal.log(`[OutlineAndChapter] Volume ${currentVolumeIndex} complete: all ${currentVolumeChapterCount}/${outlineItemCount} chapters generated`);
+            
+            // 重写卷模式：当前卷完成后停止
+            if (userSpecifiedTargetVolumeId && mode && mode !== 'full') {
+              shouldStopForVolumeComplete = true;
+              terminal.log(`[WORKFLOW] 重写卷模式: Volume ${currentVolumeIndex} complete, stopping workflow`);
+            }
+            // 完全重写模式：检查是否是最后一卷
+            else if (mode === 'full' && isLastVolume) {
+              shouldStopForVolumeComplete = true;
+              terminal.log(`[WORKFLOW] 完全重写模式: All volumes complete: Volume ${currentVolumeIndex} (last volume) finished, stopping workflow`);
+            }
+            // 正常模式：尝试切换到下一卷
+            else {
+              const nextVolFromPlans = volumePlans3[currentVolumeIndex + 1];
+              const nextVolFromNovel = localNovel.volumes?.[currentVolumeIndex + 1];
+              nextVolumeName = nextVolFromPlans?.volumeName || nextVolFromPlans?.folderName || nextVolFromNovel?.title || '';
+              
+              if (nextVolumeName) {
+                shouldSwitchVolume = true;
+                terminal.log(`[OutlineAndChapter] Volume ${currentVolumeIndex} complete, switching to next volume: "${nextVolumeName}"`);
+              } else if (!userSpecifiedTargetVolumeId && !mode) {
+                // 如果没有指定下一卷且没有重写模式，只是停止
+                shouldStopForVolumeComplete = true;
+                terminal.log(`[OutlineAndChapter] Volume ${currentVolumeIndex} complete, no next volume found, stopping workflow`);
+              }
+            }
           }
-          // 完全重写模式：所有卷完成后停止
-          else if (mode === 'full' && isLastVolume && outlineItemCount > 0 && currentVolumeChapterCount >= outlineItemCount) {
-            shouldStopForVolumeComplete = true;
-            terminal.log(`[WORKFLOW] 完全重写模式: All volumes complete: Volume ${currentVolumeIndex} (last volume) finished, stopping workflow`);
+          
+          // 处理卷切换逻辑（与章节节点保持一致）
+          if (shouldSwitchVolume && nextVolumeName) {
+            terminal.log(`[OutlineAndChapter] Switching to next volume: ${nextVolumeName}`);
+            
+            const existingNextVol = localNovel.volumes?.find(v => v.title === nextVolumeName);
+            if (!existingNextVol) {
+              const newVolId = `vol_auto_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+              const newVolume = {
+                id: newVolId,
+                title: nextVolumeName,
+                collapsed: false,
+              };
+              localNovel = {
+                ...localNovel,
+                volumes: [...(localNovel.volumes || []), newVolume]
+              };
+              
+              const types = ['worldviewSets', 'characterSets', 'outlineSets', 'inspirationSets', 'plotOutlineSets'] as const;
+              const prefix = ['wv', 'char', 'out', 'insp', 'plot'] as const;
+              
+              types.forEach((type, idx) => {
+                const newSet = {
+                  id: `${prefix[idx]}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                  name: nextVolumeName,
+                  entries: [],
+                  characters: [],
+                  items: [],
+                };
+                (localNovel as any)[type] = [...((localNovel as any)[type] || []), newSet];
+              });
+              
+              terminal.log(`[OutlineAndChapter] Created next volume: ${nextVolumeName}`);
+            }
+            
+            // 更新分卷索引
+            let nextVolIdx = volumePlans3.findIndex(v => v.volumeName === nextVolumeName || v.folderName === nextVolumeName);
+            if (nextVolIdx < 0) {
+              nextVolIdx = currentVolumeIndex + 1;
+            }
+            
+            workflowManager.setCurrentVolumeIndex(nextVolIdx);
+            const newVolumeId = existingNextVol?.id || localNovel.volumes?.find(v => v.title === nextVolumeName)?.id || '';
+            if (newVolumeId) {
+              workflowManager.setActiveVolumeAnchor(newVolumeId);
+            }
+            
+            // 更新节点状态，为下一卷做准备
+            nodesRef.current = nodesRef.current.map(n => {
+              const typeKey = n.data.typeKey;
+              if (['worldview', 'characters', 'plotOutline', 'outline'].includes(typeKey)) {
+                const updatedData: any = { 
+                  ...n.data, 
+                  status: 'pending' as const,
+                  outputEntries: []
+                };
+                if (nextVolumeName) {
+                  updatedData.folderName = nextVolumeName;
+                }
+                terminal.log(`[OutlineAndChapter] Reset node ${n.data.label} (typeKey=${typeKey}) to pending for new volume "${nextVolumeName}"`);
+                return { ...n, data: updatedData };
+              }
+              if (typeKey === 'chapter' && nextVolumeName) {
+                const newVolId = existingNextVol?.id || localNovel.volumes?.find(v => v.title === nextVolumeName)?.id || '';
+                return { ...n, data: { ...n.data, targetVolumeId: newVolId, targetVolumeName: nextVolumeName, folderName: nextVolumeName } };
+              }
+              if (typeKey === 'outlineAndChapter' && nextVolumeName) {
+                const newVolId = existingNextVol?.id || localNovel.volumes?.find(v => v.title === nextVolumeName)?.id || '';
+                return { ...n, data: { ...n.data, targetVolumeId: newVolId, folderName: nextVolumeName, currentChapterIndex: 0 } };
+              }
+              if (typeKey === 'creationInfo') {
+                const totalVolumes = localNovel.volumes?.length || 0;
+                const volumeProgress = totalVolumes > 0 ? `分卷进度：第 ${nextVolIdx + 1} 卷 / 共 ${totalVolumes} 卷` : '';
+                const loopIndex = workflowManager.getContextVar('loop_index') || 1;
+                const loopInfo = `当前循环轮次：第 ${loopIndex} 轮`;
+                const newVolumeInfoContent = nextVolumeName ? `当前分卷：${nextVolumeName}` : '';
+                
+                let newContent = [newVolumeInfoContent, volumeProgress, loopInfo].filter(Boolean).join('\n');
+                if (n.data.instruction) {
+                  newContent += `\n\n用户指令：${n.data.instruction}`;
+                }
+                
+                return { 
+                  ...n, 
+                  data: { 
+                    ...n.data, 
+                    status: 'pending', 
+                    folderName: nextVolumeName,
+                    outputEntries: [{ 
+                      id: `creation_info_auto_${Date.now()}`, 
+                      title: '创作信息', 
+                      content: newContent 
+                    }]
+                  } 
+                };
+              }
+              if (nextVolumeName && typeKey !== 'createFolder' && typeKey !== 'multiCreateFolder' && typeKey !== 'loopNode' && typeKey !== 'loopConfigurator' && typeKey !== 'pauseNode') {
+                return { ...n, data: { ...n.data, folderName: nextVolumeName } };
+              }
+              return n;
+            });
+            setNodes([...nodesRef.current]);
+            
+            // 更新 localNovel
+            await updateLocalAndGlobal(localNovel);
           }
           
           if (shouldStopForVolumeComplete) {
-            terminal.log(`[WORKFLOW] Volume complete (no next volume), stopping workflow at node ${node.id}`);
+            terminal.log(`[WORKFLOW] Volume complete, stopping workflow at node ${node.id}`);
             setEdgeAnimation(node.id, false);
             workflowManager.stop();
             clearAllEdgeAnimations();
@@ -3694,6 +3824,25 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         }
 
         // --- Standard AI Call ---
+        // 问题2修复：在日志中添加卷信息，让用户知道正在创作哪一卷的大纲、世界观等
+        const activeVolumeId = workflowManager.getActiveVolumeAnchor();
+        const currentVolumeIndex = workflowManager.getCurrentVolumeIndex();
+        let currentVolumeName = '';
+        if (activeVolumeId && localNovel.volumes) {
+          const activeVolume = localNovel.volumes.find(v => v.id === activeVolumeId);
+          if (activeVolume) {
+            currentVolumeName = activeVolume.title;
+          }
+        }
+        if (!currentVolumeName) {
+          currentVolumeName = currentWorkflowFolder || node.data.folderName || '未指定卷';
+        }
+        
+        // 对于创作类节点，打印卷信息
+        if (['worldview', 'characters', 'plotOutline', 'outline', 'inspiration'].includes(node.data.typeKey)) {
+          terminal.log(`[WORKFLOW] 正在创作第 ${currentVolumeIndex + 1} 卷: ${currentVolumeName} - ${node.data.typeLabel || node.data.label}`);
+        }
+        
         let typePresets = allPresets[node.data.presetType as string] || [];
         if (node.data.typeKey === 'aiChat') typePresets = Object.values(allPresets).flat();
         let preset =
@@ -3717,8 +3866,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         
         // 本卷模式修复：获取当前卷名称，用于过滤集合
         const isVolumeMode = globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume';
-        const currentVolumeName = currentWorkflowFolder || node.data.folderName || '';
-        terminal.log(`[CONTEXT] isVolumeMode=${isVolumeMode}, currentVolumeName="${currentVolumeName}"`);
+        const volumeNameForContext = currentWorkflowFolder || node.data.folderName || '';
+        terminal.log(`[CONTEXT] isVolumeMode=${isVolumeMode}, currentVolumeName="${volumeNameForContext}"`);
 
         const autoInject = (selectedIds: string[], allSets: any[] | undefined) => {
           // 如果已手动选择，则仅解析手动选择的
@@ -3726,9 +3875,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             return resolvePending([...selectedIds], allSets);
           }
           // 本卷模式修复：只注入当前卷的集合
-          if (isVolumeMode && allSets && currentVolumeName) {
-            const volumeSets = allSets.filter(s => s.name === currentVolumeName);
-            terminal.log(`[CONTEXT] autoInject volume sets: ${volumeSets.length} for "${currentVolumeName}"`);
+          if (isVolumeMode && allSets && volumeNameForContext) {
+            const volumeSets = allSets.filter(s => s.name === volumeNameForContext);
+            terminal.log(`[CONTEXT] autoInject volume sets: ${volumeSets.length} for "${volumeNameForContext}"`);
             return volumeSets.map(s => s.id);
           }
           // 如果是循环模式且未手动选择，默认全选 (除了大纲生成时的大纲引用)
