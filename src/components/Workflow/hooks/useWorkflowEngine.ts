@@ -3499,26 +3499,28 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
               // 尝试使用流式输出
               try {
-                const stream = chapterOpenai.chat.completions.create({
-                  ...chapterCompletionParams,
-                  signal: abortControllerRef.current?.signal
-                });
-                
-                // 直接使用 for await...of 循环处理流
-                // OpenAI SDK v4 的流对象支持异步迭代
-                for await (const chunk of stream as any) {
-                  const content = chunk.choices[0]?.delta?.content || '';
-                  batchChapterResponse += content;
-                }
-              } catch (streamError) {
-                terminal.error(`[OutlineAndChapter] 流式输出失败: ${streamError}，尝试非流式方式`);
-                // 发生错误时，使用非流式方式重新请求
+                // 直接使用非流式方式，避免流处理的类型问题
                 const nonStreamResponse = await chapterOpenai.chat.completions.create({
                   ...chapterCompletionParams,
                   stream: false, // 禁用流式输出
                   signal: abortControllerRef.current?.signal
                 });
                 batchChapterResponse = nonStreamResponse.choices[0]?.message?.content || '';
+              } catch (error) {
+                terminal.error(`[OutlineAndChapter] 正文生成失败: ${error}`);
+                // 发生错误时，使用非流式方式重新请求
+                try {
+                  const nonStreamResponse = await chapterOpenai.chat.completions.create({
+                    ...chapterCompletionParams,
+                    stream: false, // 禁用流式输出
+                    signal: abortControllerRef.current?.signal
+                  });
+                  batchChapterResponse = nonStreamResponse.choices[0]?.message?.content || '';
+                } catch (retryError) {
+                  terminal.error(`[OutlineAndChapter] 重试失败: ${retryError}`);
+                  startChapterIndex = batchEndIndex;
+                  continue;
+                }
               }
               
               terminal.log(`
