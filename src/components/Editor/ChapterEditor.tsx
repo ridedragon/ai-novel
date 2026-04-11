@@ -36,8 +36,6 @@ interface ChapterEditorProps {
   setLongTextMode: (val: boolean) => void;
   contextScope: string;
   setContextScope: (scope: string) => void;
-  stream: boolean;
-  setStream: (val: boolean) => void;
   onShowAnalysisResult: () => void;
   onShowOptimizeSettings: () => void;
   onPrevVersion: () => void;
@@ -60,14 +58,13 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     onStopOptimize,
     onRegenerate,
     optimizingChapterIds,
+    activeOptimizePresetId,
     autoOptimize,
     setAutoOptimize,
     longTextMode,
     setLongTextMode,
     contextScope,
     setContextScope,
-    stream,
-    setStream,
     onShowAnalysisResult,
     onShowOptimizeSettings,
     onPrevVersion,
@@ -254,24 +251,6 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                 >
                   <div
                     className={`absolute top-0.5 w-2 h-2 bg-white rounded-full transition-all shadow-sm ${autoOptimize ? 'translate-x-3' : 'translate-x-0.5'}`}
-                  ></div>
-                </div>
-              </div>
-              
-              <div
-                className="flex items-center gap-1.5 md:gap-2 px-2 h-9 md:h-10 bg-slate-100 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/5 shrink-0"
-                title="流式传输：开启后AI生成内容会实时显示"
-              >
-                <svg className="w-3.5 h-3.5 text-slate-500 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-                <span className="text-[10px] text-slate-500 font-medium hidden md:inline">流式传输</span>
-                <div
-                  onClick={() => setStream(!stream)}
-                  className={`w-6 h-3 rounded-full relative cursor-pointer transition-colors ${stream ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'}`}
-                >
-                  <div
-                    className={`absolute top-0.5 w-2 h-2 bg-white rounded-full transition-all shadow-sm ${stream ? 'translate-x-3' : 'translate-x-0.5'}`}
                   ></div>
                 </div>
               </div>
