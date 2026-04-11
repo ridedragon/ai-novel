@@ -221,7 +221,7 @@ export const useWorkflowEngine = (options: {
     return collected;
   };
 
-  const clearNovelContentByVolumes = (novel: Novel, volumeIds: string[], clearFollowingVolumes: boolean) => {
+  const clearNovelContentByVolumes = (novel: Novel, volumeIds: string[], clearFollowingVolumes: boolean, keepContentTypes: string[] = []) => {
     if (!volumeIds.length) return novel;
 
     const volumeOrder = novel.volumes || [];
@@ -247,8 +247,18 @@ export const useWorkflowEngine = (options: {
     );
     const allFolderIds = collectDescendantFolderIds(nextReferenceFolders, directFolderIds);
 
+    // 检查是否需要保留特定类型的内容
+    const shouldKeepType = (type: string) => {
+      return keepContentTypes.includes(type);
+    };
+
     // 清除与受影响卷相关的所有文件夹内容
-    const clearSetByName = (sets: any[], setName: string) => {
+    const clearSetByName = (sets: any[], setName: string, type: string) => {
+      // 如果该类型需要保留，直接返回原集合
+      if (shouldKeepType(type)) {
+        return sets || [];
+      }
+      
       return (sets || []).map(set => {
         if (affectedVolumeTitles.has(set.name) || 
             [...affectedVolumeTitles].some(volumeTitle => 
@@ -267,6 +277,11 @@ export const useWorkflowEngine = (options: {
           return chapter;
         }
 
+        // 检查是否需要保留章节内容
+        if (shouldKeepType('chapter')) {
+          return chapter;
+        }
+
         return {
           ...chapter,
           content: '',
@@ -279,11 +294,11 @@ export const useWorkflowEngine = (options: {
           logicScore: undefined,
         };
       }),
-      outlineSets: clearSetByName(novel.outlineSets, 'items'),
-      characterSets: clearSetByName(novel.characterSets, 'characters'),
-      worldviewSets: clearSetByName(novel.worldviewSets, 'entries'),
-      inspirationSets: clearSetByName(novel.inspirationSets, 'items'),
-      plotOutlineSets: clearSetByName(novel.plotOutlineSets, 'items'),
+      outlineSets: clearSetByName(novel.outlineSets, 'items', 'outline'),
+      characterSets: clearSetByName(novel.characterSets, 'characters', 'characters'),
+      worldviewSets: clearSetByName(novel.worldviewSets, 'entries', 'worldview'),
+      inspirationSets: clearSetByName(novel.inspirationSets, 'items', 'inspiration'),
+      plotOutlineSets: clearSetByName(novel.plotOutlineSets, 'items', 'plotOutline'),
       referenceFiles: (novel.referenceFiles || []).filter(file => !file.parentId || !allFolderIds.has(file.parentId)),
     };
   };
@@ -388,8 +403,8 @@ export const useWorkflowEngine = (options: {
         workflowManager.clearStartVolumeLock();
       }
 
-      if (userSpecifiedTargetVolumeId && mode && !keepContent.enabled) {
-        localNovel = clearNovelContentByVolumes(localNovel, [userSpecifiedTargetVolumeId], mode === 'full');
+      if (userSpecifiedTargetVolumeId && mode) {
+        localNovel = clearNovelContentByVolumes(localNovel, [userSpecifiedTargetVolumeId], mode === 'full', keepContent.types);
         await updateLocalAndGlobal(localNovel);
       }
       
