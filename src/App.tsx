@@ -187,6 +187,11 @@ function App() {
   // 全局文件夹选择状态（跨模块保持）
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
 
+  // 辅助函数：更新活跃文件夹ID
+  const updateActiveFolderId = useCallback((id: string | null) => {
+    setActiveFolderId(id);
+  }, []);
+
   // 辅助函数：切换条目选择
   const handleToggleItem = (
     type: 'worldview' | 'character' | 'inspiration' | 'outline' | 'reference',
@@ -330,26 +335,41 @@ function App() {
           const outlineSet = novelData.activeNovel.outlineSets?.find(s => s.id === setIdToUse);
           if (outlineSet) {
             novelData.setActiveOutlineSetId(setIdToUse);
+          } else if (novelData.activeNovel.outlineSets?.length > 0) {
+            // 如果找不到对应 ID 的集，使用第一个集
+            novelData.setActiveOutlineSetId(novelData.activeNovel.outlineSets[0].id);
           }
         } else if (target === 'characters') {
           const characterSet = novelData.activeNovel.characterSets?.find(s => s.id === setIdToUse);
           if (characterSet) {
             novelData.setActiveCharacterSetId(setIdToUse);
+          } else if (novelData.activeNovel.characterSets?.length > 0) {
+            // 如果找不到对应 ID 的集，使用第一个集
+            novelData.setActiveCharacterSetId(novelData.activeNovel.characterSets[0].id);
           }
         } else if (target === 'worldview') {
           const worldviewSet = novelData.activeNovel.worldviewSets?.find(s => s.id === setIdToUse);
           if (worldviewSet) {
             novelData.setActiveWorldviewSetId(setIdToUse);
+          } else if (novelData.activeNovel.worldviewSets?.length > 0) {
+            // 如果找不到对应 ID 的集，使用第一个集
+            novelData.setActiveWorldviewSetId(novelData.activeNovel.worldviewSets[0].id);
           }
         } else if (target === 'inspiration') {
           const inspirationSet = novelData.activeNovel.inspirationSets?.find(s => s.id === setIdToUse);
           if (inspirationSet) {
             novelData.setActiveInspirationSetId(setIdToUse);
+          } else if (novelData.activeNovel.inspirationSets?.length > 0) {
+            // 如果找不到对应 ID 的集，使用第一个集
+            novelData.setActiveInspirationSetId(novelData.activeNovel.inspirationSets[0].id);
           }
         } else if (target === 'plotOutline') {
           const plotOutlineSet = novelData.activeNovel.plotOutlineSets?.find(s => s.id === setIdToUse);
           if (plotOutlineSet) {
             novelData.setActivePlotOutlineSetId(setIdToUse);
+          } else if (novelData.activeNovel.plotOutlineSets?.length > 0) {
+            // 如果找不到对应 ID 的集，使用第一个集
+            novelData.setActivePlotOutlineSetId(novelData.activeNovel.plotOutlineSets[0].id);
           }
         }
       }
@@ -1090,6 +1110,7 @@ function App() {
               novelData.setActiveOutlineSetId(id);
               setActiveFolderId(id);
             },
+            onUpdateActiveFolderId: updateActiveFolderId,
 
             // Reference Selectors Props
             // Reference Selectors Props

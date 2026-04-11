@@ -54,6 +54,7 @@ interface OutlineManagerProps {
   lastNonChatPresetId?: string
   onReturnToMainWithContent?: (content: string) => void
   onSetActivePresetId?: (id: string) => void
+  onUpdateActiveFolderId?: (id: string | null) => void
   
   // Reference Selection Props
   selectedWorldviewSetId: string | null
@@ -120,6 +121,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
   lastNonChatPresetId,
   onReturnToMainWithContent,
   onSetActivePresetId,
+  onUpdateActiveFolderId,
   selectedWorldviewSetId,
   selectedWorldviewIndices,
   onSelectWorldviewSet,
@@ -459,6 +461,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
                 key={set.id}
                 onClick={() => {
                    onSetActiveOutlineSetId(set.id)
+                   onUpdateActiveFolderId?.(set.id)
                    // Auto close on mobile selection
                    if (window.innerWidth < 768) setIsMobileListOpen(false)
                 }}
