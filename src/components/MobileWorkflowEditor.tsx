@@ -81,6 +81,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
   const [selectedStartIndex, setSelectedStartIndex] = useState(0);
   const [selectedStartVolumeId, setSelectedStartVolumeId] = useState('');
   const [restartMode, setRestartMode] = useState<WorkflowRestartMode>('volume');
+  const [keepContent, setKeepContent] = useState({
+    enabled: false,
+    types: [] as string[]
+  });
 
   const nodesRef = useRef(nodes);
   const workflowsRef = useRef<WorkflowData[]>([]);
@@ -186,6 +190,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
     setSelectedStartIndex(Math.min(selectedStartIndex, Math.max(orderedNodes.length - 1, 0)));
     setSelectedStartVolumeId(activeNovel?.volumes?.[0]?.id || '');
     setRestartMode('volume');
+    setKeepContent({ enabled: false, types: [] });
     setShowStartWorkflowSheet(true);
   }, [nodes.length, orderedNodes, selectedStartIndex, activeNovel]);
 
@@ -204,6 +209,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
         startIndex: firstLoopRestartIndex,
         targetVolumeId: selectedStartVolumeId,
         mode: 'full',
+        keepContent: keepContent,
       });
       setShowStartWorkflowSheet(false);
       return;
@@ -213,9 +219,10 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
       startIndex: selectedStartIndex,
       targetVolumeId: selectedStartVolumeId,
       mode: 'volume',
+      keepContent: keepContent,
     });
     setShowStartWorkflowSheet(false);
-  }, [selectedStartVolumeId, restartMode, hasLoopNode, firstLoopRestartIndex, runWorkflow, selectedStartIndex]);
+  }, [selectedStartVolumeId, restartMode, hasLoopNode, firstLoopRestartIndex, runWorkflow, selectedStartIndex, keepContent]);
 
   // 性能优化：显式使用 useMemo 锁定 nodeTypes 和 edgeTypes，消除 React Flow 的重绘警告
   const nodeTypes = useMemo(
@@ -991,6 +998,67 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
                         <p className="text-[11px] leading-5 text-red-200">
                           会清空所选卷及其后续卷的章节内容、卷内集合内容与对应文件夹文件，该操作不可撤销。
                         </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-300 block mb-2">内容处理</label>
+                <div className="rounded-2xl border border-gray-700 bg-gray-900 p-4">
+                  <div className="flex items-center justify-between gap-4 mb-4">
+                    <div>
+                      <div className="text-sm font-bold text-gray-100">保持现有内容</div>
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        不清除文件夹内容，检查节点内容不为空时跳过执行，帮助节省 token。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setKeepContent({ enabled: !keepContent.enabled, types: keepContent.types })}
+                      className={`w-4 h-4 rounded-full border transition-colors ${
+                        keepContent.enabled
+                          ? 'border-blue-400 bg-blue-400'
+                          : 'border-gray-500'
+                      }`}
+                    />
+                  </div>
+                  
+                  {keepContent.enabled && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-400">选择要保持内容的类型：</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { value: 'worldview', label: '世界观' },
+                          { value: 'characters', label: '角色集' },
+                          { value: 'plotOutline', label: '粗纲' },
+                          { value: 'outline', label: '大纲' },
+                          { value: 'chapter', label: '正文' },
+                          { value: 'outlineAndChapter', label: '大纲与正文' }
+                        ].map((type) => (
+                          <label key={type.value} className="flex items-center gap-2 p-2 rounded-lg border border-gray-700 hover:border-gray-600 cursor-pointer transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={keepContent.types.includes(type.value)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setKeepContent({ 
+                                    enabled: keepContent.enabled, 
+                                    types: [...keepContent.types, type.value] 
+                                  });
+                                } else {
+                                  setKeepContent({ 
+                                    enabled: keepContent.enabled, 
+                                    types: keepContent.types.filter(t => t !== type.value) 
+                                  });
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-gray-600 text-blue-500 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-300">{type.label}</span>
+                          </label>
+                        ))}
                       </div>
                     </div>
                   )}
