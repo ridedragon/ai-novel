@@ -3,7 +3,7 @@ import OpenAI from 'openai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
 import { GeneratorPreset, GeneratorPrompt, LoopInstruction, Novel, ReferenceFolder, Chapter, NovelVolume } from '../../../types';
-import { AutoWriteEngine, getChapterContextMessages } from '../../../utils/auto-write';
+import { AutoWriteEngine, getChapterContextMessages, getEffectiveChapterContent } from '../../../utils/auto-write';
 import { keepAliveManager } from '../../../utils/KeepAliveManager';
 import { storage } from '../../../utils/storage';
 import { workflowManager } from '../../../utils/WorkflowManager';
@@ -2992,10 +2992,70 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           // 存储每章的章节对象，用于后续更新内容
           const chapterMap: Map<number, Chapter> = new Map();
 
-          // 获取已保存的循环进度
-          let startChapterIndex = (node.data.currentChapterIndex as number) || 0;
+          // 检测当前卷的大纲和章节状态，确定应该从哪里开始
+          let calculatedStartChapterIndex = 0;
+          
+          // 获取当前卷的章节（只筛选属于当前卷的章节）
+          const currentVolumeChapters = (localNovel.chapters || []).filter(
+            (chapter) => chapter.volumeId === finalVolumeId && (!chapter.subtype || chapter.subtype === 'story')
+          );
+          
+          // 获取当前卷的大纲数量
+          const outlineCount = outlineSet?.items?.length || 0;
+          
+          // 检查章节内容是否为空
+          const checkChapterHasContent = (chapter: Chapter) => {
+            const content = getEffectiveChapterContent(chapter);
+            return content && content.trim().length > 0;
+          };
+          
+          terminal.log(`[OutlineAndChapter] 检测当前卷状态: outlineCount=${outlineCount}, chapterCount=${currentVolumeChapters.length}`);
+          
+          // 按章节索引排序（确保顺序正确）
+          currentVolumeChapters.sort((a, b) => {
+            const numA = parseAnyNumber(a.title) || 0;
+            const numB = parseAnyNumber(b.title) || 0;
+            return numA - numB;
+          });
+          
+          // 情况1：查找第一个内容为空的章节
+          let firstEmptyChapterIndex = -1;
+          for (let idx = 0; idx < currentVolumeChapters.length; idx++) {
+            if (!checkChapterHasContent(currentVolumeChapters[idx])) {
+              firstEmptyChapterIndex = idx;
+              break;
+            }
+          }
+          
+          if (firstEmptyChapterIndex !== -1) {
+            // 有章节内容为空，从该章节开始
+            calculatedStartChapterIndex = firstEmptyChapterIndex;
+            terminal.log(`[OutlineAndChapter] 发现第 ${firstEmptyChapterIndex + 1} 章内容为空，从该章开始`);
+          } else if (outlineCount > currentVolumeChapters.length) {
+            // 大纲数量多于章节数量，从最后一章的下一章开始
+            calculatedStartChapterIndex = currentVolumeChapters.length;
+            terminal.log(`[OutlineAndChapter] 大纲数量(${outlineCount})多于章节数量(${currentVolumeChapters.length})，从第 ${calculatedStartChapterIndex + 1} 章开始`);
+          } else if (outlineCount === currentVolumeChapters.length && currentVolumeChapters.length > 0) {
+            // 大纲和章节数量相同且都有内容，从下一章开始
+            calculatedStartChapterIndex = currentVolumeChapters.length;
+            terminal.log(`[OutlineAndChapter] 大纲和章节都已完成(${currentVolumeChapters.length}章)，从第 ${calculatedStartChapterIndex + 1} 章开始`);
+          } else {
+            // 其他情况，从第一章开始
+            calculatedStartChapterIndex = 0;
+            terminal.log(`[OutlineAndChapter] 没有现有内容，从第一章开始`);
+          }
+
+          // 获取已保存的循环进度，但优先使用计算出的起始索引
+          let startChapterIndex = calculatedStartChapterIndex;
+          // 只有当节点保存的进度比计算出的更靠后时，才使用保存的进度
+          const savedChapterIndex = (node.data.currentChapterIndex as number) || 0;
+          if (savedChapterIndex > calculatedStartChapterIndex) {
+            startChapterIndex = savedChapterIndex;
+            terminal.log(`[OutlineAndChapter] 使用节点保存的进度: 从第 ${startChapterIndex + 1} 章开始`);
+          }
+          
           let currentChapterIndex = startChapterIndex;
-          terminal.log(`[OutlineAndChapter] 开始生成章节，从第 ${startChapterIndex + 1} 章开始`);
+          terminal.log(`[OutlineAndChapter] 最终确定: 从第 ${startChapterIndex + 1} 章开始`);
 
           // 获取连贯创作章节数配置
           const consecutiveChapterCount = globalConfig.consecutiveChapterCount || 1;
@@ -3219,7 +3279,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               );
             }
 
-            // 批量创建章节
+            // 批量创建或获取章节
             const batchChapters: Chapter[] = [];
             const actualProcessCount = Math.min(outlineEntries.length, chapterCount - startChapterIndex);
             
@@ -3236,18 +3296,26 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               // 使用解析后的标题
               const resolvedTitle = entry.title || `第${chapterIdx + 1}章`;
               
-              // 大纲生成完成后，创建对应章节
-              const newChapter: Chapter = {
-                id: Date.now() + chapterIdx,
-                title: resolvedTitle,
-                content: '', // 初始为空，后续会更新
-                volumeId: finalVolumeId,
-                subtype: 'story',
-              };
+              // 检查章节是否已经存在
+              let chapter = currentVolumeChapters[chapterIdx];
+              if (!chapter) {
+                // 如果不存在，创建新章节
+                chapter = {
+                  id: Date.now() + chapterIdx,
+                  title: resolvedTitle,
+                  content: '', // 初始为空，后续会更新
+                  volumeId: finalVolumeId,
+                  subtype: 'story',
+                };
+                batchChapters.push(chapter);
+                terminal.log(`[OutlineAndChapter] 创建新章节: id=${chapter.id}, title=${resolvedTitle}, volumeId=${finalVolumeId}`);
+              } else {
+                // 如果已存在，更新标题（如果需要）
+                chapter.title = resolvedTitle;
+                terminal.log(`[OutlineAndChapter] 使用现有章节: id=${chapter.id}, title=${resolvedTitle}, volumeId=${finalVolumeId}`);
+              }
               
-              batchChapters.push(newChapter);
-              chapterMap.set(chapterIdx, newChapter);
-              terminal.log(`[OutlineAndChapter] 创建章节: id=${newChapter.id}, title=${resolvedTitle}, volumeId=${finalVolumeId}`);
+              chapterMap.set(chapterIdx, chapter);
 
               // 添加大纲到输出条目
               outputEntries.push({
@@ -3257,9 +3325,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               });
             }
 
-            // 批量添加章节到小说
-            localNovel.chapters = [...(localNovel.chapters || []), ...batchChapters];
-            await updateLocalAndGlobal(localNovel);
+            // 批量添加新章节到小说（只添加新创建的）
+            if (batchChapters.length > 0) {
+              localNovel.chapters = [...(localNovel.chapters || []), ...batchChapters];
+              await updateLocalAndGlobal(localNovel);
+            }
 
             // 及时更新节点的 outputEntries，以便大纲能够及时显示在自动化创作中心的大纲文件夹中
             currentChapterIndex = batchEndIndex;
