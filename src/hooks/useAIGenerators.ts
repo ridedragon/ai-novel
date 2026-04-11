@@ -1658,8 +1658,8 @@ export function useAIGenerators() {
             let response;
             try {
               if (params.stream) {
-                // 对于流式请求，直接获取迭代器而不使用await
-                response = openai.chat.completions.create(
+                // 对于流式请求，使用await获取流对象
+                response = await openai.chat.completions.create(
                   requestParams,
                   {
                     signal: generateAbortControllerRef.current.signal,
@@ -1684,7 +1684,7 @@ export function useAIGenerators() {
                   delete requestParams.top_k;
                   fallbackMode = 1;
                   if (params.stream) {
-                    response = openai.chat.completions.create(
+                    response = await openai.chat.completions.create(
                       requestParams,
                       {
                         signal: generateAbortControllerRef.current.signal,
@@ -1704,7 +1704,7 @@ export function useAIGenerators() {
                   requestParams.temperature = 1.0;
                   fallbackMode = 2;
                   if (params.stream) {
-                    response = openai.chat.completions.create(
+                    response = await openai.chat.completions.create(
                       requestParams,
                       {
                         signal: generateAbortControllerRef.current.signal,

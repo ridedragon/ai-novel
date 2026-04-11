@@ -186,6 +186,13 @@ export function useAppConfig() {
     longTextModeRef.current = longTextMode;
   }, [longTextMode]);
 
+  // --- 流式传输设置 ---
+  const [stream, setStream] = useState(() => localStorage.getItem('stream') === 'true');
+  const streamRef = useRef(stream);
+  useEffect(() => {
+    streamRef.current = stream;
+  }, [stream]);
+
   const [contextScope, setContextScope] = useState<string>(() => localStorage.getItem('contextScope') || 'all');
   const contextScopeRef = useRef(contextScope);
   useEffect(() => {
@@ -232,6 +239,7 @@ export function useAppConfig() {
 
   useEffect(() => {
     localStorage.setItem('longTextMode', String(longTextMode));
+    localStorage.setItem('stream', String(stream));
     localStorage.setItem('contextScope', contextScope);
     localStorage.setItem('contextChapterCount', String(contextChapterCount));
     localStorage.setItem('smallSummaryInterval', String(smallSummaryInterval));
@@ -240,6 +248,7 @@ export function useAppConfig() {
     localStorage.setItem('bigSummaryPrompt', bigSummaryPrompt);
   }, [
     longTextMode,
+    stream,
     contextScope,
     contextChapterCount,
     smallSummaryInterval,
@@ -334,6 +343,9 @@ export function useAppConfig() {
     longTextMode,
     setLongTextMode,
     longTextModeRef,
+    stream,
+    setStream,
+    streamRef,
     contextScope,
     setContextScope,
     contextScopeRef,
