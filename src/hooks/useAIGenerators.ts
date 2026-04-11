@@ -425,11 +425,6 @@ export function useAIGenerators() {
           activePreset.topP ?? 1.0,
           activePreset.topK ?? 200,
         );
-        const openai = new OpenAI({
-          apiKey: apiConfig.apiKey,
-          baseURL: apiConfig.baseUrl,
-          dangerouslyAllowBrowser: true,
-        });
 
         const itemToRegenerate = targetSet.items[index];
         const referenceContext = buildReferenceContext(

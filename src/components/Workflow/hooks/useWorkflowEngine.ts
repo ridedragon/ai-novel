@@ -20,6 +20,101 @@ import {
 import { cleanAndParseJSON, extractEntries, extractTargetEndChapter, parseAnyNumber, checkNodeHasContent } from '../utils/workflowHelpers';
 import { initializeChapterNumbering, generateChapterTitle, calculateNewChapterNumbering } from '../../../utils/chapterNumbering';
 
+// 流式AI请求函数
+const streamAIRequest = async ({
+  apiKey,
+  baseUrl,
+  model,
+  messages,
+  onData,
+  onError,
+  onComplete,
+  signal,
+}: {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  messages: any[];
+  onData?: (chunk: string) => void;
+  onError?: (error: string) => void;
+  onComplete?: () => void;
+  signal?: AbortSignal;
+}) => {
+  try {
+    const response = await fetch(`${baseUrl || 'http://localhost:3001'}/api/ai/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ model, messages, apiKey, baseUrl }),
+      signal,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'API请求失败');
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('无法获取响应流');
+    }
+
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      
+      // 处理完整的行
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // 保留最后不完整的行
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') {
+            onComplete?.();
+            return;
+          }
+          try {
+            // 对于非JSON格式的响应，直接作为文本处理
+            onData?.(data);
+          } catch (e) {
+            // 忽略解析错误
+          }
+        }
+      }
+    }
+
+    // 处理最后剩余的缓冲区内容
+    if (buffer) {
+      const lines = buffer.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') {
+            onComplete?.();
+            return;
+          }
+          try {
+            onData?.(data);
+          } catch (e) {
+            // 忽略解析错误
+          }
+        }
+      }
+    }
+
+    onComplete?.();
+  } catch (error) {
+    onError?.(error instanceof Error ? error.message : '未知错误');
+  }
+};
+
 export const useWorkflowEngine = (options: {
   activeNovel: Novel | undefined;
   globalConfig: any;
@@ -2305,11 +2400,7 @@ export const useWorkflowEngine = (options: {
             const aiModel = node.data.overrideAiConfig && node.data.model ? node.data.model : globalConfig.model;
             const aiTemp = node.data.overrideAiConfig && node.data.temperature !== undefined ? node.data.temperature : 0.7;
 
-            const configuratorOpenai = new OpenAI({
-              apiKey: aiApiKey,
-              baseURL: aiBaseUrl,
-              dangerouslyAllowBrowser: true,
-            });
+
 
             // 构建 AI 请求消息
             const nodePromptItems = (node.data.promptItems as GeneratorPrompt[]) || [];
@@ -2394,12 +2485,27 @@ ${node.data.instruction || '请智能生成适合的循环配置'}
 >> -----------------------------------------------------------
 `);
 
-                const completion = await configuratorOpenai.chat.completions.create(
-                  { model: aiModel, messages: configuratorMessages, temperature: aiTemp } as any,
-                  { signal: abortControllerRef.current?.signal },
-                );
-
-                aiResponse = completion.choices[0]?.message?.content || '';
+                // 使用流式API
+                await new Promise<void>((resolve, reject) => {
+                  let responseContent = '';
+                  streamAIRequest({
+                    apiKey: aiApiKey,
+                    baseUrl: aiBaseUrl,
+                    model: aiModel,
+                    messages: configuratorMessages,
+                    onData: (chunk) => {
+                      responseContent += chunk;
+                    },
+                    onError: (error) => {
+                      reject(new Error(error));
+                    },
+                    onComplete: () => {
+                      aiResponse = responseContent;
+                      resolve();
+                    },
+                    signal: abortControllerRef.current?.signal,
+                  });
+                });
                 
                 if (aiResponse) {
                   // 解析AI返回的JSON
@@ -2726,17 +2832,13 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           if (nodesRef.current.length > 1) throw new Error('架构师节点必须在空画布上运行。');
           const genPresets = (allPresets as any).generator || [];
           const genPreset = genPresets.find((p: any) => p.id === node.data.presetId) || genPresets[0];
-          const genOpenai = new OpenAI({
-            apiKey:
-              node.data.overrideAiConfig && node.data.apiKey
-                ? node.data.apiKey
-                : genPreset?.apiConfig?.apiKey || globalConfig.apiKey,
-            baseURL:
-              node.data.overrideAiConfig && node.data.baseUrl
-                ? node.data.baseUrl
-                : genPreset?.apiConfig?.baseUrl || globalConfig.baseUrl,
-            dangerouslyAllowBrowser: true,
-          });
+          // 提取API配置
+          const genApiKey = node.data.overrideAiConfig && node.data.apiKey
+            ? node.data.apiKey
+            : genPreset?.apiConfig?.apiKey || globalConfig.apiKey;
+          const genBaseUrl = node.data.overrideAiConfig && node.data.baseUrl
+            ? node.data.baseUrl
+            : genPreset?.apiConfig?.baseUrl || globalConfig.baseUrl;
 
           let generatorMessages: any[] = [];
           if (node.data.overrideAiConfig && node.data.promptItems?.length) {
@@ -2799,12 +2901,27 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 >> -----------------------------------------------------------
 `);
 
-              const genCompletion = await genOpenai.chat.completions.create({
-                model: genModel,
-                messages: generatorMessages,
-                temperature: genTemp,
+              // 使用流式API
+              await new Promise<void>((resolve, reject) => {
+                let responseContent = '';
+                streamAIRequest({
+                  apiKey: genApiKey,
+                  baseUrl: genBaseUrl,
+                  model: genModel,
+                  messages: generatorMessages,
+                  onData: (chunk) => {
+                    responseContent += chunk;
+                  },
+                  onError: (error) => {
+                    reject(new Error(error));
+                  },
+                  onComplete: () => {
+                    aiResponse = responseContent;
+                    resolve();
+                  },
+                  signal: abortControllerRef.current?.signal,
+                });
               });
-              aiResponse = genCompletion.choices[0]?.message?.content || '';
             } catch (err) {
               if (genRetryCount === 2) throw err;
               genRetryCount++;
@@ -3197,13 +3314,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             
             // 1. 批量生成大纲（仅在需要时生成）
             if (needGenerateOutline) {
-              const outlineOpenai = new OpenAI({
-                apiKey: finalOutlinePreset.apiConfig?.apiKey || globalConfig.apiKey,
-                baseURL: finalOutlinePreset.apiConfig?.baseUrl || globalConfig.baseUrl,
-                dangerouslyAllowBrowser: true,
-              });
+              // 提取API配置
+              const outlineApiKey = finalOutlinePreset.apiConfig?.apiKey || globalConfig.apiKey;
+              const outlineBaseUrl = finalOutlinePreset.apiConfig?.baseUrl || globalConfig.baseUrl;
 
-            // 检查是否已经被中止
+              // 检查是否已经被中止
             if (abortControllerRef.current?.signal.aborted) break;
 
             // Build outline messages using preset prompts if available
@@ -3282,11 +3397,27 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 >> -----------------------------------------------------------
 `);
 
-              const outlineCompletion = await outlineOpenai.chat.completions.create({
-                ...outlineCompletionParams,
-                signal: abortControllerRef.current?.signal
+              // 使用流式API
+              await new Promise<void>((resolve, reject) => {
+                let responseContent = '';
+                streamAIRequest({
+                  apiKey: outlineApiKey,
+                  baseUrl: outlineBaseUrl,
+                  model: outlineCompletionParams.model,
+                  messages: outlineCompletionParams.messages,
+                  onData: (chunk) => {
+                    responseContent += chunk;
+                  },
+                  onError: (error) => {
+                    reject(new Error(error));
+                  },
+                  onComplete: () => {
+                    outlineResponse = responseContent;
+                    resolve();
+                  },
+                  signal: abortControllerRef.current?.signal,
+                });
               });
-              outlineResponse = outlineCompletion.choices[0]?.message?.content || '';
               
               terminal.log(`
 >> AI RESPONSE [工作流: 批量大纲生成] 第${startChapterIndex + 1}-${batchEndIndex}章
@@ -3340,8 +3471,27 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     if ((finalOutlinePreset as any).presencePenalty)
                       repairCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
 
-                    const repairedCompletion = await outlineOpenai.chat.completions.create(repairCompletionParams);
-                    parsedOutlineResponse = repairedCompletion.choices[0]?.message?.content || parsedOutlineResponse;
+                    // 使用流式API
+                    await new Promise<void>((resolve, reject) => {
+                      let responseContent = '';
+                      streamAIRequest({
+                        apiKey: outlineApiKey,
+                        baseUrl: outlineBaseUrl,
+                        model: repairCompletionParams.model,
+                        messages: repairCompletionParams.messages,
+                        onData: (chunk) => {
+                          responseContent += chunk;
+                        },
+                        onError: (error) => {
+                          reject(new Error(error));
+                        },
+                        onComplete: () => {
+                          parsedOutlineResponse = responseContent || parsedOutlineResponse;
+                          resolve();
+                        },
+                        signal: abortControllerRef.current?.signal,
+                      });
+                    });
                     parseRetry++;
                   } else {
                     // Bug3修复：与大纲节点一致的fallback逻辑
@@ -3471,11 +3621,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             await syncNodeStatus(node.id, { outputEntries, currentChapterIndex }, i);
 
             // 2. 批量生成正文
-            const chapterOpenai = new OpenAI({
-              apiKey: finalChapterPreset.apiConfig?.apiKey || globalConfig.apiKey,
-              baseURL: finalChapterPreset.apiConfig?.baseUrl || globalConfig.baseUrl,
-              dangerouslyAllowBrowser: true,
-            });
+            // 提取API配置
+            const chapterApiKey = finalChapterPreset.apiConfig?.apiKey || globalConfig.apiKey;
+            const chapterBaseUrl = finalChapterPreset.apiConfig?.baseUrl || globalConfig.baseUrl;
 
             // Build chapter messages using preset prompts if available
             let chapterMessages: any[] = [];
@@ -3569,29 +3717,25 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 >> -----------------------------------------------------------
 `);
 
-              // 尝试使用流式输出
-              try {
-                const stream = chapterOpenai.chat.completions.create({
-                  ...chapterCompletionParams,
-                  signal: abortControllerRef.current?.signal
+              // 使用流式API
+              await new Promise<void>((resolve, reject) => {
+                streamAIRequest({
+                  apiKey: chapterApiKey,
+                  baseUrl: chapterBaseUrl,
+                  model: chapterCompletionParams.model,
+                  messages: chapterCompletionParams.messages,
+                  onData: (chunk) => {
+                    batchChapterResponse += chunk;
+                  },
+                  onError: (error) => {
+                    reject(new Error(error));
+                  },
+                  onComplete: () => {
+                    resolve();
+                  },
+                  signal: abortControllerRef.current?.signal,
                 });
-                
-                // 直接使用 for await...of 循环处理流
-                // OpenAI SDK v4 的流对象支持异步迭代
-                for await (const chunk of stream as any) {
-                  const content = chunk.choices[0]?.delta?.content || '';
-                  batchChapterResponse += content;
-                }
-              } catch (streamError) {
-                terminal.error(`[OutlineAndChapter] 流式输出失败: ${streamError}，尝试非流式方式`);
-                // 发生错误时，使用非流式方式重新请求
-                const nonStreamResponse = await chapterOpenai.chat.completions.create({
-                  ...chapterCompletionParams,
-                  stream: false, // 禁用流式输出
-                  signal: abortControllerRef.current?.signal
-                });
-                batchChapterResponse = nonStreamResponse.choices[0]?.message?.content || '';
-              }
+              });
               
               terminal.log(`
 >> AI RESPONSE [工作流: 批量正文生成] 第${startChapterIndex + 1}-${batchEndIndex}章
@@ -5006,13 +5150,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             ? node.data.maxTokens
             : (preset as any)?.maxReplyLength || (preset as any)?.max_tokens || globalConfig.maxReplyLength;
 
-        const openai = new OpenAI({
-          apiKey:
-            node.data.overrideAiConfig && node.data.apiKey ? node.data.apiKey : nApi.apiKey || globalConfig.apiKey,
-          baseURL:
-            node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : nApi.baseUrl || globalConfig.baseUrl,
-          dangerouslyAllowBrowser: true,
-        });
+        // 提取API配置
+        const apiKey = node.data.overrideAiConfig && node.data.apiKey ? node.data.apiKey : nApi.apiKey || globalConfig.apiKey;
+        const baseUrl = node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : nApi.baseUrl || globalConfig.baseUrl;
 
         let aiRes = '',
           entriesToStore: any[] = [],
@@ -5068,34 +5208,82 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               requestParams.top_k = fTopK;
             }
             
-            let completion;
+            // 使用流式API
             try {
-              completion = await openai.chat.completions.create(
-                requestParams,
-                { signal: abortControllerRef.current?.signal },
-              );
+              await new Promise<void>((resolve, reject) => {
+                let responseContent = '';
+                streamAIRequest({
+                  apiKey: apiKey,
+                  baseUrl: baseUrl,
+                  model: requestParams.model,
+                  messages: requestParams.messages,
+                  onData: (chunk) => {
+                    responseContent += chunk;
+                  },
+                  onError: (error) => {
+                    reject(new Error(error));
+                  },
+                  onComplete: () => {
+                    aiRes = responseContent;
+                    resolve();
+                  },
+                  signal: abortControllerRef.current?.signal,
+                });
+              });
             } catch (apiError: any) {
-              if (apiError.status === 400) {
-                const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+              if (apiError.message && apiError.message.includes('400')) {
+                const errorBody = apiError.message || 'Unknown error';
                 terminal.warn(`API 400 错误: ${errorBody}`);
                 
                 if (requestParams.top_k && fallbackMode < 1) {
                   terminal.warn('尝试移除 top_k 参数重试');
                   delete requestParams.top_k;
                   fallbackMode = 1;
-                  completion = await openai.chat.completions.create(
-                    requestParams,
-                    { signal: abortControllerRef.current?.signal },
-                  );
+                  await new Promise<void>((resolve, reject) => {
+                    let responseContent = '';
+                    streamAIRequest({
+                      apiKey: apiKey,
+                      baseUrl: baseUrl,
+                      model: requestParams.model,
+                      messages: requestParams.messages,
+                      onData: (chunk) => {
+                        responseContent += chunk;
+                      },
+                      onError: (error) => {
+                        reject(new Error(error));
+                      },
+                      onComplete: () => {
+                        aiRes = responseContent;
+                        resolve();
+                      },
+                      signal: abortControllerRef.current?.signal,
+                    });
+                  });
                 } else if (fallbackMode < 2) {
                   terminal.warn('尝试简化参数重试 (移除 top_p)');
                   delete requestParams.top_p;
                   requestParams.temperature = 1.0;
                   fallbackMode = 2;
-                  completion = await openai.chat.completions.create(
-                    requestParams,
-                    { signal: abortControllerRef.current?.signal },
-                  );
+                  await new Promise<void>((resolve, reject) => {
+                    let responseContent = '';
+                    streamAIRequest({
+                      apiKey: apiKey,
+                      baseUrl: baseUrl,
+                      model: requestParams.model,
+                      messages: requestParams.messages,
+                      onData: (chunk) => {
+                        responseContent += chunk;
+                      },
+                      onError: (error) => {
+                        reject(new Error(error));
+                      },
+                      onComplete: () => {
+                        aiRes = responseContent;
+                        resolve();
+                      },
+                      signal: abortControllerRef.current?.signal,
+                    });
+                  });
                 } else if (retry < 2) {
                   retry++;
                   continue;
@@ -5106,8 +5294,6 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 throw apiError;
               }
             }
-            
-            aiRes = completion.choices[0]?.message?.content || '';
             // 核心修复：添加 AI 响应日志
             terminal.log(`[WORKFLOW] ${node.data.typeLabel} - ${node.data.label} AI 响应已接收, 长度: ${aiRes.length}`);
             if (!aiRes?.trim()) {
