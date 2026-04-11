@@ -272,27 +272,18 @@ export const useWorkflowEngine = (options: {
 
     return {
       ...novel,
-      chapters: (novel.chapters || []).map(chapter => {
+      chapters: (novel.chapters || []).filter(chapter => {
         if (!chapter.volumeId || !affectedVolumeIds.has(chapter.volumeId)) {
-          return chapter;
+          return true;
         }
 
-        // 检查是否需要保留章节内容
+        // 检查是否需要保留章节
         if (shouldKeepType('chapter')) {
-          return chapter;
+          return true;
         }
 
-        return {
-          ...chapter,
-          content: '',
-          sourceContent: '',
-          optimizedContent: '',
-          showingVersion: 'source' as const,
-          versions: [],
-          activeVersionId: undefined,
-          analysisResult: undefined,
-          logicScore: undefined,
-        };
+        // 不需要保留的章节，从列表中移除
+        return false;
       }),
       outlineSets: clearSetByName(novel.outlineSets, 'items', 'outline'),
       characterSets: clearSetByName(novel.characterSets, 'characters', 'characters'),
