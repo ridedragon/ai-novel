@@ -14,66 +14,47 @@ export const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   isStreaming = true
 }) => {
   const [displayedText, setDisplayedText] = useState('');
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const textRef = useRef(text);
   const animationFrameRef = useRef<number>();
   const lastUpdateTimeRef = useRef<number>(0);
-
+  const targetTextRef = useRef(text);
+  
   useEffect(() => {
-    // Update the ref when text changes
-    textRef.current = text;
+    targetTextRef.current = text;
   }, [text]);
 
   useEffect(() => {
-    // Only reset if text is shorter than displayed text (content removed)
-    // or if it's a completely different text
-    if (text.length < displayedText.length || 
-        (text.length > displayedText.length && !text.startsWith(displayedText))) {
-      setCurrentIndex(0);
-      setDisplayedText('');
-    }
-  }, [text, displayedText.length]);
-
-  useEffect(() => {
     if (!isStreaming) {
-      // If not streaming, just display the full text immediately
       setDisplayedText(text);
-      setCurrentIndex(text.length);
       return;
     }
 
-    // Reset animation when text changes significantly
-    if (text.length < displayedText.length || 
-        (text.length > displayedText.length && !text.startsWith(displayedText))) {
-      setCurrentIndex(0);
-      setDisplayedText('');
-    }
-
-    // If text has grown, adjust currentIndex to match the new text length
-    if (text.length > displayedText.length && text.startsWith(displayedText)) {
-      setCurrentIndex(displayedText.length);
-    }
-
     const animate = (timestamp: number) => {
-      if (!lastUpdateTimeRef.current) {
-        lastUpdateTimeRef.current = timestamp;
-      }
-
-      const elapsed = timestamp - lastUpdateTimeRef.current;
+      const targetText = targetTextRef.current;
       
-      if (elapsed >= speed && currentIndex < text.length) {
-        setDisplayedText(text.substring(0, currentIndex + 1));
-        setCurrentIndex(prevIndex => prevIndex + 1);
-        lastUpdateTimeRef.current = timestamp;
-      }
+      if (displayedText.length < targetText.length) {
+        if (!lastUpdateTimeRef.current) {
+          lastUpdateTimeRef.current = timestamp;
+        }
 
-      // Always continue the animation if text is still growing or not fully displayed
-      if (currentIndex < text.length) {
+        const elapsed = timestamp - lastUpdateTimeRef.current;
+        
+        if (elapsed >= speed) {
+          const charsToAdd = Math.min(
+            Math.max(1, Math.floor(elapsed / speed)),
+            targetText.length - displayedText.length
+          );
+          
+          const newDisplayedText = targetText.substring(0, displayedText.length + charsToAdd);
+          setDisplayedText(newDisplayedText);
+          lastUpdateTimeRef.current = timestamp;
+        }
+        
         animationFrameRef.current = requestAnimationFrame(animate);
+      } else if (displayedText.length > targetText.length) {
+        setDisplayedText(targetText);
       }
     };
 
-    // Start the animation immediately
     animationFrameRef.current = requestAnimationFrame(animate);
 
     return () => {
@@ -81,7 +62,7 @@ export const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [text, currentIndex, speed, isStreaming, displayedText.length]);
+  }, [text, isStreaming, speed, displayedText.length]);
 
   return (
     <div className={className}>
@@ -91,7 +72,7 @@ export const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           {index < displayedText.split('\n').length - 1 && <br />}
         </React.Fragment>
       ))}
-      {isStreaming && currentIndex < text.length && (
+      {isStreaming && displayedText.length < text.length && (
         <span className="inline-block w-2 h-5 bg-current animate-pulse ml-1"></span>
       )}
     </div>
