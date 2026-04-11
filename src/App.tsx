@@ -302,40 +302,54 @@ function App() {
   const handleSwitchModule = useCallback(
     (target: any) => {
       // 保存当前模块的活跃集 ID
+      let currentActiveSetId: string | null = null;
       if (creationModule === 'outline' && novelData.activeOutlineSetId) {
-        setActiveFolderId(novelData.activeOutlineSetId);
+        currentActiveSetId = novelData.activeOutlineSetId;
+        setActiveFolderId(currentActiveSetId);
       } else if (creationModule === 'characters' && novelData.activeCharacterSetId) {
-        setActiveFolderId(novelData.activeCharacterSetId);
+        currentActiveSetId = novelData.activeCharacterSetId;
+        setActiveFolderId(currentActiveSetId);
       } else if (creationModule === 'worldview' && novelData.activeWorldviewSetId) {
-        setActiveFolderId(novelData.activeWorldviewSetId);
+        currentActiveSetId = novelData.activeWorldviewSetId;
+        setActiveFolderId(currentActiveSetId);
       } else if (creationModule === 'inspiration' && novelData.activeInspirationSetId) {
-        setActiveFolderId(novelData.activeInspirationSetId);
+        currentActiveSetId = novelData.activeInspirationSetId;
+        setActiveFolderId(currentActiveSetId);
+      } else if (creationModule === 'plotOutline' && novelData.activePlotOutlineSetId) {
+        currentActiveSetId = novelData.activePlotOutlineSetId;
+        setActiveFolderId(currentActiveSetId);
       }
       
       setCreationModule(target);
       if (!showOutline) setShowOutline(true);
       
-      // 当切换到新模块时，使用 activeFolderId 来设置对应模块的活跃集
-      if (activeFolderId && novelData.activeNovel) {
+      // 当切换到新模块时，使用当前活跃集 ID 来设置对应模块的活跃集
+      const setIdToUse = currentActiveSetId || activeFolderId;
+      if (setIdToUse && novelData.activeNovel) {
         if (target === 'outline') {
-          const outlineSet = novelData.activeNovel.outlineSets?.find(s => s.id === activeFolderId);
+          const outlineSet = novelData.activeNovel.outlineSets?.find(s => s.id === setIdToUse);
           if (outlineSet) {
-            novelData.setActiveOutlineSetId(activeFolderId);
+            novelData.setActiveOutlineSetId(setIdToUse);
           }
         } else if (target === 'characters') {
-          const characterSet = novelData.activeNovel.characterSets?.find(s => s.id === activeFolderId);
+          const characterSet = novelData.activeNovel.characterSets?.find(s => s.id === setIdToUse);
           if (characterSet) {
-            novelData.setActiveCharacterSetId(activeFolderId);
+            novelData.setActiveCharacterSetId(setIdToUse);
           }
         } else if (target === 'worldview') {
-          const worldviewSet = novelData.activeNovel.worldviewSets?.find(s => s.id === activeFolderId);
+          const worldviewSet = novelData.activeNovel.worldviewSets?.find(s => s.id === setIdToUse);
           if (worldviewSet) {
-            novelData.setActiveWorldviewSetId(activeFolderId);
+            novelData.setActiveWorldviewSetId(setIdToUse);
           }
         } else if (target === 'inspiration') {
-          const inspirationSet = novelData.activeNovel.inspirationSets?.find(s => s.id === activeFolderId);
+          const inspirationSet = novelData.activeNovel.inspirationSets?.find(s => s.id === setIdToUse);
           if (inspirationSet) {
-            novelData.setActiveInspirationSetId(activeFolderId);
+            novelData.setActiveInspirationSetId(setIdToUse);
+          }
+        } else if (target === 'plotOutline') {
+          const plotOutlineSet = novelData.activeNovel.plotOutlineSets?.find(s => s.id === setIdToUse);
+          if (plotOutlineSet) {
+            novelData.setActivePlotOutlineSetId(setIdToUse);
           }
         }
       }
