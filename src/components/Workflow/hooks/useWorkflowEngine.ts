@@ -3537,6 +3537,70 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     console.log('[Workflow Stream] 更新UI:', { contentLength: batchChapterResponse.length, receivedSoFar: batchChapterResponse.length });
                     terminal.log('[Workflow Stream] 更新UI:', { contentLength: batchChapterResponse.length, receivedSoFar: batchChapterResponse.length });
                     process.stdout.write(`[Workflow Stream] 更新UI: 内容长度 ${batchChapterResponse.length}, 已接收 ${batchChapterResponse.length}\n`);
+
+                    // 实时分割并更新章节内容
+                    try {
+                      const tempContents: Map<string, string> = new Map();
+                      const actualContentCount = Math.min(outlineEntries.length, chapterCount - startChapterIndex);
+                       
+                      for (let i = 0; i < actualContentCount; i++) {
+                        const chapterIdx = startChapterIndex + i;
+                        if (chapterIdx >= chapterCount) break;
+
+                        const outlineEntry = outlineEntries[i];
+                        if (!outlineEntry) continue;
+                        const chapterTitle = outlineEntry.title;
+
+                        // 查找章节标题在响应中的位置
+                        const titleIndex = batchChapterResponse.indexOf(chapterTitle);
+                        if (titleIndex !== -1) {
+                          // 找到下一个章节标题的位置作为结束标记
+                          let nextTitleIndex = batchChapterResponse.length;
+                          for (let j = i + 1; j < batchSize; j++) {
+                            const nextTitle = outlineEntries[j].title;
+                            const nextIndex = batchChapterResponse.indexOf(nextTitle, titleIndex + chapterTitle.length);
+                            if (nextIndex !== -1 && nextIndex < nextTitleIndex) {
+                              nextTitleIndex = nextIndex;
+                              break;
+                            }
+                          }
+
+                          // 提取章节内容
+                          const chapterContent = batchChapterResponse
+                            .slice(titleIndex + chapterTitle.length, nextTitleIndex)
+                            .trim();
+
+                          tempContents.set(chapterTitle, chapterContent);
+                        }
+                      }
+
+                      // 实时更新章节内容
+                      if (tempContents.size > 0) {
+                        for (let i = 0; i < tempContents.size; i++) {
+                          const chapterIdx = startChapterIndex + i;
+                          if (chapterIdx >= chapterCount) break;
+                          if (!checkActive()) break;
+
+                          const outlineEntry = outlineEntries[i];
+                          if (!outlineEntry) continue;
+                          const currentChapter = chapterMap.get(chapterIdx);
+                          if (!currentChapter) continue;
+
+                          const chapterContent = tempContents.get(outlineEntry.title) || '';
+                          if (chapterContent) {
+                            currentChapter.content = chapterContent;
+                            // 实时更新到本地和全局状态
+                            await updateLocalAndGlobal(localNovel);
+                            console.log('[Workflow Stream] 实时更新章节:', outlineEntry.title, '内容长度:', chapterContent.length);
+                            terminal.log('[Workflow Stream] 实时更新章节:', outlineEntry.title, '内容长度:', chapterContent.length);
+                            process.stdout.write(`[Workflow Stream] 实时更新章节: ${outlineEntry.title}, 内容长度: ${chapterContent.length}\n`);
+                          }
+                        }
+                      }
+                    } catch (updateError) {
+                      console.error('[Workflow Stream] 实时更新章节失败:', updateError);
+                      terminal.error('[Workflow Stream] 实时更新章节失败:', updateError);
+                    }
                   }
                 }
 
