@@ -184,6 +184,9 @@ function App() {
   const [referenceFolderId, setReferenceFolderId] = useState<string | null>(null);
   const [referenceFileId, setReferenceFileId] = useState<string | null>(null);
 
+  // 全局文件夹选择状态（跨模块保持）
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+
   // 辅助函数：切换条目选择
   const handleToggleItem = (
     type: 'worldview' | 'character' | 'inspiration' | 'outline' | 'reference',
@@ -298,10 +301,46 @@ function App() {
 
   const handleSwitchModule = useCallback(
     (target: any) => {
+      // 保存当前模块的活跃集 ID
+      if (creationModule === 'outline' && novelData.activeOutlineSetId) {
+        setActiveFolderId(novelData.activeOutlineSetId);
+      } else if (creationModule === 'characters' && novelData.activeCharacterSetId) {
+        setActiveFolderId(novelData.activeCharacterSetId);
+      } else if (creationModule === 'worldview' && novelData.activeWorldviewSetId) {
+        setActiveFolderId(novelData.activeWorldviewSetId);
+      } else if (creationModule === 'inspiration' && novelData.activeInspirationSetId) {
+        setActiveFolderId(novelData.activeInspirationSetId);
+      }
+      
       setCreationModule(target);
       if (!showOutline) setShowOutline(true);
+      
+      // 当切换到新模块时，使用 activeFolderId 来设置对应模块的活跃集
+      if (activeFolderId && novelData.activeNovel) {
+        if (target === 'outline') {
+          const outlineSet = novelData.activeNovel.outlineSets?.find(s => s.id === activeFolderId);
+          if (outlineSet) {
+            novelData.setActiveOutlineSetId(activeFolderId);
+          }
+        } else if (target === 'characters') {
+          const characterSet = novelData.activeNovel.characterSets?.find(s => s.id === activeFolderId);
+          if (characterSet) {
+            novelData.setActiveCharacterSetId(activeFolderId);
+          }
+        } else if (target === 'worldview') {
+          const worldviewSet = novelData.activeNovel.worldviewSets?.find(s => s.id === activeFolderId);
+          if (worldviewSet) {
+            novelData.setActiveWorldviewSetId(activeFolderId);
+          }
+        } else if (target === 'inspiration') {
+          const inspirationSet = novelData.activeNovel.inspirationSets?.find(s => s.id === activeFolderId);
+          if (inspirationSet) {
+            novelData.setActiveInspirationSetId(activeFolderId);
+          }
+        }
+      }
     },
-    [showOutline],
+    [showOutline, creationModule, novelData, activeFolderId],
   );
 
   const getActiveScripts = useCallback(() => {
@@ -700,7 +739,10 @@ function App() {
               setGeneratorSettingsType('inspiration');
               setShowGeneratorSettingsModal(true);
             },
-            onSetActiveInspirationSetId: novelData.setActiveInspirationSetId,
+            onSetActiveInspirationSetId: (id: string | null) => {
+              novelData.setActiveInspirationSetId(id);
+              setActiveFolderId(id);
+            },
 
             // Reference Selectors Props
             // Reference Selectors Props
@@ -808,7 +850,10 @@ function App() {
               setGeneratorSettingsType('character');
               setShowGeneratorSettingsModal(true);
             },
-            onSetActiveCharacterSetId: novelData.setActiveCharacterSetId,
+            onSetActiveCharacterSetId: (id: string | null) => {
+              novelData.setActiveCharacterSetId(id);
+              setActiveFolderId(id);
+            },
 
             // Reference Selectors Props
             // Reference Selectors Props
@@ -916,7 +961,10 @@ function App() {
               setGeneratorSettingsType('worldview');
               setShowGeneratorSettingsModal(true);
             },
-            onSetActiveWorldviewSetId: novelData.setActiveWorldviewSetId,
+            onSetActiveWorldviewSetId: (id: string | null) => {
+              novelData.setActiveWorldviewSetId(id);
+              setActiveFolderId(id);
+            },
 
             // Reference Selectors Props
             // Reference Selectors Props
@@ -1014,7 +1062,6 @@ function App() {
             ...novelData,
             ...aiGenerators,
             ...generators,
-            ...autoWrite,
             userPrompt: outlineUserPrompt,
             setUserPrompt: setOutlineUserPrompt,
             onUpdateNovel: (updatedNovel: Novel) => {
@@ -1025,7 +1072,10 @@ function App() {
               setGeneratorSettingsType('outline');
               setShowGeneratorSettingsModal(true);
             },
-            onSetActiveOutlineSetId: novelData.setActiveOutlineSetId,
+            onSetActiveOutlineSetId: (id: string | null) => {
+              novelData.setActiveOutlineSetId(id);
+              setActiveFolderId(id);
+            },
 
             // Reference Selectors Props
             // Reference Selectors Props
