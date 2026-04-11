@@ -3050,6 +3050,13 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             // 有章节内容为空，从该章节开始
             calculatedStartChapterIndex = firstEmptyChapterIndex;
             terminal.log(`[OutlineAndChapter] 发现第 ${firstEmptyChapterIndex + 1} 章内容为空，从该章开始`);
+            // 核心修复：确保 chapterCount 至少要大于等于 firstEmptyChapterIndex + 1
+            // 这样即使分卷规划的章节数较少，也能处理现有的空章节
+            const requiredChapterCount = firstEmptyChapterIndex + 1;
+            if (chapterCount < requiredChapterCount) {
+              chapterCount = requiredChapterCount;
+              terminal.log(`[OutlineAndChapter] 调整 chapterCount 为 ${chapterCount}，以确保能处理第 ${firstEmptyChapterIndex + 1} 章`);
+            }
           } else if (outlineCount > currentVolumeChapters.length) {
             // 大纲数量多于章节数量，从最后一章的下一章开始
             calculatedStartChapterIndex = currentVolumeChapters.length;
@@ -3076,6 +3083,13 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           
           let currentChapterIndex = startChapterIndex;
           terminal.log(`[OutlineAndChapter] 最终确定: 从第 ${startChapterIndex + 1} 章开始`);
+
+          // 额外保护：确保 chapterCount 至少大于 startChapterIndex
+          // 这样即使前面的计算有问题，也能确保循环能执行
+          if (chapterCount <= startChapterIndex) {
+            chapterCount = startChapterIndex + 1;
+            terminal.log(`[OutlineAndChapter] 额外调整 chapterCount 为 ${chapterCount}，确保循环能执行`);
+          }
 
           // 获取连贯创作章节数配置
           const consecutiveChapterCount = globalConfig.consecutiveChapterCount || 1;
@@ -3342,8 +3356,18 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               const entry = outlineEntries[i];
               if (!entry) continue;
               
-              // 检查章节是否已经存在
-              let chapter = currentVolumeChapters[chapterIdx];
+              // 检查章节是否已经存在 - 优先通过标题匹配，而不是依赖数组索引
+              const expectedChapterNum = chapterIdx + 1;
+              let chapter = currentVolumeChapters.find((ch) => {
+                const chNum = parseAnyNumber(ch.title) || 0;
+                return chNum === expectedChapterNum;
+              });
+              
+              // 如果通过标题没找到，再尝试使用数组索引作为兜底
+              if (!chapter && chapterIdx < currentVolumeChapters.length) {
+                chapter = currentVolumeChapters[chapterIdx];
+              }
+              
               if (!chapter) {
                 // 如果不存在，创建新章节 - 确保使用正确的编号
                 // 先计算当前应该使用的章节编号
@@ -3370,8 +3394,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               } else {
                 // 如果已存在，也确保标题是正确的
                 const numbering = {
-                  globalIndex: chapter.globalIndex || (currentVolumeChapters.indexOf(chapter) + 1),
-                  volumeIndex: chapter.volumeIndex || (i + 1)
+                  globalIndex: chapter.globalIndex || expectedChapterNum,
+                  volumeIndex: chapter.volumeIndex || expectedChapterNum
                 };
                 const originalTitle = entry.title || chapter.title;
                 chapter.title = generateChapterTitle(numbering.volumeIndex, originalTitle);
