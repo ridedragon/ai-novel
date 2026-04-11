@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import terminal from 'virtual:terminal';
 import { ChapterVersion, ChatMessage, Novel, OutlineItem, PromptItem, RegexScript } from '../../types';
 import { buildWorldInfoMessages, getChapterContextMessages, processTextWithRegex } from './core';
@@ -17,6 +16,71 @@ export class AutoWriteEngine {
   constructor(config: AutoWriteConfig, novel: Novel) {
     this.config = config;
     this.novel = novel;
+  }
+
+  // 流式AI请求函数
+  private async streamAIRequest(params: {
+    apiKey: string;
+    baseUrl: string;
+    model: string;
+    messages: any[];
+    onData: (chunk: string) => void;
+    onError: (error: string) => void;
+    onComplete: () => void;
+    signal: AbortSignal | undefined;
+  }) {
+    try {
+      const response = await fetch('http://localhost:3001/api/ai/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: params.model,
+          messages: params.messages,
+          apiKey: params.apiKey,
+          baseUrl: params.baseUrl,
+        }),
+        signal: params.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        params.onError(errorData.error || 'API请求失败');
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        params.onError('无法获取响应流');
+        return;
+      }
+
+      const decoder = new TextDecoder('utf-8');
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              params.onComplete();
+              break;
+            }
+            params.onData(data);
+          }
+        }
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        params.onError(error.message || '网络错误');
+      }
+    }
   }
 
   public stop() {
@@ -359,12 +423,6 @@ export class AutoWriteEngine {
 >> -----------------------------------------------------------
           `);
 
-          const openai = new OpenAI({
-            apiKey: this.config.apiKey,
-            baseURL: this.config.baseUrl,
-            dangerouslyAllowBrowser: true,
-          });
-
           const firstChapterInBatch = this.novel.chapters?.find(c => c.id === batchItems[0].id);
           if (!firstChapterInBatch) throw new Error('Chapter placeholder missing');
 
@@ -468,69 +526,6 @@ export class AutoWriteEngine {
           console.log('Messages Structure:', messages);
           console.groupEnd();
 
-          const baseMaxTokens = this.config.max_tokens || this.config.maxReplyLength;
-          const batchMaxTokens =
-            baseMaxTokens * batchItems.length > 128000
-              ? 128000
-              : baseMaxTokens * (batchItems.length > 1 ? 1.5 : 1);
-
-          let requestParams: any = {
-              model: this.config.model,
-              messages: messages,
-              stream: this.config.stream,
-              temperature: this.config.temperature,
-              top_p: this.config.topP,
-              max_tokens: Math.round(batchMaxTokens),
-            };
-            if (this.config.topK && this.config.topK > 0) {
-              requestParams.top_k = this.config.topK;
-            }
-          
-          let response;
-          try {
-            if (this.config.stream) {
-              // 对于流式请求，使用 stream() 方法获取异步可迭代对象
-              const completion = await openai.chat.completions.create(
-                requestParams,
-                {
-                  signal: this.abortController?.signal,
-                },
-              );
-              response = completion.stream() as any;
-            } else {
-              // 对于非流式请求，使用 await
-              response = (await openai.chat.completions.create(
-                requestParams,
-                {
-                  signal: this.abortController?.signal,
-                },
-              )) as any;
-            }
-          } catch (apiError: any) {
-            if (apiError.status === 400 && requestParams.top_k) {
-              terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
-              delete requestParams.top_k;
-              if (this.config.stream) {
-                const completion = await openai.chat.completions.create(
-                  requestParams,
-                  {
-                    signal: this.abortController?.signal,
-                  },
-                );
-                response = completion.stream() as any;
-              } else {
-                response = (await openai.chat.completions.create(
-                  requestParams,
-                  {
-                    signal: this.abortController?.signal,
-                  },
-                )) as any;
-              }
-            } else {
-              throw apiError;
-            }
-          }
-
           let fullGeneratedContent = '';
 
           if (this.config.stream) {
@@ -544,98 +539,116 @@ export class AutoWriteEngine {
               return new RegExp(`(?:\\r\\n|\\r|\\n|^)###\\s*${escapedTitle}(?:\\s|\\r|\\n|$)`, 'i');
             });
 
-            for await (const chunk of response) {
-              if (!checkActive() || this.abortController?.signal.aborted) throw new Error('Aborted');
-              const content = chunk.choices[0]?.delta?.content || '';
-              fullGeneratedContent += content;
-              streamTokenCount++;
-              // 优化 4.3：移除高频流式进度日志，减轻主进程 IPC 缓冲区负担
-
-              const now = Date.now();
-            // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
-            // 50ms ≈ 20fps，在流畅度和性能之间取得平衡
-            if (now - lastUpdateTime < 50) continue;
-
-              streamUpdateCount++;
-              lastUpdateTime = now;
-
-              // 支持流式分章节更新
-              const liveContents =
-                batchItems.length > 1
-                  ? this.splitBatchContent(fullGeneratedContent, batchItems, precompiledRegexes)
-                  : [fullGeneratedContent];
-
-              this.novel = {
-                ...this.novel,
-                chapters: (this.novel.chapters || []).map(c => {
-                  const bIdx = batchItems.findIndex(b => b.id === c.id);
-                  if (bIdx !== -1) {
-                    const updatedContent = liveContents[bIdx] || '';
-                    // 多章节模式下，如果后续章节还没有内容，不要清空它们
-                    if (!updatedContent && batchItems.length > 1 && bIdx > 0) return c;
-
-                    let currentVersions = [...(c.versions || [])];
-                    let currentActiveVersionId = c.activeVersionId;
-
-                    // 1. 初始保护：如果原本有内容且无版本历史，将其锁定为 original
-                    if (currentVersions.length === 0 && c.content?.trim()) {
-                      const originalVersion: ChapterVersion = {
-                        id: `v_${taskStartTime}_orig_${c.id}`,
-                        content: c.content,
-                        timestamp: taskStartTime,
-                        type: 'original',
-                      };
-                      currentVersions = [originalVersion];
-                    }
-
-                    // 2. 更新 AI 创作版本
-                    const aiVersionId = `v_${taskStartTime}_autowrite_${c.id}`;
-                    const existingAiVerIdx = currentVersions.findIndex(v => v.id === aiVersionId);
-
-                    if (existingAiVerIdx !== -1) {
-                      currentVersions[existingAiVerIdx] = {
-                        ...currentVersions[existingAiVerIdx],
-                        content: updatedContent,
-                      };
-                    } else if (updatedContent.trim()) {
-                      // 仅在有实际内容时创建版本，避免 0 字符原文标签
-                      // 特殊修复：如果 currentVersions 中唯一的版本内容为空（之前误创建的 0 字符原文），则直接覆盖它
-                      if (currentVersions.length === 1 && !currentVersions[0].content.trim()) {
-                        currentVersions[0] = {
-                          ...currentVersions[0],
-                          id: aiVersionId,
-                          content: updatedContent,
-                          timestamp: taskStartTime,
-                          type: 'original',
-                        };
-                        currentActiveVersionId = aiVersionId;
-                      } else {
-                        const isFirstContent = currentVersions.length === 0;
-                        currentVersions.push({
-                          id: aiVersionId,
-                          content: updatedContent,
-                          timestamp: taskStartTime,
-                          type: isFirstContent ? 'original' : 'user_edit',
-                        });
-                        currentActiveVersionId = aiVersionId;
-                      }
-                    }
-
-                    return {
-                      ...c,
-                      content: updatedContent,
-                      versions: currentVersions,
-                      activeVersionId: currentActiveVersionId || c.activeVersionId,
-                    };
+            // 使用流式API
+            await new Promise<void>((resolve, reject) => {
+              this.streamAIRequest({
+                apiKey: this.config.apiKey,
+                baseUrl: this.config.baseUrl,
+                model: this.config.model,
+                messages: messages,
+                onData: (chunk) => {
+                  if (!checkActive() || this.abortController?.signal.aborted) {
+                    reject(new Error('Aborted'));
+                    return;
                   }
-                  return c;
-                }),
-              };
-              // 核心修复 4.2：流式更新期间仅发送增量章节数据 (Delta Update)，显著减轻跨进程通信 (IPC) 压力
-              // 我们仅提取本次 batch 涉及的章节传递给 UI，避免传递整个小说对象
-              const deltaChapters = (this.novel.chapters || []).filter(c => batchItems.some(b => b.id === c.id));
-              onNovelUpdate({ ...this.novel, chapters: deltaChapters });
-            }
+                  fullGeneratedContent += chunk;
+                  streamTokenCount++;
+                  
+                  const now = Date.now();
+                  // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
+                  // 50ms ≈ 20fps，在流畅度和性能之间取得平衡
+                  if (now - lastUpdateTime < 50) return;
+
+                  streamUpdateCount++;
+                  lastUpdateTime = now;
+
+                  // 支持流式分章节更新
+                  const liveContents =
+                    batchItems.length > 1
+                      ? this.splitBatchContent(fullGeneratedContent, batchItems, precompiledRegexes)
+                      : [fullGeneratedContent];
+
+                  this.novel = {
+                    ...this.novel,
+                    chapters: (this.novel.chapters || []).map(c => {
+                      const bIdx = batchItems.findIndex(b => b.id === c.id);
+                      if (bIdx !== -1) {
+                        const updatedContent = liveContents[bIdx] || '';
+                        // 多章节模式下，如果后续章节还没有内容，不要清空它们
+                        if (!updatedContent && batchItems.length > 1 && bIdx > 0) return c;
+
+                        let currentVersions = [...(c.versions || [])];
+                        let currentActiveVersionId = c.activeVersionId;
+
+                        // 1. 初始保护：如果原本有内容且无版本历史，将其锁定为 original
+                        if (currentVersions.length === 0 && c.content?.trim()) {
+                          const originalVersion: ChapterVersion = {
+                            id: `v_${taskStartTime}_orig_${c.id}`,
+                            content: c.content,
+                            timestamp: taskStartTime,
+                            type: 'original',
+                          };
+                          currentVersions = [originalVersion];
+                        }
+
+                        // 2. 更新 AI 创作版本
+                        const aiVersionId = `v_${taskStartTime}_autowrite_${c.id}`;
+                        const existingAiVerIdx = currentVersions.findIndex(v => v.id === aiVersionId);
+
+                        if (existingAiVerIdx !== -1) {
+                          currentVersions[existingAiVerIdx] = {
+                            ...currentVersions[existingAiVerIdx],
+                            content: updatedContent,
+                          };
+                        } else if (updatedContent.trim()) {
+                          // 仅在有实际内容时创建版本，避免 0 字符原文标签
+                          // 特殊修复：如果 currentVersions 中唯一的版本内容为空（之前误创建的 0 字符原文），则直接覆盖它
+                          if (currentVersions.length === 1 && !currentVersions[0].content.trim()) {
+                            currentVersions[0] = {
+                              ...currentVersions[0],
+                              id: aiVersionId,
+                              content: updatedContent,
+                              timestamp: taskStartTime,
+                              type: 'original',
+                            };
+                            currentActiveVersionId = aiVersionId;
+                          } else {
+                            const isFirstContent = currentVersions.length === 0;
+                            currentVersions.push({
+                              id: aiVersionId,
+                              content: updatedContent,
+                              timestamp: taskStartTime,
+                              type: isFirstContent ? 'original' : 'user_edit',
+                            });
+                            currentActiveVersionId = aiVersionId;
+                          }
+                        }
+
+                        return {
+                          ...c,
+                          content: updatedContent,
+                          versions: currentVersions,
+                          activeVersionId: currentActiveVersionId || c.activeVersionId,
+                        };
+                      }
+                      return c;
+                    }),
+                  };
+                  // 核心修复 4.2：流式更新期间仅发送增量章节数据 (Delta Update)，显著减轻跨进程通信 (IPC) 压力
+                  // 我们仅提取本次 batch 涉及的章节传递给 UI，避免传递整个小说对象
+                  const deltaChapters = (this.novel.chapters || []).filter(c => batchItems.some(b => b.id === c.id));
+                  onNovelUpdate({ ...this.novel, chapters: deltaChapters });
+                },
+                onError: (error) => {
+                  reject(new Error(error));
+                },
+                onComplete: () => {
+                  resolve();
+                },
+                signal: this.abortController?.signal,
+              });
+            });
+            
             // 优化 4.3：将高频流式统计改为 console.debug，不再发送给 VSCode Terminal
             const avgUpdateFreq = streamUpdateCount / ((Date.now() - taskStartTime) / 1000);
             if (avgUpdateFreq > 15) {
@@ -644,7 +657,25 @@ export class AutoWriteEngine {
               );
             }
           } else {
-            fullGeneratedContent = response.choices[0]?.message?.content || '';
+            // 使用非流式API
+            await new Promise<void>((resolve, reject) => {
+              this.streamAIRequest({
+                apiKey: this.config.apiKey,
+                baseUrl: this.config.baseUrl,
+                model: this.config.model,
+                messages: messages,
+                onData: (chunk) => {
+                  fullGeneratedContent += chunk;
+                },
+                onError: (error) => {
+                  reject(new Error(error));
+                },
+                onComplete: () => {
+                  resolve();
+                },
+                signal: this.abortController?.signal,
+              });
+            });
           }
 
           if (!fullGeneratedContent) throw new Error('Empty response received');
@@ -877,12 +908,6 @@ export class AutoWriteEngine {
     const baseTime = Date.now();
     let currentAnalysisResult = '';
 
-    const openai = new OpenAI({
-      apiKey: this.config.apiKey,
-      baseURL: this.config.baseUrl,
-      dangerouslyAllowBrowser: true,
-    });
-
     // Phase 1: Analysis
     if (this.config.twoStepOptimization) {
       try {
@@ -918,57 +943,29 @@ export class AutoWriteEngine {
           let analysisAttempt = 0;
           const maxAnalysisRetries = 2;
           let analysisSuccess = false;
-          let analysisFallbackMode = 0;
 
           while (analysisAttempt <= maxAnalysisRetries && !analysisSuccess) {
             try {
-              let requestParams: any = {
+              // 使用流式API
+              await new Promise<void>((resolve, reject) => {
+                this.streamAIRequest({
+                  apiKey: this.config.apiKey,
+                  baseUrl: this.config.baseUrl,
                   model: this.config.analysisModel || this.config.model,
                   messages: analysisMessages,
-                  temperature: analysisPreset.temperature ?? 1.0,
-                  top_p: analysisPreset.topP ?? 1.0,
-                };
-                if (analysisPreset.topK && analysisPreset.topK > 0 && analysisFallbackMode < 1) {
-                  requestParams.top_k = analysisPreset.topK;
-                }
-          
-              let completion;
-              try {
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: optimizationAbortController.signal },
-                );
-              } catch (apiError: any) {
-                if (apiError.status === 400) {
-                  const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-                  terminal.warn(`API 400 错误: ${errorBody}`);
-                  
-                  if (requestParams.top_k && analysisFallbackMode < 1) {
-                    terminal.warn('尝试移除 top_k 参数重试');
-                    delete requestParams.top_k;
-                    analysisFallbackMode = 1;
-                    completion = await openai.chat.completions.create(
-                      requestParams,
-                      { signal: optimizationAbortController.signal },
-                    );
-                  } else if (analysisFallbackMode < 2) {
-                    terminal.warn('尝试简化参数重试 (移除 top_p)');
-                    delete requestParams.top_p;
-                    requestParams.temperature = 1.0;
-                    analysisFallbackMode = 2;
-                    completion = await openai.chat.completions.create(
-                      requestParams,
-                      { signal: optimizationAbortController.signal },
-                    );
-                  } else {
-                    throw apiError;
-                  }
-                } else {
-                  throw apiError;
-                }
-              }
+                  onData: (chunk) => {
+                    currentAnalysisResult += chunk;
+                  },
+                  onError: (error) => {
+                    reject(new Error(error));
+                  },
+                  onComplete: () => {
+                    resolve();
+                  },
+                  signal: optimizationAbortController.signal,
+                });
+              });
 
-              currentAnalysisResult = completion.choices[0]?.message?.content || '';
               if (currentAnalysisResult) analysisSuccess = true;
               else analysisAttempt++;
             } catch (anaErr: any) {
@@ -1054,57 +1051,29 @@ export class AutoWriteEngine {
       const maxOptRetries = 3;
       let optSuccess = false;
       let optimizedContent = '';
-      let fallbackMode = 0;
 
       while (optAttempt <= maxOptRetries && !optSuccess) {
         try {
-          let requestParams: any = {
+          // 使用流式API
+          await new Promise<void>((resolve, reject) => {
+            this.streamAIRequest({
+              apiKey: this.config.apiKey,
+              baseUrl: this.config.baseUrl,
               model: this.config.optimizeModel || this.config.model,
               messages: messages,
-              temperature: activePreset.temperature ?? 1.0,
-              top_p: activePreset.topP ?? 1.0,
-            };
-            if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
-              requestParams.top_k = activePreset.topK;
-            }
-          
-          let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: optimizationAbortController.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: optimizationAbortController.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: optimizationAbortController.signal },
-                );
-              } else {
-                throw apiError;
-              }
-            } else {
-              throw apiError;
-            }
-          }
+              onData: (chunk) => {
+                optimizedContent += chunk;
+              },
+              onError: (error) => {
+                reject(new Error(error));
+              },
+              onComplete: () => {
+                resolve();
+              },
+              signal: optimizationAbortController.signal,
+            });
+          });
 
-          optimizedContent = completion.choices[0]?.message?.content || '';
           if (optimizedContent) optSuccess = true;
           else optAttempt++;
         } catch (optErr: any) {

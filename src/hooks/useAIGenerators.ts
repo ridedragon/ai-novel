@@ -199,11 +199,7 @@ export function useAIGenerators() {
             activePreset.topP ?? 1.0,
             activePreset.topK ?? 200,
           );
-          const openai = new OpenAI({
-            apiKey: apiConfig.apiKey,
-            baseURL: apiConfig.baseUrl,
-            dangerouslyAllowBrowser: true,
-          });
+          // 移除 OpenAI SDK 依赖，使用我们的 streamAIRequest 函数
 
           const referenceContext = buildReferenceContext(
             activeNovel,
@@ -610,11 +606,7 @@ export function useAIGenerators() {
             activePreset.topP ?? 1.0,
             activePreset.topK ?? 200,
           );
-          const openai = new OpenAI({
-            apiKey: apiConfig.apiKey,
-            baseURL: apiConfig.baseUrl,
-            dangerouslyAllowBrowser: true,
-          });
+          // 移除 OpenAI SDK 依赖，使用我们的 streamAIRequest 函数
 
           const referenceContext = buildReferenceContext(
             activeNovel,
@@ -837,11 +829,7 @@ export function useAIGenerators() {
             activePreset.topP ?? 1.0,
             activePreset.topK ?? 200,
           );
-          const openai = new OpenAI({
-            apiKey: apiConfig.apiKey,
-            baseURL: apiConfig.baseUrl,
-            dangerouslyAllowBrowser: true,
-          });
+          // 移除 OpenAI SDK 依赖，使用我们的 streamAIRequest 函数
 
           const referenceContext = buildReferenceContext(
             activeNovel,
@@ -1065,11 +1053,7 @@ export function useAIGenerators() {
             activePreset.topP ?? 1.0,
             activePreset.topK ?? 200,
           );
-          const openai = new OpenAI({
-            apiKey: apiConfig.apiKey,
-            baseURL: apiConfig.baseUrl,
-            dangerouslyAllowBrowser: true,
-          });
+          // 移除 OpenAI SDK 依赖，使用我们的 streamAIRequest 函数
 
           const referenceContext = buildReferenceContext(
             activeNovel,
@@ -1291,11 +1275,7 @@ export function useAIGenerators() {
             activePreset.topP ?? 1.0,
             activePreset.topK ?? 200,
           );
-          const openai = new OpenAI({
-            apiKey: apiConfig.apiKey,
-            baseURL: apiConfig.baseUrl,
-            dangerouslyAllowBrowser: true,
-          });
+          // 移除 OpenAI SDK 依赖，使用我们的 streamAIRequest 函数
 
           const referenceContext = buildReferenceContext(
             activeNovel,
@@ -1339,43 +1319,27 @@ export function useAIGenerators() {
           if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
-          let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: generateAbortControllerRef.current.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: generateAbortControllerRef.current.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: generateAbortControllerRef.current.signal },
-                );
-              } else {
-                throw apiError;
-              }
-            } else {
-              throw apiError;
-            }
-          }
-
-          const content = completion.choices[0]?.message?.content || '';
+          let content = '';
+          
+          // 使用流式API
+          await new Promise<void>((resolve, reject) => {
+            streamAIRequest({
+              apiKey: apiConfig.apiKey,
+              baseUrl: apiConfig.baseUrl,
+              model: apiConfig.model,
+              messages: requestParams.messages,
+              onData: (chunk) => {
+                content += chunk;
+              },
+              onError: (error) => {
+                reject(new Error(error));
+              },
+              onComplete: () => {
+                resolve();
+              },
+              signal: generateAbortControllerRef.current.signal,
+            });
+          });
           if (!content) throw new Error('Empty response');
 
           if (mode === 'chat') {
@@ -1559,11 +1523,7 @@ export function useAIGenerators() {
 
             logAiParams('对话续写生成', config.model, params.temperature, params.topP, params.topK);
 
-            const openai = new OpenAI({
-              apiKey: config.apiKey,
-              baseURL: config.baseUrl,
-              dangerouslyAllowBrowser: true,
-            });
+            // 移除 OpenAI SDK 依赖，使用我们的 streamAIRequest 函数
 
             const scripts = params.getActiveScripts();
             const worldInfoMessages = buildWorldInfoMessages(activeNovel || undefined, params.activeOutlineSetId);

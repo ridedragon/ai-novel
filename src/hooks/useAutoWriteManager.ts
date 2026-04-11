@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
 import { Chapter, ChapterVersion, GeneratorPreset, Novel, OutlineItem, PromptItem, RegexScript } from '../types';
@@ -36,6 +35,74 @@ export function useAutoWriteManager() {
   useEffect(() => {
     isAutoWritingRef.current = isAutoWriting;
   }, [isAutoWriting]);
+
+  // 流式AI请求函数
+  const streamAIRequest = useCallback(
+    async (params: {
+      apiKey: string;
+      baseUrl: string;
+      model: string;
+      messages: any[];
+      onData: (chunk: string) => void;
+      onError: (error: string) => void;
+      onComplete: () => void;
+      signal: AbortSignal | undefined;
+    }) => {
+      try {
+        const response = await fetch('http://localhost:3001/api/ai/stream', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: params.model,
+            messages: params.messages,
+            apiKey: params.apiKey,
+            baseUrl: params.baseUrl,
+          }),
+          signal: params.signal,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          params.onError(errorData.error || 'API请求失败');
+          return;
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          params.onError('无法获取响应流');
+          return;
+        }
+
+        const decoder = new TextDecoder('utf-8');
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') {
+                params.onComplete();
+                break;
+              }
+              params.onData(data);
+            }
+          }
+        }
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          params.onError(error.message || '网络错误');
+        }
+      }
+    },
+    [],
+  );
 
   const stopAutoWriting = useCallback(() => {
     setIsAutoWriting(false);
@@ -261,7 +328,6 @@ export function useAutoWriteManager() {
 >> -----------------------------------------------------------
           `);
 
-          const openai = new OpenAI({ apiKey: anaApiKey, baseURL: anaBaseUrl, dangerouslyAllowBrowser: true });
           const messages: any[] = analysisPreset.prompts
             .filter(p => p.enabled)
             .map(p => ({ role: p.role, content: p.content.replace('{{content}}', sourceContentToUse!) }))
@@ -271,53 +337,25 @@ export function useAutoWriteManager() {
           console.log('Messages:', messages);
           console.groupEnd();
 
-          let requestParams: any = {
-            model: anaModel,
-            messages,
-            temperature: analysisPreset.temperature ?? 1.0,
-            top_p: analysisPreset.topP ?? 1.0,
-          };
-          let fallbackMode = 0;
-          if (analysisPreset.topK && analysisPreset.topK > 0 && fallbackMode < 1) {
-            requestParams.top_k = analysisPreset.topK;
-          }
-          
-          let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: abortController.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: abortController.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: abortController.signal },
-                );
-              } else {
-                throw apiError;
-              }
-            } else {
-              throw apiError;
-            }
-          }
-          currentAnalysisResult = completion.choices[0]?.message?.content || '';
+          // 使用流式API
+          await new Promise<void>((resolve, reject) => {
+            streamAIRequest({
+              apiKey: anaApiKey,
+              baseUrl: anaBaseUrl,
+              model: anaModel,
+              messages: messages,
+              onData: (chunk) => {
+                currentAnalysisResult += chunk;
+              },
+              onError: (error) => {
+                reject(new Error(error));
+              },
+              onComplete: () => {
+                resolve();
+              },
+              signal: abortController.signal,
+            });
+          });
           
           terminal.log(
             `[Analysis Result] chapter ${targetId}:\n${currentAnalysisResult.slice(0, 500)}${
@@ -349,7 +387,6 @@ export function useAutoWriteManager() {
 >> -----------------------------------------------------------
         `);
 
-        const openai = new OpenAI({ apiKey: finalApiKey, baseURL: finalBaseUrl, dangerouslyAllowBrowser: true });
         let isAnalysisUsed = false;
         const messages: any[] = activePreset.prompts
           .filter(p => p.enabled)
@@ -373,80 +410,51 @@ export function useAutoWriteManager() {
         console.log('Messages:', messages);
         console.groupEnd();
 
-        let requestParams: any = {
-            model: finalModel,
-            messages,
-            temperature: activePreset.temperature ?? 1.0,
-            top_p: activePreset.topP ?? 1.0,
-            stream: true,
-          };
-          let fallbackMode = 0;
-          if (activePreset.topK && activePreset.topK > 0 && fallbackMode < 1) {
-            requestParams.top_k = activePreset.topK;
-          }
-          
-          let stream;
-          try {
-            stream = await openai.chat.completions.create(
-              requestParams,
-              { signal: abortController.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                stream = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: abortController.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                stream = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: abortController.signal },
-                );
-              } else {
-                throw apiError;
-              }
-            } else {
-              throw apiError;
-            }
-          }
-
         let newContent = '';
         let lastUpdateTime = 0;
-        for await (const chunk of stream as any) {
-          if (abortController.signal.aborted) throw new Error('Aborted');
-          const content = chunk.choices[0]?.delta?.content || '';
-          newContent += content;
+        
+        // 使用流式API
+        await new Promise<void>((resolve, reject) => {
+          streamAIRequest({
+            apiKey: finalApiKey,
+            baseUrl: finalBaseUrl,
+            model: finalModel,
+            messages: messages,
+            onData: (chunk) => {
+              if (abortController.signal.aborted) {
+                reject(new Error('Aborted'));
+                return;
+              }
+              newContent += chunk;
 
-          const now = Date.now();
-          // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
-          if (now - lastUpdateTime > 50) {
-            lastUpdateTime = now;
-            setChapters(prev =>
-              prev.map(c => {
-                if (c.id === targetId) {
-                  return {
-                    ...c,
-                    content: newContent,
-                    versions: buildVersions(c.versions, newContent),
-                    activeVersionId: newVersionId,
-                  };
-                }
-                return c;
-              }),
-            );
-          }
-        }
+              const now = Date.now();
+              // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
+              if (now - lastUpdateTime > 50) {
+                lastUpdateTime = now;
+                setChapters(prev =>
+                  prev.map(c => {
+                    if (c.id === targetId) {
+                      return {
+                        ...c,
+                        content: newContent,
+                        versions: buildVersions(c.versions, newContent),
+                        activeVersionId: newVersionId,
+                      };
+                    }
+                    return c;
+                  }),
+                );
+              }
+            },
+            onError: (error) => {
+              reject(new Error(error));
+            },
+            onComplete: () => {
+              resolve();
+            },
+            signal: abortController.signal,
+          });
+        });
 
         const scripts = params.getActiveScripts();
         const processed = await processTextWithRegex(newContent, scripts, 'output');

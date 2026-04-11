@@ -1,5 +1,4 @@
 import { Edge } from '@xyflow/react';
-import OpenAI from 'openai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
 import { GeneratorPreset, GeneratorPrompt, LoopInstruction, Novel, ReferenceFolder, Chapter, NovelVolume } from '../../../types';
@@ -192,6 +191,74 @@ export const useWorkflowEngine = (options: {
     // 直接更新，确保状态同步
     setEdges(eds => eds.map(e => ({ ...e, animated: false })));
   }, [setEdges]);
+
+  // 流式AI请求函数
+  const streamAIRequest = useCallback(
+    async (params: {
+      apiKey: string;
+      baseUrl: string;
+      model: string;
+      messages: any[];
+      onData: (chunk: string) => void;
+      onError: (error: string) => void;
+      onComplete: () => void;
+      signal: AbortSignal | undefined;
+    }) => {
+      try {
+        const response = await fetch('http://localhost:3001/api/ai/stream', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: params.model,
+            messages: params.messages,
+            apiKey: params.apiKey,
+            baseUrl: params.baseUrl,
+          }),
+          signal: params.signal,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          params.onError(errorData.error || 'API请求失败');
+          return;
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          params.onError('无法获取响应流');
+          return;
+        }
+
+        const decoder = new TextDecoder('utf-8');
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') {
+                params.onComplete();
+                break;
+              }
+              params.onData(data);
+            }
+          }
+        }
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          params.onError(error.message || '网络错误');
+        }
+      }
+    },
+    [],
+  );
 
   const normalizeStartOptions = (input?: number | WorkflowStartOptions): WorkflowStartOptions => {
     if (typeof input === 'number') {
@@ -1085,13 +1152,9 @@ export const useWorkflowEngine = (options: {
           const volTypePresets = allPresets[node.data.presetType as string] || [];
           let volPreset = volTypePresets.find(p => p.id === node.data.presetId) || volTypePresets[0];
           const volNodeApiConfig = (volPreset as any)?.apiConfig || {};
-          const volOpenai = new OpenAI({
-            apiKey: node.data.apiKey ? node.data.apiKey : volNodeApiConfig.apiKey || globalConfig.apiKey,
-            baseURL: node.data.baseUrl ? node.data.baseUrl : volNodeApiConfig.baseUrl || globalConfig.baseUrl,
-            dangerouslyAllowBrowser: true,
-          });
-
           const planningModel = node.data.model || volNodeApiConfig.model || globalConfig.model;
+          const planningApiKey = node.data.apiKey ? node.data.apiKey : volNodeApiConfig.apiKey || globalConfig.apiKey;
+          const planningBaseUrl = node.data.baseUrl ? node.data.baseUrl : volNodeApiConfig.baseUrl || globalConfig.baseUrl;
           let planningRefContext = '';
           const planningAttachments: any[] = [];
 
@@ -1259,17 +1322,26 @@ export const useWorkflowEngine = (options: {
 >> -----------------------------------------------------------
 `);
 
-              const volCompletion = await volOpenai.chat.completions.create(
-                {
+              // 使用流式API
+              await new Promise<void>((resolve, reject) => {
+                streamAIRequest({
+                  apiKey: planningApiKey,
+                  baseUrl: planningBaseUrl,
                   model: planningModel,
                   messages: planningMessages,
-                  temperature: node.data.temperature ?? 0.7,
-                } as any,
-                { signal: abortControllerRef.current?.signal },
-              );
+                  onData: (chunk) => {
+                    aiResponse += chunk;
+                  },
+                  onError: (error) => {
+                    reject(new Error(error));
+                  },
+                  onComplete: () => {
+                    resolve();
+                  },
+                  signal: abortControllerRef.current?.signal,
+                });
+              });
 
-              aiResponse = volCompletion.choices[0]?.message?.content || '';
-              
               console.log('[SAVE_TO_VOLUME] AI Response received', {
                 nodeId: node.id,
                 responseLength: aiResponse.length,
