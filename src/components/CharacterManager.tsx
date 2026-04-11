@@ -911,7 +911,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = React.memo(({
                                     <span className="px-1.5 py-0.5 rounded-none text-[10px] font-bold border whitespace-nowrap leading-none bg-indigo-900/20 text-indigo-500 border-indigo-900/50">
                                        角色
                                     </span>
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="flex items-center gap-1 opacity-100">
                                        <button
                                           onClick={(e) => { e.stopPropagation(); handleDeleteCharacter(idx); }}
                                           className="p-1 hover:bg-red-900/30 rounded-none text-gray-400 hover:text-red-400 transition-all"
