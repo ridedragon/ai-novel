@@ -183,18 +183,18 @@ class WorkflowManager {
     this.listeners.forEach(listener => listener(currentState));
   }
 
-  public start(workflowId: string, startIndex: number = 0, snapshot?: WorkflowContextSnapshot) {
+  public start(workflowId: string, startIndex: number = 0, snapshot?: WorkflowContextSnapshot, isFullMode: boolean = false) {
     // 核心修复 (Bug 2): 生成并锁定本次运行的唯一 ID
     this.currentRunId = `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     terminal.log(
-      `[WorkflowManager] Starting workflow: ${workflowId} at index ${startIndex} (RunID: ${this.currentRunId})`,
+      `[WorkflowManager] Starting workflow: ${workflowId} at index ${startIndex}, isFullMode: ${isFullMode} (RunID: ${this.currentRunId})`,
     );
 
     // 确定新的上下文逻辑
     let newContext: WorkflowGlobalContext;
 
-    if (startIndex === 0) {
-      // 1. 完全从头开始：彻底重置
+    if (startIndex === 0 || isFullMode) {
+      // 1. 完全从头开始 或 完全重写模式：彻底重置
       newContext = {
         variables: {
           loop_index: 1,
@@ -209,7 +209,7 @@ class WorkflowManager {
         volumeEndChapters: [],
       };
     } else if (startIndex > 0) {
-      // 2. 恢复执行逻辑
+      // 2. 恢复执行逻辑（非完全重写模式）
       const memoryContext = this.state.globalContext;
       const hasMemory = Object.keys(memoryContext.variables).length > 2 || memoryContext.activeVolumeAnchor;
 
