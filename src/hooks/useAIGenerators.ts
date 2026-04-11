@@ -1665,7 +1665,11 @@ export function useAIGenerators() {
               params.onStreamingStatusChange?.(true);
               let lastUpdateTime = 0;
               let chainOfThought = '';
+              console.log('[Stream] 开始流式传输');
               terminal.log('[Stream] 开始流式传输');
+              console.log('[Stream] 模型:', config.model);
+              console.log('[Stream] 温度:', params.temperature);
+              console.log('[Stream] 最大令牌:', params.max_tokens || params.maxReplyLength);
               
               try {
                 // 使用 OpenAI v4 流式 API
@@ -1685,6 +1689,7 @@ export function useAIGenerators() {
                   
                   // 检查chunk格式
                   if (!chunk || !chunk.choices || !Array.isArray(chunk.choices) || chunk.choices.length === 0) {
+                    console.warn('[Stream] 无效的chunk格式:', chunk);
                     terminal.warn('[Stream] 无效的chunk格式:', chunk);
                     continue;
                   }
@@ -1693,9 +1698,9 @@ export function useAIGenerators() {
                   const delta = choice?.delta;
                   const content = delta?.content || '';
                   
-                  terminal.log('[Stream] 收到chunk:', { content: content.substring(0, 50) + (content.length > 50 ? '...' : '') });
-                  
                   if (content) {
+                    console.log('[Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
+                    terminal.log('[Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
                     hasReceivedContent = true;
                     newGeneratedContent += content;
                   }
@@ -1712,7 +1717,8 @@ export function useAIGenerators() {
                   if (now - lastUpdateTime > 50) {
                     lastUpdateTime = now;
                     const fullRawContent = currentContent + newGeneratedContent;
-                    terminal.log('[Stream] 更新UI:', { contentLength: fullRawContent.length });
+                    console.log('[Stream] 更新UI:', { contentLength: fullRawContent.length, receivedSoFar: newGeneratedContent.length });
+                    terminal.log('[Stream] 更新UI:', { contentLength: fullRawContent.length, receivedSoFar: newGeneratedContent.length });
                     
                     params.setChapters(prev =>
                       prev.map(c => {
@@ -1736,15 +1742,20 @@ export function useAIGenerators() {
                     );
                   }
                 }
+                console.log('[Stream] 流式传输结束');
+                console.log('[Stream] 最终内容长度:', newGeneratedContent.length);
+                console.log('[Stream] 内容预览:', newGeneratedContent.substring(0, 100) + (newGeneratedContent.length > 100 ? '...' : ''));
                 terminal.log('[Stream] 流式传输结束');
                 // 流式传输结束
                 params.onStreamingStatusChange?.(false);
               } catch (streamError) {
                 // 流式处理出错，关闭流式状态
+                console.error('[Stream] 流式处理出错:', streamError);
                 terminal.warn('[Stream] 流式处理出错:', streamError);
                 params.onStreamingStatusChange?.(false);
                 
                 // 切换到非流式模式
+                console.log('[Stream] 尝试使用非流式方式获取响应');
                 terminal.log('[Stream] 尝试使用非流式方式获取响应');
                 requestParams.stream = false;
                 try {

@@ -543,12 +543,18 @@ export class AutoWriteEngine {
               return new RegExp(`(?:\\r\\n|\\r|\\n|^)###\\s*${escapedTitle}(?:\\s|\\r|\\n|$)`, 'i');
             });
 
+            console.log('[AutoWrite Stream] 开始流式传输');
+            terminal.log('[AutoWrite Stream] 开始流式传输');
+
             for await (const chunk of response) {
               if (!checkActive() || this.abortController?.signal.aborted) throw new Error('Aborted');
               const content = chunk.choices[0]?.delta?.content || '';
               fullGeneratedContent += content;
               streamTokenCount++;
-              // 优化 4.3：移除高频流式进度日志，减轻主进程 IPC 缓冲区负担
+              
+              if (content) {
+                console.log('[AutoWrite Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
+              }
 
               const now = Date.now();
               // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
