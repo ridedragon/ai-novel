@@ -2984,11 +2984,21 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           let currentChapterIndex = startChapterIndex;
           terminal.log(`[OutlineAndChapter] 开始生成章节，从第 ${startChapterIndex + 1} 章开始`);
 
-          for (let chapterIndex = startChapterIndex; chapterIndex < chapterCount; chapterIndex++) {
-            if (!checkActive()) break;
-            currentChapterIndex = chapterIndex;
+          // 获取连贯创作章节数配置
+          const consecutiveChapterCount = globalConfig.consecutiveChapterCount || 1;
+          const maxBatchSize = consecutiveChapterCount > 1 ? consecutiveChapterCount : 1;
+          terminal.log(`[OutlineAndChapter] 使用批量生成模式，每批 ${maxBatchSize} 章`);
 
-            // 1. 生成大纲
+          // 批量生成大纲和正文
+          while (startChapterIndex < chapterCount) {
+            if (!checkActive()) break;
+            
+            // 计算当前批次的章节范围
+            const batchEndIndex = Math.min(startChapterIndex + maxBatchSize, chapterCount);
+            const batchSize = batchEndIndex - startChapterIndex;
+            terminal.log(`[OutlineAndChapter] 处理批次: 第 ${startChapterIndex + 1} 章 到 第 ${batchEndIndex} 章`);
+
+            // 1. 批量生成大纲
             const outlineOpenai = new OpenAI({
               apiKey: finalOutlinePreset.apiConfig?.apiKey || globalConfig.apiKey,
               baseURL: finalOutlinePreset.apiConfig?.baseUrl || globalConfig.baseUrl,
@@ -3033,7 +3043,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             outlineMessages.push({
               role: 'user',
-              content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成第${chapterIndex + 1}章的大纲。请以JSON格式输出，包含title和summary字段。`
+              content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}批量生成第${startChapterIndex + 1}章到第${batchEndIndex}章的大纲。请以JSON格式输出，包含title和summary字段的数组。`
             });
 
             let outlineResponse = '';
@@ -3052,7 +3062,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               if ((finalOutlinePreset as any).presencePenalty) outlineCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
 
               console.groupCollapsed(
-                `[Workflow AI Request] 大纲与正文生成 - 大纲 ${chapterIndex + 1}`
+                `[Workflow AI Request] 大纲与正文生成 - 批量大纲 ${startChapterIndex + 1}-${batchEndIndex}`
               );
               console.log('Messages:', outlineMessages);
               console.log('Config:', outlineCompletionParams);
@@ -3060,7 +3070,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
               // 详细的参数日志
               terminal.log(`
->> AI REQUEST [工作流: 大纲生成] 第${chapterIndex + 1}章
+>> AI REQUEST [工作流: 批量大纲生成] 第${startChapterIndex + 1}-${batchEndIndex}章
 >> -----------------------------------------------------------
 >> Model:               ${outlineCompletionParams.model}
 >> Temperature:         ${outlineCompletionParams.temperature}
@@ -3079,13 +3089,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               outlineResponse = outlineCompletion.choices[0]?.message?.content || '';
               
               terminal.log(`
->> AI RESPONSE [工作流: 大纲生成] 第${chapterIndex + 1}章
+>> AI RESPONSE [工作流: 批量大纲生成] 第${startChapterIndex + 1}-${batchEndIndex}章
 >> -----------------------------------------------------------
 >> Content length: ${outlineResponse.length} characters
 >> -----------------------------------------------------------
 `);
             } catch (err) {
-              terminal.error(`[OutlineAndChapter] 大纲生成失败: ${err}`);
+              terminal.error(`[OutlineAndChapter] 批量大纲生成失败: ${err}`);
+              startChapterIndex += batchSize;
               continue;
             }
 
@@ -3142,9 +3153,23 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             outlineResponse = parsedOutlineResponse;
 
+            // 确保生成的大纲数量与批次大小一致
+            if (outlineEntries.length < batchSize) {
+              terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 少于批次大小 (${batchSize})，将使用默认标题`);
+              // 补充缺失的大纲
+              for (let i = outlineEntries.length; i < batchSize; i++) {
+                const chapterIdx = startChapterIndex + i;
+                outlineEntries.push({ 
+                  title: `第${chapterIdx + 1}章`, 
+                  content: `第${chapterIdx + 1}章的大纲内容` 
+                });
+              }
+            }
+
             // 保存大纲到对应文件夹（与大纲节点的 upSets 逻辑一致）
             if (outlineSet) {
-              outlineEntries.forEach(entry => {
+              outlineEntries.forEach((entry, i) => {
+                const chapterIdx = startChapterIndex + i;
                 const existingIdx = outlineSet.items.findIndex((ni: any) => ni.title === entry.title);
                 const ni = { title: entry.title, summary: entry.content };
                 if (existingIdx !== -1) {
@@ -3166,37 +3191,45 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               );
             }
 
-            // 使用解析后的标题
-            const resolvedTitle = outlineEntries.length > 0 ? outlineEntries[0].title : `第${chapterIndex + 1}章`;
-            
-            // 大纲生成完成后，创建对应章节
-            const newChapter: Chapter = {
-              id: Date.now() + chapterIndex,
-              title: resolvedTitle,
-              content: '', // 初始为空，后续会流式更新
-              volumeId: finalVolumeId,
-              subtype: 'story',
-            };
-            
-            localNovel.chapters = [...(localNovel.chapters || []), newChapter];
-            await updateLocalAndGlobal(localNovel);
-            chapterMap.set(chapterIndex, newChapter);
-            terminal.log(`[OutlineAndChapter] 创建章节: id=${newChapter.id}, title=${resolvedTitle}, volumeId=${finalVolumeId}`);
+            // 批量创建章节
+            const batchChapters: Chapter[] = [];
+            outlineEntries.forEach((entry, i) => {
+              const chapterIdx = startChapterIndex + i;
+              if (chapterIdx >= chapterCount) return;
+              
+              // 使用解析后的标题
+              const resolvedTitle = entry.title || `第${chapterIdx + 1}章`;
+              
+              // 大纲生成完成后，创建对应章节
+              const newChapter: Chapter = {
+                id: Date.now() + chapterIdx,
+                title: resolvedTitle,
+                content: '', // 初始为空，后续会流式更新
+                volumeId: finalVolumeId,
+                subtype: 'story',
+              };
+              
+              batchChapters.push(newChapter);
+              chapterMap.set(chapterIdx, newChapter);
+              terminal.log(`[OutlineAndChapter] 创建章节: id=${newChapter.id}, title=${resolvedTitle}, volumeId=${finalVolumeId}`);
 
-            // 添加大纲到输出条目
-            outlineEntries.forEach((entry, eIdx) => {
+              // 添加大纲到输出条目
               outputEntries.push({
-                id: `outline_${chapterIndex}_${eIdx}_${Date.now()}`,
+                id: `outline_${chapterIdx}_${Date.now()}`,
                 title: entry.title,
                 content: entry.content
               });
             });
 
+            // 批量添加章节到小说
+            localNovel.chapters = [...(localNovel.chapters || []), ...batchChapters];
+            await updateLocalAndGlobal(localNovel);
+
             // 及时更新节点的 outputEntries，以便大纲能够及时显示在自动化创作中心的大纲文件夹中
-            currentChapterIndex = chapterIndex + 1;
+            currentChapterIndex = batchEndIndex;
             await syncNodeStatus(node.id, { outputEntries, currentChapterIndex }, i);
 
-            // 2. 生成正文
+            // 2. 批量生成正文
             const chapterOpenai = new OpenAI({
               apiKey: finalChapterPreset.apiConfig?.apiKey || globalConfig.apiKey,
               baseURL: finalChapterPreset.apiConfig?.baseUrl || globalConfig.baseUrl,
@@ -3229,12 +3262,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               });
             }
 
-            const outlineContentForChapter = outlineEntries.length > 0
-              ? outlineEntries.map(e => `${e.title}: ${e.content}`).join('\n')
-              : outlineResponse;
+            // 构建批量大纲内容
+            const batchOutlineContent = outlineEntries
+              .slice(0, batchSize)
+              .map((entry, i) => `${entry.title}: ${entry.content}`)
+              .join('\n\n');
             chapterMessages.push({
               role: 'system',
-              content: `【本章大纲】：\n${outlineContentForChapter}`
+              content: `【本章大纲】：\n${batchOutlineContent}`
             });
 
             if (lastChapterContent) {
@@ -3244,12 +3279,18 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               });
             }
 
+            // 构建章节标题列表，用于提示AI
+            const chapterTitles = outlineEntries
+              .slice(0, batchSize)
+              .map(entry => entry.title)
+              .join('、');
+
             chapterMessages.push({
               role: 'user',
-              content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成${resolvedTitle}的正文。`
+              content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}批量生成以下章节的正文：${chapterTitles}。请在每章正文前加上明确的章节标题作为分隔标记。`
             });
 
-            let chapterResponse = '';
+            let batchChapterResponse = '';
             try {
               // 构建完整的参数对象，以便日志记录
               const chapterCompletionParams: any = {
@@ -3266,7 +3307,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               if ((finalChapterPreset as any).presencePenalty) chapterCompletionParams.presence_penalty = (finalChapterPreset as any).presencePenalty;
 
               console.groupCollapsed(
-                `[Workflow AI Request] 大纲与正文生成 - 正文 ${chapterIndex + 1}`
+                `[Workflow AI Request] 大纲与正文生成 - 批量正文 ${startChapterIndex + 1}-${batchEndIndex}`
               );
               console.log('Messages:', chapterMessages);
               console.log('Config:', chapterCompletionParams);
@@ -3274,7 +3315,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
               // 详细的参数日志
               terminal.log(`
->> AI REQUEST [工作流: 正文生成] 第${chapterIndex + 1}章
+>> AI REQUEST [工作流: 批量正文生成] 第${startChapterIndex + 1}-${batchEndIndex}章
 >> -----------------------------------------------------------
 >> Model:               ${chapterCompletionParams.model}
 >> Temperature:         ${chapterCompletionParams.temperature}
@@ -3295,47 +3336,123 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               
               for await (const chunk of stream as any) {
                 const content = chunk.choices[0]?.delta?.content || '';
-                chapterResponse += content;
-                
-                // 实时更新章节内容
-                const currentChapter = chapterMap.get(chapterIndex);
-                if (currentChapter) {
-                  currentChapter.content = chapterResponse;
-                  await updateLocalAndGlobal(localNovel);
-                }
+                batchChapterResponse += content;
               }
               
               terminal.log(`
->> AI RESPONSE [工作流: 正文生成] 第${chapterIndex + 1}章
+>> AI RESPONSE [工作流: 批量正文生成] 第${startChapterIndex + 1}-${batchEndIndex}章
 >> -----------------------------------------------------------
->> Content length: ${chapterResponse.length} characters
+>> Content length: ${batchChapterResponse.length} characters
 >> -----------------------------------------------------------
 `);
             } catch (err) {
-              terminal.error(`[OutlineAndChapter] 正文生成失败: ${err}`);
+              terminal.error(`[OutlineAndChapter] 批量正文生成失败: ${err}`);
+              startChapterIndex = batchEndIndex;
               continue;
             }
 
-            // 确保 targetVolumeId 不为空且有效（防止落到未分卷）
-            const isValidVolume = (id?: string) =>
-              !!id && !!localNovel.volumes?.some(v => String(v.id) === String(id));
+            // 3. 通过标题分割正文内容
+            const chapterContents: Map<string, string> = new Map();
+            
+            // 首先尝试精确匹配章节标题
+            for (let i = 0; i < batchSize; i++) {
+              const chapterIdx = startChapterIndex + i;
+              if (chapterIdx >= chapterCount) break;
               
-            if (!isValidVolume(finalVolumeId)) {
-              terminal.warn(`[OutlineAndChapter] 警告: finalVolumeId 无效，重新获取`);
-              finalVolumeId = getValidVolumeId();
-              if (!localNovel.volumes?.some(v => v.id === finalVolumeId)) {
-                await updateLocalAndGlobal(localNovel);
+              const outlineEntry = outlineEntries[i];
+              const chapterTitle = outlineEntry.title;
+              
+              // 查找章节标题在响应中的位置
+              const titleIndex = batchChapterResponse.indexOf(chapterTitle);
+              if (titleIndex !== -1) {
+                // 找到下一个章节标题的位置作为结束标记
+                let nextTitleIndex = batchChapterResponse.length;
+                for (let j = i + 1; j < batchSize; j++) {
+                  const nextTitle = outlineEntries[j].title;
+                  const nextIndex = batchChapterResponse.indexOf(nextTitle, titleIndex + chapterTitle.length);
+                  if (nextIndex !== -1 && nextIndex < nextTitleIndex) {
+                    nextTitleIndex = nextIndex;
+                    break;
+                  }
+                }
+                
+                // 提取章节内容
+                const chapterContent = batchChapterResponse
+                  .slice(titleIndex + chapterTitle.length, nextTitleIndex)
+                  .trim();
+                
+                chapterContents.set(chapterTitle, chapterContent);
+                terminal.log(`[OutlineAndChapter] 成功分割章节: ${chapterTitle}, 内容长度: ${chapterContent.length}`);
               }
             }
             
-            // 章节内容已经在流式输出时实时更新
-            lastChapterContent = chapterResponse;
-            lastChapterTitle = resolvedTitle;
+            // 对于没有找到精确匹配的章节，尝试使用顺序分割
+            if (chapterContents.size < batchSize) {
+              terminal.warn(`[OutlineAndChapter] 部分章节未找到精确标题匹配，尝试顺序分割`);
+              
+              // 简单的顺序分割：将内容平均分配给剩余章节
+              const remainingChapters = [];
+              for (let i = 0; i < batchSize; i++) {
+                const outlineEntry = outlineEntries[i];
+                if (!chapterContents.has(outlineEntry.title)) {
+                  remainingChapters.push(outlineEntry);
+                }
+              }
+              
+              if (remainingChapters.length > 0) {
+                // 找到未被分配的内容
+                let remainingContent = batchChapterResponse;
+                chapterContents.forEach((content) => {
+                  remainingContent = remainingContent.replace(content, '');
+                });
+                remainingContent = remainingContent.trim();
+                
+                // 平均分配剩余内容
+                const chunkSize = Math.floor(remainingContent.length / remainingChapters.length);
+                remainingChapters.forEach((chapter, idx) => {
+                  const start = idx * chunkSize;
+                  const end = idx === remainingChapters.length - 1 ? remainingContent.length : (idx + 1) * chunkSize;
+                  const content = remainingContent.slice(start, end).trim();
+                  chapterContents.set(chapter.title, content);
+                  terminal.log(`[OutlineAndChapter] 顺序分配章节: ${chapter.title}, 内容长度: ${content.length}`);
+                });
+              }
+            }
 
-            // 触发章节完成回调，以支持总结生成
-            if (globalConfig.onChapterComplete) {
-              const currentChapter = chapterMap.get(chapterIndex);
-              if (currentChapter) {
+            // 4. 将内容分配到对应章节并保存
+            for (let i = 0; i < batchSize; i++) {
+              const chapterIdx = startChapterIndex + i;
+              if (chapterIdx >= chapterCount) break;
+              if (!checkActive()) break;
+
+              const outlineEntry = outlineEntries[i];
+              const currentChapter = chapterMap.get(chapterIdx);
+              if (!currentChapter) continue;
+
+              // 确保 targetVolumeId 不为空且有效（防止落到未分卷）
+              const isValidVolume = (id?: string) =>
+                !!id && !!localNovel.volumes?.some(v => String(v.id) === String(id));
+                
+              if (!isValidVolume(finalVolumeId)) {
+                terminal.warn(`[OutlineAndChapter] 警告: finalVolumeId 无效，重新获取`);
+                finalVolumeId = getValidVolumeId();
+                if (!localNovel.volumes?.some(v => v.id === finalVolumeId)) {
+                  await updateLocalAndGlobal(localNovel);
+                }
+              }
+
+              // 获取章节内容
+              const chapterContent = chapterContents.get(outlineEntry.title) || '';
+              currentChapter.content = chapterContent;
+              
+              // 更新 lastChapterContent 和 lastChapterTitle 用于下一批次
+              if (chapterContent) {
+                lastChapterContent = chapterContent;
+                lastChapterTitle = outlineEntry.title;
+              }
+
+              // 触发章节完成回调，以支持总结生成
+              if (globalConfig.onChapterComplete) {
                 terminal.log(`[OutlineAndChapter] 触发章节完成回调: id=${currentChapter.id}, title=${currentChapter.title}`);
                 const summaryResult = await globalConfig.onChapterComplete(
                   currentChapter.id,
@@ -3349,9 +3466,15 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   await updateLocalAndGlobal(localNovel);
                 }
               }
-            }
 
-            await new Promise(resolve => setTimeout(resolve, 100));
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            // 批量保存所有章节内容
+            await updateLocalAndGlobal(localNovel);
+
+            // 更新起始索引，处理下一批次
+            startChapterIndex = batchEndIndex;
           }
 
           // 循环结束后，对最后一章触发一次强制总结检查
