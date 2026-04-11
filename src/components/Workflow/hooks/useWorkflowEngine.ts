@@ -3064,9 +3064,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
           // 获取已保存的循环进度，但优先使用计算出的起始索引
           let startChapterIndex = calculatedStartChapterIndex;
-          // 只有当节点保存的进度比计算出的更靠后时，才使用保存的进度
+          // 只有当没有发现空章节时，才考虑使用节点保存的进度
+          // 如果有章节内容为空，必须优先从该空章节开始
           const savedChapterIndex = (node.data.currentChapterIndex as number) || 0;
-          if (savedChapterIndex > calculatedStartChapterIndex) {
+          if (firstEmptyChapterIndex === -1 && savedChapterIndex > calculatedStartChapterIndex) {
             startChapterIndex = savedChapterIndex;
             terminal.log(`[OutlineAndChapter] 使用节点保存的进度: 从第 ${startChapterIndex + 1} 章开始`);
           }
