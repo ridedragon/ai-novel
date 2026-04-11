@@ -391,7 +391,8 @@ export const useWorkflowEngine = (options: {
     }
 
     const currentWf = workflowsRef.current.find(w => w.id === activeWorkflowId);
-    workflowManager.start(activeWorkflowId, startIndex, currentWf?.contextSnapshot);
+    const isFullMode = mode === 'full';
+    workflowManager.start(activeWorkflowId, startIndex, currentWf?.contextSnapshot, isFullMode);
     const startRunId = workflowManager.getCurrentRunId();
 
     setError(null);
@@ -499,12 +500,17 @@ export const useWorkflowEngine = (options: {
         return { ...n, data: { ...n.data, ...updates } };
       };
 
-      // 修复：只重置未执行的节点，保留已执行节点的状态
+      // 修复：重置逻辑 - 在完全重写模式下，重置所有 startIndex 之后的节点
+      // 在普通模式下，只重置未执行的节点
+      const isFullMode = mode === 'full';
       const initialResetNodes = nodesRef.current.map(n => {
         const nodeInSorted = sortedNodes.findIndex(sn => sn.id === n.id);
-        // 只有当节点在startIndex之后且状态为pending时才重置
-        if (nodeInSorted >= startIndex && n.data.status === 'pending') {
-          return resetNodeData(n);
+        // 完全重写模式：只要节点在 startIndex 之后，就重置
+        // 普通模式：只有当节点在 startIndex 之后且状态为 pending 时才重置
+        if (nodeInSorted >= startIndex) {
+          if (isFullMode || n.data.status === 'pending') {
+            return resetNodeData(n);
+          }
         }
         return n;
       });
@@ -514,16 +520,21 @@ export const useWorkflowEngine = (options: {
       // 初始化时清除所有连线动画
       clearAllEdgeAnimations();
 
-      // 修复：只重置未执行的节点，保留已执行节点的状态
+      // 修复：重置逻辑 - 在完全重写模式下，重置所有 startIndex 之后的节点
       sortedNodes = sortedNodes.map((sn, idx) => {
         if (idx >= startIndex) {
           const node = nodesRef.current.find(n => n.id === sn.id);
-          if (node && node.data.status === 'pending') {
+          if (isFullMode || (node && node.data.status === 'pending')) {
             return resetNodeData(sn);
           }
         }
         return sn;
       });
+
+      // 完全重写模式：重置 loop_index 为 1
+      if (isFullMode) {
+        workflowManager.setContextVar('loop_index', 1);
+      }
 
       // 构建宏上下文：供 interpolateWithMacros 使用
       // 宏组件可以在任何节点的指令和提示词中使用，获取其他节点的全部内容
