@@ -112,7 +112,7 @@ const TreeItem: React.FC<{
           <span className="text-sm font-medium text-gray-200 truncate block">{item.title}</span>
         </div>
 
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 opacity-100">
           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-900/20 text-blue-400 border border-blue-900/50 mr-2">
             {item.type || '剧情'}
           </span>
