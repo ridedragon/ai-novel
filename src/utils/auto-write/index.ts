@@ -489,13 +489,14 @@ export class AutoWriteEngine {
           let response;
           try {
             if (this.config.stream) {
-              // 对于流式请求，不使用 await，直接获取流对象
-              response = openai.chat.completions.create(
+              // 对于流式请求，使用 stream() 方法获取异步可迭代对象
+              const completion = await openai.chat.completions.create(
                 requestParams,
                 {
                   signal: this.abortController?.signal,
                 },
-              ) as any;
+              );
+              response = completion.stream() as any;
             } else {
               // 对于非流式请求，使用 await
               response = (await openai.chat.completions.create(
@@ -510,12 +511,13 @@ export class AutoWriteEngine {
               terminal.warn('API 400 错误，尝试移除 top_k 参数重试');
               delete requestParams.top_k;
               if (this.config.stream) {
-                response = openai.chat.completions.create(
+                const completion = await openai.chat.completions.create(
                   requestParams,
                   {
                     signal: this.abortController?.signal,
                   },
-                ) as any;
+                );
+                response = completion.stream() as any;
               } else {
                 response = (await openai.chat.completions.create(
                   requestParams,
