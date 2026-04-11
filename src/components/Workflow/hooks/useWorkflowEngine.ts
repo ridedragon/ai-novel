@@ -2996,7 +2996,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             // 计算当前批次的章节范围
             const batchEndIndex = Math.min(startChapterIndex + maxBatchSize, chapterCount);
             const batchSize = batchEndIndex - startChapterIndex;
-            terminal.log(`[OutlineAndChapter] 处理批次: 第 ${startChapterIndex + 1} 章 到 第 ${batchEndIndex} 章`);
+            
+            // 边界检查：确保批次大小不会为负数
+            if (batchSize <= 0) {
+              terminal.log(`[OutlineAndChapter] 所有章节已生成完成，结束工作`);
+              break;
+            }
+            
+            terminal.log(`[OutlineAndChapter] 处理批次: 第 ${startChapterIndex + 1} 章 到 第 ${batchEndIndex} 章 (共 ${batchSize} 章)`);
 
             // 1. 批量生成大纲
             const outlineOpenai = new OpenAI({
@@ -3041,9 +3048,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               });
             }
 
+            // 确保提示词中的结束索引不超过实际章节总数
+            const actualEndIndex = Math.min(batchEndIndex, chapterCount);
             outlineMessages.push({
               role: 'user',
-              content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}批量生成第${startChapterIndex + 1}章到第${batchEndIndex}章的大纲。请以JSON格式输出，包含title和summary字段的数组。`
+              content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}批量生成第${startChapterIndex + 1}章到第${actualEndIndex}章的大纲。请以JSON格式输出，包含title和summary字段的数组。`
             });
 
             let outlineResponse = '';
@@ -3153,17 +3162,23 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             outlineResponse = parsedOutlineResponse;
 
-            // 确保生成的大纲数量与批次大小一致
-            if (outlineEntries.length < batchSize) {
-              terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 少于批次大小 (${batchSize})，将使用默认标题`);
-              // 补充缺失的大纲
-              for (let i = outlineEntries.length; i < batchSize; i++) {
+            // 确保生成的大纲数量不超过批次大小，并且不超过剩余需要生成的章节数
+            const actualNeededCount = Math.min(batchSize, chapterCount - startChapterIndex);
+            if (outlineEntries.length < actualNeededCount) {
+              terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 少于需要的数量 (${actualNeededCount})，将使用默认标题`);
+              // 补充缺失的大纲，但不超过实际需要的数量
+              for (let i = outlineEntries.length; i < actualNeededCount; i++) {
                 const chapterIdx = startChapterIndex + i;
+                if (chapterIdx >= chapterCount) break; // 双重保险，确保不超出总数
                 outlineEntries.push({ 
                   title: `第${chapterIdx + 1}章`, 
                   content: `第${chapterIdx + 1}章的大纲内容` 
                 });
               }
+            } else if (outlineEntries.length > actualNeededCount) {
+              // 如果生成的大纲数量超过需要的数量，截断多余的
+              terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 超过需要的数量 (${actualNeededCount})，将截断多余部分`);
+              outlineEntries = outlineEntries.slice(0, actualNeededCount);
             }
 
             // 保存大纲到对应文件夹（与大纲节点的 upSets 逻辑一致）
@@ -3193,9 +3208,17 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             // 批量创建章节
             const batchChapters: Chapter[] = [];
-            outlineEntries.forEach((entry, i) => {
+            const actualProcessCount = Math.min(outlineEntries.length, chapterCount - startChapterIndex);
+            
+            for (let i = 0; i < actualProcessCount; i++) {
               const chapterIdx = startChapterIndex + i;
-              if (chapterIdx >= chapterCount) return;
+              if (chapterIdx >= chapterCount) {
+                terminal.warn(`[OutlineAndChapter] 章节索引超出范围: ${chapterIdx}, 跳过`);
+                break;
+              }
+              
+              const entry = outlineEntries[i];
+              if (!entry) continue;
               
               // 使用解析后的标题
               const resolvedTitle = entry.title || `第${chapterIdx + 1}章`;
@@ -3204,7 +3227,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               const newChapter: Chapter = {
                 id: Date.now() + chapterIdx,
                 title: resolvedTitle,
-                content: '', // 初始为空，后续会流式更新
+                content: '', // 初始为空，后续会更新
                 volumeId: finalVolumeId,
                 subtype: 'story',
               };
@@ -3219,7 +3242,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 title: entry.title,
                 content: entry.content
               });
-            });
+            }
 
             // 批量添加章节到小说
             localNovel.chapters = [...(localNovel.chapters || []), ...batchChapters];
@@ -3280,14 +3303,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             }
 
             // 构建章节标题列表，用于提示AI
-            const chapterTitles = outlineEntries
-              .slice(0, batchSize)
+            const titlesForPrompt = outlineEntries
+              .slice(0, actualNeededCount)
               .map(entry => entry.title)
               .join('、');
 
             chapterMessages.push({
               role: 'user',
-              content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}批量生成以下章节的正文：${chapterTitles}。请在每章正文前加上明确的章节标题作为分隔标记。`
+              content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}批量生成以下章节的正文：${titlesForPrompt}。请在每章正文前加上明确的章节标题作为分隔标记。`
             });
 
             let batchChapterResponse = '';
@@ -3355,11 +3378,16 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             const chapterContents: Map<string, string> = new Map();
             
             // 首先尝试精确匹配章节标题
-            for (let i = 0; i < batchSize; i++) {
+            const actualContentCount = Math.min(outlineEntries.length, chapterCount - startChapterIndex);
+            for (let i = 0; i < actualContentCount; i++) {
               const chapterIdx = startChapterIndex + i;
-              if (chapterIdx >= chapterCount) break;
+              if (chapterIdx >= chapterCount) {
+                terminal.warn(`[OutlineAndChapter] 章节索引超出范围: ${chapterIdx}, 跳过`);
+                break;
+              }
               
               const outlineEntry = outlineEntries[i];
+              if (!outlineEntry) continue;
               const chapterTitle = outlineEntry.title;
               
               // 查找章节标题在响应中的位置
@@ -3420,12 +3448,17 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             }
 
             // 4. 将内容分配到对应章节并保存
-            for (let i = 0; i < batchSize; i++) {
+            const finalProcessCount = Math.min(outlineEntries.length, chapterCount - startChapterIndex);
+            for (let i = 0; i < finalProcessCount; i++) {
               const chapterIdx = startChapterIndex + i;
-              if (chapterIdx >= chapterCount) break;
+              if (chapterIdx >= chapterCount) {
+                terminal.warn(`[OutlineAndChapter] 章节索引超出范围: ${chapterIdx}, 跳过`);
+                break;
+              }
               if (!checkActive()) break;
 
               const outlineEntry = outlineEntries[i];
+              if (!outlineEntry) continue;
               const currentChapter = chapterMap.get(chapterIdx);
               if (!currentChapter) continue;
 
