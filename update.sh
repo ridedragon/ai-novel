@@ -1,66 +1,59 @@
 #!/bin/bash
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+echo "Updating AI Novel Writer..."
 
-echo -e "${YELLOW}正在准备更新 AI 小说写作助手...${NC}"
-
-# 1. 清理可能导致冲突的构建/生成文件
-# dev-dist 是 VitePWA 插件在开发模式下生成的，经常会导致 git pull 冲突
+# Clean dev-dist
 if [ -d "dev-dist" ]; then
-    echo -e "清理临时文件 (dev-dist)..."
+    echo "Cleaning temp files (dev-dist)..."
     rm -rf dev-dist
 fi
 
-# 2. 配置 npm 国内镜像
-echo -e "${YELLOW}正在配置 npm 镜像...${NC}"
+# Set npm mirror
+echo "Setting npm mirror..."
 npm config set registry https://registry.npmmirror.com
 
-# 3. 尝试拉取更新
-echo -e "${YELLOW}正在从 GitHub 拉取最新代码...${NC}"
+# Pull from GitHub
+echo "Pulling latest code from GitHub..."
 if git pull; then
-    echo -e "${GREEN}代码更新成功！${NC}"
+    echo "Code update successful!"
     
-    # 4. 更新依赖
-    echo -e "${YELLOW}正在检查并更新依赖...${NC}"
+    # Update dependencies
+    echo "Updating dependencies..."
     if npm install; then
-        echo -e "${GREEN}依赖更新完成！${NC}"
-        echo -e "${YELLOW}正在自动启动程序...${NC}"
+        echo "Dependencies updated!"
+        echo "Starting application..."
         ./start.sh
     else
-        echo -e "${RED}依赖更新失败。请检查网络连接或 npm 配置。${NC}"
+        echo "Failed to update dependencies."
     fi
 else
-    echo -e "${RED}更新遇到冲突。${NC}"
-    echo -e "通常这是因为本地修改了文件，或者远程仓库的历史被重写。"
+    echo "Update conflict."
+    echo "This usually happens when local files were modified."
     
-    # 获取当前分支
+    # Get current branch
     BRANCH=$(git rev-parse --abbrev-ref HEAD)
     
-    # 询问是否强制更新
-    read -p "是否强制覆盖本地修改以完成更新？(这将丢失所有未提交的更改) [y/N] " -n 1 -r
+    # Ask for force update
+    read -p "Force update? This will lose all uncommitted changes [y/N] " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${YELLOW}正在强制重置本地仓库...${NC}"
+        echo "Force resetting local repository..."
         
         if git fetch --all && git reset --hard origin/$BRANCH; then
-            echo -e "${GREEN}强制重置成功。${NC}"
+            echo "Force reset successful."
             
-            echo -e "${YELLOW}正在更新依赖...${NC}"
+            echo "Updating dependencies..."
             if npm install; then
-                echo -e "${GREEN}依赖更新完成！${NC}"
-                echo -e "${YELLOW}正在自动启动程序...${NC}"
+                echo "Dependencies updated!"
+                echo "Starting application..."
                 ./start.sh
             else
-                echo -e "${RED}依赖更新失败。请检查网络连接或 npm 配置。${NC}"
+                echo "Failed to update dependencies."
             fi
         else
-            echo -e "${RED}强制重置失败。请尝试手动删除项目并重新 clone。${NC}"
+            echo "Force reset failed."
         fi
     else
-        echo -e "${YELLOW}更新已取消。${NC}"
+        echo "Update cancelled."
     fi
 fi
