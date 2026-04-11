@@ -7,7 +7,6 @@ import {
   Wand2,
   X
 } from 'lucide-react'
-import OpenAI from 'openai'
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import terminal from 'virtual:terminal'
@@ -26,6 +25,71 @@ interface AIChatModalProps {
   context?: string
   onAttach: (content: string) => void
 }
+
+// 流式AI请求函数
+const streamAIRequest = async (params: {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  messages: any[];
+  onData: (chunk: string) => void;
+  onError: (error: string) => void;
+  onComplete: () => void;
+  signal: AbortSignal | undefined;
+}) => {
+  try {
+    const response = await fetch('http://localhost:3001/api/ai/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: params.model,
+        messages: params.messages,
+        apiKey: params.apiKey,
+        baseUrl: params.baseUrl,
+      }),
+      signal: params.signal,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      params.onError(errorData.error || 'API请求失败');
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      params.onError('无法获取响应流');
+      return;
+    }
+
+    const decoder = new TextDecoder('utf-8');
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') {
+            params.onComplete();
+            break;
+          }
+          params.onData(data);
+        }
+      }
+    }
+  } catch (error: any) {
+    if (error.name !== 'AbortError') {
+      params.onError(error.message || '网络错误');
+    }
+  }
+};
 
 export function AIChatModal({
   isOpen,
@@ -66,12 +130,6 @@ export function AIChatModal({
     abortControllerRef.current = new AbortController()
 
     try {
-      const openai = new OpenAI({
-        apiKey,
-        baseURL: baseUrl,
-        dangerouslyAllowBrowser: true
-      })
-
       // 1. 查找与当前大纲集同名的世界观和角色集
       let targetName = ''
       if (activeOutlineSetId) {
@@ -145,26 +203,34 @@ export function AIChatModal({
 >> -----------------------------------------------------------
       `);
 
-      const response = await openai.chat.completions.create({
-        model,
-        messages: chatMessages,
-        stream: true,
-      }, {
-        signal: abortControllerRef.current.signal
-      })
-
       let assistantContent = ''
       setMessages([...newMessages, { role: 'assistant', content: '' }])
 
-      for await (const chunk of response) {
-        const content = chunk.choices[0]?.delta?.content || ''
-        assistantContent += content
-        setMessages(prev => {
-          const updated = [...prev]
-          updated[updated.length - 1] = { role: 'assistant', content: assistantContent }
-          return updated
+      // 使用流式API
+      await new Promise<void>((resolve, reject) => {
+        streamAIRequest({
+          apiKey: apiKey,
+          baseUrl: baseUrl,
+          model: model,
+          messages: chatMessages,
+          onData: (chunk) => {
+            assistantContent += chunk
+            setMessages(prev => {
+              const updated = [...prev]
+              updated[updated.length - 1] = { role: 'assistant', content: assistantContent }
+              return updated
+            })
+          },
+          onError: (error) => {
+            reject(new Error(error))
+          },
+          onComplete: () => {
+            resolve()
+          },
+          signal: abortControllerRef.current?.signal,
         })
-      }
+      })
+
       terminal.log(`[Chat Assistant Output]:\n${assistantContent.slice(0, 500)}${assistantContent.length > 500 ? '...' : ''}`);
     } catch (err: any) {
       if (err.name === 'AbortError') return

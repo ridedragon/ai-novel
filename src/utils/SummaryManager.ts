@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import terminal from 'virtual:terminal';
 import { Chapter, Novel } from '../types';
 
@@ -245,6 +244,71 @@ const getStableContent = (chapter: Chapter) => {
 
 const activeGenerations = new Set<string>();
 
+// 流式AI请求函数
+const streamAIRequest = async (params: {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  messages: any[];
+  onData: (chunk: string) => void;
+  onError: (error: string) => void;
+  onComplete: () => void;
+  signal: AbortSignal | undefined;
+}) => {
+  try {
+    const response = await fetch('http://localhost:3001/api/ai/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: params.model,
+        messages: params.messages,
+        apiKey: params.apiKey,
+        baseUrl: params.baseUrl,
+      }),
+      signal: params.signal,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      params.onError(errorData.error || 'API请求失败');
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      params.onError('无法获取响应流');
+      return;
+    }
+
+    const decoder = new TextDecoder('utf-8');
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') {
+            params.onComplete();
+            break;
+          }
+          params.onData(data);
+        }
+      }
+    }
+  } catch (error: any) {
+    if (error.name !== 'AbortError') {
+      params.onError(error.message || '网络错误');
+    }
+  }
+};
+
 export const checkAndGenerateSummary = async (
   targetChapterId: number,
   currentContent: string,
@@ -406,7 +470,6 @@ export const checkAndGenerateSummary = async (
     if (!sourceText) return;
 
     try {
-      const openai = new OpenAI({ apiKey, baseURL: baseUrl, dangerouslyAllowBrowser: true });
       let prompt = type === 'small' ? smallSummaryPrompt : bigSummaryPrompt;
 
       // 在本卷模式下，通过系统指令强力约束 AI 的总结范围
@@ -415,20 +478,32 @@ export const checkAndGenerateSummary = async (
         prompt = `【分卷总结专项指令】：当前正在进行“分卷创作模式”，你必须仅针对下方提供的本卷内容进行大总结。严禁提及或猜测任何不属于下方内容的剧情。\n\n${prompt}`;
       }
 
-      const completion = await openai.chat.completions.create(
-        {
+      let summaryContent = '';
+      
+      // 使用流式API
+      await new Promise<void>((resolve, reject) => {
+        streamAIRequest({
+          apiKey: apiKey,
+          baseUrl: baseUrl,
           model: model,
           messages: [
             { role: 'system', content: 'You are a professional editor helper.' },
             { role: 'user', content: `${sourceText}\n\n${prompt}` },
           ],
-          temperature: 0.5,
-        },
-        { signal },
-      );
+          onData: (chunk) => {
+            summaryContent += chunk;
+          },
+          onError: (error) => {
+            reject(new Error(error));
+          },
+          onComplete: () => {
+            resolve();
+          },
+          signal: signal,
+        });
+      });
 
       if (!checkActive()) return;
-      const summaryContent = completion.choices[0]?.message?.content || '';
       if (summaryContent && checkActive()) {
         const existingIndex = currentChaptersSnapshot.findIndex(
           c => c.subtype === subtype && c.summaryRange === rangeStr,
