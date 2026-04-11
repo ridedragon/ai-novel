@@ -1564,7 +1564,7 @@ export const useWorkflowEngine = (options: {
                     }
 
                     // 清除章节节点的分卷目标，设置为下一个分卷
-                    if (typeKey === 'chapter' && nextVolumeId) {
+                    if ((typeKey === 'chapter' || typeKey === 'outlineAndChapter') && nextVolumeId) {
                       updates.targetVolumeId = nextVolumeId;
                       updates.targetVolumeName = nextFolderName;
                     }
@@ -2904,6 +2904,13 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             if (volumePlan) {
               currentVolumeName = volumePlan.volumeName || volumePlan.folderName || '';
               terminal.log(`[OutlineAndChapter] 使用 volumePlan 中的名称: ${currentVolumeName}`);
+            }
+          } else if (targetVolumeId && localNovel.volumes) {
+            // 优先级6: 直接从 targetVolumeId 查找卷名称
+            const volumeById = localNovel.volumes.find(v => v.id === targetVolumeId);
+            if (volumeById) {
+              currentVolumeName = volumeById.title;
+              terminal.log(`[OutlineAndChapter] 使用 targetVolumeId 查找卷名称: ${currentVolumeName}`);
             }
           }
 
