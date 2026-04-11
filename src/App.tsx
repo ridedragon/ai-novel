@@ -1483,8 +1483,6 @@ function App() {
           setLongTextMode={config.setLongTextMode}
           contextScope={config.contextScope}
           setContextScope={config.setContextScope}
-          stream={completion.stream}
-          setStream={completion.setStream}
           onShowOptimizeSettings={() => {
             setGeneratorSettingsType('optimize');
             setShowGeneratorSettingsModal(true);
