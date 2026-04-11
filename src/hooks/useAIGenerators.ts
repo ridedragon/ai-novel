@@ -1657,12 +1657,23 @@ export function useAIGenerators() {
             
             let response;
             try {
-              response = (await openai.chat.completions.create(
-                requestParams,
-                {
-                  signal: generateAbortControllerRef.current.signal,
-                },
-              )) as any;
+              if (params.stream) {
+                // 对于流式请求，直接获取迭代器而不使用await
+                response = openai.chat.completions.create(
+                  requestParams,
+                  {
+                    signal: generateAbortControllerRef.current.signal,
+                  },
+                ) as any;
+              } else {
+                // 对于非流式请求，正常使用await
+                response = (await openai.chat.completions.create(
+                  requestParams,
+                  {
+                    signal: generateAbortControllerRef.current.signal,
+                  },
+                )) as any;
+              }
             } catch (apiError: any) {
               if (apiError.status === 400) {
                 const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
@@ -1672,23 +1683,41 @@ export function useAIGenerators() {
                   terminal.warn('尝试移除 top_k 参数重试');
                   delete requestParams.top_k;
                   fallbackMode = 1;
-                  response = (await openai.chat.completions.create(
-                    requestParams,
-                    {
-                      signal: generateAbortControllerRef.current.signal,
-                    },
-                  )) as any;
+                  if (params.stream) {
+                    response = openai.chat.completions.create(
+                      requestParams,
+                      {
+                        signal: generateAbortControllerRef.current.signal,
+                      },
+                    ) as any;
+                  } else {
+                    response = (await openai.chat.completions.create(
+                      requestParams,
+                      {
+                        signal: generateAbortControllerRef.current.signal,
+                      },
+                    )) as any;
+                  }
                 } else if (fallbackMode < 2) {
                   terminal.warn('尝试简化参数重试 (移除 top_p)');
                   delete requestParams.top_p;
                   requestParams.temperature = 1.0;
                   fallbackMode = 2;
-                  response = (await openai.chat.completions.create(
-                    requestParams,
-                    {
-                      signal: generateAbortControllerRef.current.signal,
-                    },
-                  )) as any;
+                  if (params.stream) {
+                    response = openai.chat.completions.create(
+                      requestParams,
+                      {
+                        signal: generateAbortControllerRef.current.signal,
+                      },
+                    ) as any;
+                  } else {
+                    response = (await openai.chat.completions.create(
+                      requestParams,
+                      {
+                        signal: generateAbortControllerRef.current.signal,
+                      },
+                    )) as any;
+                  }
                 } else {
                   throw apiError;
                 }
