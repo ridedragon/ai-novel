@@ -7,7 +7,7 @@ import {
   Wand2,
   X
 } from 'lucide-react'
-import OpenAI from 'openai'
+import OpenAI from 'openai';
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import terminal from 'virtual:terminal'
