@@ -285,11 +285,11 @@ export const useWorkflowEngine = (options: {
         // 不需要保留的章节，从列表中移除
         return false;
       }),
-      outlineSets: clearSetByName(novel.outlineSets, 'items', 'outline'),
-      characterSets: clearSetByName(novel.characterSets, 'characters', 'characters'),
-      worldviewSets: clearSetByName(novel.worldviewSets, 'entries', 'worldview'),
-      inspirationSets: clearSetByName(novel.inspirationSets, 'items', 'inspiration'),
-      plotOutlineSets: clearSetByName(novel.plotOutlineSets, 'items', 'plotOutline'),
+      outlineSets: clearSetByName(novel.outlineSets || [], 'items', 'outline'),
+      characterSets: clearSetByName(novel.characterSets || [], 'characters', 'characters'),
+      worldviewSets: clearSetByName(novel.worldviewSets || [], 'entries', 'worldview'),
+      inspirationSets: clearSetByName(novel.inspirationSets || [], 'items', 'inspiration'),
+      plotOutlineSets: clearSetByName(novel.plotOutlineSets || [], 'items', 'plotOutline'),
       referenceFiles: (novel.referenceFiles || []).filter(file => !file.parentId || !allFolderIds.has(file.parentId)),
     };
   };

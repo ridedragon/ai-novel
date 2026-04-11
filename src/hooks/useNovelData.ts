@@ -82,7 +82,7 @@ export function useNovelData() {
           try {
             return await storage.loadNovelContent(novel);
           } catch (error) {
-            terminal.error(`[STORAGE] 加载小说 ${novel.title} 内容失败: ${error.message}`);
+            terminal.error(`[STORAGE] 加载小说 ${novel.title} 内容失败: ${error instanceof Error ? error.message : String(error)}`);
             return novel;
           }
         })
