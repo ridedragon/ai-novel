@@ -552,9 +552,9 @@ export class AutoWriteEngine {
               // 优化 4.3：移除高频流式进度日志，减轻主进程 IPC 缓冲区负担
 
               const now = Date.now();
-            // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
-            // 50ms ≈ 20fps，在流畅度和性能之间取得平衡
-            if (now - lastUpdateTime < 50) continue;
+              // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
+              // 50ms ≈ 20fps，在流畅度和性能之间取得平衡
+              if (now - lastUpdateTime < 50) continue;
 
               streamUpdateCount++;
               lastUpdateTime = now;
