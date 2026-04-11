@@ -1524,6 +1524,7 @@ export function useAIGenerators() {
         generateAbortControllerRef: React.MutableRefObject<AbortController | null>;
         isRegenerating?: boolean;
         onChainOfThoughtUpdate?: (content: string) => void;
+        onStreamingStatusChange?: (isStreaming: boolean) => void;
       }) => {
         const { apiKey, activeChapter, activeNovel, generateAbortControllerRef } = params;
 
@@ -1744,6 +1745,8 @@ export function useAIGenerators() {
             let hasReceivedContent = false;
 
             if (params.stream) {
+              // 开始流式传输
+              params.onStreamingStatusChange?.(true);
               let lastUpdateTime = 0;
               let chainOfThought = '';
               terminal.log('[Stream] 开始流式传输');
@@ -1752,7 +1755,11 @@ export function useAIGenerators() {
                 // 检查response是否为可迭代对象
                 if (typeof response === 'object' && response !== null && Symbol.asyncIterator in response) {
                   for await (const chunk of response) {
-                    if (generateAbortControllerRef.current?.signal.aborted) throw new Error('Aborted');
+                    if (generateAbortControllerRef.current?.signal.aborted) {
+                      // 中止时关闭流式状态
+                      params.onStreamingStatusChange?.(false);
+                      throw new Error('Aborted');
+                    }
                     
                     // 检查chunk格式
                     if (!chunk || !chunk.choices || !Array.isArray(chunk.choices) || chunk.choices.length === 0) {
@@ -1809,15 +1816,21 @@ export function useAIGenerators() {
                   }
                   isStreamSuccessful = true;
                   terminal.log('[Stream] 流式传输结束');
+                  // 流式传输结束
+                  params.onStreamingStatusChange?.(false);
                 } else {
                   // 流对象不可迭代，切换到非流式模式
                   terminal.warn('[Stream] 流对象不可迭代，切换到非流式模式');
                   isStreamSuccessful = false;
+                  // 关闭流式状态
+                  params.onStreamingStatusChange?.(false);
                 }
               } catch (streamError) {
                 // 流式处理出错，切换到非流式模式
                 terminal.warn('[Stream] 流式处理出错:', streamError);
                 isStreamSuccessful = false;
+                // 关闭流式状态
+                params.onStreamingStatusChange?.(false);
               }
             }
             

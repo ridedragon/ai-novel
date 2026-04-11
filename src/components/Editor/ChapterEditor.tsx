@@ -18,6 +18,7 @@ import ReactMarkdown from 'react-markdown';
 import terminal from 'virtual:terminal';
 import { Chapter } from '../../types';
 import { extractChapterName } from '../../utils/chapterNumbering';
+import { TypewriterEffect } from '../UI/TypewriterEffect';
 
 interface ChapterEditorProps {
   activeChapter: Chapter | undefined;
@@ -44,6 +45,7 @@ interface ChapterEditorProps {
   showChainOfThought: boolean;
   setShowChainOfThought: (show: boolean) => void;
   chainOfThoughtContent: string;
+  isStreaming?: boolean;
 
   onDeleteChapter: (chapterId: number) => void;
 }
@@ -73,6 +75,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     showChainOfThought,
     setShowChainOfThought,
     chainOfThoughtContent,
+    isStreaming = false,
     onDeleteChapter,
   }) => {
     const contentScrollRef = useRef<HTMLDivElement>(null);
@@ -382,14 +385,16 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
               >
                 {activeChapter.content ? (
                   <div className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
-                    <ReactMarkdown>
-                      {activeChapter.content
+                    <TypewriterEffect 
+                      text={activeChapter.content
                         .replace(/<[^>]+>/g, '')
                         .split('\n')
                         .map(line => line.trim())
                         .filter(line => line)
                         .join('\n\n')}
-                    </ReactMarkdown>
+                      speed={20}
+                      isStreaming={isStreaming}
+                    />
                   </div>
                 ) : (
                   <div className="text-slate-500 italic text-center py-20">

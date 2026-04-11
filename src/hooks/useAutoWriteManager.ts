@@ -151,6 +151,7 @@ export function useAutoWriteManager() {
       getActiveScripts: () => RegexScript[];
       onAnalysisResult?: (result: string) => void;
       onError: (msg: string) => void;
+      onStreamingStatusChange?: (isStreaming: boolean) => void;
     }) => {
       const { targetId, activeNovelId, novelsRef, setChapters } = params;
 
@@ -385,13 +386,17 @@ export function useAutoWriteManager() {
             requestParams.top_k = activePreset.topK;
           }
           
-          let stream;
+          // 开始流式输出
+        params.onStreamingStatusChange?.(true);
+        let stream;
           try {
             stream = await openai.chat.completions.create(
               requestParams,
               { signal: abortController.signal },
             );
           } catch (apiError: any) {
+            // 出错时关闭流式状态
+            params.onStreamingStatusChange?.(false);
             if (apiError.status === 400) {
               const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
               terminal.warn(`API 400 错误: ${errorBody}`);
@@ -424,7 +429,11 @@ export function useAutoWriteManager() {
         let newContent = '';
         let lastUpdateTime = 0;
         for await (const chunk of stream as any) {
-          if (abortController.signal.aborted) throw new Error('Aborted');
+          if (abortController.signal.aborted) {
+            // 中止时关闭流式状态
+            params.onStreamingStatusChange?.(false);
+            throw new Error('Aborted');
+          }
           const content = chunk.choices[0]?.delta?.content || '';
           newContent += content;
 
@@ -447,6 +456,9 @@ export function useAutoWriteManager() {
             );
           }
         }
+
+        // 流式输出结束
+        params.onStreamingStatusChange?.(false);
 
         const scripts = params.getActiveScripts();
         const processed = await processTextWithRegex(newContent, scripts, 'output');

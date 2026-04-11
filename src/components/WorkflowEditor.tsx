@@ -146,6 +146,10 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
     setNodes,
     setEdges,
     onUpdateNovel,
+    onStreamingStatusChange: (isStreaming) => {
+      // 这里可以添加逻辑来处理流式状态变化
+      console.log('Workflow streaming status:', isStreaming);
+    },
     getOrderedNodes: () => orderedNodes,
     isMobile: false
   });
