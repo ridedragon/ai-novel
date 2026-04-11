@@ -2862,6 +2862,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               chapterCount = (volumePlan.endChapter - volumePlan.startChapter) + 1;
             }
           }
+          
+          // 修复：如果大纲集的章节数量大于分卷规划的章节数量，使用大纲集的数量
+          if (outlineSet?.items?.length > chapterCount) {
+            chapterCount = outlineSet.items.length;
+            terminal.log(`[OutlineAndChapter] 大纲集章节数量(${outlineSet.items.length})大于分卷规划章节数量，使用大纲集数量`);
+          }
 
           // 获取大纲和正文的预设
           const outlinePresets = allPresets['outline'] || [];
@@ -3479,15 +3485,38 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 >> -----------------------------------------------------------
 `);
 
-              // 使用流式输出，不使用 await，直接获取流对象
-              const stream = chapterOpenai.chat.completions.create({
-                ...chapterCompletionParams,
-                signal: abortControllerRef.current?.signal
-              });
-              
-              for await (const chunk of stream as any) {
-                const content = chunk.choices[0]?.delta?.content || '';
-                batchChapterResponse += content;
+              // 尝试使用流式输出
+              try {
+                const stream = chapterOpenai.chat.completions.create({
+                  ...chapterCompletionParams,
+                  signal: abortControllerRef.current?.signal
+                });
+                
+                // 检查 stream 是否为有效的异步可迭代对象
+                if (stream && typeof stream[Symbol.asyncIterator] === 'function') {
+                  for await (const chunk of stream as any) {
+                    const content = chunk.choices[0]?.delta?.content || '';
+                    batchChapterResponse += content;
+                  }
+                } else {
+                  // 如果 stream 不是有效的异步可迭代对象，使用非流式方式
+                  terminal.warn(`[OutlineAndChapter] 流对象不是有效的异步可迭代对象，使用非流式方式`);
+                  const nonStreamResponse = await chapterOpenai.chat.completions.create({
+                    ...chapterCompletionParams,
+                    stream: false, // 禁用流式输出
+                    signal: abortControllerRef.current?.signal
+                  });
+                  batchChapterResponse = nonStreamResponse.choices[0]?.message?.content || '';
+                }
+              } catch (streamError) {
+                terminal.error(`[OutlineAndChapter] 流式输出失败: ${streamError}，尝试非流式方式`);
+                // 发生错误时，使用非流式方式重新请求
+                const nonStreamResponse = await chapterOpenai.chat.completions.create({
+                  ...chapterCompletionParams,
+                  stream: false, // 禁用流式输出
+                  signal: abortControllerRef.current?.signal
+                });
+                batchChapterResponse = nonStreamResponse.choices[0]?.message?.content || '';
               }
               
               terminal.log(`
