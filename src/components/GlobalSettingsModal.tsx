@@ -86,6 +86,8 @@ interface GlobalSettingsModalProps {
   setConcurrentOptimizationLimit: (val: number | '') => void;
   contextChapterCount: number | '';
   setContextChapterCount: (val: number | '') => void;
+  stream: boolean;
+  setStream: (val: boolean) => void;
 }
 
 export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
@@ -141,6 +143,8 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   setConcurrentOptimizationLimit,
   contextChapterCount,
   setContextChapterCount,
+  stream,
+  setStream,
 }) => {
   const { theme, setTheme } = useTheme();
   const [localThemeColor, setLocalThemeColor] = React.useState(themeColor);
@@ -389,6 +393,18 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                 >
                   <div
                     className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${longTextMode ? 'translate-x-5' : ''}`}
+                  />
+                </button>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-300">流式传输</label>
+                <button
+                  onClick={() => setStream(!stream)}
+                  className={`w-10 h-5 rounded-full transition-colors relative ${stream ? 'bg-[var(--theme-color)]' : 'bg-gray-700'}`}
+                >
+                  <div
+                    className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${stream ? 'translate-x-5' : ''}`}
                   />
                 </button>
               </div>

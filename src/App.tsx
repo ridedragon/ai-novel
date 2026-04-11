@@ -1398,6 +1398,8 @@ function App() {
           setLongTextMode={config.setLongTextMode}
           contextScope={config.contextScope}
           setContextScope={config.setContextScope}
+          stream={completion.stream}
+          setStream={completion.setStream}
           onShowOptimizeSettings={() => {
             setGeneratorSettingsType('optimize');
             setShowGeneratorSettingsModal(true);
@@ -1436,6 +1438,8 @@ function App() {
             isOpen={showSettings}
             onClose={() => setShowSettings(false)}
             {...config}
+            stream={completion.stream}
+            setStream={completion.setStream}
             handleScanSummaries={() => {}}
             handleRecalibrateSummaries={() => {}}
             isLoading={autoWrite.isLoading}
