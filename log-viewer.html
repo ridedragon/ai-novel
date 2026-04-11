@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日志查看器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #e2e8f0;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .log-entry {
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        .log-info { color: #22d3ee; }
+        .log-warn { color: #fbbf24; }
+        .log-error { color: #f43f5e; }
+        .log-stream { color: #4ade80; }
+    </style>
+</head>
+<body class="p-4">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-2xl font-bold mb-4 text-cyan-400">📋 日志查看器</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-slate-800 p-4 rounded-lg">
+                <h2 class="text-lg font-semibold mb-2 text-cyan-300">🔗 可用链接</h2>
+                <ul class="space-y-2">
+                    <li><a href="http://localhost:8002" target="_blank" class="text-blue-400 hover:underline">主应用 (8002)</a></li>
+                    <li><a href="http://localhost:8003" target="_blank" class="text-blue-400 hover:underline">内存监控 (8003)</a></li>
+                </ul>
+            </div>
+            
+            <div class="bg-slate-800 p-4 rounded-lg">
+                <h2 class="text-lg font-semibold mb-2 text-cyan-300">🎯 快速测试</h2>
+                <ul class="space-y-2 text-sm">
+                    <li>在主应用中生成正文内容</li>
+                    <li>观察浏览器控制台日志</li>
+                    <li>检查流式输出是否正常</li>
+                </ul>
+            </div>
+            
+            <div class="bg-slate-800 p-4 rounded-lg">
+                <h2 class="text-lg font-semibold mb-2 text-cyan-300">📝 测试脚本</h2>
+                <ul class="space-y-2 text-sm">
+                    <li><code class="text-yellow-300">node test-streaming-complete.js</code></li>
+                    <li><code class="text-yellow-300">node test-stream-simulation.js</code></li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="bg-slate-800 p-4 rounded-lg mb-6">
+            <h2 class="text-lg font-semibold mb-3 text-cyan-300">🚀 使用指南</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                    <h3 class="font-semibold text-cyan-200 mb-2">1. 查看浏览器日志</h3>
+                    <ol class="list-decimal list-inside space-y-1">
+                        <li>打开主应用 <a href="http://localhost:8002" target="_blank" class="text-blue-400">http://localhost:8002</a></li>
+                        <li>按 F12 打开开发者工具</li>
+                        <li>切换到 "Console" 标签</li>
+                        <li>尝试生成正文内容</li>
+                        <li>观察日志输出，特别是包含 "[Stream]" 的行</li>
+                    </ol>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-cyan-200 mb-2">2. 运行测试脚本</h3>
+                    <ol class="list-decimal list-inside space-y-1">
+                        <li>在项目根目录打开终端</li>
+                        <li>运行 <code class="text-yellow-300">node test-streaming-complete.js</code></li>
+                        <li>这将模拟完整的流式输出流程</li>
+                        <li>查看模拟的 UI 更新过程</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-slate-800 p-4 rounded-lg mb-6">
+            <h2 class="text-lg font-semibold mb-3 text-cyan-300">🔍 关键日志关键词</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <div class="bg-slate-700 p-2 rounded">
+                    <span class="text-cyan-400">[Stream]</span>
+                    <p class="text-xs mt-1">流式传输相关</p>
+                </div>
+                <div class="bg-slate-700 p-2 rounded">
+                    <span class="text-yellow-400">[FREQ ALERT]</span>
+                    <p class="text-xs mt-1">更新频率警告</p>
+                </div>
+                <div class="bg-slate-700 p-2 rounded">
+                    <span class="text-green-400">[PERF]</span>
+                    <p class="text-xs mt-1">性能相关</p>
+                </div>
+                <div class="bg-slate-700 p-2 rounded">
+                    <span class="text-red-400">Error</span>
+                    <p class="text-xs mt-1">错误信息</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-slate-800 p-4 rounded-lg">
+            <h2 class="text-lg font-semibold mb-3 text-cyan-300">📋 问题排查清单</h2>
+            <div class="space-y-2 text-sm">
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="check1" class="w-4 h-4">
+                    <label for="check1">API Key 是否已正确设置？</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="check2" class="w-4 h-4">
+                    <label for="check2">流式输出选项是否已启用？</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="check3" class="w-4 h-4">
+                    <label for="check3">网络连接是否正常？</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="check4" class="w-4 h-4">
+                    <label for="check4">浏览器控制台是否有错误？</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="check5" class="w-4 h-4">
+                    <label for="check5">是否使用了支持流式输出的模型？</label>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
