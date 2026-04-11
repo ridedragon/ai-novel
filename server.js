@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fetch from 'node-fetch';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,14 +106,99 @@ app.delete('/api/storage/:key', async (req, res) => {
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n📦 Data Persistence Server is active!`);
-  console.log(`🔗 Endpoint: http://0.0.0.0:${PORT}/api/storage`);
-  console.log(`📂 Data Dir: ${DATA_DIR}\n`);
-  console.log(`💡 Note: If accessing from a phone, use the PC's IP address instead of localhost.\n`);
+// SSE 流式AI回答端点
+app.post('/api/ai/stream', async (req, res) => {
+  try {
+    const { model, messages, apiKey, baseUrl } = req.body;
+    
+    if (!apiKey) {
+      return res.status(400).json({ error: '请提供API Key' });
+    }
+    
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: '请提供有效的消息数组' });
+    }
+    
+    // 设置 SSE 响应头
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
+    // 构建请求体
+    const requestBody = {
+      model: model || 'gpt-3.5-turbo',
+      messages,
+      stream: true,
+      temperature: 1.0,
+      top_p: 1.0
+    };
+    
+    // 发送请求到AI API
+    const response = await fetch(`${baseUrl || 'https://api.openai.com/v1'}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      return res.status(response.status).json({ error: errorData.error?.message || 'API请求失败' });
+    }
+    
+    // 处理流式响应
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') {
+            res.write(`data: [DONE]\n\n`);
+            break;
+          }
+          try {
+            const json = JSON.parse(data);
+            const content = json.choices[0]?.delta?.content;
+            if (content) {
+              res.write(`data: ${content}\n\n`);
+            }
+          } catch (e) {
+            // 忽略解析错误
+          }
+        }
+      }
+      
+      // 确保数据被及时发送
+      await new Promise(resolve => res.flushHeaders ? res.flushHeaders() : setImmediate(resolve));
+    }
+    
+    res.end();
+  } catch (error) {
+    console.error('流式API错误:', error);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
 });
 
 // 健康检查端点
 app.head('/api/storage/__health', (req, res) => {
   res.status(200).end();
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n📦 Data Persistence Server is active!`);
+  console.log(`🔗 Endpoint: http://0.0.0.0:${PORT}/api/storage`);
+  console.log(`🔗 SSE Endpoint: http://0.0.0.0:${PORT}/api/ai/stream`);
+  console.log(`📂 Data Dir: ${DATA_DIR}\n`);
+  console.log(`💡 Note: If accessing from a phone, use the PC's IP address instead of localhost.\n`);
 });

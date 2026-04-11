@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { useCallback, useState } from 'react';
 import terminal from 'virtual:terminal';
 import { Chapter, GeneratorPreset, Novel, PlotOutlineItem, PresetApiConfig, PromptItem, RegexScript } from '../types';
@@ -42,6 +41,74 @@ export function useAIGenerators() {
     let finalModel = presetConfig?.model || featureModel || globalModel;
     return { apiKey: finalApiKey, baseUrl: finalBaseUrl, model: finalModel };
   };
+
+  // 流式AI请求函数
+  const streamAIRequest = useCallback(
+    async (params: {
+      apiKey: string;
+      baseUrl: string;
+      model: string;
+      messages: any[];
+      onData: (chunk: string) => void;
+      onError: (error: string) => void;
+      onComplete: () => void;
+      signal: AbortSignal;
+    }) => {
+      try {
+        const response = await fetch('http://localhost:3001/api/ai/stream', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: params.model,
+            messages: params.messages,
+            apiKey: params.apiKey,
+            baseUrl: params.baseUrl,
+          }),
+          signal: params.signal,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          params.onError(errorData.error || 'API请求失败');
+          return;
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          params.onError('无法获取响应流');
+          return;
+        }
+
+        const decoder = new TextDecoder('utf-8');
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') {
+                params.onComplete();
+                break;
+              }
+              params.onData(data);
+            }
+          }
+        }
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          params.onError(error.message || '网络错误');
+        }
+      }
+    },
+    [],
+  );
 
   /**
    * 迁移自 App.tsx: handleGenerateOutline
@@ -203,43 +270,28 @@ export function useAIGenerators() {
           if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
-          let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: outlineAbortControllerRef.current.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: outlineAbortControllerRef.current.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: outlineAbortControllerRef.current.signal },
-                );
-              } else {
-                throw apiError;
-              }
-            } else {
-              throw apiError;
-            }
-          }
+          let content = '';
+          
+          // 使用流式API
+          await new Promise<void>((resolve, reject) => {
+            streamAIRequest({
+              apiKey: apiConfig.apiKey,
+              baseUrl: apiConfig.baseUrl,
+              model: apiConfig.model,
+              messages: requestParams.messages,
+              onData: (chunk) => {
+                content += chunk;
+              },
+              onError: (error) => {
+                reject(new Error(error));
+              },
+              onComplete: () => {
+                resolve();
+              },
+              signal: outlineAbortControllerRef.current.signal,
+            });
+          });
 
-          const content = completion.choices[0]?.message?.content || '';
           if (!content) throw new Error('Empty response');
 
           if (mode === 'chat') {
@@ -428,34 +480,28 @@ export function useAIGenerators() {
         if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
         if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
         
-        let completion;
-        try {
-          completion = await openai.chat.completions.create(requestParams);
-        } catch (apiError: any) {
-          if (apiError.status === 400) {
-            const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-            terminal.warn(`API 400 错误: ${errorBody}`);
-            
-            if (requestParams.top_k && fallbackMode < 1) {
-              terminal.warn('尝试移除 top_k 参数重试');
-              delete requestParams.top_k;
-              fallbackMode = 1;
-              completion = await openai.chat.completions.create(requestParams);
-            } else if (fallbackMode < 2) {
-              terminal.warn('尝试简化参数重试 (移除 top_p)');
-              delete requestParams.top_p;
-              requestParams.temperature = 1.0;
-              fallbackMode = 2;
-              completion = await openai.chat.completions.create(requestParams);
-            } else {
-              throw apiError;
-            }
-          } else {
-            throw apiError;
-          }
-        }
+        let content = '';
+        
+        // 使用流式API
+        await new Promise<void>((resolve, reject) => {
+          streamAIRequest({
+            apiKey: apiConfig.apiKey,
+            baseUrl: apiConfig.baseUrl,
+            model: apiConfig.model,
+            messages: requestParams.messages,
+            onData: (chunk) => {
+              content += chunk;
+            },
+            onError: (error) => {
+              reject(new Error(error));
+            },
+            onComplete: () => {
+              resolve();
+            },
+            signal: new AbortController().signal, // 这里可以使用一个新的AbortController
+          });
+        });
 
-        const content = completion.choices[0]?.message?.content || '';
         const rawData = safeParseJSONArray(content);
         const outlineData = normalizeGeneratorResult(rawData, 'outline');
 
@@ -626,43 +672,28 @@ export function useAIGenerators() {
           if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
-          let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: characterAbortControllerRef.current.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: characterAbortControllerRef.current.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: characterAbortControllerRef.current.signal },
-                );
-              } else {
-                throw apiError;
-              }
-            } else {
-              throw apiError;
-            }
-          }
+          let content = '';
+          
+          // 使用流式API
+          await new Promise<void>((resolve, reject) => {
+            streamAIRequest({
+              apiKey: apiConfig.apiKey,
+              baseUrl: apiConfig.baseUrl,
+              model: apiConfig.model,
+              messages: requestParams.messages,
+              onData: (chunk) => {
+                content += chunk;
+              },
+              onError: (error) => {
+                reject(new Error(error));
+              },
+              onComplete: () => {
+                resolve();
+              },
+              signal: characterAbortControllerRef.current.signal,
+            });
+          });
 
-          const content = completion.choices[0]?.message?.content || '';
           if (!content) throw new Error('Empty response');
 
           if (mode === 'chat') {
@@ -868,43 +899,28 @@ export function useAIGenerators() {
           if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
-          let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: worldviewAbortControllerRef.current.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: worldviewAbortControllerRef.current.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: worldviewAbortControllerRef.current.signal },
-                );
-              } else {
-                throw apiError;
-              }
-            } else {
-              throw apiError;
-            }
-          }
+          let content = '';
+          
+          // 使用流式API
+          await new Promise<void>((resolve, reject) => {
+            streamAIRequest({
+              apiKey: apiConfig.apiKey,
+              baseUrl: apiConfig.baseUrl,
+              model: apiConfig.model,
+              messages: requestParams.messages,
+              onData: (chunk) => {
+                content += chunk;
+              },
+              onError: (error) => {
+                reject(new Error(error));
+              },
+              onComplete: () => {
+                resolve();
+              },
+              signal: worldviewAbortControllerRef.current.signal,
+            });
+          });
 
-          const content = completion.choices[0]?.message?.content || '';
           if (!content) throw new Error('Empty response');
 
           if (mode === 'chat') {
@@ -1111,43 +1127,28 @@ export function useAIGenerators() {
           if ((activePreset as any).frequencyPenalty) requestParams.frequency_penalty = (activePreset as any).frequencyPenalty;
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
-          let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: inspirationAbortControllerRef.current.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: inspirationAbortControllerRef.current.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: inspirationAbortControllerRef.current.signal },
-                );
-              } else {
-                throw apiError;
-              }
-            } else {
-              throw apiError;
-            }
-          }
+          let content = '';
+          
+          // 使用流式API
+          await new Promise<void>((resolve, reject) => {
+            streamAIRequest({
+              apiKey: apiConfig.apiKey,
+              baseUrl: apiConfig.baseUrl,
+              model: apiConfig.model,
+              messages: requestParams.messages,
+              onData: (chunk) => {
+                content += chunk;
+              },
+              onError: (error) => {
+                reject(new Error(error));
+              },
+              onComplete: () => {
+                resolve();
+              },
+              signal: inspirationAbortControllerRef.current.signal,
+            });
+          });
 
-          const content = completion.choices[0]?.message?.content || '';
           if (!content) throw new Error('Empty response');
 
           if (mode === 'chat') {
