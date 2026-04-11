@@ -19,6 +19,7 @@ import {
   WorkflowStartOptions,
 } from '../types';
 import { cleanAndParseJSON, extractEntries, extractTargetEndChapter, parseAnyNumber, checkNodeHasContent } from '../utils/workflowHelpers';
+import { initializeChapterNumbering, generateChapterTitle, calculateNewChapterNumbering } from '../../../utils/chapterNumbering';
 
 export const useWorkflowEngine = (options: {
   activeNovel: Novel | undefined;
@@ -3321,26 +3322,40 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               const entry = outlineEntries[i];
               if (!entry) continue;
               
-              // 使用解析后的标题
-              const resolvedTitle = entry.title || `第${chapterIdx + 1}章`;
-              
               // 检查章节是否已经存在
               let chapter = currentVolumeChapters[chapterIdx];
               if (!chapter) {
-                // 如果不存在，创建新章节
+                // 如果不存在，创建新章节 - 确保使用正确的编号
+                // 先计算当前应该使用的章节编号
+                const numbering = calculateNewChapterNumbering(
+                  [...(localNovel.chapters || []), ...batchChapters],
+                  finalVolumeId
+                );
+                
+                // 使用 generateChapterTitle 生成正确的标题，保留原有的章节名称
+                const originalTitle = entry.title;
+                const resolvedTitle = generateChapterTitle(numbering.volumeIndex, originalTitle);
+                
                 chapter = {
                   id: Date.now() + chapterIdx,
                   title: resolvedTitle,
                   content: '', // 初始为空，后续会更新
                   volumeId: finalVolumeId,
                   subtype: 'story',
+                  globalIndex: numbering.globalIndex,
+                  volumeIndex: numbering.volumeIndex,
                 };
                 batchChapters.push(chapter);
                 terminal.log(`[OutlineAndChapter] 创建新章节: id=${chapter.id}, title=${resolvedTitle}, volumeId=${finalVolumeId}`);
               } else {
-                // 如果已存在，更新标题（如果需要）
-                chapter.title = resolvedTitle;
-                terminal.log(`[OutlineAndChapter] 使用现有章节: id=${chapter.id}, title=${resolvedTitle}, volumeId=${finalVolumeId}`);
+                // 如果已存在，也确保标题是正确的
+                const numbering = {
+                  globalIndex: chapter.globalIndex || (currentVolumeChapters.indexOf(chapter) + 1),
+                  volumeIndex: chapter.volumeIndex || (i + 1)
+                };
+                const originalTitle = entry.title || chapter.title;
+                chapter.title = generateChapterTitle(numbering.volumeIndex, originalTitle);
+                terminal.log(`[OutlineAndChapter] 使用现有章节: id=${chapter.id}, title=${chapter.title}, volumeId=${finalVolumeId}`);
               }
               
               chapterMap.set(chapterIdx, chapter);
@@ -3356,6 +3371,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             // 批量添加新章节到小说（只添加新创建的）
             if (batchChapters.length > 0) {
               localNovel.chapters = [...(localNovel.chapters || []), ...batchChapters];
+              // 初始化所有章节的编号信息，确保一致
+              localNovel = initializeChapterNumbering(localNovel);
               await updateLocalAndGlobal(localNovel);
             }
 

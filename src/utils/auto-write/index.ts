@@ -3,6 +3,7 @@ import terminal from 'virtual:terminal';
 import { ChapterVersion, ChatMessage, Novel, OutlineItem, PromptItem, RegexScript } from '../../types';
 import { buildWorldInfoMessages, getChapterContextMessages, processTextWithRegex } from './core';
 import { AutoWriteConfig } from './types';
+import { initializeChapterNumbering, generateChapterTitle, calculateNewChapterNumbering } from '../chapterNumbering';
 
 export { buildWorldInfoMessages, getChapterContextMessages, processTextWithRegex, getEffectiveChapterContent } from './core';
 
@@ -277,11 +278,20 @@ export class AutoWriteEngine {
         });
 
         if (!existingById && !existingByTitle) {
+          // 计算当前应该使用的章节编号
+          const numbering = calculateNewChapterNumbering(newChapters, itemVolId);
+          
+          // 使用 generateChapterTitle 生成正确的标题，保留原有的章节名称
+          const originalTitle = batchItem.item.title;
+          const resolvedTitle = generateChapterTitle(numbering.volumeIndex, originalTitle);
+          
           const newChapter = {
             id: batchItem.id,
-            title: batchItem.item.title,
+            title: resolvedTitle,
             content: '',
             volumeId: itemVolId,
+            globalIndex: numbering.globalIndex,
+            volumeIndex: numbering.volumeIndex,
           };
 
           // 核心修复：优化章节插入位置 (Bug 1 反馈修复)
@@ -314,9 +324,19 @@ export class AutoWriteEngine {
           if ((!existingByTitle.volumeId || existingByTitle.volumeId === '') && itemVolId) {
             existingByTitle.volumeId = itemVolId;
           }
+          
+          // 确保已存在章节的标题也是正确的
+          const numbering = {
+            globalIndex: existingByTitle.globalIndex || (newChapters.indexOf(existingByTitle) + 1),
+            volumeIndex: existingByTitle.volumeIndex || 1
+          };
+          existingByTitle.title = generateChapterTitle(numbering.volumeIndex, batchItem.item.title);
         }
       });
+      
+      // 初始化所有章节的编号信息，确保一致
       this.novel = { ...this.novel, chapters: newChapters };
+      this.novel = initializeChapterNumbering(this.novel);
       onNovelUpdate(this.novel);
 
       const batchStatusStr = batchItems.map(b => b.item.title).join('、');
