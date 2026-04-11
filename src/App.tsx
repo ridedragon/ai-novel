@@ -99,6 +99,8 @@ function App() {
   const [keepAliveMode, setKeepAliveMode] = useState(false);
   const [isEditingChapter, setIsEditingChapter] = useState(false);
   const [showWorkflowEditor, setShowWorkflowEditor] = useState(false);
+  const [showChainOfThought, setShowChainOfThought] = useState(false);
+  const [chainOfThoughtContent, setChainOfThoughtContent] = useState('');
 
   // 弹窗控制
   const [showSettings, setShowSettings] = useState(false);
@@ -1351,6 +1353,9 @@ function App() {
               },
               generateAbortControllerRef: abortControllerRef,
               isRegenerating: true,
+              onChainOfThoughtUpdate: (content) => {
+                setChainOfThoughtContent(content);
+              },
             });
           }}
           optimizingChapterIds={autoWrite.optimizingChapterIds}
@@ -1375,6 +1380,9 @@ function App() {
               ),
             )
           }
+          showChainOfThought={showChainOfThought}
+          setShowChainOfThought={setShowChainOfThought}
+          chainOfThoughtContent={chainOfThoughtContent}
           onDeleteChapter={id =>
             setDialog({
               isOpen: true,
