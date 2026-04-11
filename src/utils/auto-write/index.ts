@@ -545,6 +545,8 @@ export class AutoWriteEngine {
 
             console.log('[AutoWrite Stream] 开始流式传输');
             terminal.log('[AutoWrite Stream] 开始流式传输');
+            // 确保日志显示在 PowerShell 中
+            process.stdout.write('[AutoWrite Stream] 开始流式传输\n');
 
             for await (const chunk of response) {
               if (!checkActive() || this.abortController?.signal.aborted) throw new Error('Aborted');
@@ -554,6 +556,8 @@ export class AutoWriteEngine {
               
               if (content) {
                 console.log('[AutoWrite Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
+                // 确保日志显示在 PowerShell 中
+                process.stdout.write(`[AutoWrite Stream] 收到数据: ${content.substring(0, 30)}${content.length > 30 ? '...' : ''} (长度: ${content.length})\n`);
               }
 
               const now = Date.now();
