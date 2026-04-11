@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import AsyncOpenAI from 'openai';
 import { useCallback, useState } from 'react';
 import terminal from 'virtual:terminal';
 import { Chapter, GeneratorPreset, Novel, PlotOutlineItem, PresetApiConfig, PromptItem, RegexScript } from '../types';
@@ -1558,11 +1559,23 @@ export function useAIGenerators() {
 
             logAiParams('对话续写生成', config.model, params.temperature, params.topP, params.topK);
 
-            const openai = new OpenAI({
-              apiKey: config.apiKey,
-              baseURL: config.baseUrl,
-              dangerouslyAllowBrowser: true,
-            });
+            // 根据是否需要流式处理选择不同的客户端
+            let openaiClient;
+            if (params.stream) {
+              // 流式请求必须使用 AsyncOpenAI 客户端
+              openaiClient = new AsyncOpenAI({
+                apiKey: config.apiKey,
+                baseURL: config.baseUrl,
+                dangerouslyAllowBrowser: true,
+              });
+            } else {
+              // 非流式请求使用普通 OpenAI 客户端
+              openaiClient = new OpenAI({
+                apiKey: config.apiKey,
+                baseURL: config.baseUrl,
+                dangerouslyAllowBrowser: true,
+              });
+            }
 
             const scripts = params.getActiveScripts();
             const worldInfoMessages = buildWorldInfoMessages(activeNovel || undefined, params.activeOutlineSetId);
@@ -1660,7 +1673,7 @@ export function useAIGenerators() {
             try {
               if (params.stream) {
                 // 对于流式请求，使用 await 获取响应
-                response = await openai.chat.completions.create(
+                response = await openaiClient.chat.completions.create(
                   requestParams,
                   {
                     signal: generateAbortControllerRef.current.signal,
@@ -1668,7 +1681,7 @@ export function useAIGenerators() {
                 ) as any;
               } else {
                 // 对于非流式请求，使用 await
-                response = (await openai.chat.completions.create(
+                response = (await openaiClient.chat.completions.create(
                   requestParams,
                   {
                     signal: generateAbortControllerRef.current.signal,
@@ -1685,14 +1698,14 @@ export function useAIGenerators() {
                   delete requestParams.top_k;
                   fallbackMode = 1;
                   if (params.stream) {
-                    response = await openai.chat.completions.create(
+                    response = await openaiClient.chat.completions.create(
                       requestParams,
                       {
                         signal: generateAbortControllerRef.current.signal,
                       },
                     ) as any;
                   } else {
-                    response = (await openai.chat.completions.create(
+                    response = (await openaiClient.chat.completions.create(
                       requestParams,
                       {
                         signal: generateAbortControllerRef.current.signal,
@@ -1705,14 +1718,14 @@ export function useAIGenerators() {
                   requestParams.temperature = 1.0;
                   fallbackMode = 2;
                   if (params.stream) {
-                    response = await openai.chat.completions.create(
+                    response = await openaiClient.chat.completions.create(
                       requestParams,
                       {
                         signal: generateAbortControllerRef.current.signal,
                       },
                     ) as any;
                   } else {
-                    response = (await openai.chat.completions.create(
+                    response = (await openaiClient.chat.completions.create(
                       requestParams,
                       {
                         signal: generateAbortControllerRef.current.signal,
@@ -1813,7 +1826,13 @@ export function useAIGenerators() {
               terminal.log('[Stream] 尝试使用非流式方式获取响应');
               requestParams.stream = false;
               try {
-                response = await openai.chat.completions.create(
+                // 非流式请求需要使用 OpenAI 客户端，重新创建一个
+                const syncOpenaiClient = new OpenAI({
+                  apiKey: config.apiKey,
+                  baseURL: config.baseUrl,
+                  dangerouslyAllowBrowser: true,
+                });
+                response = await syncOpenaiClient.chat.completions.create(
                   requestParams,
                   {
                     signal: generateAbortControllerRef.current.signal,
