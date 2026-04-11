@@ -3462,8 +3462,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 >> -----------------------------------------------------------
 `);
 
-              // 使用流式输出
-              const stream = await chapterOpenai.chat.completions.create({
+              // 使用流式输出，不使用 await，直接获取流对象
+              const stream = chapterOpenai.chat.completions.create({
                 ...chapterCompletionParams,
                 signal: abortControllerRef.current?.signal
               });
