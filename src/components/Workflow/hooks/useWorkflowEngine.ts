@@ -224,7 +224,7 @@ export const useWorkflowEngine = (options: {
     return collected;
   };
 
-  const clearNovelContentByVolumes = (novel: Novel, volumeIds: string[], clearFollowingVolumes: boolean, keepContentTypes: string[] = []) => {
+  const clearNovelContentByVolumes = (novel: Novel, volumeIds: string[], clearFollowingVolumes: boolean, keepContent: { enabled: boolean; types: string[] } = { enabled: false, types: [] }) => {
     if (!volumeIds.length) return novel;
 
     const volumeOrder = novel.volumes || [];
@@ -252,7 +252,7 @@ export const useWorkflowEngine = (options: {
 
     // 检查是否需要保留特定类型的内容
     const shouldKeepType = (type: string) => {
-      return keepContentTypes.includes(type);
+      return keepContent.enabled && keepContent.types.includes(type);
     };
 
     // 清除与受影响卷相关的所有文件夹内容
@@ -398,7 +398,7 @@ export const useWorkflowEngine = (options: {
       }
 
       if (userSpecifiedTargetVolumeId && mode) {
-        localNovel = clearNovelContentByVolumes(localNovel, [userSpecifiedTargetVolumeId], mode === 'full', keepContent.types);
+        localNovel = clearNovelContentByVolumes(localNovel, [userSpecifiedTargetVolumeId], mode === 'full', keepContent);
         await updateLocalAndGlobal(localNovel);
       }
       
