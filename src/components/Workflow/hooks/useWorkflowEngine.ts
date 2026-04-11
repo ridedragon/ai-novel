@@ -1421,7 +1421,31 @@ export const useWorkflowEngine = (options: {
             currentLoopIndex,
             currentVolumeIndex: workflowManager.getCurrentVolumeIndex(),
             loopIndex: workflowManager.getContextVar('loop_index') || 1,
+            userSpecifiedTargetVolumeIndex,
           });
+
+          // 核心修复：当从特定卷开始运行时，计算实际应该执行的循环次数
+          // 例如：总共有8卷，从第5卷开始（索引4），那么实际只需要执行 8 - 4 = 4 次循环
+          let effectiveLoopCount = loopConfig.count;
+          let shouldTerminateEarly = false;
+          
+          if (userSpecifiedTargetVolumeIndex >= 0) {
+            // 获取分卷规划，确定总共有多少卷
+            const volumePlans = workflowManager.getVolumePlans();
+            const totalVolumes = volumePlans.length > 0 ? volumePlans.length : loopConfig.count;
+            
+            // 计算从用户指定的卷开始，还需要执行多少次循环
+            effectiveLoopCount = totalVolumes - userSpecifiedTargetVolumeIndex;
+            
+            console.log('[LOOP_NODE] 从特定卷开始运行的循环调整:', {
+              userSpecifiedTargetVolumeIndex,
+              totalVolumes,
+              originalLoopCount: loopConfig.count,
+              effectiveLoopCount,
+            });
+            
+            terminal.log(`[LOOP_NODE] 从第${userSpecifiedTargetVolumeIndex + 1}卷开始运行，总共有${totalVolumes}卷，实际需要执行${effectiveLoopCount}次循环`);
+          }
           
           volumeFolderDebugTracker.recordNodeExecution(
             node.id,
@@ -1443,8 +1467,13 @@ export const useWorkflowEngine = (options: {
           setEdgeAnimation(node.id, true);
           await new Promise(resolve => setTimeout(resolve, 600));
 
-          if (currentLoopIndex < loopConfig.count) {
-            console.log('[LOOP_NODE] LOOP CONTINUE:', { currentIteration: currentLoopIndex, totalIterations: loopConfig.count, targetLoopIndex: currentLoopIndex + 1 });
+          if (currentLoopIndex < effectiveLoopCount) {
+            console.log('[LOOP_NODE] LOOP CONTINUE:', { 
+              currentIteration: currentLoopIndex, 
+              originalTotalIterations: loopConfig.count,
+              effectiveTotalIterations: effectiveLoopCount,
+              targetLoopIndex: currentLoopIndex + 1 
+            });
             
             // 核心修复：重写卷模式（单卷模式）下，不进行循环回跳
             // 当用户指定了目标卷且有 mode（重写/全量模式），说明是"重写单卷"，只处理一卷
