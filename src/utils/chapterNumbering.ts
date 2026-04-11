@@ -45,12 +45,40 @@ export const extractChapterName = (title: string): string | null => {
 };
 
 /**
+ * 阿拉伯数字转中文数字
+ */
+const numberToChinese = (num: number): string => {
+  const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  const units = ['', '十', '百', '千'];
+  
+  if (num === 0) return '零';
+  if (num < 10) return digits[num];
+  if (num < 20) return '十' + (num % 10 === 0 ? '' : digits[num % 10]);
+  
+  let result = '';
+  let temp = num;
+  let unitIndex = 0;
+  
+  while (temp > 0) {
+    const digit = temp % 10;
+    if (digit > 0) {
+      result = digits[digit] + units[unitIndex] + result;
+    }
+    temp = Math.floor(temp / 10);
+    unitIndex++;
+  }
+  
+  return result;
+};
+
+/**
  * 生成章节标题
  * @param index 章节编号
  * @param originalTitle 原有标题（可选），用于保留章节名称
  */
 export const generateChapterTitle = (index: number, originalTitle?: string): string => {
-  const baseTitle = `第${index}章`;
+  const chineseNumber = numberToChinese(index);
+  const baseTitle = `第${chineseNumber}章`;
   if (originalTitle) {
     const name = extractChapterName(originalTitle);
     if (name) {
