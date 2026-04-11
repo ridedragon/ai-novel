@@ -3499,22 +3499,63 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 >> -----------------------------------------------------------
 `);
 
-              // 尝试使用流式输出
+              // 使用流式输出
               try {
-                // 直接使用非流式方式，避免流处理的类型问题
-                const nonStreamResponse = await chapterOpenai.chat.completions.create({
+                console.log('[Workflow Stream] 开始流式传输');
+                terminal.log('[Workflow Stream] 开始流式传输');
+                process.stdout.write('[Workflow Stream] 开始流式传输\n');
+
+                let lastUpdateTime = 0;
+                let streamTokenCount = 0;
+                let streamUpdateCount = 0;
+
+                const stream = await chapterOpenai.chat.completions.create({
                   ...chapterCompletionParams,
-                  stream: false, // 禁用流式输出
+                  stream: true,
                   signal: abortControllerRef.current?.signal
                 });
-                batchChapterResponse = nonStreamResponse.choices[0]?.message?.content || '';
+
+                for await (const chunk of stream) {
+                  if (abortControllerRef.current?.signal.aborted) {
+                    throw new Error('Aborted');
+                  }
+
+                  const content = chunk.choices[0]?.delta?.content || '';
+                  batchChapterResponse += content;
+                  streamTokenCount++;
+
+                  if (content) {
+                    console.log('[Workflow Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
+                    terminal.log('[Workflow Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
+                    process.stdout.write(`[Workflow Stream] 收到数据: ${content.substring(0, 30)}${content.length > 30 ? '...' : ''} (长度: ${content.length})\n`);
+                  }
+
+                  const now = Date.now();
+                  if (now - lastUpdateTime > 50) {
+                    streamUpdateCount++;
+                    lastUpdateTime = now;
+                    console.log('[Workflow Stream] 更新UI:', { contentLength: batchChapterResponse.length, receivedSoFar: batchChapterResponse.length });
+                    terminal.log('[Workflow Stream] 更新UI:', { contentLength: batchChapterResponse.length, receivedSoFar: batchChapterResponse.length });
+                    process.stdout.write(`[Workflow Stream] 更新UI: 内容长度 ${batchChapterResponse.length}, 已接收 ${batchChapterResponse.length}\n`);
+                  }
+                }
+
+                console.log('[Workflow Stream] 流式传输结束');
+                console.log('[Workflow Stream] 最终内容长度:', batchChapterResponse.length);
+                console.log('[Workflow Stream] 内容预览:', batchChapterResponse.substring(0, 100) + (batchChapterResponse.length > 100 ? '...' : ''));
+                terminal.log('[Workflow Stream] 流式传输结束');
+                process.stdout.write('[Workflow Stream] 流式传输结束\n');
+                process.stdout.write(`[Workflow Stream] 最终内容长度: ${batchChapterResponse.length}\n`);
+                process.stdout.write(`[Workflow Stream] 内容预览: ${batchChapterResponse.substring(0, 100)}${batchChapterResponse.length > 100 ? '...' : ''}\n`);
               } catch (error) {
                 terminal.error(`[OutlineAndChapter] 正文生成失败: ${error}`);
                 // 发生错误时，使用非流式方式重新请求
                 try {
+                  terminal.log('[Workflow Stream] 切换到非流式模式重试');
+                  process.stdout.write('[Workflow Stream] 切换到非流式模式重试\n');
                   const nonStreamResponse = await chapterOpenai.chat.completions.create({
                     ...chapterCompletionParams,
-                    stream: false, // 禁用流式输出
+                    stream: false,
                     signal: abortControllerRef.current?.signal
                   });
                   batchChapterResponse = nonStreamResponse.choices[0]?.message?.content || '';
