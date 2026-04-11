@@ -1670,11 +1670,6 @@ export function useAIGenerators() {
               console.log('[Stream] 模型:', config.model);
               console.log('[Stream] 温度:', params.temperature);
               console.log('[Stream] 最大令牌:', params.max_tokens || params.maxReplyLength);
-              // 确保日志显示在 PowerShell 中
-              process.stdout.write('[Stream] 开始流式传输\n');
-              process.stdout.write(`[Stream] 模型: ${config.model}\n`);
-              process.stdout.write(`[Stream] 温度: ${params.temperature}\n`);
-              process.stdout.write(`[Stream] 最大令牌: ${params.max_tokens || params.maxReplyLength}\n`);
               
               try {
                 // 使用 OpenAI v4 流式 API
@@ -1706,8 +1701,6 @@ export function useAIGenerators() {
                   if (content) {
                     console.log('[Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
                     terminal.log('[Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
-                    // 确保日志显示在 PowerShell 中
-                    process.stdout.write(`[Stream] 收到数据: ${content.substring(0, 30)}${content.length > 30 ? '...' : ''} (长度: ${content.length})\n`);
                     hasReceivedContent = true;
                     newGeneratedContent += content;
                   }
@@ -1726,8 +1719,6 @@ export function useAIGenerators() {
                     const fullRawContent = currentContent + newGeneratedContent;
                     console.log('[Stream] 更新UI:', { contentLength: fullRawContent.length, receivedSoFar: newGeneratedContent.length });
                     terminal.log('[Stream] 更新UI:', { contentLength: fullRawContent.length, receivedSoFar: newGeneratedContent.length });
-                    // 确保日志显示在 PowerShell 中
-                    process.stdout.write(`[Stream] 更新UI: 内容长度 ${fullRawContent.length}, 已接收 ${newGeneratedContent.length}\n`);
                     
                     params.setChapters(prev =>
                       prev.map(c => {
@@ -1755,10 +1746,6 @@ export function useAIGenerators() {
                 console.log('[Stream] 最终内容长度:', newGeneratedContent.length);
                 console.log('[Stream] 内容预览:', newGeneratedContent.substring(0, 100) + (newGeneratedContent.length > 100 ? '...' : ''));
                 terminal.log('[Stream] 流式传输结束');
-                // 确保日志显示在 PowerShell 中
-                process.stdout.write('[Stream] 流式传输结束\n');
-                process.stdout.write(`[Stream] 最终内容长度: ${newGeneratedContent.length}\n`);
-                process.stdout.write(`[Stream] 内容预览: ${newGeneratedContent.substring(0, 100)}${newGeneratedContent.length > 100 ? '...' : ''}\n`);
                 // 流式传输结束
                 params.onStreamingStatusChange?.(false);
               } catch (streamError) {
