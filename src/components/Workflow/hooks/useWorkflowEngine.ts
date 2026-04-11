@@ -3236,86 +3236,86 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               dangerouslyAllowBrowser: true,
             });
 
-            // 逐章生成正文
-            for (let i = 0; i < batchSize; i++) {
-              const chapterIdx = startChapterIndex + i;
-              if (chapterIdx >= chapterCount) break;
-              if (!checkActive()) break;
+            // Build chapter messages using preset prompts if available
+            let chapterMessages: any[] = [];
+            const chapterBasePrompts = (finalChapterPreset as any)?.prompts?.filter((p: any) => p.enabled || p.active) || [];
+            if (chapterBasePrompts.length > 0) {
+              chapterBasePrompts.forEach((p: any) => {
+                const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), updatedMacroCtx);
+                chapterMessages.push({ role: p.role, content: c });
+              });
+              // 插入前序节点上下文，确保 AI 能获取到之前的内容
+              chapterMessages.push(...dynamicContextMessages);
+            } else {
+              chapterMessages = [
+                { role: 'system', content: localNovel.systemPrompt || '你是一名专业的小说作者。' },
+                ...dynamicContextMessages,
+              ];
+            }
 
-              const outlineEntry = outlineEntries[i];
-              const currentChapter = chapterMap.get(chapterIdx);
-              if (!currentChapter) continue;
-
-              // Build chapter messages using preset prompts if available
-              let chapterMessages: any[] = [];
-              const chapterBasePrompts = (finalChapterPreset as any)?.prompts?.filter((p: any) => p.enabled || p.active) || [];
-              if (chapterBasePrompts.length > 0) {
-                chapterBasePrompts.forEach((p: any) => {
-                  const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), updatedMacroCtx);
-                  chapterMessages.push({ role: p.role, content: c });
-                });
-                // 插入前序节点上下文，确保 AI 能获取到之前的内容
-                chapterMessages.push(...dynamicContextMessages);
-              } else {
-                chapterMessages = [
-                  { role: 'system', content: localNovel.systemPrompt || '你是一名专业的小说作者。' },
-                  ...dynamicContextMessages,
-                ];
-              }
-
-              // 处理正文指令中的宏
-              const chapterInstruction = node.data.chapterInstruction ? workflowManager.interpolateWithMacros(node.data.chapterInstruction, updatedMacroCtx) : '';
-              if (chapterInstruction) {
-                chapterMessages.push({
-                  role: 'system',
-                  content: `【正文AI指令】：\n${chapterInstruction}`,
-                });
-              }
-
-              const outlineContentForChapter = outlineEntry ? `${outlineEntry.title}: ${outlineEntry.content}` : '';
+            // 处理正文指令中的宏
+            const chapterInstruction = node.data.chapterInstruction ? workflowManager.interpolateWithMacros(node.data.chapterInstruction, updatedMacroCtx) : '';
+            if (chapterInstruction) {
               chapterMessages.push({
                 role: 'system',
-                content: `【本章大纲】：\n${outlineContentForChapter}`
+                content: `【正文AI指令】：\n${chapterInstruction}`,
               });
+            }
 
-              if (lastChapterContent) {
-                chapterMessages.push({
-                  role: 'system',
-                  content: `【前文回顾】：\n章节标题：${lastChapterTitle}\n\n${lastChapterContent}`
-                });
-              }
+            // 构建批量大纲内容
+            const batchOutlineContent = outlineEntries
+              .slice(0, batchSize)
+              .map((entry, i) => `${entry.title}: ${entry.content}`)
+              .join('\n\n');
+            chapterMessages.push({
+              role: 'system',
+              content: `【本章大纲】：\n${batchOutlineContent}`
+            });
 
+            if (lastChapterContent) {
               chapterMessages.push({
-                role: 'user',
-                content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}生成${currentChapter.title}的正文。`
+                role: 'system',
+                content: `【前文回顾】：\n章节标题：${lastChapterTitle}\n\n${lastChapterContent}`
               });
+            }
 
-              let chapterResponse = '';
-              try {
-                // 构建完整的参数对象，以便日志记录
-                const chapterCompletionParams: any = {
-                  model: finalChapterPreset.apiConfig?.model || globalConfig.model,
-                  messages: chapterMessages,
-                  temperature: finalChapterPreset.temperature,
-                  top_p: finalChapterPreset.topP,
-                  stream: true, // 启用流式输出
-                };
-                // Add optional parameters if they exist
-                const chapterMaxTokens = node.data.maxTokens || (finalChapterPreset as any).maxReplyLength || (finalChapterPreset as any).max_tokens;
-                if (chapterMaxTokens) chapterCompletionParams.max_tokens = chapterMaxTokens;
-                if ((finalChapterPreset as any).frequencyPenalty) chapterCompletionParams.frequency_penalty = (finalChapterPreset as any).frequencyPenalty;
-                if ((finalChapterPreset as any).presencePenalty) chapterCompletionParams.presence_penalty = (finalChapterPreset as any).presencePenalty;
+            // 构建章节标题列表，用于提示AI
+            const chapterTitles = outlineEntries
+              .slice(0, batchSize)
+              .map(entry => entry.title)
+              .join('、');
 
-                console.groupCollapsed(
-                  `[Workflow AI Request] 大纲与正文生成 - 正文 ${chapterIdx + 1}`
-                );
-                console.log('Messages:', chapterMessages);
-                console.log('Config:', chapterCompletionParams);
-                console.groupEnd();
+            chapterMessages.push({
+              role: 'user',
+              content: `请根据大纲为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}批量生成以下章节的正文：${chapterTitles}。请在每章正文前加上明确的章节标题作为分隔标记。`
+            });
 
-                // 详细的参数日志
-                terminal.log(`
->> AI REQUEST [工作流: 正文生成] 第${chapterIdx + 1}章
+            let batchChapterResponse = '';
+            try {
+              // 构建完整的参数对象，以便日志记录
+              const chapterCompletionParams: any = {
+                model: finalChapterPreset.apiConfig?.model || globalConfig.model,
+                messages: chapterMessages,
+                temperature: finalChapterPreset.temperature,
+                top_p: finalChapterPreset.topP,
+                stream: true, // 启用流式输出
+              };
+              // Add optional parameters if they exist
+              const chapterMaxTokens = node.data.maxTokens || (finalChapterPreset as any).maxReplyLength || (finalChapterPreset as any).max_tokens;
+              if (chapterMaxTokens) chapterCompletionParams.max_tokens = chapterMaxTokens;
+              if ((finalChapterPreset as any).frequencyPenalty) chapterCompletionParams.frequency_penalty = (finalChapterPreset as any).frequencyPenalty;
+              if ((finalChapterPreset as any).presencePenalty) chapterCompletionParams.presence_penalty = (finalChapterPreset as any).presencePenalty;
+
+              console.groupCollapsed(
+                `[Workflow AI Request] 大纲与正文生成 - 批量正文 ${startChapterIndex + 1}-${batchEndIndex}`
+              );
+              console.log('Messages:', chapterMessages);
+              console.log('Config:', chapterCompletionParams);
+              console.groupEnd();
+
+              // 详细的参数日志
+              terminal.log(`
+>> AI REQUEST [工作流: 批量正文生成] 第${startChapterIndex + 1}-${batchEndIndex}章
 >> -----------------------------------------------------------
 >> Model:               ${chapterCompletionParams.model}
 >> Temperature:         ${chapterCompletionParams.temperature}
@@ -3328,33 +3328,106 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 >> -----------------------------------------------------------
 `);
 
-                // 使用流式输出
-                const stream = await chapterOpenai.chat.completions.create({
-                  ...chapterCompletionParams,
-                  signal: abortControllerRef.current?.signal
-                });
-                
-                for await (const chunk of stream as any) {
-                  const content = chunk.choices[0]?.delta?.content || '';
-                  chapterResponse += content;
-                  
-                  // 实时更新章节内容
-                  if (currentChapter) {
-                    currentChapter.content = chapterResponse;
-                    await updateLocalAndGlobal(localNovel);
+              // 使用流式输出
+              const stream = await chapterOpenai.chat.completions.create({
+                ...chapterCompletionParams,
+                signal: abortControllerRef.current?.signal
+              });
+              
+              for await (const chunk of stream as any) {
+                const content = chunk.choices[0]?.delta?.content || '';
+                batchChapterResponse += content;
+              }
+              
+              terminal.log(`
+>> AI RESPONSE [工作流: 批量正文生成] 第${startChapterIndex + 1}-${batchEndIndex}章
+>> -----------------------------------------------------------
+>> Content length: ${batchChapterResponse.length} characters
+>> -----------------------------------------------------------
+`);
+            } catch (err) {
+              terminal.error(`[OutlineAndChapter] 批量正文生成失败: ${err}`);
+              startChapterIndex = batchEndIndex;
+              continue;
+            }
+
+            // 3. 通过标题分割正文内容
+            const chapterContents: Map<string, string> = new Map();
+            
+            // 首先尝试精确匹配章节标题
+            for (let i = 0; i < batchSize; i++) {
+              const chapterIdx = startChapterIndex + i;
+              if (chapterIdx >= chapterCount) break;
+              
+              const outlineEntry = outlineEntries[i];
+              const chapterTitle = outlineEntry.title;
+              
+              // 查找章节标题在响应中的位置
+              const titleIndex = batchChapterResponse.indexOf(chapterTitle);
+              if (titleIndex !== -1) {
+                // 找到下一个章节标题的位置作为结束标记
+                let nextTitleIndex = batchChapterResponse.length;
+                for (let j = i + 1; j < batchSize; j++) {
+                  const nextTitle = outlineEntries[j].title;
+                  const nextIndex = batchChapterResponse.indexOf(nextTitle, titleIndex + chapterTitle.length);
+                  if (nextIndex !== -1 && nextIndex < nextTitleIndex) {
+                    nextTitleIndex = nextIndex;
+                    break;
                   }
                 }
                 
-                terminal.log(`
->> AI RESPONSE [工作流: 正文生成] 第${chapterIdx + 1}章
->> -----------------------------------------------------------
->> Content length: ${chapterResponse.length} characters
->> -----------------------------------------------------------
-`);
-              } catch (err) {
-                terminal.error(`[OutlineAndChapter] 正文生成失败: ${err}`);
-                continue;
+                // 提取章节内容
+                const chapterContent = batchChapterResponse
+                  .slice(titleIndex + chapterTitle.length, nextTitleIndex)
+                  .trim();
+                
+                chapterContents.set(chapterTitle, chapterContent);
+                terminal.log(`[OutlineAndChapter] 成功分割章节: ${chapterTitle}, 内容长度: ${chapterContent.length}`);
               }
+            }
+            
+            // 对于没有找到精确匹配的章节，尝试使用顺序分割
+            if (chapterContents.size < batchSize) {
+              terminal.warn(`[OutlineAndChapter] 部分章节未找到精确标题匹配，尝试顺序分割`);
+              
+              // 简单的顺序分割：将内容平均分配给剩余章节
+              const remainingChapters = [];
+              for (let i = 0; i < batchSize; i++) {
+                const outlineEntry = outlineEntries[i];
+                if (!chapterContents.has(outlineEntry.title)) {
+                  remainingChapters.push(outlineEntry);
+                }
+              }
+              
+              if (remainingChapters.length > 0) {
+                // 找到未被分配的内容
+                let remainingContent = batchChapterResponse;
+                chapterContents.forEach((content) => {
+                  remainingContent = remainingContent.replace(content, '');
+                });
+                remainingContent = remainingContent.trim();
+                
+                // 平均分配剩余内容
+                const chunkSize = Math.floor(remainingContent.length / remainingChapters.length);
+                remainingChapters.forEach((chapter, idx) => {
+                  const start = idx * chunkSize;
+                  const end = idx === remainingChapters.length - 1 ? remainingContent.length : (idx + 1) * chunkSize;
+                  const content = remainingContent.slice(start, end).trim();
+                  chapterContents.set(chapter.title, content);
+                  terminal.log(`[OutlineAndChapter] 顺序分配章节: ${chapter.title}, 内容长度: ${content.length}`);
+                });
+              }
+            }
+
+            // 4. 将内容分配到对应章节并保存
+            for (let i = 0; i < batchSize; i++) {
+              const chapterIdx = startChapterIndex + i;
+              if (chapterIdx >= chapterCount) break;
+              if (!checkActive()) break;
+
+              const outlineEntry = outlineEntries[i];
+              const currentChapter = chapterMap.get(chapterIdx);
+              if (!currentChapter) continue;
 
               // 确保 targetVolumeId 不为空且有效（防止落到未分卷）
               const isValidVolume = (id?: string) =>
@@ -3367,10 +3440,16 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   await updateLocalAndGlobal(localNovel);
                 }
               }
+
+              // 获取章节内容
+              const chapterContent = chapterContents.get(outlineEntry.title) || '';
+              currentChapter.content = chapterContent;
               
-              // 章节内容已经在流式输出时实时更新
-              lastChapterContent = chapterResponse;
-              lastChapterTitle = currentChapter.title;
+              // 更新 lastChapterContent 和 lastChapterTitle 用于下一批次
+              if (chapterContent) {
+                lastChapterContent = chapterContent;
+                lastChapterTitle = outlineEntry.title;
+              }
 
               // 触发章节完成回调，以支持总结生成
               if (globalConfig.onChapterComplete) {
@@ -3390,6 +3469,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
               await new Promise(resolve => setTimeout(resolve, 100));
             }
+            
+            // 批量保存所有章节内容
+            await updateLocalAndGlobal(localNovel);
 
             // 更新起始索引，处理下一批次
             startChapterIndex = batchEndIndex;
