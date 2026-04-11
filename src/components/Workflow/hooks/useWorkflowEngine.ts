@@ -3356,16 +3356,38 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               const entry = outlineEntries[i];
               if (!entry) continue;
               
-              // 检查章节是否已经存在 - 优先通过标题匹配，而不是依赖数组索引
+              // 检查章节是否已经存在 - 多重匹配策略
               const expectedChapterNum = chapterIdx + 1;
-              let chapter = currentVolumeChapters.find((ch) => {
+              let chapter: Chapter | undefined = undefined;
+              
+              // 策略1: 通过标题精确匹配
+              chapter = currentVolumeChapters.find((ch) => {
                 const chNum = parseAnyNumber(ch.title) || 0;
                 return chNum === expectedChapterNum;
               });
               
-              // 如果通过标题没找到，再尝试使用数组索引作为兜底
+              // 策略2: 如果通过标题没找到，尝试通过数组索引匹配（仅在索引范围内）
               if (!chapter && chapterIdx < currentVolumeChapters.length) {
-                chapter = currentVolumeChapters[chapterIdx];
+                const candidateChapter = currentVolumeChapters[chapterIdx];
+                const candidateNum = parseAnyNumber(candidateChapter.title) || 0;
+                // 验证一下索引对应的章节号是否合理
+                if (candidateNum === 0 || candidateNum === expectedChapterNum || Math.abs(candidateNum - expectedChapterNum) <= 1) {
+                  chapter = candidateChapter;
+                  terminal.log(`[OutlineAndChapter] 通过数组索引找到章节: idx=${chapterIdx}, title=${chapter.title}`);
+                }
+              }
+              
+              // 策略3: 检查是否在 localNovel.chapters 中有其他匹配的章节（防止 currentVolumeChapters 过时）
+              if (!chapter) {
+                chapter = (localNovel.chapters || []).find((ch) => {
+                  if (ch.volumeId !== finalVolumeId) return false;
+                  if (ch.subtype && ch.subtype !== 'story') return false;
+                  const chNum = parseAnyNumber(ch.title) || 0;
+                  return chNum === expectedChapterNum;
+                });
+                if (chapter) {
+                  terminal.log(`[OutlineAndChapter] 在 localNovel.chapters 中找到章节: title=${chapter.title}`);
+                }
               }
               
               if (!chapter) {
@@ -3414,7 +3436,17 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             // 批量添加新章节到小说（只添加新创建的）
             if (batchChapters.length > 0) {
-              localNovel.chapters = [...(localNovel.chapters || []), ...batchChapters];
+              // 双重检查：确保不会添加已经存在的章节
+              const existingChapterIds = new Set((localNovel.chapters || []).map(ch => ch.id));
+              const trulyNewChapters = batchChapters.filter(ch => !existingChapterIds.has(ch.id));
+              
+              if (trulyNewChapters.length > 0) {
+                localNovel.chapters = [...(localNovel.chapters || []), ...trulyNewChapters];
+                terminal.log(`[OutlineAndChapter] 实际添加 ${trulyNewChapters.length} 个新章节`);
+              } else {
+                terminal.log(`[OutlineAndChapter] 没有需要添加的新章节，所有章节都已存在`);
+              }
+              
               // 初始化所有章节的编号信息，确保一致
               localNovel = initializeChapterNumbering(localNovel);
               await updateLocalAndGlobal(localNovel);
