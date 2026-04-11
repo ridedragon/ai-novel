@@ -50,8 +50,47 @@ export function useNovelData() {
   // 统一状态更新包装器
   const setNovels = useCallback((value: Novel[] | ((prev: Novel[]) => Novel[])) => {
     const startTime = Date.now();
-    _setNovels(prev => {
-      let next = typeof value === 'function' ? (value as any)(prev) : value;
+    _setNovels((prev: Novel[]) => {
+      let next: Novel[] = typeof value === 'function' 
+        ? (value as (prev: Novel[]) => Novel[])(prev) 
+        : value;
+      
+      // 关键修复：合并流式更新的章节，防止其他章节丢失
+      // 当检测到更新只包含部分章节时（流式更新的典型特征），我们进行合并
+      if (Array.isArray(next)) {
+        // 创建一个 Map 来快速查找原始小说
+        const originalNovelsMap = new Map<string, Novel>(prev.map(n => [n.id, n]));
+        
+        next = next.map((updatedNovel: Novel) => {
+          const originalNovel = originalNovelsMap.get(updatedNovel.id);
+          
+          // 只有当小说存在，且更新的章节数少于原始章节数时才合并
+          if (originalNovel && 
+              updatedNovel.chapters && 
+              originalNovel.chapters && 
+              updatedNovel.chapters.length < originalNovel.chapters.length) {
+            
+            // 合并章节：用更新的章节替换原始章节中的对应项
+            const mergedChapters = originalNovel.chapters.map((originalChapter: Chapter) => {
+              const updatedChapter = updatedNovel.chapters?.find(
+                (uc: Chapter) => uc.id === originalChapter.id
+              );
+              return updatedChapter || originalChapter;
+            });
+            
+            // 添加可能新增的章节
+            updatedNovel.chapters?.forEach((updatedChapter: Chapter) => {
+              if (!mergedChapters.find((mc: Chapter) => mc.id === updatedChapter.id)) {
+                mergedChapters.push(updatedChapter);
+              }
+            });
+            
+            return { ...updatedNovel, chapters: mergedChapters };
+          }
+          return updatedNovel;
+        });
+      }
+
       if (next === prev) return prev;
 
       // 强制过滤已删除章节，防止“亡灵复活”
