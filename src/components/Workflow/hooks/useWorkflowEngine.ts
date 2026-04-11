@@ -3630,7 +3630,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             return s.name === volTitle;
           });
           const outlineItemCount = effectiveOutlineSet?.items?.length || 0;
-          const currentVolumeChapters = (localNovel.chapters || []).filter(c => {
+          const currentVolumeChapterCount = (localNovel.chapters || []).filter(c => {
             return c.volumeId === (workflowManager.getActiveVolumeAnchor() || '') && 
                    (!c.subtype || c.subtype === 'story') && 
                    c.content && c.content.trim().length > 0;
@@ -3642,12 +3642,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           const isLastVolume = currentVolumeIndex >= volumePlans3.length - 1;
           
           // 重写卷模式：当前卷完成后停止
-          if (userSpecifiedTargetVolumeId && mode && mode !== 'full' && outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
+          if (userSpecifiedTargetVolumeId && mode && mode !== 'full' && outlineItemCount > 0 && currentVolumeChapterCount >= outlineItemCount) {
             shouldStopForVolumeComplete = true;
-            terminal.log(`[WORKFLOW] 重写卷模式: Volume ${currentVolumeIndex} complete: all ${currentVolumeChapters}/${outlineItemCount} outline items generated, stopping workflow`);
+            terminal.log(`[WORKFLOW] 重写卷模式: Volume ${currentVolumeIndex} complete: all ${currentVolumeChapterCount}/${outlineItemCount} outline items generated, stopping workflow`);
           }
           // 完全重写模式：所有卷完成后停止
-          else if (mode === 'full' && isLastVolume && outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
+          else if (mode === 'full' && isLastVolume && outlineItemCount > 0 && currentVolumeChapterCount >= outlineItemCount) {
             shouldStopForVolumeComplete = true;
             terminal.log(`[WORKFLOW] 完全重写模式: All volumes complete: Volume ${currentVolumeIndex} (last volume) finished, stopping workflow`);
           }
@@ -4213,14 +4213,14 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     return s.name === volTitle;
                   });
                   const outlineItemCount = effectiveOutlineSet?.items?.length || 0;
-                  const currentVolumeChapters = (localNovel.chapters || []).filter(c => {
+                  const currentVolumeChapterCount = (localNovel.chapters || []).filter(c => {
                     return c.volumeId === (workflowManager.getActiveVolumeAnchor() || '') && 
                            (!c.subtype || c.subtype === 'story') && 
                            c.content && c.content.trim().length > 0;
                   }).length;
                   
                   // 如果当前卷的所有大纲项都已生成为章节，且还有下一卷
-                  if (outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
+                  if (outlineItemCount > 0 && currentVolumeChapterCount >= outlineItemCount) {
                     const nextVolFromPlans = volumePlans[currentVolumeIndex + 1];
                     const nextVolFromNovel = localNovel.volumes?.[currentVolumeIndex + 1];
                     const nextVolName = nextVolFromPlans?.volumeName || nextVolFromPlans?.folderName || nextVolFromNovel?.title || '';
@@ -4228,7 +4228,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     if (nextVolName) {
                       shouldSwitch = true;
                       nextVolumeName = nextVolName;
-                      terminal.log(`[WORKFLOW] Volume ${currentVolumeIndex} fallback switch: all ${currentVolumeChapters}/${outlineItemCount} outline items generated, switching to "${nextVolName}"`);
+                      terminal.log(`[WORKFLOW] Volume ${currentVolumeIndex} fallback switch: all ${currentVolumeChapterCount}/${outlineItemCount} outline items generated, switching to "${nextVolName}"`);
                     }
                   }
                 }
@@ -4245,7 +4245,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   return s.name === volTitle;
                 });
                 const outlineItemCount = effectiveOutlineSet?.items?.length || 0;
-                const currentVolumeChapters = (localNovel.chapters || []).filter(c => {
+                const currentVolumeChapterCount = (localNovel.chapters || []).filter(c => {
                   return c.volumeId === (workflowManager.getActiveVolumeAnchor() || '') && 
                          (!c.subtype || c.subtype === 'story') && 
                          c.content && c.content.trim().length > 0;
@@ -4257,12 +4257,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 
                 if (!shouldSwitch) {
                   // 重写卷模式：当前卷完成后停止
-                  if (userSpecifiedTargetVolumeId && mode && mode !== 'full' && outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
+                  if (userSpecifiedTargetVolumeId && mode && mode !== 'full' && outlineItemCount > 0 && currentVolumeChapterCount >= outlineItemCount) {
                     shouldStopForVolumeComplete = true;
-                    terminal.log(`[WORKFLOW] 重写卷模式: Volume ${currentVolumeIndex} complete: all ${currentVolumeChapters}/${outlineItemCount} outline items generated, stopping workflow`);
+                    terminal.log(`[WORKFLOW] 重写卷模式: Volume ${currentVolumeIndex} complete: all ${currentVolumeChapterCount}/${outlineItemCount} outline items generated, stopping workflow`);
                   }
                   // 完全重写模式：所有卷完成后停止
-                  else if (mode === 'full' && isLastVolume && outlineItemCount > 0 && currentVolumeChapters >= outlineItemCount) {
+                  else if (mode === 'full' && isLastVolume && outlineItemCount > 0 && currentVolumeChapterCount >= outlineItemCount) {
                     shouldStopForVolumeComplete = true;
                     terminal.log(`[WORKFLOW] 完全重写模式: All volumes complete: Volume ${currentVolumeIndex} (last volume) finished, stopping workflow`);
                   }
