@@ -3503,21 +3503,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   signal: abortControllerRef.current?.signal
                 });
                 
-                // 检查 stream 是否为有效的异步可迭代对象
-                if (stream && typeof stream[Symbol.asyncIterator] === 'function') {
-                  for await (const chunk of stream as any) {
-                    const content = chunk.choices[0]?.delta?.content || '';
-                    batchChapterResponse += content;
-                  }
-                } else {
-                  // 如果 stream 不是有效的异步可迭代对象，使用非流式方式
-                  terminal.warn(`[OutlineAndChapter] 流对象不是有效的异步可迭代对象，使用非流式方式`);
-                  const nonStreamResponse = await chapterOpenai.chat.completions.create({
-                    ...chapterCompletionParams,
-                    stream: false, // 禁用流式输出
-                    signal: abortControllerRef.current?.signal
-                  });
-                  batchChapterResponse = nonStreamResponse.choices[0]?.message?.content || '';
+                // 直接使用 for await...of 循环处理流
+                // OpenAI SDK v4 的流对象支持异步迭代
+                for await (const chunk of stream as any) {
+                  const content = chunk.choices[0]?.delta?.content || '';
+                  batchChapterResponse += content;
                 }
               } catch (streamError) {
                 terminal.error(`[OutlineAndChapter] 流式输出失败: ${streamError}，尝试非流式方式`);
