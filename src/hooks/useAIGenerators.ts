@@ -1522,6 +1522,7 @@ export function useAIGenerators() {
         handleOptimize: (id: number, content: string) => Promise<void>;
         generateAbortControllerRef: React.MutableRefObject<AbortController | null>;
         isRegenerating?: boolean;
+        onChainOfThoughtUpdate?: (content: string) => void;
       }) => {
         const { apiKey, activeChapter, activeNovel, generateAbortControllerRef } = params;
 
@@ -1644,6 +1645,10 @@ export function useAIGenerators() {
               presence_penalty: params.presencePenalty,
               frequency_penalty: params.frequencyPenalty,
               max_tokens: params.max_tokens || params.maxReplyLength,
+              // 启用思维链
+              extra_body: {
+                chain_of_thought: true
+              }
             };
             let fallbackMode = 0;
             if (params.topK && params.topK > 0 && fallbackMode < 1) {
@@ -1697,11 +1702,19 @@ export function useAIGenerators() {
 
             if (params.stream) {
               let lastUpdateTime = 0;
+              let chainOfThought = '';
               for await (const chunk of response) {
                 if (generateAbortControllerRef.current?.signal.aborted) throw new Error('Aborted');
                 const content = chunk.choices[0]?.delta?.content || '';
                 if (content) hasReceivedContent = true;
                 newGeneratedContent += content;
+                
+                // 提取思维链内容（假设思维链在响应的某个字段中）
+                const chainContent = chunk.choices[0]?.delta?.chain_of_thought || chunk.choices[0]?.delta?.thought || '';
+                if (chainContent) {
+                  chainOfThought += chainContent;
+                  params.onChainOfThoughtUpdate?.(chainOfThought);
+                }
 
                 const now = Date.now();
                 // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
@@ -1734,6 +1747,12 @@ export function useAIGenerators() {
               if (generateAbortControllerRef.current?.signal.aborted) throw new Error('Aborted');
               newGeneratedContent = response.choices[0]?.message?.content || '';
               if (newGeneratedContent) hasReceivedContent = true;
+              
+              // 提取思维链内容（非流式响应）
+              const chainContent = response.choices[0]?.message?.chain_of_thought || response.choices[0]?.message?.thought || '';
+              if (chainContent) {
+                params.onChainOfThoughtUpdate?.(chainContent);
+              }
             }
 
             if (!hasReceivedContent) throw new Error('Empty response received');

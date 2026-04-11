@@ -41,6 +41,9 @@ interface ChapterEditorProps {
   onPrevVersion: () => void;
   onNextVersion: () => void;
   _onSwitchVersion?: (version: any) => void;
+  showChainOfThought: boolean;
+  setShowChainOfThought: (show: boolean) => void;
+  chainOfThoughtContent: string;
 
   onDeleteChapter: (chapterId: number) => void;
 }
@@ -66,6 +69,9 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     onPrevVersion,
     onNextVersion,
     _onSwitchVersion,
+    showChainOfThought,
+    setShowChainOfThought,
+    chainOfThoughtContent,
     onDeleteChapter,
   }) => {
     const contentScrollRef = useRef<HTMLDivElement>(null);
@@ -301,6 +307,15 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                 <BarChart2 className="w-4 h-4" />
               </button>
               <button
+                onClick={() => setShowChainOfThought(!showChainOfThought)}
+                className={`w-8 h-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-all ${showChainOfThought ? 'text-primary bg-primary/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
+                title="查看思维链"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </button>
+              <button
                 onClick={handleToggleEditWithSync}
                 className={`w-8 h-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-all ${isEditingChapter ? 'text-primary bg-primary/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
                 title={isEditingChapter ? '保存' : '编辑'}
@@ -385,6 +400,21 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
               </article>
             )}
           </div>
+          
+          {/* 思维链显示区域 */}
+          {showChainOfThought && (
+            <div className="mt-8 border-t border-slate-200 dark:border-white/5 pt-6">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                思维链
+              </h3>
+              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 text-sm text-slate-600 dark:text-slate-300 font-mono whitespace-pre-wrap">
+                {chainOfThoughtContent || '暂无思维链内容'}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
