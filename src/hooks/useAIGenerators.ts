@@ -1,5 +1,4 @@
 import OpenAI from 'openai';
-import AsyncOpenAI from 'openai';
 import { useCallback, useState } from 'react';
 import terminal from 'virtual:terminal';
 import { Chapter, GeneratorPreset, Novel, PlotOutlineItem, PresetApiConfig, PromptItem, RegexScript } from '../types';
@@ -1560,23 +1559,12 @@ export function useAIGenerators() {
 
             logAiParams('对话续写生成', config.model, params.temperature, params.topP, params.topK);
 
-            // 根据是否需要流式处理选择不同的客户端
-            let openaiClient;
-            if (params.stream) {
-              // 流式请求必须使用 AsyncOpenAI 客户端
-              openaiClient = new AsyncOpenAI({
-                apiKey: config.apiKey,
-                baseURL: config.baseUrl,
-                dangerouslyAllowBrowser: true,
-              });
-            } else {
-              // 非流式请求使用普通 OpenAI 客户端
-              openaiClient = new OpenAI({
-                apiKey: config.apiKey,
-                baseURL: config.baseUrl,
-                dangerouslyAllowBrowser: true,
-              });
-            }
+            // 创建 OpenAI 客户端（v4 版本已统一 API）
+            const openaiClient = new OpenAI({
+              apiKey: config.apiKey,
+              baseURL: config.baseUrl,
+              dangerouslyAllowBrowser: true,
+            });
 
             const scripts = params.getActiveScripts();
             const worldInfoMessages = buildWorldInfoMessages(activeNovel || undefined, params.activeOutlineSetId);
@@ -1669,78 +1657,6 @@ export function useAIGenerators() {
               requestParams.top_k = params.topK;
             }
             
-            let response;
-            let isStreamSuccessful = false;
-            try {
-              if (params.stream) {
-                // 对于流式请求，使用 await 获取响应
-                response = await openaiClient.chat.completions.create(
-                  requestParams,
-                  {
-                    signal: generateAbortControllerRef.current.signal,
-                  },
-                ) as any;
-              } else {
-                // 对于非流式请求，使用 await
-                response = (await openaiClient.chat.completions.create(
-                  requestParams,
-                  {
-                    signal: generateAbortControllerRef.current.signal,
-                  },
-                )) as any;
-              }
-            } catch (apiError: any) {
-              if (apiError.status === 400) {
-                const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-                terminal.warn(`API 400 错误: ${errorBody}`);
-                
-                if (requestParams.top_k && fallbackMode < 1) {
-                  terminal.warn('尝试移除 top_k 参数重试');
-                  delete requestParams.top_k;
-                  fallbackMode = 1;
-                  if (params.stream) {
-                    response = await openaiClient.chat.completions.create(
-                      requestParams,
-                      {
-                        signal: generateAbortControllerRef.current.signal,
-                      },
-                    ) as any;
-                  } else {
-                    response = (await openaiClient.chat.completions.create(
-                      requestParams,
-                      {
-                        signal: generateAbortControllerRef.current.signal,
-                      },
-                    )) as any;
-                  }
-                } else if (fallbackMode < 2) {
-                  terminal.warn('尝试简化参数重试 (移除 top_p)');
-                  delete requestParams.top_p;
-                  requestParams.temperature = 1.0;
-                  fallbackMode = 2;
-                  if (params.stream) {
-                    response = await openaiClient.chat.completions.create(
-                      requestParams,
-                      {
-                        signal: generateAbortControllerRef.current.signal,
-                      },
-                    ) as any;
-                  } else {
-                    response = (await openaiClient.chat.completions.create(
-                      requestParams,
-                      {
-                        signal: generateAbortControllerRef.current.signal,
-                      },
-                    )) as any;
-                  }
-                } else {
-                  throw apiError;
-                }
-              } else {
-                throw apiError;
-              }
-            }
-
             let newGeneratedContent = '';
             let hasReceivedContent = false;
 
@@ -1752,119 +1668,116 @@ export function useAIGenerators() {
               terminal.log('[Stream] 开始流式传输');
               
               try {
-                // 检查response是否为可迭代对象
-                if (typeof response === 'object' && response !== null && Symbol.asyncIterator in response) {
-                  for await (const chunk of response) {
-                    if (generateAbortControllerRef.current?.signal.aborted) {
-                      // 中止时关闭流式状态
-                      params.onStreamingStatusChange?.(false);
-                      throw new Error('Aborted');
-                    }
-                    
-                    // 检查chunk格式
-                    if (!chunk || !chunk.choices || !Array.isArray(chunk.choices) || chunk.choices.length === 0) {
-                      terminal.warn('[Stream] 无效的chunk格式:', chunk);
-                      continue;
-                    }
-                    
-                    const choice = chunk.choices[0];
-                    const delta = choice?.delta;
-                    const content = delta?.content || '';
-                    
-                    terminal.log('[Stream] 收到chunk:', { content: content.substring(0, 50) + (content.length > 50 ? '...' : '') });
-                    
-                    if (content) {
-                      hasReceivedContent = true;
-                      newGeneratedContent += content;
-                    }
-                    
-                    // 提取思维链内容（假设思维链在响应的某个字段中）
-                    const chainContent = delta?.chain_of_thought || delta?.thought || '';
-                    if (chainContent) {
-                      chainOfThought += chainContent;
-                      params.onChainOfThoughtUpdate?.(chainOfThought);
-                    }
-
-                    const now = Date.now();
-                    // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
-                    if (now - lastUpdateTime > 50) {
-                      lastUpdateTime = now;
-                      const fullRawContent = currentContent + newGeneratedContent;
-                      terminal.log('[Stream] 更新UI:', { contentLength: fullRawContent.length });
-                      
-                      params.setChapters(prev =>
-                        prev.map(c => {
-                          if (c.id === activeChapter.id) {
-                            let chapterWithHistory = ensureChapterVersions(c);
-                            const continueId = `v_continue_${c.id}`;
-                            let versions = [...(chapterWithHistory.versions || [])];
-                            let verIdx = versions.findIndex(v => v.id === continueId);
-                            if (verIdx !== -1) versions[verIdx] = { ...versions[verIdx], content: fullRawContent };
-                            else
-                              versions.push({
-                                id: continueId,
-                                content: fullRawContent,
-                                timestamp: Date.now(),
-                                type: 'user_edit',
-                              });
-                            return { ...c, content: fullRawContent, versions, activeVersionId: continueId };
-                          }
-                          return c;
-                        }),
-                      );
-                    }
-                  }
-                  isStreamSuccessful = true;
-                  terminal.log('[Stream] 流式传输结束');
-                  // 流式传输结束
-                  params.onStreamingStatusChange?.(false);
-                } else {
-                  // 流对象不可迭代，切换到非流式模式
-                  terminal.warn('[Stream] 流对象不可迭代，切换到非流式模式');
-                  isStreamSuccessful = false;
-                  // 关闭流式状态
-                  params.onStreamingStatusChange?.(false);
-                }
-              } catch (streamError) {
-                // 流式处理出错，切换到非流式模式
-                terminal.warn('[Stream] 流式处理出错:', streamError);
-                isStreamSuccessful = false;
-                // 关闭流式状态
-                params.onStreamingStatusChange?.(false);
-              }
-            }
-            
-            // 如果流式处理失败，使用非流式方式获取响应
-            if (params.stream && !isStreamSuccessful) {
-              terminal.log('[Stream] 尝试使用非流式方式获取响应');
-              requestParams.stream = false;
-              try {
-                // 非流式请求需要使用 OpenAI 客户端，重新创建一个
-                const syncOpenaiClient = new OpenAI({
-                  apiKey: config.apiKey,
-                  baseURL: config.baseUrl,
-                  dangerouslyAllowBrowser: true,
-                });
-                response = await syncOpenaiClient.chat.completions.create(
+                // 使用 OpenAI v4 流式 API
+                const stream = await openaiClient.chat.completions.create(
                   requestParams,
                   {
                     signal: generateAbortControllerRef.current.signal,
-                  },
-                ) as any;
-                newGeneratedContent = response.choices[0]?.message?.content || '';
-                if (newGeneratedContent) hasReceivedContent = true;
+                  }
+                );
                 
-                // 提取思维链内容（非流式响应）
-                const chainContent = response.choices[0]?.message?.chain_of_thought || response.choices[0]?.message?.thought || '';
-                if (chainContent) {
-                  params.onChainOfThoughtUpdate?.(chainContent);
+                for await (const chunk of stream) {
+                  if (generateAbortControllerRef.current?.signal.aborted) {
+                    // 中止时关闭流式状态
+                    params.onStreamingStatusChange?.(false);
+                    throw new Error('Aborted');
+                  }
+                  
+                  // 检查chunk格式
+                  if (!chunk || !chunk.choices || !Array.isArray(chunk.choices) || chunk.choices.length === 0) {
+                    terminal.warn('[Stream] 无效的chunk格式:', chunk);
+                    continue;
+                  }
+                  
+                  const choice = chunk.choices[0];
+                  const delta = choice?.delta;
+                  const content = delta?.content || '';
+                  
+                  terminal.log('[Stream] 收到chunk:', { content: content.substring(0, 50) + (content.length > 50 ? '...' : '') });
+                  
+                  if (content) {
+                    hasReceivedContent = true;
+                    newGeneratedContent += content;
+                  }
+                  
+                  // 提取思维链内容（假设思维链在响应的某个字段中）
+                  const chainContent = delta?.chain_of_thought || delta?.thought || '';
+                  if (chainContent) {
+                    chainOfThought += chainContent;
+                    params.onChainOfThoughtUpdate?.(chainOfThought);
+                  }
+
+                  const now = Date.now();
+                  // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
+                  if (now - lastUpdateTime > 50) {
+                    lastUpdateTime = now;
+                    const fullRawContent = currentContent + newGeneratedContent;
+                    terminal.log('[Stream] 更新UI:', { contentLength: fullRawContent.length });
+                    
+                    params.setChapters(prev =>
+                      prev.map(c => {
+                        if (c.id === activeChapter.id) {
+                          let chapterWithHistory = ensureChapterVersions(c);
+                          const continueId = `v_continue_${c.id}`;
+                          let versions = [...(chapterWithHistory.versions || [])];
+                          let verIdx = versions.findIndex(v => v.id === continueId);
+                          if (verIdx !== -1) versions[verIdx] = { ...versions[verIdx], content: fullRawContent };
+                          else
+                            versions.push({
+                              id: continueId,
+                              content: fullRawContent,
+                              timestamp: Date.now(),
+                              type: 'user_edit',
+                            });
+                          return { ...c, content: fullRawContent, versions, activeVersionId: continueId };
+                        }
+                        return c;
+                      }),
+                    );
+                  }
                 }
-              } catch (error) {
-                terminal.error('[Stream] 非流式方式获取响应失败:', error);
-                throw error;
+                terminal.log('[Stream] 流式传输结束');
+                // 流式传输结束
+                params.onStreamingStatusChange?.(false);
+              } catch (streamError) {
+                // 流式处理出错，关闭流式状态
+                terminal.warn('[Stream] 流式处理出错:', streamError);
+                params.onStreamingStatusChange?.(false);
+                
+                // 切换到非流式模式
+                terminal.log('[Stream] 尝试使用非流式方式获取响应');
+                requestParams.stream = false;
+                try {
+                  const response = await openaiClient.chat.completions.create(
+                    requestParams,
+                    {
+                      signal: generateAbortControllerRef.current.signal,
+                    }
+                  );
+                  newGeneratedContent = response.choices[0]?.message?.content || '';
+                  if (newGeneratedContent) hasReceivedContent = true;
+                  
+                  // 提取思维链内容（非流式响应）
+                  const chainContent = response.choices[0]?.message?.chain_of_thought || response.choices[0]?.message?.thought || '';
+                  if (chainContent) {
+                    params.onChainOfThoughtUpdate?.(chainContent);
+                  }
+                } catch (error) {
+                  terminal.error('[Stream] 非流式方式获取响应失败:', error);
+                  throw error;
+                }
               }
-            } else if (!params.stream) {
+            } else {
+              // 非流式请求
               if (generateAbortControllerRef.current?.signal.aborted) throw new Error('Aborted');
+              
+              const response = await openaiClient.chat.completions.create(
+                requestParams,
+                {
+                  signal: generateAbortControllerRef.current.signal,
+                }
+              );
+              
               newGeneratedContent = response.choices[0]?.message?.content || '';
               if (newGeneratedContent) hasReceivedContent = true;
               
