@@ -101,6 +101,7 @@ function App() {
   const [showWorkflowEditor, setShowWorkflowEditor] = useState(false);
   const [showChainOfThought, setShowChainOfThought] = useState(false);
   const [chainOfThoughtContent, setChainOfThoughtContent] = useState('');
+  const [regeneratingChapterIds, setRegeneratingChapterIds] = useState<Set<number>>(new Set());
 
   // 弹窗控制
   const [showSettings, setShowSettings] = useState(false);
@@ -282,7 +283,9 @@ function App() {
         if (versions && versions.length > 0) {
           novelData.setChapters(prev =>
             prev.map(c => {
-              if (c.id === novelData.activeChapterId && !autoWrite.optimizingChapterIds.has(c.id)) {
+              if (c.id === novelData.activeChapterId && 
+                  !autoWrite.optimizingChapterIds.has(c.id) && 
+                  !regeneratingChapterIds.has(c.id)) {
                 return ensureChapterVersions({ ...c, versions });
               }
               return c;
@@ -291,7 +294,7 @@ function App() {
         }
       });
     }
-  }, [novelData.activeChapterId]);
+  }, [novelData.activeChapterId, regeneratingChapterIds]);
 
   const handleSwitchModule = useCallback(
     (target: any) => {
@@ -1263,31 +1266,39 @@ function App() {
             const chapter = novelData.chapters.find(c => c.id === chapterId);
             if (!chapter || !novelData.activeNovel) return;
 
-            // 创建一个清空了内容的章节对象，专门用于重新生成
-            const regenerateChapter = {
-              ...chapter,
-              content: '',
-              versions: undefined,
-              activeVersionId: undefined
-            };
+            // 标记该章节正在重新生成，防止旧版本被恢复
+            setRegeneratingChapterIds(prev => new Set(prev).add(chapterId));
 
-            // 先更新章节状态，清空内容和版本
-            novelData.setChapters(prev =>
-              prev.map(c => {
-                if (c.id === chapterId) {
-                  return {
-                    ...c,
-                    content: '',
-                    versions: undefined,
-                    activeVersionId: undefined
-                  };
-                }
-                return c;
-              }),
-            );
+            try {
+              // 彻底删除存储中的旧版本和旧内容
+              await storage.deleteChapterVersions(chapterId);
+              await storage.deleteChapterContent(chapterId);
 
-            // 立即保存当前状态，确保清空操作被持久化
-            await storage.saveNovels(novelData.novels);
+              // 创建一个清空了内容的章节对象，专门用于重新生成
+              const regenerateChapter = {
+                ...chapter,
+                content: '',
+                versions: undefined,
+                activeVersionId: undefined
+              };
+
+              // 先更新章节状态，清空内容和版本
+              novelData.setChapters(prev =>
+                prev.map(c => {
+                  if (c.id === chapterId) {
+                    return {
+                      ...c,
+                      content: '',
+                      versions: undefined,
+                      activeVersionId: undefined
+                    };
+                  }
+                  return c;
+                }),
+              );
+
+              // 立即保存当前状态，确保清空操作被持久化
+              await storage.saveNovels(novelData.novels);
 
             // 创建 abort controller ref
             const abortControllerRef = {
@@ -1328,10 +1339,22 @@ function App() {
                 terminal.log(`[Regenerate] 章节 ${regenerateChapter.title} 重新生成成功`);
                 // 重新生成完成后立即保存，确保新内容被持久化
                 await storage.saveNovels(novelData.novels);
+                // 清除重新生成标记
+                setRegeneratingChapterIds(prev => {
+                  const next = new Set(prev);
+                  next.delete(chapterId);
+                  return next;
+                });
               },
               onError: (msg: string) => {
                 terminal.error(`[Regenerate] 章节 ${regenerateChapter.title} 重新生成失败: ${msg}`);
                 setDialog({ isOpen: true, type: 'alert', title: '错误', message: msg, onConfirm: closeDialog });
+                // 出错时也要清除重新生成标记
+                setRegeneratingChapterIds(prev => {
+                  const next = new Set(prev);
+                  next.delete(chapterId);
+                  return next;
+                });
               },
               getActiveScripts,
               checkAndGenerateSummary: async (id, content, nid, updatedNovel, signal, forceFinal, rid) => {
@@ -1357,6 +1380,14 @@ function App() {
                 setChainOfThoughtContent(content);
               },
             });
+            } finally {
+              // 确保无论如何都清除重新生成标记
+              setRegeneratingChapterIds(prev => {
+                const next = new Set(prev);
+                next.delete(chapterId);
+                return next;
+              });
+            }
           }}
           optimizingChapterIds={autoWrite.optimizingChapterIds}
           activeOptimizePresetId={generators.activeOptimizePresetId}
