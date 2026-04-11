@@ -870,7 +870,7 @@ export const InspirationManager: React.FC<InspirationManagerProps> = React.memo(
                                     <span className="px-1.5 py-0.5 rounded-none text-[10px] font-bold border whitespace-nowrap leading-none bg-yellow-900/20 text-yellow-500 border-yellow-900/50">
                                        灵感
                                     </span>
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="flex items-center gap-1 opacity-100">
                                        <div className="relative">
                                           <button
                                              onClick={(e) => {

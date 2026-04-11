@@ -1025,7 +1025,7 @@ export const OutlineManager: React.FC<OutlineManagerProps> = React.memo(({
                             <span className="px-1.5 py-0.5 rounded-none text-[10px] font-bold border whitespace-nowrap leading-none bg-rose-900/20 text-rose-500 border-rose-900/50">
                                大纲
                             </span>
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center gap-1 opacity-100" onClick={e => e.stopPropagation()}>
                                <button
                                   onClick={() => handleMoveItem(idx, idx - 1)}
                                   disabled={idx === 0}
