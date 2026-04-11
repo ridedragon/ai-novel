@@ -1671,6 +1671,34 @@ export function useAIGenerators() {
               console.log('[Stream] 温度:', params.temperature);
               console.log('[Stream] 最大令牌:', params.max_tokens || params.maxReplyLength);
               
+              // 定义更新UI的函数
+              const updateUI = (content: string, force = false) => {
+                const fullRawContent = currentContent + content;
+                console.log('[Stream] 更新UI:', { contentLength: fullRawContent.length, receivedSoFar: content.length, force });
+                terminal.log('[Stream] 更新UI:', { contentLength: fullRawContent.length, receivedSoFar: content.length, force });
+                
+                params.setChapters(prev =>
+                  prev.map(c => {
+                    if (c.id === activeChapter.id) {
+                      let chapterWithHistory = ensureChapterVersions(c);
+                      const continueId = `v_continue_${c.id}`;
+                      let versions = [...(chapterWithHistory.versions || [])];
+                      let verIdx = versions.findIndex(v => v.id === continueId);
+                      if (verIdx !== -1) versions[verIdx] = { ...versions[verIdx], content: fullRawContent };
+                      else
+                        versions.push({
+                          id: continueId,
+                          content: fullRawContent,
+                          timestamp: Date.now(),
+                          type: 'user_edit',
+                        });
+                      return { ...c, content: fullRawContent, versions, activeVersionId: continueId };
+                    }
+                    return c;
+                  }),
+                );
+              };
+              
               try {
                 // 使用 OpenAI v4 流式 API
                 const stream = await openaiClient.chat.completions.create(
@@ -1714,38 +1742,23 @@ export function useAIGenerators() {
 
                   const now = Date.now();
                   // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
-                  if (now - lastUpdateTime > 50) {
+                  if (now - lastUpdateTime > 50 || content.length > 0) {
                     lastUpdateTime = now;
-                    const fullRawContent = currentContent + newGeneratedContent;
-                    console.log('[Stream] 更新UI:', { contentLength: fullRawContent.length, receivedSoFar: newGeneratedContent.length });
-                    terminal.log('[Stream] 更新UI:', { contentLength: fullRawContent.length, receivedSoFar: newGeneratedContent.length });
-                    
-                    params.setChapters(prev =>
-                      prev.map(c => {
-                        if (c.id === activeChapter.id) {
-                          let chapterWithHistory = ensureChapterVersions(c);
-                          const continueId = `v_continue_${c.id}`;
-                          let versions = [...(chapterWithHistory.versions || [])];
-                          let verIdx = versions.findIndex(v => v.id === continueId);
-                          if (verIdx !== -1) versions[verIdx] = { ...versions[verIdx], content: fullRawContent };
-                          else
-                            versions.push({
-                              id: continueId,
-                              content: fullRawContent,
-                              timestamp: Date.now(),
-                              type: 'user_edit',
-                            });
-                          return { ...c, content: fullRawContent, versions, activeVersionId: continueId };
-                        }
-                        return c;
-                      }),
-                    );
+                    updateUI(newGeneratedContent, false);
                   }
                 }
                 console.log('[Stream] 流式传输结束');
                 console.log('[Stream] 最终内容长度:', newGeneratedContent.length);
                 console.log('[Stream] 内容预览:', newGeneratedContent.substring(0, 100) + (newGeneratedContent.length > 100 ? '...' : ''));
                 terminal.log('[Stream] 流式传输结束');
+                
+                // 强制进行最终更新，确保所有内容都显示
+                if (hasReceivedContent) {
+                  console.log('[Stream] 执行最终更新');
+                  terminal.log('[Stream] 执行最终更新');
+                  updateUI(newGeneratedContent, true);
+                }
+                
                 // 流式传输结束
                 params.onStreamingStatusChange?.(false);
               } catch (streamError) {
@@ -1753,6 +1766,13 @@ export function useAIGenerators() {
                 console.error('[Stream] 流式处理出错:', streamError);
                 terminal.warn('[Stream] 流式处理出错:', streamError);
                 params.onStreamingStatusChange?.(false);
+                
+                // 如果已经收到部分内容，先进行最终更新
+                if (hasReceivedContent && newGeneratedContent) {
+                  console.log('[Stream] 错误后尝试更新已收到的内容');
+                  terminal.log('[Stream] 错误后尝试更新已收到的内容');
+                  updateUI(newGeneratedContent, true);
+                }
                 
                 // 切换到非流式模式
                 console.log('[Stream] 尝试使用非流式方式获取响应');

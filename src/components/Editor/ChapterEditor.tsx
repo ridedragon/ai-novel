@@ -387,12 +387,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                   <div className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
                     {isStreaming ? (
                       <TypewriterEffect 
-                        text={activeChapter.content
-                          .replace(/<[^>]+>/g, '')
-                          .split('\n')
-                          .map(line => line.trim())
-                          .filter(line => line)
-                          .join('\n')}
+                        text={activeChapter.content}
                         speed={20}
                         isStreaming={isStreaming}
                       />
