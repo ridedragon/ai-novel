@@ -130,6 +130,7 @@ function App() {
   const [showSkillManager, setShowSkillManager] = useState(false);
   const [skillsCount, setSkillsCount] = useState(0);
   const [collapsedVolumesByNovel, setCollapsedVolumesByNovel] = useState<Record<string, Record<string, boolean>>>({});
+  const [isStreaming, setIsStreaming] = useState(false);
 
   useEffect(() => {
     initializeBuiltinSkills();
@@ -1351,6 +1352,9 @@ function App() {
               getActiveScripts,
               onError: m =>
                 setDialog({ isOpen: true, type: 'alert', title: '错误', message: m, onConfirm: closeDialog }),
+              onStreamingStatusChange: (isStreaming) => {
+                setIsStreaming(isStreaming);
+              },
             })
           }
           onStopOptimize={autoWrite.stopOptimize}
@@ -1471,6 +1475,9 @@ function App() {
               onChainOfThoughtUpdate: (content) => {
                 setChainOfThoughtContent(content);
               },
+              onStreamingStatusChange: (isStreaming) => {
+                setIsStreaming(isStreaming);
+              },
             });
             } finally {
               // 确保无论如何都清除重新生成标记
@@ -1496,6 +1503,7 @@ function App() {
           }}
           onPrevVersion={() => handleVersionStep(-1)}
           onNextVersion={() => handleVersionStep(1)}
+          isStreaming={isStreaming}
           _onSwitchVersion={async (v: any) =>
             novelData.setChapters(prev =>
               prev.map(c =>

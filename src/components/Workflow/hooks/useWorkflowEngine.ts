@@ -31,6 +31,7 @@ export const useWorkflowEngine = (options: {
   setNodes: React.Dispatch<React.SetStateAction<WorkflowNode[]>>;
   setEdges: React.Dispatch<React.SetStateAction<Edge[]>>;
   onUpdateNovel?: (novel: Novel) => void;
+  onStreamingStatusChange?: (isStreaming: boolean) => void;
   getOrderedNodes: () => WorkflowNode[];
   isMobile?: boolean;
   clearAutoSaveTimeout?: () => void;
@@ -46,6 +47,7 @@ export const useWorkflowEngine = (options: {
     setNodes,
     setEdges,
     onUpdateNovel,
+    onStreamingStatusChange,
     getOrderedNodes,
     isMobile = false,
     clearAutoSaveTimeout,
@@ -4236,7 +4238,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           
           let chapterResult: any = null;
           if (wStart < currentSet.items.length) {
-            chapterResult = await engine.run(
+            // 开始流式输出
+            onStreamingStatusChange?.(true);
+            try {
+              chapterResult = await engine.run(
               currentSet.items,
               wStart,
               globalConfig.prompts.filter((p: any) => p.active),
@@ -4817,6 +4822,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               // 移除冗余的“小说大纲”条目，因为 AutoWriteEngine 内部会自带更智能的“待创作章节大纲参考”
               dynamicContextMessages.filter(m => !m.content.startsWith('【小说大纲】：')),
             );
+            // 结束流式输出
+            onStreamingStatusChange?.(false);
           }
           // 核心修复：检查 AutoWriteEngine 的返回值，如果因为卷切换而暂停，则根据模式决定是否停止工作流
           if (chapterResult && typeof chapterResult === 'object' && 'shouldPauseForVolumeSwitch' in chapterResult && chapterResult.shouldPauseForVolumeSwitch) {
@@ -4854,7 +4861,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             await syncNodeStatus(node.id, { label: NODE_CONFIGS.chapter.defaultLabel, status: 'completed' }, i);
           setEdgeAnimation(node.id, false);
           continue;
+        } finally {
+          // 流式输出结束
+          onStreamingStatusChange?.(false);
         }
+        
 
         // --- Standard AI Messages ---
         let messages: any[] = [];
