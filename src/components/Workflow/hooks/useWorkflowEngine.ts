@@ -238,10 +238,27 @@ export const useWorkflowEngine = (options: {
     const nextReferenceFolders = [...(novel.referenceFolders || [])];
     const directFolderIds = new Set(
       nextReferenceFolders
-        .filter(folder => affectedVolumeTitles.has(folder.name))
+        .filter(folder => affectedVolumeTitles.has(folder.name) || 
+          [...affectedVolumeTitles].some(volumeTitle => 
+            folder.name.includes(volumeTitle) || volumeTitle.includes(folder.name)
+          )
+        )
         .map(folder => folder.id),
     );
     const allFolderIds = collectDescendantFolderIds(nextReferenceFolders, directFolderIds);
+
+    // 清除与受影响卷相关的所有文件夹内容
+    const clearSetByName = (sets: any[], setName: string) => {
+      return (sets || []).map(set => {
+        if (affectedVolumeTitles.has(set.name) || 
+            [...affectedVolumeTitles].some(volumeTitle => 
+              set.name.includes(volumeTitle) || volumeTitle.includes(set.name)
+            )) {
+          return { ...set, [setName]: [] };
+        }
+        return set;
+      });
+    };
 
     return {
       ...novel,
@@ -262,21 +279,11 @@ export const useWorkflowEngine = (options: {
           logicScore: undefined,
         };
       }),
-      outlineSets: (novel.outlineSets || []).map(set =>
-        affectedVolumeTitles.has(set.name) ? { ...set, items: [] } : set,
-      ),
-      characterSets: (novel.characterSets || []).map(set =>
-        affectedVolumeTitles.has(set.name) ? { ...set, characters: [] } : set,
-      ),
-      worldviewSets: (novel.worldviewSets || []).map(set =>
-        affectedVolumeTitles.has(set.name) ? { ...set, entries: [] } : set,
-      ),
-      inspirationSets: (novel.inspirationSets || []).map(set =>
-        affectedVolumeTitles.has(set.name) ? { ...set, items: [] } : set,
-      ),
-      plotOutlineSets: (novel.plotOutlineSets || []).map(set =>
-        affectedVolumeTitles.has(set.name) ? { ...set, items: [] } : set,
-      ),
+      outlineSets: clearSetByName(novel.outlineSets, 'items'),
+      characterSets: clearSetByName(novel.characterSets, 'characters'),
+      worldviewSets: clearSetByName(novel.worldviewSets, 'entries'),
+      inspirationSets: clearSetByName(novel.inspirationSets, 'items'),
+      plotOutlineSets: clearSetByName(novel.plotOutlineSets, 'items'),
       referenceFiles: (novel.referenceFiles || []).filter(file => !file.parentId || !allFolderIds.has(file.parentId)),
     };
   };
