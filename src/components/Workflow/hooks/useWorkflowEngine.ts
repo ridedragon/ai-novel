@@ -5257,9 +5257,17 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             ? node.data.baseUrl 
             : (apiPreset && apiPreset.baseUrl) || (usePresetApiConfig && nApi.baseUrl) || globalConfig.baseUrl;
 
-        terminal.log(`[API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
-        terminal.log(`  - baseUrl: ${finalBaseUrl}`);
-        terminal.log(`  - model: ${fModel}`);
+        // 核心修复：添加移动端API配置检查
+        if (isMobile) {
+          terminal.log(`[Mobile API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
+          terminal.log(`  - baseUrl: ${finalBaseUrl}`);
+          terminal.log(`  - model: ${fModel}`);
+          terminal.log(`  - apiKey: ${finalApiKey ? '已设置' : '未设置'}`);
+        } else {
+          terminal.log(`[API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
+          terminal.log(`  - baseUrl: ${finalBaseUrl}`);
+          terminal.log(`  - model: ${fModel}`);
+        }
 
         const openai = new OpenAI({
           apiKey: finalApiKey,
@@ -5379,6 +5387,16 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                       }
                     }
                   }
+                } else if (apiError.status === 404) {
+                  // 核心修复：处理 404 错误，特别是移动端可能遇到的API端点不存在问题
+                  const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+                  terminal.error(`API 404 错误: ${errorBody}`);
+                  terminal.error(`请检查API配置是否正确：`);
+                  terminal.error(`  - baseUrl: ${finalBaseUrl}`);
+                  terminal.error(`  - model: ${fModel}`);
+                  terminal.error(`  - apiKey: ${finalApiKey ? '已设置' : '未设置'}`);
+                  terminal.error(`请确保您的API端点和模型配置正确！`);
+                  throw apiError;
                 } else {
                   throw apiError;
                 }
