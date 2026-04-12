@@ -4335,6 +4335,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   node.data.systemPrompt ||
                   localNovel.systemPrompt
                 : localNovel.systemPrompt) + nodeLoopContext,
+            stream: true, // 明确启用流式输出
             ...globalConfig,
           };
 
