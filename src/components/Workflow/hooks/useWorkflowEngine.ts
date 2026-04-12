@@ -3389,37 +3389,29 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               const entry = outlineEntries[i];
               if (!entry) continue;
               
-              // 检查章节是否已经存在 - 多重匹配策略
+              // 检查章节是否已经存在 - 多重匹配策略，每次都从最新的 localNovel.chapters 查找
               const expectedChapterNum = chapterIdx + 1;
               let chapter: Chapter | undefined = undefined;
               
+              // 直接从最新的 localNovel.chapters 中查找属于当前卷的章节
+              const latestVolumeChapters = (localNovel.chapters || []).filter(
+                (chapter) => chapter.volumeId === finalVolumeId && (!chapter.subtype || chapter.subtype === 'story')
+              );
+              
               // 策略1: 通过标题精确匹配
-              chapter = currentVolumeChapters.find((ch) => {
+              chapter = latestVolumeChapters.find((ch) => {
                 const chNum = parseAnyNumber(ch.title) || 0;
                 return chNum === expectedChapterNum;
               });
               
               // 策略2: 如果通过标题没找到，尝试通过数组索引匹配（仅在索引范围内）
-              if (!chapter && chapterIdx < currentVolumeChapters.length) {
-                const candidateChapter = currentVolumeChapters[chapterIdx];
+              if (!chapter && chapterIdx < latestVolumeChapters.length) {
+                const candidateChapter = latestVolumeChapters[chapterIdx];
                 const candidateNum = parseAnyNumber(candidateChapter.title) || 0;
                 // 验证一下索引对应的章节号是否合理
                 if (candidateNum === 0 || candidateNum === expectedChapterNum || Math.abs(candidateNum - expectedChapterNum) <= 1) {
                   chapter = candidateChapter;
                   terminal.log(`[OutlineAndChapter] 通过数组索引找到章节: idx=${chapterIdx}, title=${chapter.title}`);
-                }
-              }
-              
-              // 策略3: 检查是否在 localNovel.chapters 中有其他匹配的章节（防止 currentVolumeChapters 过时）
-              if (!chapter) {
-                chapter = (localNovel.chapters || []).find((ch) => {
-                  if (ch.volumeId !== finalVolumeId) return false;
-                  if (ch.subtype && ch.subtype !== 'story') return false;
-                  const chNum = parseAnyNumber(ch.title) || 0;
-                  return chNum === expectedChapterNum;
-                });
-                if (chapter) {
-                  terminal.log(`[OutlineAndChapter] 在 localNovel.chapters 中找到章节: title=${chapter.title}`);
                 }
               }
               
