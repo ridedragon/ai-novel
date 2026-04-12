@@ -3665,8 +3665,22 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                           const chapterContent = tempContents.get(outlineEntry.title) || '';
                           if (chapterContent) {
                             currentChapter.content = chapterContent;
-                            // 实时更新到本地和全局状态
-                            await updateLocalAndGlobal(localNovel);
+                            // 实时更新到本地和全局状态（非异步，避免阻塞流式循环）
+                            const volumeStateMap = new Map();
+                            (activeNovelRef.current?.volumes || []).forEach(v => volumeStateMap.set(v.id, v.collapsed));
+
+                            const mergedNovel: Novel = {
+                              ...localNovel,
+                              volumes: (localNovel.volumes || []).map(v => ({
+                                ...v,
+                                collapsed: volumeStateMap.has(v.id) ? volumeStateMap.get(v.id) : v.collapsed,
+                              })),
+                            };
+                            localNovel = mergedNovel;
+
+                            if (onUpdateNovel) {
+                              onUpdateNovel(mergedNovel);
+                            }
                             console.log('[Workflow Stream] 实时更新章节:', outlineEntry.title, '内容长度:', chapterContent.length);
                             terminal.log('[Workflow Stream] 实时更新章节:', outlineEntry.title, '内容长度:', chapterContent.length);
                           }
