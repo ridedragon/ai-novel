@@ -5179,11 +5179,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         }
         
         let featModel = globalConfig.model;
-        if (node.data.typeKey === 'outline') featModel = globalConfig.outlineModel;
-        else if (node.data.typeKey === 'characters') featModel = globalConfig.characterModel;
-        else if (node.data.typeKey === 'worldview') featModel = globalConfig.worldviewModel;
-        else if (node.data.typeKey === 'inspiration') featModel = globalConfig.inspirationModel;
-        else if (node.data.typeKey === 'plotOutline') featModel = globalConfig.plotOutlineModel;
+        if (node.data.typeKey === 'outline') featModel = globalConfig.outlineModel || globalConfig.model;
+        else if (node.data.typeKey === 'characters') featModel = globalConfig.characterModel || globalConfig.model;
+        else if (node.data.typeKey === 'worldview') featModel = globalConfig.worldviewModel || globalConfig.model;
+        else if (node.data.typeKey === 'inspiration') featModel = globalConfig.inspirationModel || globalConfig.model;
+        else if (node.data.typeKey === 'plotOutline') featModel = globalConfig.plotOutlineModel || globalConfig.model;
 
         const fModel =
           node.data.overrideAiConfig && node.data.model
