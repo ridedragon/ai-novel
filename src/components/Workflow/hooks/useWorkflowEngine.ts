@@ -1424,12 +1424,15 @@ export const useWorkflowEngine = (options: {
             userSpecifiedTargetVolumeIndex,
           });
 
-          // 核心修复：当从特定卷开始运行时，计算实际应该执行的循环次数
-          // 例如：总共有8卷，从第5卷开始（索引4），那么实际只需要执行 8 - 4 = 4 次循环
+          // 核心修复：当从特定卷开始运行且使用重写模式时，计算实际应该执行的循环次数
+          // 例如：总共有8卷，从第5卷开始（索引4）且使用完全重写模式，那么实际只需要执行 8 - 4 = 4 次循环
           let effectiveLoopCount = loopConfig.count;
           let shouldTerminateEarly = false;
           
-          if (userSpecifiedTargetVolumeIndex >= 0) {
+          // 只有在以下两个条件同时满足时才调整循环次数：
+          // 1. 用户指定了起始卷（userSpecifiedTargetVolumeIndex >= 0）
+          // 2. 用户使用了重写模式（mode 存在）
+          if (userSpecifiedTargetVolumeIndex >= 0 && mode) {
             // 获取分卷规划，确定总共有多少卷
             const volumePlans = workflowManager.getVolumePlans();
             const totalVolumes = volumePlans.length > 0 ? volumePlans.length : loopConfig.count;
@@ -1437,14 +1440,15 @@ export const useWorkflowEngine = (options: {
             // 计算从用户指定的卷开始，还需要执行多少次循环
             effectiveLoopCount = totalVolumes - userSpecifiedTargetVolumeIndex;
             
-            console.log('[LOOP_NODE] 从特定卷开始运行的循环调整:', {
+            console.log('[LOOP_NODE] 从特定卷开始且使用重写模式的循环调整:', {
               userSpecifiedTargetVolumeIndex,
+              mode,
               totalVolumes,
               originalLoopCount: loopConfig.count,
               effectiveLoopCount,
             });
             
-            terminal.log(`[LOOP_NODE] 从第${userSpecifiedTargetVolumeIndex + 1}卷开始运行，总共有${totalVolumes}卷，实际需要执行${effectiveLoopCount}次循环`);
+            terminal.log(`[LOOP_NODE] 从第${userSpecifiedTargetVolumeIndex + 1}卷开始运行，使用${mode === 'full' ? '完全重写' : '单卷重写'}模式，总共有${totalVolumes}卷，实际需要执行${effectiveLoopCount}次循环`);
           }
           
           volumeFolderDebugTracker.recordNodeExecution(
