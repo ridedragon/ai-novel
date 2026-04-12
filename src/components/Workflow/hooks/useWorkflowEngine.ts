@@ -325,7 +325,7 @@ export const useWorkflowEngine = (options: {
       }
     };
 
-    if (!globalConfig?.apiKey) {
+    if (!globalConfigRef.current?.apiKey) {
       setError('请先在主设置中配置 API Key');
       return;
     }
@@ -499,7 +499,7 @@ export const useWorkflowEngine = (options: {
         let currentVolumeConfig: any = null;
         let totalVolumesFromConfig = 0;
         
-        if (globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume') {
+        if (globalConfigRef.current.contextScope === 'volume' || globalConfigRef.current.contextScope === 'currentVolume') {
           // 获取当前分卷索引
           const currentVolIdx = workflowManager.getCurrentVolumeIndex();
           
@@ -612,7 +612,7 @@ export const useWorkflowEngine = (options: {
           // 用户可能在 UI 中修改了分卷规划内容，volumeContent 始终是最新版本
           // outputEntries 可能在非AI模式下为空，或包含旧的AI生成内容
           if (pNode.data.typeKey === 'saveToVolume' && pNode.data.volumeContent) {
-            const volumeMode = globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume';
+            const volumeMode = globalConfigRef.current.contextScope === 'volume' || globalConfigRef.current.contextScope === 'currentVolume';
             if (volumeMode && j < boundaryIndex) {
               // 本卷模式下跳过隔离边界之前的节点
             } else {
@@ -627,7 +627,7 @@ export const useWorkflowEngine = (options: {
           // 修复：loopConfigurator 节点传递生成的循环配置内容
           // 循环配置器的生成结果对后续AI节点理解整体创作结构很有帮助
           if (pNode.data.typeKey === 'loopConfigurator' && pNode.data.generatedLoopConfig) {
-            const volumeMode = globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume';
+            const volumeMode = globalConfigRef.current.contextScope === 'volume' || globalConfigRef.current.contextScope === 'currentVolume';
             if (volumeMode && j < boundaryIndex) {
               // 本卷模式下跳过隔离边界之前的节点
             } else {
@@ -641,7 +641,7 @@ export const useWorkflowEngine = (options: {
 
           if (pNode.data.outputEntries && pNode.data.outputEntries.length > 0) {
             // 本卷模式修复：如果开启了本卷模式，过滤掉隔离边界之前的节点输出
-            if ((globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume') && j < boundaryIndex) {
+            if ((globalConfigRef.current.contextScope === 'volume' || globalConfigRef.current.contextScope === 'currentVolume') && j < boundaryIndex) {
               continue;
             }
 
@@ -1093,12 +1093,12 @@ export const useWorkflowEngine = (options: {
           let volPreset = volTypePresets.find(p => p.id === node.data.presetId) || volTypePresets[0];
           const volNodeApiConfig = (volPreset as any)?.apiConfig || {};
           const volOpenai = new OpenAI({
-            apiKey: node.data.apiKey ? node.data.apiKey : volNodeApiConfig.apiKey || globalConfig.apiKey,
-            baseURL: node.data.baseUrl ? node.data.baseUrl : volNodeApiConfig.baseUrl || globalConfig.baseUrl,
+            apiKey: node.data.apiKey ? node.data.apiKey : volNodeApiConfig.apiKey || globalConfigRef.current.apiKey,
+            baseURL: node.data.baseUrl ? node.data.baseUrl : volNodeApiConfig.baseUrl || globalConfigRef.current.baseUrl,
             dangerouslyAllowBrowser: true,
           });
 
-          const planningModel = node.data.model || volNodeApiConfig.model || globalConfig.model;
+          const planningModel = node.data.model || volNodeApiConfig.model || globalConfigRef.current.model;
           let planningRefContext = '';
           const planningAttachments: any[] = [];
 
@@ -2268,9 +2268,9 @@ export const useWorkflowEngine = (options: {
             }
 
             // 获取AI配置
-            const aiApiKey = node.data.overrideAiConfig && node.data.apiKey ? node.data.apiKey : globalConfig.apiKey;
-            const aiBaseUrl = node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : globalConfig.baseUrl;
-            const aiModel = node.data.overrideAiConfig && node.data.model ? node.data.model : globalConfig.model;
+            const aiApiKey = node.data.overrideAiConfig && node.data.apiKey ? node.data.apiKey : globalConfigRef.current.apiKey;
+            const aiBaseUrl = node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : globalConfigRef.current.baseUrl;
+            const aiModel = node.data.overrideAiConfig && node.data.model ? node.data.model : globalConfigRef.current.model;
             const aiTemp = node.data.overrideAiConfig && node.data.temperature !== undefined ? node.data.temperature : 0.7;
 
             const configuratorOpenai = new OpenAI({
@@ -2698,11 +2698,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             apiKey:
               node.data.overrideAiConfig && node.data.apiKey
                 ? node.data.apiKey
-                : genPreset?.apiConfig?.apiKey || globalConfig.apiKey,
+                : genPreset?.apiConfig?.apiKey || globalConfigRef.current.apiKey,
             baseURL:
               node.data.overrideAiConfig && node.data.baseUrl
                 ? node.data.baseUrl
-                : genPreset?.apiConfig?.baseUrl || globalConfig.baseUrl,
+                : genPreset?.apiConfig?.baseUrl || globalConfigRef.current.baseUrl,
             dangerouslyAllowBrowser: true,
           });
 
@@ -2741,7 +2741,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               const genModel =
                 node.data.overrideAiConfig && node.data.model
                   ? node.data.model
-                  : genPreset?.apiConfig?.model || globalConfig.model;
+                  : genPreset?.apiConfig?.model || globalConfigRef.current.model;
               const genTemp =
                 node.data.overrideAiConfig && node.data.temperature !== undefined
                   ? node.data.temperature
@@ -3150,7 +3150,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           }
 
           // 获取连贯创作章节数配置
-          const consecutiveChapterCount = globalConfig.consecutiveChapterCount || 1;
+          const consecutiveChapterCount = globalConfigRef.current.consecutiveChapterCount || 1;
           const maxBatchSize = consecutiveChapterCount > 1 ? consecutiveChapterCount : 1;
           terminal.log(`[OutlineAndChapter] 使用批量生成模式，每批 ${maxBatchSize} 章`);
 
@@ -3200,9 +3200,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             // 1. 批量生成大纲（仅在需要时生成）
             if (needGenerateOutline) {
               // 安全：始终使用用户全局配置配置
-              const outlineApiKey = globalConfig.apiKey;
-              const outlineBaseUrl = globalConfig.baseUrl;
-              const outlineModel = globalConfig.outlineModel || globalConfig.model;
+              const outlineApiKey = globalConfigRef.current.apiKey;
+              const outlineBaseUrl = globalConfigRef.current.baseUrl;
+              const outlineModel = globalConfigRef.current.outlineModel || globalConfigRef.current.model;
               
               terminal.log(`[API 配置] 节点类型: outlineAndChapter (大纲), 使用配置:`);
               terminal.log(`  - baseUrl: ${outlineBaseUrl}`);
@@ -3510,9 +3510,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
             // 2. 批量生成正文
             // 安全：始终使用用户全局配置
-            const chapterApiKey = globalConfig.apiKey;
-            const chapterBaseUrl = globalConfig.baseUrl;
-            const chapterModel = globalConfig.model;
+            const chapterApiKey = globalConfigRef.current.apiKey;
+            const chapterBaseUrl = globalConfigRef.current.baseUrl;
+            const chapterModel = globalConfigRef.current.model;
             
             terminal.log(`[API 配置] 节点类型: outlineAndChapter (正文), 使用配置:`);
             terminal.log(`  - baseUrl: ${chapterBaseUrl}`);
@@ -3876,9 +3876,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               }
 
               // 触发章节完成回调，以支持总结生成
-              if (globalConfig.onChapterComplete) {
+              if (globalConfigRef.current.onChapterComplete) {
                 terminal.log(`[OutlineAndChapter] 触发章节完成回调: id=${currentChapter.id}, title=${currentChapter.title}`);
-                const summaryResult = await globalConfig.onChapterComplete(
+                const summaryResult = await globalConfigRef.current.onChapterComplete(
                   currentChapter.id,
                   currentChapter.content,
                   localNovel,
@@ -3902,12 +3902,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           }
 
           // 循环结束后，对最后一章触发一次强制总结检查
-          if (globalConfig.onChapterComplete && chapterMap.size > 0) {
+          if (globalConfigRef.current.onChapterComplete && chapterMap.size > 0) {
             const lastChapterIndex = chapterCount - 1;
             const lastChapter = chapterMap.get(lastChapterIndex);
             if (lastChapter) {
               terminal.log(`[OutlineAndChapter] 触发最终总结检查: id=${lastChapter.id}, title=${lastChapter.title}`);
-              const summaryResult = await globalConfig.onChapterComplete(
+              const summaryResult = await globalConfigRef.current.onChapterComplete(
                 lastChapter.id,
                 lastChapter.content,
                 localNovel,
@@ -4145,7 +4145,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         const isOutlineGen = node.data.typeKey === 'outline' || node.data.typeKey === 'plotOutline';
         
         // 本卷模式修复：获取当前卷名称，用于过滤集合
-        const isVolumeMode = globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume';
+        const isVolumeMode = globalConfigRef.current.contextScope === 'volume' || globalConfigRef.current.contextScope === 'currentVolume';
         const volumeNameForContext = currentWorkflowFolder || node.data.folderName || '';
         terminal.log(`[CONTEXT] isVolumeMode=${isVolumeMode}, currentVolumeName="${volumeNameForContext}"`);
 
@@ -4230,7 +4230,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           // 如果是本卷模式，尝试寻找该节点关联的卷或最后一个章节所属的卷
           let effectiveVolumeId: string | undefined = undefined;
 
-          if (globalConfig.contextScope === 'volume' || globalConfig.contextScope === 'currentVolume') {
+          if (globalConfigRef.current.contextScope === 'volume' || globalConfigRef.current.contextScope === 'currentVolume') {
             // 优先级：节点显式指定的卷 > 工作流当前定位的卷 > 最后一章的卷
             effectiveVolumeId = (node.data.targetVolumeId as string) || workflowManager.getActiveVolumeAnchor() || '';
             if (!effectiveVolumeId) {
@@ -4251,7 +4251,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 {
                   longTextMode: true,
                   contextScope: 'volume',  // 本卷模式下只获取当前卷的总结
-                  contextChapterCount: globalConfig.contextChapterCount || 1,
+                  contextChapterCount: globalConfigRef.current.contextChapterCount || 1,
                 },
               );
             }
@@ -4263,8 +4263,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               lastChapter,
               {
                 longTextMode: true,
-                contextScope: globalConfig.contextScope || 'all',
-                contextChapterCount: globalConfig.contextChapterCount || 1,
+                contextScope: globalConfigRef.current.contextScope || 'all',
+                contextChapterCount: globalConfigRef.current.contextChapterCount || 1,
               },
             );
           }
@@ -4362,25 +4362,25 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           const engCfg = {
             apiKey: node.data.overrideAiConfig && node.data.apiKey 
               ? node.data.apiKey 
-              : (usePresetApiConfig && nApi.apiKey) || globalConfig.apiKey,
+              : (usePresetApiConfig && nApi.apiKey) || globalConfigRef.current.apiKey,
             baseURL: node.data.overrideAiConfig && node.data.baseUrl 
               ? node.data.baseUrl 
-              : (usePresetApiConfig && nApi.baseUrl) || globalConfig.baseUrl,
+              : (usePresetApiConfig && nApi.baseUrl) || globalConfigRef.current.baseUrl,
             model: node.data.overrideAiConfig && node.data.model 
               ? node.data.model 
-              : (usePresetApiConfig && nApi.model) || globalConfig.model,
+              : (usePresetApiConfig && nApi.model) || globalConfigRef.current.model,
             temperature:
               node.data.overrideAiConfig && node.data.temperature !== undefined
                 ? node.data.temperature
-                : ((preset as any)?.temperature ?? globalConfig.temperature),
+                : ((preset as any)?.temperature ?? globalConfigRef.current.temperature),
             maxReplyLength:
               node.data.overrideAiConfig && node.data.maxReplyLength !== undefined
                 ? node.data.maxReplyLength
-                : ((preset as any)?.maxReplyLength ?? globalConfig.maxReplyLength),
+                : ((preset as any)?.maxReplyLength ?? globalConfigRef.current.maxReplyLength),
             max_tokens:
               node.data.overrideAiConfig && node.data.max_tokens !== undefined
                 ? node.data.max_tokens
-                : ((preset as any)?.max_tokens ?? globalConfig.max_tokens),
+                : ((preset as any)?.max_tokens ?? globalConfigRef.current.max_tokens),
             systemPrompt:
               (node.data.overrideAiConfig
                 ? node.data.promptItems
@@ -4391,7 +4391,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   localNovel.systemPrompt
                 : localNovel.systemPrompt) + nodeLoopContext,
             stream: true, // 明确启用流式输出
-            ...globalConfig,
+            ...globalConfigRef.current,
           };
           
           terminal.log(`[API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
@@ -4494,8 +4494,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               chapterResult = await engine.run(
               currentSet.items,
               wStart,
-              globalConfig.prompts.filter((p: any) => p.active),
-              () => [...(globalConfig.getActiveScripts() || []), ...((preset as any)?.regexScripts || [])],
+              globalConfigRef.current.prompts.filter((p: any) => p.active),
+              () => [...(globalConfigRef.current.getActiveScripts() || []), ...((preset as any)?.regexScripts || [])],
               s => {
                 // 只有当标签真正变化且超过节流时间时才更新
                 const shouldUpdate = !s.match(/完成|失败|跳过|错误/) ? throttleLabelUpdate(node.id, s) : true;
@@ -5203,7 +5203,6 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           node.data.overrideAiConfig && node.data.topP !== undefined
             ? node.data.topP
             : (preset?.topP ?? globalConfig.topP);
-        const globalConfig = globalConfigRef.current;
         const fTopK =
           node.data.overrideAiConfig && node.data.topK !== undefined
             ? node.data.topK
@@ -5312,7 +5311,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   } else if (fallbackMode < 3) {
                     // 尝试使用默认模型重试
                     terminal.warn('尝试使用默认模型重试');
-                    requestParams.model = globalConfig.model;
+                    requestParams.model = globalConfigRef.current.model;
                     fallbackMode = 3;
                   } else {
                     if (retry < 2) {
@@ -5325,7 +5324,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                         terminal.error('API 400 错误：请求参数可能无效或模型不支持');
                         // 尝试使用最小化参数集
                         requestParams = {
-                          model: globalConfig.model,
+                          model: globalConfigRef.current.model,
                           messages: currMsgs,
                           temperature: 0.7,
                         };
@@ -5603,7 +5602,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
       }
       clearAllEdgeAnimations();
     }
-  }, [activeNovel, globalConfig, allPresets, activeWorkflowId, nodesRef, workflowsRef, setNodes, setEdges, onUpdateNovel, onStreamingStatusChange, getOrderedNodes, isMobile, clearAutoSaveTimeout, setWorkflows]);
+  }, [activeNovel, options.globalConfig, allPresets, activeWorkflowId, nodesRef, workflowsRef, setNodes, setEdges, onUpdateNovel, onStreamingStatusChange, getOrderedNodes, isMobile, clearAutoSaveTimeout, setWorkflows]);
 
   const stopWorkflow = () => {
     const realIdx = workflowManager.getState().currentNodeIndex;
@@ -5810,15 +5809,15 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
   // 辅助功能：获取整合后的模型列表 (两端共用)
   const getConsolidatedModelList = useCallback(() => {
-    const list = [...(globalConfig?.modelList || [])];
-    if (globalConfig?.model) list.push(globalConfig.model);
-    if (globalConfig?.outlineModel) list.push(globalConfig.outlineModel);
-    if (globalConfig?.characterModel) list.push(globalConfig.characterModel);
-    if (globalConfig?.worldviewModel) list.push(globalConfig.worldviewModel);
-    if (globalConfig?.inspirationModel) list.push(globalConfig.inspirationModel);
-    if (globalConfig?.plotOutlineModel) list.push(globalConfig.plotOutlineModel);
-    if (globalConfig?.optimizeModel) list.push(globalConfig.optimizeModel);
-    if (globalConfig?.analysisModel) list.push(globalConfig.analysisModel);
+    const list = [...(globalConfigRef.current?.modelList || [])];
+    if (globalConfigRef.current?.model) list.push(globalConfigRef.current.model);
+    if (globalConfigRef.current?.outlineModel) list.push(globalConfigRef.current.outlineModel);
+    if (globalConfigRef.current?.characterModel) list.push(globalConfigRef.current.characterModel);
+    if (globalConfigRef.current?.worldviewModel) list.push(globalConfigRef.current.worldviewModel);
+    if (globalConfigRef.current?.inspirationModel) list.push(globalConfigRef.current.inspirationModel);
+    if (globalConfigRef.current?.plotOutlineModel) list.push(globalConfigRef.current.plotOutlineModel);
+    if (globalConfigRef.current?.optimizeModel) list.push(globalConfigRef.current.optimizeModel);
+    if (globalConfigRef.current?.analysisModel) list.push(globalConfigRef.current.analysisModel);
 
     const presetTypes = [
       'outline',
@@ -5851,7 +5850,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
       });
 
     return Array.from(new Set(list.filter(Boolean)));
-  }, [globalConfig, allPresets]);
+  }, [options.globalConfig, allPresets]);
 
   return {
     isRunning,
