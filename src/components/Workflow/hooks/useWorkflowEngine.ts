@@ -39,7 +39,7 @@ export const useWorkflowEngine = (options: {
 }) => {
   const {
     activeNovel,
-    globalConfig,
+    globalConfig: initialGlobalConfig,
     allPresets,
     activeWorkflowId,
     nodesRef,
@@ -63,10 +63,15 @@ export const useWorkflowEngine = (options: {
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeNovelRef = useRef(activeNovel);
   const resumeAttemptedRef = useRef(false);
+  const globalConfigRef = useRef(initialGlobalConfig);
 
   useEffect(() => {
     activeNovelRef.current = activeNovel;
   }, [activeNovel]);
+
+  useEffect(() => {
+    globalConfigRef.current = options.globalConfig;
+  }, [options.globalConfig]);
 
   // 初始化时检查并恢复工作流状态
   useEffect(() => {
@@ -5178,6 +5183,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           }
         }
         
+        const globalConfig = globalConfigRef.current;
         let featModel = globalConfig.model;
         if (node.data.typeKey === 'outline') featModel = globalConfig.outlineModel || globalConfig.model;
         else if (node.data.typeKey === 'characters') featModel = globalConfig.characterModel || globalConfig.model;
@@ -5197,6 +5203,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           node.data.overrideAiConfig && node.data.topP !== undefined
             ? node.data.topP
             : (preset?.topP ?? globalConfig.topP);
+        const globalConfig = globalConfigRef.current;
         const fTopK =
           node.data.overrideAiConfig && node.data.topK !== undefined
             ? node.data.topK
