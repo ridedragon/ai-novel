@@ -64,6 +64,25 @@ export function useNovelData() {
         next = next.map((updatedNovel: Novel) => {
           const originalNovel = originalNovelsMap.get(updatedNovel.id);
           
+          // 检查是否是流式更新：只有一个章节被修改，且只修改了内容和版本
+          const isStreamingUpdate = originalNovel && 
+            updatedNovel.chapters && 
+            originalNovel.chapters &&
+            updatedNovel.chapters.length === originalNovel.chapters.length &&
+            updatedNovel.chapters.every((uc, idx) => {
+              const oc = originalNovel!.chapters![idx];
+              return uc.id === oc.id && 
+                     uc.title === oc.title &&
+                     uc.volumeId === oc.volumeId &&
+                     uc.globalIndex === oc.globalIndex &&
+                     uc.volumeIndex === oc.volumeIndex;
+            });
+          
+          // 如果是流式更新，直接返回，不执行合并和其他耗时操作
+          if (isStreamingUpdate) {
+            return updatedNovel;
+          }
+          
           // 只有当小说存在，且更新的章节数少于原始章节数时才合并
           if (originalNovel && 
               updatedNovel.chapters && 
@@ -307,14 +326,14 @@ export function useNovelData() {
   );
 
   const setChapters = useCallback(
-    (value: Chapter[] | ((prev: Chapter[]) => Chapter[])) => {
+    (value: Chapter[] | ((prev: Chapter[]) => Chapter[]), skipNormalization = false) => {
       if (!activeNovelId) return;
       setNovels(prevNovels =>
         prevNovels.map(n => {
           if (n.id === activeNovelId) {
             const currentChapters = n.chapters || [];
             const newChapters = typeof value === 'function' ? (value as any)(currentChapters) : value;
-            return { ...n, chapters: normalizeChapters(newChapters) };
+            return { ...n, chapters: skipNormalization ? newChapters : normalizeChapters(newChapters) };
           }
           return n;
         }),
