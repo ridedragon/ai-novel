@@ -91,20 +91,26 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     useEffect(() => {
       if (activeChapter) {
         setLocalContent(activeChapter.content || '');
-        isDirtyRef.current = false;
-        setHasUnsavedChanges(false);
+        // 只有在非流式传输且不是编辑模式时，才重置脏状态
+        if (!isStreaming && !isEditingChapter) {
+          isDirtyRef.current = false;
+          setHasUnsavedChanges(false);
+        }
       }
 
       // 使用 requestAnimationFrame 确保在内容渲染后再滚动到顶部
-      requestAnimationFrame(() => {
-        if (contentScrollRef.current) {
-          contentScrollRef.current.scrollTop = 0;
-        }
-        if (textareaRef.current) {
-          textareaRef.current.scrollTop = 0;
-        }
-      });
-    }, [activeChapterId, isEditingChapter, activeChapter?.content]);
+      // 只有在章节切换时才滚动，流式传输时不滚动
+      if (!isStreaming) {
+        requestAnimationFrame(() => {
+          if (contentScrollRef.current) {
+            contentScrollRef.current.scrollTop = 0;
+          }
+          if (textareaRef.current) {
+            textareaRef.current.scrollTop = 0;
+          }
+        });
+      }
+    }, [activeChapterId, isEditingChapter, activeChapter?.content, isStreaming]);
 
     // 添加 beforeunload 事件，防止意外关闭丢失数据
     useEffect(() => {
@@ -386,11 +392,10 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                 {activeChapter.content ? (
                   <div className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
                     {isStreaming ? (
-                      <TypewriterEffect 
-                        text={activeChapter.content}
-                        speed={20}
-                        isStreaming={isStreaming}
-                      />
+                      <div className="whitespace-pre-wrap">
+                        {activeChapter.content}
+                        <span className="inline-block w-2 h-5 bg-current animate-pulse ml-1"></span>
+                      </div>
                     ) : (
                       <ReactMarkdown className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
                         {activeChapter.content.replace(/<[^>]+>/g, '')}
