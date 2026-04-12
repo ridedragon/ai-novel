@@ -3618,31 +3618,36 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             });
 
             let batchChapterResponse = '';
-            try {
-              // 构建完整的参数对象，以便日志记录
-              const chapterCompletionParams: any = {
-                model: chapterModel,
-                messages: chapterMessages,
-                temperature: finalChapterPreset.temperature,
-                top_p: finalChapterPreset.topP,
-                stream: true, // 启用流式输出
-              };
-              // Add optional parameters if they exist
-              const chapterMaxTokens = node.data.maxTokens || (finalChapterPreset as any).maxReplyLength || (finalChapterPreset as any).max_tokens;
-              if (chapterMaxTokens) chapterCompletionParams.max_tokens = chapterMaxTokens;
-              if ((finalChapterPreset as any).frequencyPenalty) chapterCompletionParams.frequency_penalty = (finalChapterPreset as any).frequencyPenalty;
-              if ((finalChapterPreset as any).presencePenalty) chapterCompletionParams.presence_penalty = (finalChapterPreset as any).presencePenalty;
+            let attempt = 0;
+            const maxRetries = globalConfigRef.current.maxRetries || 3;
+            let success = false;
+            
+            while (attempt <= maxRetries && !success) {
+              try {
+                // 构建完整的参数对象，以便日志记录
+                const chapterCompletionParams: any = {
+                  model: chapterModel,
+                  messages: chapterMessages,
+                  temperature: finalChapterPreset.temperature,
+                  top_p: finalChapterPreset.topP,
+                  stream: true, // 启用流式输出
+                };
+                // Add optional parameters if they exist
+                const chapterMaxTokens = node.data.maxTokens || (finalChapterPreset as any).maxReplyLength || (finalChapterPreset as any).max_tokens;
+                if (chapterMaxTokens) chapterCompletionParams.max_tokens = chapterMaxTokens;
+                if ((finalChapterPreset as any).frequencyPenalty) chapterCompletionParams.frequency_penalty = (finalChapterPreset as any).frequencyPenalty;
+                if ((finalChapterPreset as any).presencePenalty) chapterCompletionParams.presence_penalty = (finalChapterPreset as any).presence_penalty;
 
-              console.groupCollapsed(
-                `[Workflow AI Request] 大纲与正文生成 - 批量正文 ${startChapterIndex + 1}-${batchEndIndex}`
-              );
-              console.log('Messages:', chapterMessages);
-              console.log('Config:', chapterCompletionParams);
-              console.groupEnd();
+                console.groupCollapsed(
+                  `[Workflow AI Request] 大纲与正文生成 - 批量正文 ${startChapterIndex + 1}-${batchEndIndex}${attempt > 0 ? ` (重试 ${attempt}/${maxRetries})` : ''}`
+                );
+                console.log('Messages:', chapterMessages);
+                console.log('Config:', chapterCompletionParams);
+                console.groupEnd();
 
-              // 详细的参数日志
-              terminal.log(`
->> AI REQUEST [工作流: 批量正文生成] 第${startChapterIndex + 1}-${batchEndIndex}章
+                // 详细的参数日志
+                terminal.log(`
+>> AI REQUEST [工作流: 批量正文生成] 第${startChapterIndex + 1}-${batchEndIndex}章${attempt > 0 ? ` (重试 ${attempt}/${maxRetries})` : ''}
 >> -----------------------------------------------------------
 >> Model:               ${chapterCompletionParams.model}
 >> Temperature:         ${chapterCompletionParams.temperature}
@@ -3655,157 +3660,166 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 >> -----------------------------------------------------------
 `);
 
-              // 使用流式输出
-              try {
-                console.log('[Workflow Stream] 开始流式传输');
-                terminal.log('[Workflow Stream] 开始流式传输');
+                // 使用流式输出
+                try {
+                  console.log('[Workflow Stream] 开始流式传输');
+                  terminal.log('[Workflow Stream] 开始流式传输');
 
-                let lastUpdateTime = 0;
-                let streamTokenCount = 0;
-                let streamUpdateCount = 0;
+                  let lastUpdateTime = 0;
+                  let streamTokenCount = 0;
+                  let streamUpdateCount = 0;
 
-                const stream = await chapterOpenai.chat.completions.create({
-                  ...chapterCompletionParams,
-                  stream: true,
-                  signal: abortControllerRef.current?.signal
-                });
+                  const stream = await chapterOpenai.chat.completions.create({
+                    ...chapterCompletionParams,
+                    stream: true,
+                    signal: abortControllerRef.current?.signal
+                  });
 
-                for await (const chunk of stream) {
-                  if (abortControllerRef.current?.signal.aborted) {
-                    throw new Error('Aborted');
-                  }
+                  for await (const chunk of stream) {
+                    if (abortControllerRef.current?.signal.aborted) {
+                      throw new Error('Aborted');
+                    }
 
-                  const content = chunk.choices[0]?.delta?.content || '';
-                  batchChapterResponse += content;
-                  streamTokenCount++;
+                    const content = chunk.choices[0]?.delta?.content || '';
+                    batchChapterResponse += content;
+                    streamTokenCount++;
 
-                  if (content) {
-                    console.log('[Workflow Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
-                    terminal.log('[Workflow Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
-                  }
+                    if (content) {
+                      console.log('[Workflow Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
+                      terminal.log('[Workflow Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
+                    }
 
-                  const now = Date.now();
-                  if (now - lastUpdateTime > 50) {
-                    streamUpdateCount++;
-                    lastUpdateTime = now;
-                    console.log('[Workflow Stream] 更新UI:', { contentLength: batchChapterResponse.length, receivedSoFar: batchChapterResponse.length });
-                    terminal.log('[Workflow Stream] 更新UI:', { contentLength: batchChapterResponse.length, receivedSoFar: batchChapterResponse.length });
+                    const now = Date.now();
+                    if (now - lastUpdateTime > 50) {
+                      streamUpdateCount++;
+                      lastUpdateTime = now;
+                      console.log('[Workflow Stream] 更新UI:', { contentLength: batchChapterResponse.length, receivedSoFar: batchChapterResponse.length });
+                      terminal.log('[Workflow Stream] 更新UI:', { contentLength: batchChapterResponse.length, receivedSoFar: batchChapterResponse.length });
 
-                    // 实时分割并更新章节内容
-                    try {
-                      const tempContents: Map<string, string> = new Map();
-                      const actualContentCount = Math.min(outlineEntries.length, chapterCount - startChapterIndex);
-                       
-                      for (let i = 0; i < actualContentCount; i++) {
-                        const chapterIdx = startChapterIndex + i;
-                        if (chapterIdx >= chapterCount) break;
-
-                        const outlineEntry = outlineEntries[i];
-                        if (!outlineEntry) continue;
-                        const chapterTitle = outlineEntry.title;
-
-                        // 查找章节标题在响应中的位置
-                        const titleIndex = batchChapterResponse.indexOf(chapterTitle);
-                        if (titleIndex !== -1) {
-                          // 找到下一个章节标题的位置作为结束标记
-                          let nextTitleIndex = batchChapterResponse.length;
-                          for (let j = i + 1; j < batchSize; j++) {
-                            const nextTitle = outlineEntries[j].title;
-                            const nextIndex = batchChapterResponse.indexOf(nextTitle, titleIndex + chapterTitle.length);
-                            if (nextIndex !== -1 && nextIndex < nextTitleIndex) {
-                              nextTitleIndex = nextIndex;
-                              break;
-                            }
-                          }
-
-                          // 提取章节内容
-                          const chapterContent = batchChapterResponse
-                            .slice(titleIndex + chapterTitle.length, nextTitleIndex)
-                            .trim();
-
-                          tempContents.set(chapterTitle, chapterContent);
-                        }
-                      }
-
-                      // 实时更新章节内容
-                      if (tempContents.size > 0) {
-                        for (let i = 0; i < tempContents.size; i++) {
+                      // 实时分割并更新章节内容
+                      try {
+                        const tempContents: Map<string, string> = new Map();
+                        const actualContentCount = Math.min(outlineEntries.length, chapterCount - startChapterIndex);
+                         
+                        for (let i = 0; i < actualContentCount; i++) {
                           const chapterIdx = startChapterIndex + i;
                           if (chapterIdx >= chapterCount) break;
-                          if (!checkActive()) break;
 
                           const outlineEntry = outlineEntries[i];
                           if (!outlineEntry) continue;
-                          const currentChapter = chapterMap.get(chapterIdx);
-                          if (!currentChapter) continue;
+                          const chapterTitle = outlineEntry.title;
 
-                          const chapterContent = tempContents.get(outlineEntry.title) || '';
-                          if (chapterContent) {
-                            currentChapter.content = chapterContent;
-                            // 实时更新到本地和全局状态（非异步，避免阻塞流式循环）
-                            const volumeStateMap = new Map();
-                            (activeNovelRef.current?.volumes || []).forEach(v => volumeStateMap.set(v.id, v.collapsed));
-
-                            const mergedNovel: Novel = {
-                              ...localNovel,
-                              volumes: (localNovel.volumes || []).map(v => ({
-                                ...v,
-                                collapsed: volumeStateMap.has(v.id) ? volumeStateMap.get(v.id) : v.collapsed,
-                              })),
-                            };
-                            localNovel = mergedNovel;
-
-                            if (onUpdateNovel) {
-                              onUpdateNovel(mergedNovel);
+                          // 查找章节标题在响应中的位置
+                          const titleIndex = batchChapterResponse.indexOf(chapterTitle);
+                          if (titleIndex !== -1) {
+                            // 找到下一个章节标题的位置作为结束标记
+                            let nextTitleIndex = batchChapterResponse.length;
+                            for (let j = i + 1; j < batchSize; j++) {
+                              const nextTitle = outlineEntries[j].title;
+                              const nextIndex = batchChapterResponse.indexOf(nextTitle, titleIndex + chapterTitle.length);
+                              if (nextIndex !== -1 && nextIndex < nextTitleIndex) {
+                                nextTitleIndex = nextIndex;
+                                break;
+                              }
                             }
-                            console.log('[Workflow Stream] 实时更新章节:', outlineEntry.title, '内容长度:', chapterContent.length);
-                            terminal.log('[Workflow Stream] 实时更新章节:', outlineEntry.title, '内容长度:', chapterContent.length);
+
+                            // 提取章节内容
+                            const chapterContent = batchChapterResponse
+                              .slice(titleIndex + chapterTitle.length, nextTitleIndex)
+                              .trim();
+
+                            tempContents.set(chapterTitle, chapterContent);
                           }
                         }
+
+                        // 实时更新章节内容
+                        if (tempContents.size > 0) {
+                          for (let i = 0; i < tempContents.size; i++) {
+                            const chapterIdx = startChapterIndex + i;
+                            if (chapterIdx >= chapterCount) break;
+                            if (!checkActive()) break;
+
+                            const outlineEntry = outlineEntries[i];
+                            if (!outlineEntry) continue;
+                            const currentChapter = chapterMap.get(chapterIdx);
+                            if (!currentChapter) continue;
+
+                            const chapterContent = tempContents.get(outlineEntry.title) || '';
+                            if (chapterContent) {
+                              currentChapter.content = chapterContent;
+                              // 实时更新到本地和全局状态（非异步，避免阻塞流式循环）
+                              const volumeStateMap = new Map();
+                              (activeNovelRef.current?.volumes || []).forEach(v => volumeStateMap.set(v.id, v.collapsed));
+
+                              const mergedNovel: Novel = {
+                                ...localNovel,
+                                volumes: (localNovel.volumes || []).map(v => ({
+                                  ...v,
+                                  collapsed: volumeStateMap.has(v.id) ? volumeStateMap.get(v.id) : v.collapsed,
+                                })),
+                              };
+                              localNovel = mergedNovel;
+
+                              if (onUpdateNovel) {
+                                onUpdateNovel(mergedNovel);
+                              }
+                              console.log('[Workflow Stream] 实时更新章节:', outlineEntry.title, '内容长度:', chapterContent.length);
+                              terminal.log('[Workflow Stream] 实时更新章节:', outlineEntry.title, '内容长度:', chapterContent.length);
+                            }
+                          }
+                        }
+                      } catch (updateError) {
+                        console.error('[Workflow Stream] 实时更新章节失败:', updateError);
+                        terminal.error('[Workflow Stream] 实时更新章节失败:', updateError);
                       }
-                    } catch (updateError) {
-                      console.error('[Workflow Stream] 实时更新章节失败:', updateError);
-                      terminal.error('[Workflow Stream] 实时更新章节失败:', updateError);
                     }
                   }
-                }
 
-                console.log('[Workflow Stream] 流式传输结束');
-                console.log('[Workflow Stream] 最终内容长度:', batchChapterResponse.length);
-                console.log('[Workflow Stream] 内容预览:', batchChapterResponse.substring(0, 100) + (batchChapterResponse.length > 100 ? '...' : ''));
-                terminal.log('[Workflow Stream] 流式传输结束');
-                // 关闭流式状态
-                onStreamingStatusChange?.(false);
-              } catch (error) {
-                terminal.error(`[OutlineAndChapter] 正文生成失败: ${error}`);
-                // 发生错误时，关闭流式状态
-                onStreamingStatusChange?.(false);
-                // 发生错误时，使用非流式方式重新请求
-                try {
-                  terminal.log('[Workflow Stream] 切换到非流式模式重试');
-                  const nonStreamResponse = await chapterOpenai.chat.completions.create({
-                    ...chapterCompletionParams,
-                    stream: false,
-                    signal: abortControllerRef.current?.signal
-                  });
-                  batchChapterResponse = nonStreamResponse.choices[0]?.message?.content || '';
-                } catch (retryError) {
-                  terminal.error(`[OutlineAndChapter] 重试失败: ${retryError}`);
-                  startChapterIndex = batchEndIndex;
-                  continue;
+                  console.log('[Workflow Stream] 流式传输结束');
+                  console.log('[Workflow Stream] 最终内容长度:', batchChapterResponse.length);
+                  console.log('[Workflow Stream] 内容预览:', batchChapterResponse.substring(0, 100) + (batchChapterResponse.length > 100 ? '...' : ''));
+                  terminal.log('[Workflow Stream] 流式传输结束');
+                  // 关闭流式状态
+                  onStreamingStatusChange?.(false);
+                  success = true;
+                } catch (error) {
+                  terminal.error(`[OutlineAndChapter] 正文生成失败: ${error}`);
+                  // 发生错误时，关闭流式状态
+                  onStreamingStatusChange?.(false);
+                  // 发生错误时，使用非流式方式重新请求
+                  try {
+                    terminal.log('[Workflow Stream] 切换到非流式模式重试');
+                    const nonStreamResponse = await chapterOpenai.chat.completions.create({
+                      ...chapterCompletionParams,
+                      stream: false,
+                      signal: abortControllerRef.current?.signal
+                    });
+                    batchChapterResponse = nonStreamResponse.choices[0]?.message?.content || '';
+                    success = true;
+                  } catch (retryError) {
+                    terminal.error(`[OutlineAndChapter] 重试失败: ${retryError}`);
+                    attempt++;
+                    if (attempt > maxRetries) {
+                      throw new Error(`正文生成失败，已达到最大重试次数: ${retryError}`);
+                    }
+                    // 等待后重试
+                    await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+                  }
                 }
-              }
-              
-              terminal.log(`
+                
+                if (success) {
+                  terminal.log(`
 >> AI RESPONSE [工作流: 批量正文生成] 第${startChapterIndex + 1}-${batchEndIndex}章
 >> -----------------------------------------------------------
 >> Content length: ${batchChapterResponse.length} characters
 >> -----------------------------------------------------------
 `);
-            } catch (err) {
-              terminal.error(`[OutlineAndChapter] 批量正文生成失败: ${err}`);
-              startChapterIndex = batchEndIndex;
-              continue;
+                }
+              } catch (err) {
+                terminal.error(`[OutlineAndChapter] 批量正文生成失败: ${err}`);
+                await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_chapter_gen', title: '正文生成错误', content: `批量正文生成失败: ${err}` }] }, i);
+                throw err;
+              }
             }
 
             // 3. 通过标题分割正文内容
