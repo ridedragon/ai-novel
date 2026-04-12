@@ -5204,7 +5204,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             
             let completion;
             let apiCallSuccess = false;
-            while (!apiCallSuccess && fallbackMode <= 2) {
+            while (!apiCallSuccess && fallbackMode <= 3) {
               try {
                 completion = await openai.chat.completions.create(
                   requestParams,
@@ -5225,13 +5225,39 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     delete requestParams.top_p;
                     requestParams.temperature = 1.0;
                     fallbackMode = 2;
+                  } else if (fallbackMode < 3) {
+                    // 尝试使用默认模型重试
+                    terminal.warn('尝试使用默认模型重试');
+                    requestParams.model = globalConfig.model;
+                    fallbackMode = 3;
                   } else {
                     if (retry < 2) {
                       retry++;
                       fallbackMode = 0;
                       break;
                     } else {
-                      throw apiError;
+                      // 核心修复：处理没有响应体的 400 错误
+                      if (errorBody === 'Unknown error' && apiError.status === 400) {
+                        terminal.error('API 400 错误：请求参数可能无效或模型不支持');
+                        // 尝试使用最小化参数集
+                        requestParams = {
+                          model: globalConfig.model,
+                          messages: currMsgs,
+                          temperature: 0.7,
+                        };
+                        try {
+                          terminal.warn('尝试使用最小化参数集');
+                          completion = await openai.chat.completions.create(
+                            requestParams,
+                            { signal: abortControllerRef.current?.signal },
+                          );
+                          apiCallSuccess = true;
+                        } catch (minError) {
+                          throw apiError;
+                        }
+                      } else {
+                        throw apiError;
+                      }
                     }
                   }
                 } else {
