@@ -4168,16 +4168,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           typePresets.find(p => p.id === node.data.presetId) || (node.data.presetType ? typePresets[0] : null);
         if (!preset && node.data.presetType && node.data.typeKey !== 'aiChat') continue;
         
-        // 核心修复：根据选择的模型关联到对应的API预设
-        let apiPreset = null;
-        const selectedModel = node.data.overrideAiConfig && node.data.model ? node.data.model : (preset as any)?.apiConfig?.model || globalConfigRef.current.model;
-        if (globalConfigRef.current.apiPresets && selectedModel) {
-          // 查找包含该模型的API预设
-          apiPreset = globalConfigRef.current.apiPresets.find((p: any) => p.modelList.includes(selectedModel));
-          if (apiPreset) {
-            terminal.log(`[API 预设] 找到模型 ${selectedModel} 对应的API预设: ${apiPreset.name}`);
-          }
-        }
+
 
         let refContext = '';
         const attachments: any[] = [];
@@ -5251,10 +5242,27 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         else if (node.data.typeKey === 'inspiration') featModel = globalConfig.inspirationModel || globalConfig.model;
         else if (node.data.typeKey === 'plotOutline') featModel = globalConfig.plotOutlineModel || globalConfig.model;
 
-        const fModel =
+        // 核心修复：根据选择的模型关联到对应的API预设
+        // 先确定最终使用的模型，再查找对应的API预设
+        let candidateModel =
           node.data.overrideAiConfig && node.data.model
             ? node.data.model
             : (usePresetApiConfig && nApi.model) || featModel || globalConfig.model;
+        
+        let apiPreset = null;
+        if (globalConfig.apiPresets && candidateModel) {
+          // 查找包含该模型的API预设
+          apiPreset = globalConfig.apiPresets.find((p: any) => p.modelList.includes(candidateModel));
+          if (apiPreset) {
+            terminal.log(`[API 预设] 找到模型 ${candidateModel} 对应的API预设: ${apiPreset.name}`);
+          }
+        }
+
+        // 优先使用API预设中的默认模型（如果存在）
+        const fModel =
+          node.data.overrideAiConfig && node.data.model
+            ? node.data.model
+            : (usePresetApiConfig && nApi.model) || (apiPreset && apiPreset.defaultModel) || candidateModel || globalConfig.model;
         const fTemp =
           node.data.overrideAiConfig && node.data.temperature !== undefined
             ? node.data.temperature
