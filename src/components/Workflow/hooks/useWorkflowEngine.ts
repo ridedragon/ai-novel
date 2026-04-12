@@ -3201,73 +3201,73 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 dangerouslyAllowBrowser: true,
               });
 
-            // 检查是否已经被中止
-            if (abortControllerRef.current?.signal.aborted) break;
+              // 检查是否已经被中止
+              if (abortControllerRef.current?.signal.aborted) break;
 
-            // Build outline messages using preset prompts if available
-            let outlineMessages: any[] = [];
-            const outlineBasePrompts = (finalOutlinePreset as any)?.prompts?.filter((p: any) => p.enabled || p.active) || [];
-            if (outlineBasePrompts.length > 0) {
-              outlineBasePrompts.forEach((p: any) => {
-                const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), updatedMacroCtx);
-                outlineMessages.push({ role: p.role, content: c });
-              });
-              // 插入前序节点上下文，确保 AI 能获取到之前的内容
-              outlineMessages.push(...dynamicContextMessages);
-            } else {
-              outlineMessages = [
-                { role: 'system', content: localNovel.systemPrompt || '你是一名专业的小说大纲作者。' },
-                ...dynamicContextMessages,
-              ];
-            }
+              // Build outline messages using preset prompts if available
+              let outlineMessages: any[] = [];
+              const outlineBasePrompts = (finalOutlinePreset as any)?.prompts?.filter((p: any) => p.enabled || p.active) || [];
+              if (outlineBasePrompts.length > 0) {
+                outlineBasePrompts.forEach((p: any) => {
+                  const c = workflowManager.interpolateWithMacros(p.content.replace('{{context}}', ''), updatedMacroCtx);
+                  outlineMessages.push({ role: p.role, content: c });
+                });
+                // 插入前序节点上下文，确保 AI 能获取到之前的内容
+                outlineMessages.push(...dynamicContextMessages);
+              } else {
+                outlineMessages = [
+                  { role: 'system', content: localNovel.systemPrompt || '你是一名专业的小说大纲作者。' },
+                  ...dynamicContextMessages,
+                ];
+              }
 
-            // 处理大纲指令中的宏
-            const outlineInstruction = node.data.outlineInstruction ? workflowManager.interpolateWithMacros(node.data.outlineInstruction, updatedMacroCtx) : '';
-            if (outlineInstruction) {
+              // 处理大纲指令中的宏
+              const outlineInstruction = node.data.outlineInstruction ? workflowManager.interpolateWithMacros(node.data.outlineInstruction, updatedMacroCtx) : '';
+              if (outlineInstruction) {
+                outlineMessages.push({
+                  role: 'system',
+                  content: `【大纲AI指令】：\n${outlineInstruction}`,
+                });
+              }
+
+              if (lastChapterContent) {
+                outlineMessages.push({
+                  role: 'system',
+                  content: `【前文回顾】：\n章节标题：${lastChapterTitle}\n\n${lastChapterContent}`
+                });
+              }
+
+              // 确保提示词中的结束索引不超过实际章节总数
+              const actualEndIndex = Math.min(batchEndIndex, chapterCount);
               outlineMessages.push({
-                role: 'system',
-                content: `【大纲AI指令】：\n${outlineInstruction}`,
+                role: 'user',
+                content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}批量生成第${startChapterIndex + 1}章到第${actualEndIndex}章的大纲。请以JSON格式输出，包含title和summary字段的数组。`
               });
-            }
 
-            if (lastChapterContent) {
-              outlineMessages.push({
-                role: 'system',
-                content: `【前文回顾】：\n章节标题：${lastChapterTitle}\n\n${lastChapterContent}`
-              });
-            }
+              let outlineResponse = '';
+              try {
+                // 构建完整的参数对象，以便日志记录
+                const outlineCompletionParams: any = {
+                  model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
+                  messages: outlineMessages,
+                  temperature: finalOutlinePreset.temperature,
+                  top_p: finalOutlinePreset.topP,
+                };
+                // Add optional parameters if they exist
+                const outlineMaxTokens = node.data.maxTokens || (finalOutlinePreset as any).maxReplyLength || (finalOutlinePreset as any).max_tokens;
+                if (outlineMaxTokens) outlineCompletionParams.max_tokens = outlineMaxTokens;
+                if ((finalOutlinePreset as any).frequencyPenalty) outlineCompletionParams.frequency_penalty = (finalOutlinePreset as any).frequencyPenalty;
+                if ((finalOutlinePreset as any).presencePenalty) outlineCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
 
-            // 确保提示词中的结束索引不超过实际章节总数
-            const actualEndIndex = Math.min(batchEndIndex, chapterCount);
-            outlineMessages.push({
-              role: 'user',
-              content: `请为《${localNovel.title || '小说'}》的${currentVolumeName || '当前卷'}批量生成第${startChapterIndex + 1}章到第${actualEndIndex}章的大纲。请以JSON格式输出，包含title和summary字段的数组。`
-            });
+                console.groupCollapsed(
+                  `[Workflow AI Request] 大纲与正文生成 - 批量大纲 ${startChapterIndex + 1}-${batchEndIndex}`
+                );
+                console.log('Messages:', outlineMessages);
+                console.log('Config:', outlineCompletionParams);
+                console.groupEnd();
 
-            let outlineResponse = '';
-            try {
-              // 构建完整的参数对象，以便日志记录
-              const outlineCompletionParams: any = {
-                model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
-                messages: outlineMessages,
-                temperature: finalOutlinePreset.temperature,
-                top_p: finalOutlinePreset.topP,
-              };
-              // Add optional parameters if they exist
-              const outlineMaxTokens = node.data.maxTokens || (finalOutlinePreset as any).maxReplyLength || (finalOutlinePreset as any).max_tokens;
-              if (outlineMaxTokens) outlineCompletionParams.max_tokens = outlineMaxTokens;
-              if ((finalOutlinePreset as any).frequencyPenalty) outlineCompletionParams.frequency_penalty = (finalOutlinePreset as any).frequencyPenalty;
-              if ((finalOutlinePreset as any).presencePenalty) outlineCompletionParams.presence_penalty = (finalOutlinePreset as any).presencePenalty;
-
-              console.groupCollapsed(
-                `[Workflow AI Request] 大纲与正文生成 - 批量大纲 ${startChapterIndex + 1}-${batchEndIndex}`
-              );
-              console.log('Messages:', outlineMessages);
-              console.log('Config:', outlineCompletionParams);
-              console.groupEnd();
-
-              // 详细的参数日志
-              terminal.log(`
+                // 详细的参数日志
+                terminal.log(`
 >> AI REQUEST [工作流: 批量大纲生成] 第${startChapterIndex + 1}-${batchEndIndex}章
 >> -----------------------------------------------------------
 >> Model:               ${outlineCompletionParams.model}
@@ -3280,23 +3280,23 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 >> -----------------------------------------------------------
 `);
 
-              const outlineCompletion = await outlineOpenai.chat.completions.create({
-                ...outlineCompletionParams,
-                signal: abortControllerRef.current?.signal
-              });
-              outlineResponse = outlineCompletion.choices[0]?.message?.content || '';
-              
-              terminal.log(`
+                const outlineCompletion = await outlineOpenai.chat.completions.create({
+                  ...outlineCompletionParams,
+                  signal: abortControllerRef.current?.signal
+                });
+                outlineResponse = outlineCompletion.choices[0]?.message?.content || '';
+                
+                terminal.log(`
 >> AI RESPONSE [工作流: 批量大纲生成] 第${startChapterIndex + 1}-${batchEndIndex}章
 >> -----------------------------------------------------------
 >> Content length: ${outlineResponse.length} characters
 >> -----------------------------------------------------------
 `);
-            } catch (err) {
-              terminal.error(`[OutlineAndChapter] 批量大纲生成失败: ${err}`);
-              startChapterIndex += batchSize;
-              continue;
-            }
+              } catch (err) {
+                terminal.error(`[OutlineAndChapter] 批量大纲生成失败: ${err}`);
+                await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_outline_gen', title: '大纲生成错误', content: `批量大纲生成失败: ${err}` }] }, i);
+                throw err;
+              }
 
               // 使用与大纲节点一致的解析逻辑（含 JSON 修复重试）
               let parsedOutlineResponse = outlineResponse;
@@ -3354,16 +3354,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               // 确保生成的大纲数量不超过批次大小，并且不超过剩余需要生成的章节数
               const actualNeededCount = Math.min(batchSize, chapterCount - startChapterIndex);
               if (outlineEntries.length < actualNeededCount) {
-                terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 少于需要的数量 (${actualNeededCount})，将使用默认标题`);
-                // 补充缺失的大纲，但不超过实际需要的数量
-                for (let i = outlineEntries.length; i < actualNeededCount; i++) {
-                  const chapterIdx = startChapterIndex + i;
-                  if (chapterIdx >= chapterCount) break; // 双重保险，确保不超出总数
-                  outlineEntries.push({ 
-                    title: `第${chapterIdx + 1}章`, 
-                    content: `第${chapterIdx + 1}章的大纲内容` 
-                  });
-                }
+                terminal.error(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 少于需要的数量 (${actualNeededCount})，终止工作`);
+                await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_outline_count', title: '大纲生成错误', content: `生成的大纲数量 ${outlineEntries.length} 少于需要的数量 ${actualNeededCount}` }] }, i);
+                throw new Error(`生成的大纲数量 ${outlineEntries.length} 少于需要的数量 ${actualNeededCount}`);
               } else if (outlineEntries.length > actualNeededCount) {
                 // 如果生成的大纲数量超过需要的数量，截断多余的
                 terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 超过需要的数量 (${actualNeededCount})，将截断多余部分`);
