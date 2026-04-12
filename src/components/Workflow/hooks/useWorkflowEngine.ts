@@ -21,6 +21,29 @@ import {
 import { cleanAndParseJSON, extractEntries, extractTargetEndChapter, parseAnyNumber, checkNodeHasContent } from '../utils/workflowHelpers';
 import { initializeChapterNumbering, generateChapterTitle, calculateNewChapterNumbering } from '../../../utils/chapterNumbering';
 
+// Helper function to normalize base URL
+const normalizeBaseUrl = (url: string): string => {
+  let normalized = url.trim();
+  
+  // Ensure it starts with http:// or https://
+  if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+    normalized = 'https://' + normalized;
+  }
+  
+  // Remove trailing slashes
+  normalized = normalized.replace(/\/+$/, '');
+  
+  // If it doesn't end with /v1 (common for OpenAI-compatible APIs), add it if it looks like a base domain
+  // But only if the path is empty or just a slash
+  const hasPath = normalized.split('://')[1]?.includes('/');
+  if (!hasPath && !normalized.includes('/v1')) {
+    normalized = normalized + '/v1';
+  }
+  
+  terminal.log(`[Base URL] Normalized: "${url}" -> "${normalized}"`);
+  return normalized;
+};
+
 export const useWorkflowEngine = (options: {
   activeNovel: Novel | undefined;
   globalConfig: any;
@@ -1094,7 +1117,7 @@ export const useWorkflowEngine = (options: {
           const volNodeApiConfig = (volPreset as any)?.apiConfig || {};
           const volOpenai = new OpenAI({
             apiKey: node.data.apiKey ? node.data.apiKey : volNodeApiConfig.apiKey || globalConfigRef.current.apiKey,
-            baseURL: node.data.baseUrl ? node.data.baseUrl : volNodeApiConfig.baseUrl || globalConfigRef.current.baseUrl,
+            baseURL: normalizeBaseUrl(node.data.baseUrl ? node.data.baseUrl : volNodeApiConfig.baseUrl || globalConfigRef.current.baseUrl),
             dangerouslyAllowBrowser: true,
           });
 
@@ -2269,7 +2292,7 @@ export const useWorkflowEngine = (options: {
 
             // 获取AI配置
             const aiApiKey = node.data.overrideAiConfig && node.data.apiKey ? node.data.apiKey : globalConfigRef.current.apiKey;
-            const aiBaseUrl = node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : globalConfigRef.current.baseUrl;
+            const aiBaseUrl = normalizeBaseUrl(node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : globalConfigRef.current.baseUrl);
             const aiModel = node.data.overrideAiConfig && node.data.model ? node.data.model : globalConfigRef.current.model;
             const aiTemp = node.data.overrideAiConfig && node.data.temperature !== undefined ? node.data.temperature : 0.7;
 
@@ -4400,9 +4423,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             apiKey: node.data.overrideAiConfig && node.data.apiKey 
               ? node.data.apiKey 
               : (apiPreset && apiPreset.apiKey) || (usePresetApiConfig && nApi.apiKey) || globalConfigRef.current.apiKey,
-            baseURL: node.data.overrideAiConfig && node.data.baseUrl 
-              ? node.data.baseUrl 
-              : (apiPreset && apiPreset.baseUrl) || (usePresetApiConfig && nApi.baseUrl) || globalConfigRef.current.baseUrl,
+            baseURL: normalizeBaseUrl(
+              node.data.overrideAiConfig && node.data.baseUrl 
+                ? node.data.baseUrl 
+                : (apiPreset && apiPreset.baseUrl) || (usePresetApiConfig && nApi.baseUrl) || globalConfigRef.current.baseUrl
+            ),
             model: selectedModel,
             temperature:
               node.data.overrideAiConfig && node.data.temperature !== undefined
@@ -5252,10 +5277,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           node.data.overrideAiConfig && node.data.apiKey 
             ? node.data.apiKey 
             : (apiPreset && apiPreset.apiKey) || (usePresetApiConfig && nApi.apiKey) || globalConfig.apiKey;
-        const finalBaseUrl =
+        const finalBaseUrl = normalizeBaseUrl(
           node.data.overrideAiConfig && node.data.baseUrl 
             ? node.data.baseUrl 
-            : (apiPreset && apiPreset.baseUrl) || (usePresetApiConfig && nApi.baseUrl) || globalConfig.baseUrl;
+            : (apiPreset && apiPreset.baseUrl) || (usePresetApiConfig && nApi.baseUrl) || globalConfig.baseUrl
+        );
 
         // 核心修复：添加移动端API配置检查
         if (isMobile) {
@@ -5339,6 +5365,27 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 );
                 apiCallSuccess = true;
               } catch (apiError: any) {
+                // 特殊处理连接/网络错误
+                const isNetworkError = 
+                  apiError.name === 'ConnectionError' || 
+                  apiError.name === 'NetworkError' ||
+                  /connection/i.test(apiError.message) || 
+                  /network/i.test(apiError.message) ||
+                  /ECONNREFUSED/i.test(apiError.message) ||
+                  !apiError.status; // No status usually means network error
+
+                if (isNetworkError) {
+                  terminal.error(`[网络错误] Connection error!`);
+                  terminal.error(`请检查以下配置：`);
+                  terminal.error(`  - baseUrl: ${finalBaseUrl}`);
+                  terminal.error(`  - 网络连接是否正常？`);
+                  terminal.error(`  - API服务是否可访问？`);
+                  terminal.error(`  - 手机端请确保使用电脑的IP地址而不是localhost！`);
+                  // Provide a more helpful error message to the user
+                  apiError.message = `连接错误，请检查：\n1. 网络连接\n2. API地址配置 (baseUrl: ${finalBaseUrl})\n3. 手机端请使用电脑IP而非localhost\n4. API服务是否正常运行`;
+                  throw apiError;
+                }
+                
                 if (apiError.status === 400) {
                   const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
                   terminal.warn(`API 400 错误: ${errorBody}`);
