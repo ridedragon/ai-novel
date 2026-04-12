@@ -1,6 +1,7 @@
 import { ChevronDown, Loader2, Monitor, Moon, Plus, RefreshCw, Sun, Trash2, Wand2, X } from 'lucide-react';
 import React from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { ApiPreset } from '../types';
 
 // Helper functions for real-time preview
 const adjustColor = (hex: string, lum: number) => {
@@ -88,6 +89,12 @@ interface GlobalSettingsModalProps {
   setContextChapterCount: (val: number | '') => void;
   stream: boolean;
   setStream: (val: boolean) => void;
+  apiPresets: ApiPreset[];
+  activeApiPresetId: string;
+  handleAddApiPreset: (preset: Omit<ApiPreset, 'id'>) => void;
+  handleUpdateApiPreset: (id: string, updates: Partial<ApiPreset>) => void;
+  handleDeleteApiPreset: (id: string) => void;
+  handleSwitchApiPreset: (id: string) => void;
 }
 
 export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
@@ -145,10 +152,25 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   setContextChapterCount,
   stream,
   setStream,
+  apiPresets,
+  activeApiPresetId,
+  handleAddApiPreset,
+  handleUpdateApiPreset,
+  handleDeleteApiPreset,
+  handleSwitchApiPreset,
 }) => {
   const { theme, setTheme } = useTheme();
   const [localThemeColor, setLocalThemeColor] = React.useState(themeColor);
   const [localWorkflowEdgeColor, setLocalWorkflowEdgeColor] = React.useState(workflowEdgeColor);
+  
+  // API预设表单状态
+  const [newPresetName, setNewPresetName] = React.useState('');
+  const [newPresetApiKey, setNewPresetApiKey] = React.useState('');
+  const [newPresetBaseUrl, setNewPresetBaseUrl] = React.useState('https://api.openai.com/v1');
+  const [newPresetDefaultModel, setNewPresetDefaultModel] = React.useState('');
+  const [newPresetModelList, setNewPresetModelList] = React.useState<string[]>([]);
+  const [newPresetModelInput, setNewPresetModelInput] = React.useState('');
+  const [editingPresetId, setEditingPresetId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setLocalThemeColor(themeColor);
@@ -157,6 +179,73 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   React.useEffect(() => {
     setLocalWorkflowEdgeColor(workflowEdgeColor);
   }, [workflowEdgeColor]);
+
+  // 处理添加新模型到预设
+  const handleAddModelToPreset = () => {
+    if (newPresetModelInput.trim() && !newPresetModelList.includes(newPresetModelInput.trim())) {
+      setNewPresetModelList([...newPresetModelList, newPresetModelInput.trim()]);
+      setNewPresetModelInput('');
+    }
+  };
+
+  // 处理从预设中删除模型
+  const handleDeleteModelFromPreset = (modelToDelete: string) => {
+    setNewPresetModelList(newPresetModelList.filter(m => m !== modelToDelete));
+    if (newPresetDefaultModel === modelToDelete) {
+      setNewPresetDefaultModel('');
+    }
+  };
+
+  // 处理保存新预设或更新现有预设
+  const handleSavePreset = () => {
+    if (!newPresetName.trim() || !newPresetApiKey.trim() || !newPresetBaseUrl.trim()) {
+      return;
+    }
+
+    const presetData = {
+      name: newPresetName.trim(),
+      apiKey: newPresetApiKey,
+      baseUrl: newPresetBaseUrl,
+      modelList: newPresetModelList,
+      defaultModel: newPresetDefaultModel
+    };
+
+    if (editingPresetId) {
+      handleUpdateApiPreset(editingPresetId, presetData);
+      setEditingPresetId(null);
+    } else {
+      handleAddApiPreset(presetData);
+    }
+
+    // 重置表单
+    setNewPresetName('');
+    setNewPresetApiKey('');
+    setNewPresetBaseUrl('https://api.openai.com/v1');
+    setNewPresetDefaultModel('');
+    setNewPresetModelList([]);
+    setNewPresetModelInput('');
+  };
+
+  // 处理编辑预设
+  const handleEditPreset = (preset: ApiPreset) => {
+    setEditingPresetId(preset.id);
+    setNewPresetName(preset.name);
+    setNewPresetApiKey(preset.apiKey);
+    setNewPresetBaseUrl(preset.baseUrl);
+    setNewPresetModelList([...preset.modelList]);
+    setNewPresetDefaultModel(preset.defaultModel);
+  };
+
+  // 取消编辑
+  const handleCancelEdit = () => {
+    setEditingPresetId(null);
+    setNewPresetName('');
+    setNewPresetApiKey('');
+    setNewPresetBaseUrl('https://api.openai.com/v1');
+    setNewPresetDefaultModel('');
+    setNewPresetModelList([]);
+    setNewPresetModelInput('');
+  };
 
   // Direct DOM manipulation for instant preview without React re-renders
   const updateThemePreview = (color: string) => {
@@ -303,6 +392,170 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
               className="bg-gray-900 border border-gray-700 rounded p-2.5 text-sm focus:border-[var(--theme-color)] outline-none"
             />
           </div>
+
+          {/* API预设设置 */}
+          <div className="space-y-4 border-t border-gray-700 pt-4">
+            <div className="flex justify-between items-center">
+              <label className="text-sm font-medium text-gray-300">API预设管理</label>
+            </div>
+
+            {/* 预设选择 */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium text-gray-400">当前预设</label>
+              <div className="relative">
+                <select
+                  value={activeApiPresetId}
+                  onChange={e => handleSwitchApiPreset(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded p-2.5 text-sm focus:border-[var(--theme-color)] outline-none appearance-none"
+                >
+                  <option value="">无（使用当前设置）</option>
+                  {apiPresets.map(preset => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 预设列表 */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-gray-400">现有预设</label>
+              <div className="space-y-2">
+                {apiPresets.map(preset => (
+                  <div key={preset.id} className="flex items-center justify-between bg-gray-900 p-2.5 rounded border border-gray-700">
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">{preset.name}</div>
+                      <div className="text-xs text-gray-500">{preset.baseUrl}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEditPreset(preset)}
+                        className="p-1.5 text-gray-400 hover:text-white transition-colors"
+                        title="编辑预设"
+                      >
+                        <Wand2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteApiPreset(preset.id)}
+                        className="p-1.5 text-red-400 hover:text-red-300 transition-colors"
+                        title="删除预设"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 新增/编辑预设表单 */}
+            <div className="bg-gray-900 p-4 rounded border border-gray-700">
+              <h4 className="text-sm font-medium mb-3">{editingPresetId ? '编辑预设' : '添加新预设'}</h4>
+              <div className="space-y-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-gray-400">预设名称</label>
+                  <input
+                    type="text"
+                    value={newPresetName}
+                    onChange={e => setNewPresetName(e.target.value)}
+                    placeholder="输入预设名称"
+                    className="bg-gray-800 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-gray-400">API Key</label>
+                  <input
+                    type="password"
+                    value={newPresetApiKey}
+                    onChange={e => setNewPresetApiKey(e.target.value)}
+                    placeholder="输入API Key"
+                    className="bg-gray-800 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-gray-400">Base URL</label>
+                  <input
+                    type="text"
+                    value={newPresetBaseUrl}
+                    onChange={e => setNewPresetBaseUrl(e.target.value)}
+                    placeholder="输入API基础URL"
+                    className="bg-gray-800 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-gray-400">默认模型</label>
+                  <div className="relative">
+                    <select
+                      value={newPresetDefaultModel}
+                      onChange={e => setNewPresetDefaultModel(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none appearance-none"
+                    >
+                      <option value="">选择默认模型</option>
+                      {newPresetModelList.map(m => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-gray-500 pointer-events-none" />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-gray-400">模型列表</label>
+                  <div className="space-y-2">
+                    {newPresetModelList.map((m, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-gray-800 p-2 rounded">
+                        <span className="text-sm">{m}</span>
+                        <button
+                          onClick={() => handleDeleteModelFromPreset(m)}
+                          className="text-red-400 hover:text-red-300 transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="添加模型..."
+                        value={newPresetModelInput}
+                        onChange={e => setNewPresetModelInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleAddModelToPreset()}
+                        className="flex-1 bg-gray-800 border border-gray-700 rounded p-2 text-sm focus:border-[var(--theme-color)] outline-none"
+                      />
+                      <button
+                        onClick={handleAddModelToPreset}
+                        disabled={!newPresetModelInput.trim()}
+                        className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-gray-200 disabled:opacity-50 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  {editingPresetId && (
+                    <button
+                      onClick={handleCancelEdit}
+                      className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-200 transition-colors"
+                    >
+                      取消
+                    </button>
+                  )}
+                  <button
+                    onClick={handleSavePreset}
+                    disabled={!newPresetName.trim() || !newPresetApiKey.trim() || !newPresetBaseUrl.trim()}
+                    className="flex-1 py-2 bg-[var(--theme-color)] hover:bg-[var(--theme-color-hover)] rounded text-sm text-white transition-colors disabled:opacity-50"
+                  >
+                    {editingPresetId ? '更新预设' : '保存预设'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-4 border-t border-gray-700 pt-4">
             {/* Default Model */}
             <div className="flex flex-col gap-2">
