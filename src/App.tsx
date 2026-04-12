@@ -52,7 +52,7 @@ const RegexManagerModal = lazy(() =>
 
 import { useLayout } from './contexts/LayoutContext';
 import { GeneratorPrompt, Novel, PromptItem } from './types';
-import { buildReferenceContext, buildWorldInfoContext } from './utils/aiHelpers';
+import { buildReferenceContext, buildWorldInfoContext, getApiConfig } from './utils/aiHelpers';
 import { ensureChapterVersions } from './utils/chapterUtils';
 import { handleExportNovel, handleExportVolume } from './utils/exportUtils';
 import { keepAliveManager } from './utils/KeepAliveManager';
@@ -428,6 +428,18 @@ function App() {
     terminal.log(`[Summary Debug] handleChapterComplete called: chapterId=${chapterId}, longTextMode=${config.longTextMode}, activeNovelId=${novelData.activeNovelId}, forceFinal=${forceFinal}`);
     if (config.longTextMode && novelData.activeNovelId) {
       terminal.log(`[Summary Debug] Calling checkAndGenerateSummary for chapter ${chapterId}`);
+      
+      const finalApiConfig = getApiConfig(
+        activePreset?.apiConfig,
+        config.outlineModel || config.model,
+        config.apiKey,
+        config.baseUrl,
+        config.model
+      );
+      
+      const finalSmallSummaryModel = activePreset?.apiConfig?.model || config.smallSummaryModel || config.outlineModel || config.model;
+      const finalBigSummaryModel = activePreset?.apiConfig?.model || config.bigSummaryModel || config.outlineModel || config.model;
+      
       const result = await checkAndGenerateSummary(
         chapterId,
         content,
@@ -435,11 +447,11 @@ function App() {
         updatedNovel ? [updatedNovel] : novelData.novelsRef.current,
         novelData.setNovels,
         {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          model: config.outlineModel || config.model,
-          smallSummaryModel: config.smallSummaryModel || config.outlineModel || config.model,
-          bigSummaryModel: config.bigSummaryModel || config.outlineModel || config.model,
+          apiKey: finalApiConfig.apiKey,
+          baseUrl: finalApiConfig.baseUrl,
+          model: finalApiConfig.model,
+          smallSummaryModel: finalSmallSummaryModel,
+          bigSummaryModel: finalBigSummaryModel,
           smallSummaryInterval: Number(config.smallSummaryInterval),
           bigSummaryInterval: Number(config.bigSummaryInterval),
           smallSummaryPrompt: config.smallSummaryPrompt,

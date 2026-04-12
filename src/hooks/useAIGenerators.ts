@@ -6,6 +6,7 @@ import {
   buildReferenceContext,
   buildWorldInfoMessages,
   extractTargetEndChapter,
+  getApiConfig,
   getStoryChapters,
   logAiParams,
   normalizeGeneratorResult,
@@ -29,19 +30,6 @@ export function useAIGenerators() {
   const [isGeneratingPlotOutline, setIsGeneratingPlotOutline] = useState(false);
   const [regeneratingOutlineItemIndices, setRegeneratingOutlineItemIndices] = useState<Set<number>>(new Set());
   const [lastTriggeredSkills, setLastTriggeredSkills] = useState<string[]>([]);
-
-  const getApiConfig = (
-    presetConfig: any,
-    featureModel: string,
-    globalApiKey: string,
-    globalBaseUrl: string,
-    globalModel: string,
-  ) => {
-    const finalApiKey = presetConfig?.apiKey || globalApiKey;
-    const finalBaseUrl = presetConfig?.baseUrl || globalBaseUrl;
-    let finalModel = presetConfig?.model || featureModel || globalModel;
-    return { apiKey: finalApiKey, baseUrl: finalBaseUrl, model: finalModel };
-  };
 
   /**
    * 迁移自 App.tsx: handleGenerateOutline

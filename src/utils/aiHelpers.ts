@@ -2,6 +2,19 @@ import terminal from 'virtual:terminal';
 import { fixedPromptItems } from '../constants/aiPresets';
 import { Chapter, ChatMessage, Novel, PromptItem, RegexScript } from '../types';
 
+export const getApiConfig = (
+  presetConfig: any,
+  featureModel: string,
+  globalApiKey: string,
+  globalBaseUrl: string,
+  globalModel: string,
+) => {
+  const finalApiKey = presetConfig?.apiKey || globalApiKey;
+  const finalBaseUrl = presetConfig?.baseUrl || globalBaseUrl;
+  let finalModel = presetConfig?.model || featureModel || globalModel;
+  return { apiKey: finalApiKey, baseUrl: finalBaseUrl, model: finalModel };
+};
+
 /**
  * 确保提示词列表中包含固定条目（聊天记录、世界观、大纲）
  */
