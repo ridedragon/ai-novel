@@ -3294,8 +3294,8 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 `);
               } catch (err) {
                 terminal.error(`[OutlineAndChapter] 批量大纲生成失败: ${err}`);
-                startChapterIndex += batchSize;
-                continue;
+                await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_outline_gen', title: '大纲生成错误', content: `批量大纲生成失败: ${err}` }] }, i);
+                throw err;
               }
 
               // 使用与大纲节点一致的解析逻辑（含 JSON 修复重试）
@@ -3354,16 +3354,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               // 确保生成的大纲数量不超过批次大小，并且不超过剩余需要生成的章节数
               const actualNeededCount = Math.min(batchSize, chapterCount - startChapterIndex);
               if (outlineEntries.length < actualNeededCount) {
-                terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 少于需要的数量 (${actualNeededCount})，将使用默认标题`);
-                // 补充缺失的大纲，但不超过实际需要的数量
-                for (let i = outlineEntries.length; i < actualNeededCount; i++) {
-                  const chapterIdx = startChapterIndex + i;
-                  if (chapterIdx >= chapterCount) break; // 双重保险，确保不超出总数
-                  outlineEntries.push({ 
-                    title: `第${chapterIdx + 1}章`, 
-                    content: `第${chapterIdx + 1}章的大纲内容` 
-                  });
-                }
+                terminal.error(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 少于需要的数量 (${actualNeededCount})，终止工作`);
+                await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_outline_count', title: '大纲生成错误', content: `生成的大纲数量 ${outlineEntries.length} 少于需要的数量 ${actualNeededCount}` }] }, i);
+                throw new Error(`生成的大纲数量 ${outlineEntries.length} 少于需要的数量 ${actualNeededCount}`);
               } else if (outlineEntries.length > actualNeededCount) {
                 // 如果生成的大纲数量超过需要的数量，截断多余的
                 terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 超过需要的数量 (${actualNeededCount})，将截断多余部分`);
