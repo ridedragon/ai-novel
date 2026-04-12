@@ -223,6 +223,8 @@ export interface SummaryConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
+  smallSummaryModel: string;
+  bigSummaryModel: string;
   smallSummaryInterval: number;
   bigSummaryInterval: number;
   smallSummaryPrompt: string;
@@ -278,6 +280,8 @@ export const checkAndGenerateSummary = async (
     apiKey,
     baseUrl,
     model,
+    smallSummaryModel,
+    bigSummaryModel,
     smallSummaryInterval,
     bigSummaryInterval,
     smallSummaryPrompt,
@@ -408,6 +412,7 @@ export const checkAndGenerateSummary = async (
     try {
       const openai = new OpenAI({ apiKey, baseURL: baseUrl, dangerouslyAllowBrowser: true });
       let prompt = type === 'small' ? smallSummaryPrompt : bigSummaryPrompt;
+      const currentModel = type === 'small' ? smallSummaryModel : bigSummaryModel;
 
       // 在本卷模式下，通过系统指令强力约束 AI 的总结范围
       const isVolMode = contextScope === 'volume' || contextScope === 'currentVolume';
@@ -417,7 +422,7 @@ export const checkAndGenerateSummary = async (
 
       const completion = await openai.chat.completions.create(
         {
-          model: model,
+          model: currentModel,
           messages: [
             { role: 'system', content: 'You are a professional editor helper.' },
             { role: 'user', content: `${sourceText}\n\n${prompt}` },

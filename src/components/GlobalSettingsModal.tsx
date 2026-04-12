@@ -66,6 +66,10 @@ interface GlobalSettingsModalProps {
   setOptimizeModel: (model: string) => void;
   analysisModel: string;
   setAnalysisModel: (model: string) => void;
+  smallSummaryModel: string;
+  setSmallSummaryModel: (model: string) => void;
+  bigSummaryModel: string;
+  setBigSummaryModel: (model: string) => void;
   smallSummaryInterval: number | string;
   setSmallSummaryInterval: (val: number) => void;
   bigSummaryInterval: number | string;
@@ -129,6 +133,10 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   setOptimizeModel,
   analysisModel,
   setAnalysisModel,
+  smallSummaryModel,
+  setSmallSummaryModel,
+  bigSummaryModel,
+  setBigSummaryModel,
   smallSummaryInterval,
   setSmallSummaryInterval,
   bigSummaryInterval,
@@ -574,6 +582,8 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
               { label: '剧情粗纲模型', value: plotOutlineModel, setter: setPlotOutlineModel },
               { label: '正文优化模型', value: optimizeModel, setter: setOptimizeModel },
               { label: '正文分析模型', value: analysisModel, setter: setAnalysisModel },
+              { label: '小总结模型', value: smallSummaryModel, setter: setSmallSummaryModel },
+              { label: '大总结模型', value: bigSummaryModel, setter: setBigSummaryModel },
             ].map((item, idx) => (
               <div key={idx} className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-gray-400">{item.label}</label>

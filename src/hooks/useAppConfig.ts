@@ -76,6 +76,8 @@ export function useAppConfig() {
   const [plotOutlineModel, setPlotOutlineModel] = useState(() => localStorage.getItem('plotOutlineModel') || '');
   const [optimizeModel, setOptimizeModel] = useState(() => localStorage.getItem('optimizeModel') || '');
   const [analysisModel, setAnalysisModel] = useState(() => localStorage.getItem('analysisModel') || '');
+  const [smallSummaryModel, setSmallSummaryModel] = useState(() => localStorage.getItem('smallSummaryModel') || '');
+  const [bigSummaryModel, setBigSummaryModel] = useState(() => localStorage.getItem('bigSummaryModel') || '');
 
   const [modelList, setModelList] = useState<string[]>(() => {
     try {
@@ -167,6 +169,8 @@ export function useAppConfig() {
     localStorage.setItem('plotOutlineModel', plotOutlineModel);
     localStorage.setItem('optimizeModel', optimizeModel);
     localStorage.setItem('analysisModel', analysisModel);
+    localStorage.setItem('smallSummaryModel', smallSummaryModel);
+    localStorage.setItem('bigSummaryModel', bigSummaryModel);
     localStorage.setItem('modelList', JSON.stringify(modelList));
   }, [
     model,
@@ -177,6 +181,8 @@ export function useAppConfig() {
     plotOutlineModel,
     optimizeModel,
     analysisModel,
+    smallSummaryModel,
+    bigSummaryModel,
     modelList,
   ]);
 
@@ -388,6 +394,10 @@ export function useAppConfig() {
     setOptimizeModel,
     analysisModel,
     setAnalysisModel,
+    smallSummaryModel,
+    setSmallSummaryModel,
+    bigSummaryModel,
+    setBigSummaryModel,
     modelList,
     setModelList,
     newModelInput,
