@@ -2918,6 +2918,21 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           const finalOutlinePreset = outlinePreset || outlinePresets[0];
           const finalChapterPreset = chapterPreset || chapterPresets[0];
 
+          // 安全检查：确保预设中的 API 配置不会意外覆盖用户全局设置
+          if (finalOutlinePreset.apiConfig && Object.keys(finalOutlinePreset.apiConfig).length > 0) {
+            terminal.warn(`[API 配置警告] 大纲预设 "${finalOutlinePreset?.name || finalOutlinePreset?.id || 'unknown'}" 包含 API 配置，outlineAndChapter 节点将忽略此配置，使用全局设置`);
+            if (finalOutlinePreset.apiConfig.baseUrl) {
+              terminal.warn(`  - 预设中的 baseUrl: ${finalOutlinePreset.apiConfig.baseUrl}`);
+            }
+          }
+          
+          if (finalChapterPreset.apiConfig && Object.keys(finalChapterPreset.apiConfig).length > 0) {
+            terminal.warn(`[API 配置警告] 正文预设 "${finalChapterPreset?.name || finalChapterPreset?.id || 'unknown'}" 包含 API 配置，outlineAndChapter 节点将忽略此配置，使用全局设置`);
+            if (finalChapterPreset.apiConfig.baseUrl) {
+              terminal.warn(`  - 预设中的 baseUrl: ${finalChapterPreset.apiConfig.baseUrl}`);
+            }
+          }
+
           if (!finalOutlinePreset || !finalChapterPreset) {
             await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_2', title: '错误', content: '缺少大纲或正文预设' }] }, i);
             setEdgeAnimation(node.id, false);
@@ -3179,9 +3194,18 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             
             // 1. 批量生成大纲（仅在需要时生成）
             if (needGenerateOutline) {
+              // 安全：始终使用用户全局配置配置
+              const outlineApiKey = globalConfig.apiKey;
+              const outlineBaseUrl = globalConfig.baseUrl;
+              const outlineModel = globalConfig.outlineModel || globalConfig.model;
+              
+              terminal.log(`[API 配置] 节点类型: outlineAndChapter (大纲), 使用配置:`);
+              terminal.log(`  - baseUrl: ${outlineBaseUrl}`);
+              terminal.log(`  - model: ${outlineModel}`);
+              
               const outlineOpenai = new OpenAI({
-                apiKey: finalOutlinePreset.apiConfig?.apiKey || globalConfig.apiKey,
-                baseURL: finalOutlinePreset.apiConfig?.baseUrl || globalConfig.baseUrl,
+                apiKey: outlineApiKey,
+                baseURL: outlineBaseUrl,
                 dangerouslyAllowBrowser: true,
               });
 
@@ -3232,7 +3256,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               try {
                 // 构建完整的参数对象，以便日志记录
                 const outlineCompletionParams: any = {
-                  model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
+                  model: outlineModel,
                   messages: outlineMessages,
                   temperature: finalOutlinePreset.temperature,
                   top_p: finalOutlinePreset.topP,
@@ -3309,7 +3333,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     ];
 
                     const repairCompletionParams: any = {
-                      model: finalOutlinePreset.apiConfig?.model || globalConfig.outlineModel || globalConfig.model,
+                      model: outlineModel,
                       messages: parseMessages,
                       temperature: finalOutlinePreset.temperature,
                       top_p: finalOutlinePreset.topP,
@@ -3480,9 +3504,18 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             await syncNodeStatus(node.id, { outputEntries, currentChapterIndex }, i);
 
             // 2. 批量生成正文
+            // 安全：始终使用用户全局配置
+            const chapterApiKey = globalConfig.apiKey;
+            const chapterBaseUrl = globalConfig.baseUrl;
+            const chapterModel = globalConfig.model;
+            
+            terminal.log(`[API 配置] 节点类型: outlineAndChapter (正文), 使用配置:`);
+            terminal.log(`  - baseUrl: ${chapterBaseUrl}`);
+            terminal.log(`  - model: ${chapterModel}`);
+            
             const chapterOpenai = new OpenAI({
-              apiKey: finalChapterPreset.apiConfig?.apiKey || globalConfig.apiKey,
-              baseURL: finalChapterPreset.apiConfig?.baseUrl || globalConfig.baseUrl,
+              apiKey: chapterApiKey,
+              baseURL: chapterBaseUrl,
               dangerouslyAllowBrowser: true,
             });
 
@@ -3544,7 +3577,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             try {
               // 构建完整的参数对象，以便日志记录
               const chapterCompletionParams: any = {
-                model: finalChapterPreset.apiConfig?.model || globalConfig.model,
+                model: chapterModel,
                 messages: chapterMessages,
                 temperature: finalChapterPreset.temperature,
                 top_p: finalChapterPreset.topP,
@@ -4310,10 +4343,27 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           }
 
           const nApi = (preset as any)?.apiConfig || {};
+          
+          // 安全检查：确保预设中的 API 配置不会意外覆盖用户全局设置
+          const usePresetApiConfig = node.data.overrideAiConfig && nApi && Object.keys(nApi).length > 0;
+          
+          if (nApi && Object.keys(nApi).length > 0 && !node.data.overrideAiConfig) {
+            terminal.warn(`[API 配置警告] 预设 "${preset?.name || preset?.id || 'unknown'}" 包含 API 配置，但节点未启用覆盖，将使用全局设置`);
+            if (nApi.baseUrl) {
+              terminal.warn(`  - 预设中的 baseUrl: ${nApi.baseUrl}`);
+            }
+          }
+          
           const engCfg = {
-            apiKey: nApi.apiKey || globalConfig.apiKey,
-            baseURL: nApi.baseUrl || globalConfig.baseUrl,
-            model: node.data.overrideAiConfig && node.data.model ? node.data.model : nApi.model || globalConfig.model,
+            apiKey: node.data.overrideAiConfig && node.data.apiKey 
+              ? node.data.apiKey 
+              : (usePresetApiConfig && nApi.apiKey) || globalConfig.apiKey,
+            baseURL: node.data.overrideAiConfig && node.data.baseUrl 
+              ? node.data.baseUrl 
+              : (usePresetApiConfig && nApi.baseUrl) || globalConfig.baseUrl,
+            model: node.data.overrideAiConfig && node.data.model 
+              ? node.data.model 
+              : (usePresetApiConfig && nApi.model) || globalConfig.model,
             temperature:
               node.data.overrideAiConfig && node.data.temperature !== undefined
                 ? node.data.temperature
@@ -4338,6 +4388,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             stream: true, // 明确启用流式输出
             ...globalConfig,
           };
+          
+          terminal.log(`[API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
+          terminal.log(`  - baseUrl: ${engCfg.baseURL}`);
+          terminal.log(`  - model: ${engCfg.model}`);
 
           const engine = new AutoWriteEngine(engCfg, localNovel);
           let wStart = 0;
@@ -5112,6 +5166,18 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           });
 
         const nApi = (preset as any)?.apiConfig || {};
+        
+        // 安全检查：确保预设中的 API 配置不会意外覆盖用户全局设置
+        // 只有在用户明确在节点配置中选择覆盖时，才使用预设中的 API 配置
+        const usePresetApiConfig = node.data.overrideAiConfig && nApi && Object.keys(nApi).length > 0;
+        
+        if (nApi && Object.keys(nApi).length > 0 && !node.data.overrideAiConfig) {
+          terminal.warn(`[API 配置警告] 预设 "${preset?.name || preset?.id || 'unknown'}" 包含 API 配置，但节点未启用覆盖，将使用全局设置`);
+          if (nApi.baseUrl) {
+            terminal.warn(`  - 预设中的 baseUrl: ${nApi.baseUrl}`);
+          }
+        }
+        
         let featModel = globalConfig.model;
         if (node.data.typeKey === 'outline') featModel = globalConfig.outlineModel;
         else if (node.data.typeKey === 'characters') featModel = globalConfig.characterModel;
@@ -5122,7 +5188,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         const fModel =
           node.data.overrideAiConfig && node.data.model
             ? node.data.model
-            : nApi.model || featModel || globalConfig.model;
+            : (usePresetApiConfig && nApi.model) || featModel || globalConfig.model;
         const fTemp =
           node.data.overrideAiConfig && node.data.temperature !== undefined
             ? node.data.temperature
@@ -5140,11 +5206,22 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             ? node.data.maxTokens
             : (preset as any)?.maxReplyLength || (preset as any)?.max_tokens || globalConfig.maxReplyLength;
 
+        const finalApiKey =
+          node.data.overrideAiConfig && node.data.apiKey 
+            ? node.data.apiKey 
+            : (usePresetApiConfig && nApi.apiKey) || globalConfig.apiKey;
+        const finalBaseUrl =
+          node.data.overrideAiConfig && node.data.baseUrl 
+            ? node.data.baseUrl 
+            : (usePresetApiConfig && nApi.baseUrl) || globalConfig.baseUrl;
+
+        terminal.log(`[API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
+        terminal.log(`  - baseUrl: ${finalBaseUrl}`);
+        terminal.log(`  - model: ${fModel}`);
+
         const openai = new OpenAI({
-          apiKey:
-            node.data.overrideAiConfig && node.data.apiKey ? node.data.apiKey : nApi.apiKey || globalConfig.apiKey,
-          baseURL:
-            node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : nApi.baseUrl || globalConfig.baseUrl,
+          apiKey: finalApiKey,
+          baseURL: finalBaseUrl,
           dangerouslyAllowBrowser: true,
         });
 
