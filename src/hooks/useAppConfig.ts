@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { RegexScript } from '../types';
+import { RegexScript, ApiPreset } from '../types';
 import { adjustColor, hexToRgb } from '../utils/uiUtils';
 
 export function useAppConfig() {
@@ -67,12 +67,6 @@ export function useAppConfig() {
     }
   });
 
-  useEffect(() => {
-    localStorage.setItem('apiKey', apiKey);
-    localStorage.setItem('baseUrl', baseUrl);
-    localStorage.setItem('maxRetries', String(maxRetries));
-  }, [apiKey, baseUrl, maxRetries]);
-
   // --- 模型选择系统 ---
   const [model, setModel] = useState(() => localStorage.getItem('model') || '');
   const [outlineModel, setOutlineModel] = useState(() => localStorage.getItem('outlineModel') || '');
@@ -95,6 +89,74 @@ export function useAppConfig() {
       return [];
     }
   });
+
+  // --- API 预设设置 ---
+  const [apiPresets, setApiPresets] = useState<ApiPreset[]>(() => {
+    try {
+      const saved = localStorage.getItem('apiPresets');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : [];
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [activeApiPresetId, setActiveApiPresetId] = useState(() => {
+    try {
+      return localStorage.getItem('activeApiPresetId') || '';
+    } catch (e) {
+      return '';
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('apiKey', apiKey);
+    localStorage.setItem('baseUrl', baseUrl);
+    localStorage.setItem('maxRetries', String(maxRetries));
+  }, [apiKey, baseUrl, maxRetries]);
+
+  useEffect(() => {
+    localStorage.setItem('apiPresets', JSON.stringify(apiPresets));
+  }, [apiPresets]);
+
+  useEffect(() => {
+    localStorage.setItem('activeApiPresetId', activeApiPresetId);
+  }, [activeApiPresetId]);
+
+  const handleAddApiPreset = useCallback((preset: Omit<ApiPreset, 'id'>) => {
+    const newPreset: ApiPreset = {
+      ...preset,
+      id: `preset_${Date.now()}_${Math.floor(Math.random() * 1000)}`
+    };
+    setApiPresets(prev => [...prev, newPreset]);
+    setActiveApiPresetId(newPreset.id);
+  }, []);
+
+  const handleUpdateApiPreset = useCallback((id: string, updates: Partial<ApiPreset>) => {
+    setApiPresets(prev => prev.map(preset => 
+      preset.id === id ? { ...preset, ...updates } : preset
+    ));
+  }, []);
+
+  const handleDeleteApiPreset = useCallback((id: string) => {
+    setApiPresets(prev => prev.filter(preset => preset.id !== id));
+    if (activeApiPresetId === id) {
+      setActiveApiPresetId('');
+    }
+  }, [activeApiPresetId]);
+
+  const handleSwitchApiPreset = useCallback((id: string) => {
+    setActiveApiPresetId(id);
+    const preset = apiPresets.find(p => p.id === id);
+    if (preset) {
+      setApiKey(preset.apiKey);
+      setBaseUrl(preset.baseUrl);
+      setModel(preset.defaultModel);
+      setModelList(preset.modelList);
+    }
+  }, [apiPresets, setModel, setModelList]);
 
   useEffect(() => {
     localStorage.setItem('model', model);
@@ -371,5 +433,13 @@ export function useAppConfig() {
     isMobile,
     globalRegexScripts,
     setGlobalRegexScripts,
+    apiPresets,
+    setApiPresets,
+    activeApiPresetId,
+    setActiveApiPresetId,
+    handleAddApiPreset,
+    handleUpdateApiPreset,
+    handleDeleteApiPreset,
+    handleSwitchApiPreset,
   };
 }

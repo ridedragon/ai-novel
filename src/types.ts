@@ -221,6 +221,15 @@ export interface PresetApiConfig {
   modelList?: string[];
 }
 
+export interface ApiPreset {
+  id: string;
+  name: string;
+  apiKey: string;
+  baseUrl: string;
+  modelList: string[];
+  defaultModel: string;
+}
+
 export interface GeneratorPreset {
   id: string;
   name: string;
