@@ -1677,7 +1677,7 @@ export function useAIGenerators() {
                 console.log('[Stream] 更新UI:', { contentLength: fullRawContent.length, receivedSoFar: content.length, force });
                 terminal.log('[Stream] 更新UI:', { contentLength: fullRawContent.length, receivedSoFar: content.length, force });
                 
-                params.setChapters(prev =>
+                (params.setChapters as any)(prev =>
                   prev.map(c => {
                     if (c.id === activeChapter.id) {
                       let chapterWithHistory = ensureChapterVersions(c);
@@ -1696,6 +1696,7 @@ export function useAIGenerators() {
                     }
                     return c;
                   }),
+                  true // skipNormalization: true for streaming updates
                 );
               };
               
