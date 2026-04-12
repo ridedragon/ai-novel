@@ -5257,9 +5257,17 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             ? node.data.baseUrl 
             : (apiPreset && apiPreset.baseUrl) || (usePresetApiConfig && nApi.baseUrl) || globalConfig.baseUrl;
 
-        terminal.log(`[API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
-        terminal.log(`  - baseUrl: ${finalBaseUrl}`);
-        terminal.log(`  - model: ${fModel}`);
+        // 核心修复：添加移动端API配置检查
+        if (isMobile) {
+          terminal.log(`[Mobile API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
+          terminal.log(`  - baseUrl: ${finalBaseUrl}`);
+          terminal.log(`  - model: ${fModel}`);
+          terminal.log(`  - apiKey: ${finalApiKey ? '已设置' : '未设置'}`);
+        } else {
+          terminal.log(`[API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
+          terminal.log(`  - baseUrl: ${finalBaseUrl}`);
+          terminal.log(`  - model: ${fModel}`);
+        }
 
         const openai = new OpenAI({
           apiKey: finalApiKey,
@@ -5378,6 +5386,33 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                         throw apiError;
                       }
                     }
+                  }
+                } else if (apiError.status === 404) {
+                  // 核心修复：处理 404 错误，特别是移动端可能遇到的API端点不存在问题
+                  const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+                  terminal.warn(`API 404 错误: ${errorBody}`);
+                  terminal.warn('可能是API端点不存在或模型不存在，尝试使用默认模型和基础URL');
+                  
+                  // 尝试使用默认模型和基础URL
+                  requestParams.model = globalConfigRef.current.model;
+                  const openaiWithDefault = new OpenAI({
+                    apiKey: finalApiKey,
+                    baseURL: 'https://api.openai.com/v1',
+                    dangerouslyAllowBrowser: true,
+                  });
+                  
+                  try {
+                    terminal.warn('尝试使用默认OpenAI API端点');
+                    const defaultCompletion = await openaiWithDefault.chat.completions.create(
+                      requestParams,
+                      { signal: abortControllerRef.current?.signal },
+                    );
+                    if (defaultCompletion) {
+                      completion = defaultCompletion;
+                      apiCallSuccess = true;
+                    }
+                  } catch (defaultError) {
+                    throw apiError;
                   }
                 } else {
                   throw apiError;
