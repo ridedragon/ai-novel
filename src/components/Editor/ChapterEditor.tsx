@@ -392,10 +392,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                 {activeChapter.content ? (
                   <div className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
                     {isStreaming ? (
-                      <div className="whitespace-pre-wrap">
-                        {activeChapter.content}
-                        <span className="inline-block w-2 h-5 bg-current animate-pulse ml-1"></span>
-                      </div>
+                      <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap" />
                     ) : (
                       <ReactMarkdown className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
                         {activeChapter.content.replace(/<[^>]+>/g, '')}
