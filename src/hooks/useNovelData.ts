@@ -64,30 +64,11 @@ export function useNovelData() {
         next = next.map((updatedNovel: Novel) => {
           const originalNovel = originalNovelsMap.get(updatedNovel.id);
           
-          // 检查是否是流式更新：只有一个章节被修改，且只修改了内容和版本
-          const isStreamingUpdate = originalNovel && 
-            updatedNovel.chapters && 
-            originalNovel.chapters &&
-            updatedNovel.chapters.length === originalNovel.chapters.length &&
-            updatedNovel.chapters.every((uc, idx) => {
-              const oc = originalNovel!.chapters![idx];
-              return uc.id === oc.id && 
-                     uc.title === oc.title &&
-                     uc.volumeId === oc.volumeId &&
-                     uc.globalIndex === oc.globalIndex &&
-                     uc.volumeIndex === oc.volumeIndex;
-            });
-          
-          // 如果是流式更新，直接返回，不执行合并和其他耗时操作
-          if (isStreamingUpdate) {
-            return updatedNovel;
-          }
-          
-          // 只有当小说存在，且更新的章节数少于原始章节数时才合并
+          // 关键修复：只要原始小说存在并且有章节，就进行合并
+          // AutoWriteEngine 发送的 deltaChapters 只有正在更新的章节，所以数量会少于原始章节数
           if (originalNovel && 
               updatedNovel.chapters && 
-              originalNovel.chapters && 
-              updatedNovel.chapters.length < originalNovel.chapters.length) {
+              originalNovel.chapters) {
             
             // 合并章节：用更新的章节替换原始章节中的对应项
             const mergedChapters = originalNovel.chapters.map((originalChapter: Chapter) => {
