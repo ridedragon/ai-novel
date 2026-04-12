@@ -89,18 +89,50 @@ export const checkNodeHasContent = (
       break;
 
     case 'outlineAndChapter':
-      // 大纲与正文复合节点：检查大纲条目数是否符合预期
+      // 大纲与正文复合节点：需要检查是否所有章节都有内容
+      // 即使有部分内容，只要还有章节没有内容，就不应该跳过
+      if (novel) {
+        // 获取节点关联的卷信息
+        const folderName = node.data.folderName;
+        let targetVolumeId = node.data.targetVolumeId as string;
+        
+        // 如果没有 targetVolumeId，尝试通过 folderName 找到对应的卷
+        if (!targetVolumeId && folderName && novel.volumes) {
+          const matchingVolume = novel.volumes.find(v => v.title === folderName);
+          if (matchingVolume) {
+            targetVolumeId = matchingVolume.id;
+          }
+        }
+        
+        // 如果找到了卷，检查该卷的所有章节是否都有内容
+        if (targetVolumeId) {
+          const currentVolumeChapters = (novel.chapters || []).filter(
+            (chapter) => chapter.volumeId === targetVolumeId && (!chapter.subtype || chapter.subtype === 'story')
+          );
+          
+          // 检查是否有空章节
+          const hasEmptyChapter = currentVolumeChapters.some((chapter) => {
+            const content = chapter.content || '';
+            return !content.trim();
+          });
+          
+          // 如果有空章节，返回 false，表示不应该跳过
+          if (hasEmptyChapter) {
+            return false;
+          }
+        }
+      }
+      
+      // 原来的逻辑作为备用（如果无法通过卷信息检查）
       if (targetOutlineCount !== undefined) {
         if (outputEntries && outputEntries.length >= targetOutlineCount) {
           const hasValidContent = outputEntries.some(e => e.content && e.content.trim() !== '');
           if (hasValidContent) return true;
         }
       } else {
-        // 如果没有指定目标数量，只要有内容就可以跳过
-        if (outputEntries && outputEntries.length > 0) {
-          const hasValidContent = outputEntries.some(e => e.content && e.content.trim() !== '');
-          if (hasValidContent) return true;
-        }
+        // 即使有内容，也需要进一步检查是否所有章节都完成了
+        // 这里我们保守处理，不轻易跳过，让节点自身去判断哪些章节需要生成
+        return false;
       }
       break;
   }
