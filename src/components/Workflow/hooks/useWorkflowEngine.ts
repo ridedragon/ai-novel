@@ -462,11 +462,11 @@ export const useWorkflowEngine = (options: {
         return { ...n, data: { ...n.data, ...updates } };
       };
 
-      // 修复：只重置未执行的节点，保留已执行节点的状态
+      // 修复：根据keepContent参数决定是否重置节点
       const initialResetNodes = nodesRef.current.map(n => {
         const nodeInSorted = sortedNodes.findIndex(sn => sn.id === n.id);
-        // 只有当节点在startIndex之后且状态为pending时才重置
-        if (nodeInSorted >= startIndex && n.data.status === 'pending') {
+        // 当节点在startIndex之后，并且要么状态为pending，要么keepContent未启用时重置
+        if (nodeInSorted >= startIndex && (n.data.status === 'pending' || !keepContent.enabled)) {
           return resetNodeData(n);
         }
         return n;
@@ -477,11 +477,11 @@ export const useWorkflowEngine = (options: {
       // 初始化时清除所有连线动画
       clearAllEdgeAnimations();
 
-      // 修复：只重置未执行的节点，保留已执行节点的状态
+      // 修复：根据keepContent参数决定是否重置节点
       sortedNodes = sortedNodes.map((sn, idx) => {
         if (idx >= startIndex) {
           const node = nodesRef.current.find(n => n.id === sn.id);
-          if (node && node.data.status === 'pending') {
+          if (node && (node.data.status === 'pending' || !keepContent.enabled)) {
             return resetNodeData(sn);
           }
         }
@@ -1636,8 +1636,8 @@ export const useWorkflowEngine = (options: {
                     };
 
                     // 清除创作类节点的输出，以便重新生成
-                    // 修复：扩大清空范围，包含世界观、角色、粗纲、大纲、灵感和大纲与正文节点
-                    if (['worldview', 'characters', 'plotOutline', 'outline', 'inspiration', 'outlineAndChapter'].includes(typeKey)) {
+                    // 修复：扩大清空范围，包含世界观、角色、粗纲、大纲、灵感、大纲与正文节点和创作信息节点
+                    if (['worldview', 'characters', 'plotOutline', 'outline', 'inspiration', 'outlineAndChapter', 'creationInfo'].includes(typeKey)) {
                       updates.outputEntries = [];
                     }
 
