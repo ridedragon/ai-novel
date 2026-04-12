@@ -273,9 +273,9 @@ export const useWorkflowEngine = (options: {
       });
     };
 
-    return {
-      ...novel,
-      chapters: (novel.chapters || []).filter(chapter => {
+  return {
+    ...novel,
+    chapters: (novel.chapters || []).filter(chapter => {
         if (!chapter.volumeId || !affectedVolumeIds.has(chapter.volumeId)) {
           return true;
         }
@@ -298,7 +298,7 @@ export const useWorkflowEngine = (options: {
   };
 
   // 执行引擎核心逻辑
-  const runWorkflow = async (opts?: number | WorkflowStartOptions) => {
+  const runWorkflow = useCallback(async (opts?: number | WorkflowStartOptions) => {
     const normalizedOpts = normalizeStartOptions(opts);
     const startIndex = normalizedOpts.startIndex ?? workflowManager.getState().currentNodeIndex ?? 0;
     const mode = normalizedOpts.mode;
@@ -5596,7 +5596,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
       }
       clearAllEdgeAnimations();
     }
-  };
+  }, [activeNovel, globalConfig, allPresets, activeWorkflowId, nodesRef, workflowsRef, setNodes, setEdges, onUpdateNovel, onStreamingStatusChange, getOrderedNodes, isMobile, clearAutoSaveTimeout, setWorkflows]);
 
   const stopWorkflow = () => {
     const realIdx = workflowManager.getState().currentNodeIndex;
