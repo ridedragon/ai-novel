@@ -67,25 +67,30 @@ export function useNovelData() {
           // 关键修复：只要原始小说存在并且有章节，就进行合并
           // AutoWriteEngine 发送的 deltaChapters 只有正在更新的章节，所以数量会少于原始章节数
           if (originalNovel && 
-              updatedNovel.chapters && 
-              originalNovel.chapters) {
-            
-            // 合并章节：用更新的章节替换原始章节中的对应项
-            const mergedChapters = originalNovel.chapters.map((originalChapter: Chapter) => {
-              const updatedChapter = updatedNovel.chapters?.find(
-                (uc: Chapter) => uc.id === originalChapter.id
-              );
-              return updatedChapter || originalChapter;
-            });
-            
-            // 添加可能新增的章节
-            updatedNovel.chapters?.forEach((updatedChapter: Chapter) => {
-              if (!mergedChapters.find((mc: Chapter) => mc.id === updatedChapter.id)) {
-                mergedChapters.push(updatedChapter);
-              }
-            });
-            
-            return { ...updatedNovel, chapters: mergedChapters };
+          updatedNovel.chapters && 
+          originalNovel.chapters) {
+            // If updatedNovel.chapters is a full list (length >= original), use it directly (no merge)
+            // If it's shorter (delta), merge it with original
+            if (updatedNovel.chapters.length >= originalNovel.chapters.length) {
+              return updatedNovel;
+            } else {
+              // 合并章节：用更新的章节替换原始章节中的对应项
+              const mergedChapters = originalNovel.chapters.map((originalChapter: Chapter) => {
+                const updatedChapter = updatedNovel.chapters?.find(
+                  (uc: Chapter) => uc.id === originalChapter.id
+                );
+                return updatedChapter || originalChapter;
+              });
+              
+              // 添加可能新增的章节
+              updatedNovel.chapters?.forEach((updatedChapter: Chapter) => {
+                if (!mergedChapters.find((mc: Chapter) => mc.id === updatedChapter.id)) {
+                  mergedChapters.push(updatedChapter);
+                }
+              });
+              
+              return { ...updatedNovel, chapters: mergedChapters };
+            }
           }
           return updatedNovel;
         });

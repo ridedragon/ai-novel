@@ -624,35 +624,33 @@ export const checkAndGenerateSummary = async (
   }
 
   if (pendingSummaries.length > 0 && checkActive()) {
-    // 核心修复 (Bug: 总结出现又消失):
-    // 使用 getSnapshotStoryChapters() 获取最新章节列表，而不是闭包中的 currentNovel
-    // 原来的问题：currentNovel.chapters 可能是过时的快照，导致返回的 lastUpdatedNovel
-    // 缺少在总结生成期间新增的章节，造成总结"消失"的视觉效果
-    const freshStoryChapters = getSnapshotStoryChapters();
-    const allExistingChapters = currentChaptersSnapshot;
-    const existingSummaryIds = allExistingChapters.filter(c => isSummaryChapter(c)).map(c => c.id);
-
     setNovels(prev =>
       prev.map(n => {
         if (n.id !== targetNovelId) return n;
-        const newSummaries = pendingSummaries.filter(c => !allExistingChapters.some(nc => nc.id === c.id));
-        const newChapterIds = new Set(newSummaries.map(c => c.id));
-        const updatedChapters = allExistingChapters.map(nc => {
+        
+        // Use the PREV novel's chapters (the latest state) instead of outdated snapshot
+        const latestChapters = n.chapters || [];
+        
+        const newSummaries = pendingSummaries.filter(c => !latestChapters.some(nc => nc.id === c.id));
+        
+        const updatedChapters = latestChapters.map(nc => {
           const match = pendingSummaries?.find(
             ps => ps.id === nc.id || (ps.subtype === nc.subtype && ps.summaryRange === nc.summaryRange),
           );
           return match ? { ...nc, content: match.content } : nc;
         });
+        
         return { ...n, chapters: sortChapters([...updatedChapters, ...newSummaries]) };
       }),
     );
 
-    // 核心修复：使用最新的章节列表构建 lastUpdatedNovel
-    // 确保不包含重复的总结（如果已在快照中存在）
+    // For returning lastUpdatedNovel, also use the latest chapters if possible
+    // But since we don't have access to latest state here, we'll use currentChaptersSnapshot as fallback
+    const existingSummaryIds = currentChaptersSnapshot.filter(c => isSummaryChapter(c)).map(c => c.id);
     const newSummariesForReturn = pendingSummaries.filter(c => !existingSummaryIds.includes(c.id));
     lastUpdatedNovel = {
       ...currentNovel,
-      chapters: sortChapters([...allExistingChapters, ...newSummariesForReturn]),
+      chapters: sortChapters([...currentChaptersSnapshot, ...newSummariesForReturn]),
     };
   }
 
