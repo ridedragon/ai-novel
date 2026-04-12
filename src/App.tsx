@@ -438,6 +438,8 @@ function App() {
           apiKey: config.apiKey,
           baseUrl: config.baseUrl,
           model: config.outlineModel || config.model,
+          smallSummaryModel: config.smallSummaryModel || config.outlineModel || config.model,
+          bigSummaryModel: config.bigSummaryModel || config.outlineModel || config.model,
           smallSummaryInterval: Number(config.smallSummaryInterval),
           bigSummaryInterval: Number(config.bigSummaryInterval),
           smallSummaryPrompt: config.smallSummaryPrompt,
