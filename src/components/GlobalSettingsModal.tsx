@@ -374,25 +374,6 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
             </div>
             <p className="text-[10px] text-gray-500">不设置则默认跟随系统主题色。</p>
           </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-gray-300">API Key</label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={e => setApiKey(e.target.value)}
-              className="bg-gray-900 border border-gray-700 rounded p-2.5 text-sm focus:border-[var(--theme-color)] outline-none"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-gray-300">Base URL</label>
-            <input
-              type="text"
-              value={baseUrl}
-              onChange={e => setBaseUrl(e.target.value)}
-              className="bg-gray-900 border border-gray-700 rounded p-2.5 text-sm focus:border-[var(--theme-color)] outline-none"
-            />
-          </div>
-
           {/* API预设设置 */}
           <div className="space-y-4 border-t border-gray-700 pt-4">
             <div className="flex justify-between items-center">
@@ -561,14 +542,6 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
             <div className="flex flex-col gap-2">
               <div className="flex justify-between items-center">
                 <label className="text-sm font-medium text-gray-300">默认模型 (正文/通用)</label>
-                {modelList.includes(model) && (
-                  <button
-                    onClick={e => handleDeleteModel(e, model)}
-                    className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3 h-3" /> 删除
-                  </button>
-                )}
               </div>
               <div className="relative">
                 <select
@@ -576,26 +549,17 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                   onChange={e => setModel(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded p-2.5 text-sm focus:border-[var(--theme-color)] outline-none appearance-none"
                 >
-                  {/* 显示当前激活预设的模型列表 */}
-                  {activeApiPresetId && (
-                    <optgroup label="预设模型">
-                      {apiPresets.find(p => p.id === activeApiPresetId)?.modelList.map(m => (
-                        <option key={m} value={m}>
+                  <option value="">请选择模型</option>
+                  {/* 显示所有预设的模型 */}
+                  {apiPresets.map(preset => (
+                    <optgroup key={preset.id} label={`${preset.name} 模型`}>
+                      {preset.modelList.map(m => (
+                        <option key={`${preset.id}-${m}`} value={m}>
                           {m}
                         </option>
                       ))}
                     </optgroup>
-                  )}
-                  {/* 显示全局模型列表 */}
-                  {modelList.length > 0 && (
-                    <optgroup label="全局模型">
-                      {modelList.map(m => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
+                  ))}
                 </select>
                 <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" />
               </div>
@@ -620,51 +584,23 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                     className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-xs focus:border-[var(--theme-color)] outline-none appearance-none text-gray-300"
                   >
                     <option value="">跟随默认模型</option>
-                    {/* 显示当前激活预设的模型列表 */}
-                    {activeApiPresetId && (
-                      <optgroup label="预设模型">
-                        {apiPresets.find(p => p.id === activeApiPresetId)?.modelList.map(m => (
-                          <option key={m} value={m}>
+                    {/* 显示所有预设的模型 */}
+                    {apiPresets.map(preset => (
+                      <optgroup key={preset.id} label={`${preset.name} 模型`}>
+                        {preset.modelList.map(m => (
+                          <option key={`${preset.id}-${m}`} value={m}>
                             {m}
                           </option>
                         ))}
                       </optgroup>
-                    )}
-                    {/* 显示全局模型列表 */}
-                    {modelList.length > 0 && (
-                      <optgroup label="全局模型">
-                        {modelList.map(m => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
+                    ))}
                   </select>
                   <ChevronDown className="absolute right-3 top-2.5 w-3 h-3 text-gray-500 pointer-events-none" />
                 </div>
               </div>
             ))}
 
-            {/* Add New Model */}
-            <div className="flex gap-2 pt-2">
-              <input
-                type="text"
-                placeholder="添加新模型到列表..."
-                value={newModelInput}
-                onChange={e => setNewModelInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddModel()}
-                className="flex-1 bg-gray-900 border border-gray-700 rounded p-2.5 text-sm focus:border-[var(--theme-color)] outline-none"
-              />
-              <button
-                onClick={handleAddModel}
-                disabled={!newModelInput.trim()}
-                className="p-2.5 bg-gray-700 hover:bg-gray-600 rounded text-gray-200 disabled:opacity-50 transition-colors"
-                title="添加模型"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
+
 
             {/* Long Text Mode Settings */}
             <div className="flex flex-col gap-2 pt-4 border-t border-gray-700">
