@@ -284,38 +284,34 @@ export function useAutoWriteManager() {
           }
           
           let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: abortController.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: abortController.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: abortController.signal },
-                );
+          let apiCallSuccess = false;
+          while (!apiCallSuccess && fallbackMode <= 2) {
+            try {
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: abortController.signal },
+              );
+              apiCallSuccess = true;
+            } catch (apiError: any) {
+              if (apiError.status === 400) {
+                const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+                terminal.warn(`API 400 错误: ${errorBody}`);
+                
+                if (requestParams.top_k && fallbackMode < 1) {
+                  terminal.warn('尝试移除 top_k 参数重试');
+                  delete requestParams.top_k;
+                  fallbackMode = 1;
+                } else if (fallbackMode < 2) {
+                  terminal.warn('尝试简化参数重试 (移除 top_p)');
+                  delete requestParams.top_p;
+                  requestParams.temperature = 1.0;
+                  fallbackMode = 2;
+                } else {
+                  throw apiError;
+                }
               } else {
                 throw apiError;
               }
-            } else {
-              throw apiError;
             }
           }
           currentAnalysisResult = completion.choices[0]?.message?.content || '';
@@ -389,11 +385,14 @@ export function useAutoWriteManager() {
           // 开始流式输出
         params.onStreamingStatusChange?.(true);
         let stream;
+        let apiCallSuccess = false;
+        while (!apiCallSuccess && fallbackMode <= 2) {
           try {
             stream = await openai.chat.completions.create(
               requestParams,
               { signal: abortController.signal },
             );
+            apiCallSuccess = true;
           } catch (apiError: any) {
             // 出错时关闭流式状态
             params.onStreamingStatusChange?.(false);
@@ -405,19 +404,11 @@ export function useAutoWriteManager() {
                 terminal.warn('尝试移除 top_k 参数重试');
                 delete requestParams.top_k;
                 fallbackMode = 1;
-                stream = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: abortController.signal },
-                );
               } else if (fallbackMode < 2) {
                 terminal.warn('尝试简化参数重试 (移除 top_p)');
                 delete requestParams.top_p;
                 requestParams.temperature = 1.0;
                 fallbackMode = 2;
-                stream = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: abortController.signal },
-                );
               } else {
                 throw apiError;
               }
@@ -425,6 +416,7 @@ export function useAutoWriteManager() {
               throw apiError;
             }
           }
+        }
 
         let newContent = '';
         let lastUpdateTime = 0;

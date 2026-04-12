@@ -204,38 +204,34 @@ export function useAIGenerators() {
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
           let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: outlineAbortControllerRef.current.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: outlineAbortControllerRef.current.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: outlineAbortControllerRef.current.signal },
-                );
+          let apiCallSuccess = false;
+          while (!apiCallSuccess && fallbackMode <= 2) {
+            try {
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: outlineAbortControllerRef.current.signal },
+              );
+              apiCallSuccess = true;
+            } catch (apiError: any) {
+              if (apiError.status === 400) {
+                const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+                terminal.warn(`API 400 错误: ${errorBody}`);
+                
+                if (requestParams.top_k && fallbackMode < 1) {
+                  terminal.warn('尝试移除 top_k 参数重试');
+                  delete requestParams.top_k;
+                  fallbackMode = 1;
+                } else if (fallbackMode < 2) {
+                  terminal.warn('尝试简化参数重试 (移除 top_p)');
+                  delete requestParams.top_p;
+                  requestParams.temperature = 1.0;
+                  fallbackMode = 2;
+                } else {
+                  throw apiError;
+                }
               } else {
                 throw apiError;
               }
-            } else {
-              throw apiError;
             }
           }
 
@@ -429,29 +425,31 @@ export function useAIGenerators() {
         if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
         
         let completion;
-        try {
-          completion = await openai.chat.completions.create(requestParams);
-        } catch (apiError: any) {
-          if (apiError.status === 400) {
-            const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-            terminal.warn(`API 400 错误: ${errorBody}`);
-            
-            if (requestParams.top_k && fallbackMode < 1) {
-              terminal.warn('尝试移除 top_k 参数重试');
-              delete requestParams.top_k;
-              fallbackMode = 1;
-              completion = await openai.chat.completions.create(requestParams);
-            } else if (fallbackMode < 2) {
-              terminal.warn('尝试简化参数重试 (移除 top_p)');
-              delete requestParams.top_p;
-              requestParams.temperature = 1.0;
-              fallbackMode = 2;
-              completion = await openai.chat.completions.create(requestParams);
+        let apiCallSuccess = false;
+        while (!apiCallSuccess && fallbackMode <= 2) {
+          try {
+            completion = await openai.chat.completions.create(requestParams);
+            apiCallSuccess = true;
+          } catch (apiError: any) {
+            if (apiError.status === 400) {
+              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+              terminal.warn(`API 400 错误: ${errorBody}`);
+              
+              if (requestParams.top_k && fallbackMode < 1) {
+                terminal.warn('尝试移除 top_k 参数重试');
+                delete requestParams.top_k;
+                fallbackMode = 1;
+              } else if (fallbackMode < 2) {
+                terminal.warn('尝试简化参数重试 (移除 top_p)');
+                delete requestParams.top_p;
+                requestParams.temperature = 1.0;
+                fallbackMode = 2;
+              } else {
+                throw apiError;
+              }
             } else {
               throw apiError;
             }
-          } else {
-            throw apiError;
           }
         }
 
@@ -627,38 +625,34 @@ export function useAIGenerators() {
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
           let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: characterAbortControllerRef.current.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: characterAbortControllerRef.current.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: characterAbortControllerRef.current.signal },
-                );
+          let apiCallSuccess = false;
+          while (!apiCallSuccess && fallbackMode <= 2) {
+            try {
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: characterAbortControllerRef.current.signal },
+              );
+              apiCallSuccess = true;
+            } catch (apiError: any) {
+              if (apiError.status === 400) {
+                const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+                terminal.warn(`API 400 错误: ${errorBody}`);
+                
+                if (requestParams.top_k && fallbackMode < 1) {
+                  terminal.warn('尝试移除 top_k 参数重试');
+                  delete requestParams.top_k;
+                  fallbackMode = 1;
+                } else if (fallbackMode < 2) {
+                  terminal.warn('尝试简化参数重试 (移除 top_p)');
+                  delete requestParams.top_p;
+                  requestParams.temperature = 1.0;
+                  fallbackMode = 2;
+                } else {
+                  throw apiError;
+                }
               } else {
                 throw apiError;
               }
-            } else {
-              throw apiError;
             }
           }
 
@@ -869,38 +863,34 @@ export function useAIGenerators() {
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
           let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: worldviewAbortControllerRef.current.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: worldviewAbortControllerRef.current.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: worldviewAbortControllerRef.current.signal },
-                );
+          let apiCallSuccess = false;
+          while (!apiCallSuccess && fallbackMode <= 2) {
+            try {
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: worldviewAbortControllerRef.current.signal },
+              );
+              apiCallSuccess = true;
+            } catch (apiError: any) {
+              if (apiError.status === 400) {
+                const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+                terminal.warn(`API 400 错误: ${errorBody}`);
+                
+                if (requestParams.top_k && fallbackMode < 1) {
+                  terminal.warn('尝试移除 top_k 参数重试');
+                  delete requestParams.top_k;
+                  fallbackMode = 1;
+                } else if (fallbackMode < 2) {
+                  terminal.warn('尝试简化参数重试 (移除 top_p)');
+                  delete requestParams.top_p;
+                  requestParams.temperature = 1.0;
+                  fallbackMode = 2;
+                } else {
+                  throw apiError;
+                }
               } else {
                 throw apiError;
               }
-            } else {
-              throw apiError;
             }
           }
 
@@ -1112,38 +1102,34 @@ export function useAIGenerators() {
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
           let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: inspirationAbortControllerRef.current.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: inspirationAbortControllerRef.current.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: inspirationAbortControllerRef.current.signal },
-                );
+          let apiCallSuccess = false;
+          while (!apiCallSuccess && fallbackMode <= 2) {
+            try {
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: inspirationAbortControllerRef.current.signal },
+              );
+              apiCallSuccess = true;
+            } catch (apiError: any) {
+              if (apiError.status === 400) {
+                const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+                terminal.warn(`API 400 错误: ${errorBody}`);
+                
+                if (requestParams.top_k && fallbackMode < 1) {
+                  terminal.warn('尝试移除 top_k 参数重试');
+                  delete requestParams.top_k;
+                  fallbackMode = 1;
+                } else if (fallbackMode < 2) {
+                  terminal.warn('尝试简化参数重试 (移除 top_p)');
+                  delete requestParams.top_p;
+                  requestParams.temperature = 1.0;
+                  fallbackMode = 2;
+                } else {
+                  throw apiError;
+                }
               } else {
                 throw apiError;
               }
-            } else {
-              throw apiError;
             }
           }
 
@@ -1339,38 +1325,34 @@ export function useAIGenerators() {
           if ((activePreset as any).presencePenalty) requestParams.presence_penalty = (activePreset as any).presencePenalty;
           
           let completion;
-          try {
-            completion = await openai.chat.completions.create(
-              requestParams,
-              { signal: generateAbortControllerRef.current.signal },
-            );
-          } catch (apiError: any) {
-            if (apiError.status === 400) {
-              const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-              terminal.warn(`API 400 错误: ${errorBody}`);
-              
-              if (requestParams.top_k && fallbackMode < 1) {
-                terminal.warn('尝试移除 top_k 参数重试');
-                delete requestParams.top_k;
-                fallbackMode = 1;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: generateAbortControllerRef.current.signal },
-                );
-              } else if (fallbackMode < 2) {
-                terminal.warn('尝试简化参数重试 (移除 top_p)');
-                delete requestParams.top_p;
-                requestParams.temperature = 1.0;
-                fallbackMode = 2;
-                completion = await openai.chat.completions.create(
-                  requestParams,
-                  { signal: generateAbortControllerRef.current.signal },
-                );
+          let apiCallSuccess = false;
+          while (!apiCallSuccess && fallbackMode <= 2) {
+            try {
+              completion = await openai.chat.completions.create(
+                requestParams,
+                { signal: generateAbortControllerRef.current.signal },
+              );
+              apiCallSuccess = true;
+            } catch (apiError: any) {
+              if (apiError.status === 400) {
+                const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+                terminal.warn(`API 400 错误: ${errorBody}`);
+                
+                if (requestParams.top_k && fallbackMode < 1) {
+                  terminal.warn('尝试移除 top_k 参数重试');
+                  delete requestParams.top_k;
+                  fallbackMode = 1;
+                } else if (fallbackMode < 2) {
+                  terminal.warn('尝试简化参数重试 (移除 top_p)');
+                  delete requestParams.top_p;
+                  requestParams.temperature = 1.0;
+                  fallbackMode = 2;
+                } else {
+                  throw apiError;
+                }
               } else {
                 throw apiError;
               }
-            } else {
-              throw apiError;
             }
           }
 

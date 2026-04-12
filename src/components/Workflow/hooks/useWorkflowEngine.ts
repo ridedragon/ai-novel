@@ -5203,42 +5203,44 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             }
             
             let completion;
-            try {
-              completion = await openai.chat.completions.create(
-                requestParams,
-                { signal: abortControllerRef.current?.signal },
-              );
-            } catch (apiError: any) {
-              if (apiError.status === 400) {
-                const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-                terminal.warn(`API 400 错误: ${errorBody}`);
-                
-                if (requestParams.top_k && fallbackMode < 1) {
-                  terminal.warn('尝试移除 top_k 参数重试');
-                  delete requestParams.top_k;
-                  fallbackMode = 1;
-                  completion = await openai.chat.completions.create(
-                    requestParams,
-                    { signal: abortControllerRef.current?.signal },
-                  );
-                } else if (fallbackMode < 2) {
-                  terminal.warn('尝试简化参数重试 (移除 top_p)');
-                  delete requestParams.top_p;
-                  requestParams.temperature = 1.0;
-                  fallbackMode = 2;
-                  completion = await openai.chat.completions.create(
-                    requestParams,
-                    { signal: abortControllerRef.current?.signal },
-                  );
-                } else if (retry < 2) {
-                  retry++;
-                  continue;
+            let apiCallSuccess = false;
+            while (!apiCallSuccess && fallbackMode <= 2) {
+              try {
+                completion = await openai.chat.completions.create(
+                  requestParams,
+                  { signal: abortControllerRef.current?.signal },
+                );
+                apiCallSuccess = true;
+              } catch (apiError: any) {
+                if (apiError.status === 400) {
+                  const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
+                  terminal.warn(`API 400 错误: ${errorBody}`);
+                  
+                  if (requestParams.top_k && fallbackMode < 1) {
+                    terminal.warn('尝试移除 top_k 参数重试');
+                    delete requestParams.top_k;
+                    fallbackMode = 1;
+                  } else if (fallbackMode < 2) {
+                    terminal.warn('尝试简化参数重试 (移除 top_p)');
+                    delete requestParams.top_p;
+                    requestParams.temperature = 1.0;
+                    fallbackMode = 2;
+                  } else {
+                    if (retry < 2) {
+                      retry++;
+                      fallbackMode = 0;
+                      break;
+                    } else {
+                      throw apiError;
+                    }
+                  }
                 } else {
                   throw apiError;
                 }
-              } else {
-                throw apiError;
               }
+            }
+            if (!apiCallSuccess) {
+              continue;
             }
             
             aiRes = completion.choices[0]?.message?.content || '';
