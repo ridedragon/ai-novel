@@ -3774,8 +3774,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 console.log('[Workflow Stream] 最终内容长度:', batchChapterResponse.length);
                 console.log('[Workflow Stream] 内容预览:', batchChapterResponse.substring(0, 100) + (batchChapterResponse.length > 100 ? '...' : ''));
                 terminal.log('[Workflow Stream] 流式传输结束');
+                // 关闭流式状态
+                onStreamingStatusChange?.(false);
               } catch (error) {
                 terminal.error(`[OutlineAndChapter] 正文生成失败: ${error}`);
+                // 发生错误时，关闭流式状态
+                onStreamingStatusChange?.(false);
                 // 发生错误时，使用非流式方式重新请求
                 try {
                   terminal.log('[Workflow Stream] 切换到非流式模式重试');
