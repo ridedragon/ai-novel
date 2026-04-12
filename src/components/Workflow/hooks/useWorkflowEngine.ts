@@ -3052,8 +3052,9 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             (chapter) => chapter.volumeId === finalVolumeId && (!chapter.subtype || chapter.subtype === 'story')
           );
           
-          // 获取当前卷的大纲数量
-          const outlineCount = outlineSet?.items?.length || 0;
+          // 获取当前卷的大纲
+          const outlineItems = outlineSet?.items || [];
+          const outlineCount = outlineItems.length;
           
           // 检查章节内容是否为空
           const checkChapterHasContent = (chapter: Chapter) => {
@@ -3090,14 +3091,34 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               chapterCount = requiredChapterCount;
               terminal.log(`[OutlineAndChapter] 调整 chapterCount 为 ${chapterCount}，以确保能处理第 ${firstEmptyChapterIndex + 1} 章`);
             }
-          } else if (outlineCount > currentVolumeChapters.length) {
-            // 大纲数量多于章节数量，从最后一章的下一章开始
-            calculatedStartChapterIndex = currentVolumeChapters.length;
-            terminal.log(`[OutlineAndChapter] 大纲数量(${outlineCount})多于章节数量(${currentVolumeChapters.length})，从第 ${calculatedStartChapterIndex + 1} 章开始`);
-          } else if (outlineCount === currentVolumeChapters.length && currentVolumeChapters.length > 0) {
-            // 大纲和章节数量相同且都有内容，从下一章开始
-            calculatedStartChapterIndex = currentVolumeChapters.length;
-            terminal.log(`[OutlineAndChapter] 大纲和章节都已完成(${currentVolumeChapters.length}章)，从第 ${calculatedStartChapterIndex + 1} 章开始`);
+          } else if (outlineCount > 0) {
+            // 情况2：有大纲，找到第一个没有对应章节的大纲索引
+            calculatedStartChapterIndex = 0;
+            let foundMissingChapter = false;
+            
+            for (let outlineIdx = 0; outlineIdx < outlineItems.length; outlineIdx++) {
+              const outlineItem = outlineItems[outlineIdx];
+              const outlineChapterNum = parseAnyNumber(outlineItem.title) || (outlineIdx + 1);
+              
+              // 查找是否有对应的章节
+              const hasChapter = currentVolumeChapters.some(chapter => {
+                const chapterNum = parseAnyNumber(chapter.title) || 0;
+                return chapterNum === outlineChapterNum;
+              });
+              
+              if (!hasChapter) {
+                calculatedStartChapterIndex = outlineIdx;
+                foundMissingChapter = true;
+                terminal.log(`[OutlineAndChapter] 发现第 ${outlineChapterNum} 章有大纲但没有章节，从该章开始`);
+                break;
+              }
+            }
+            
+            if (!foundMissingChapter) {
+              // 所有大纲都有对应的章节，从下一章开始
+              calculatedStartChapterIndex = outlineItems.length;
+              terminal.log(`[OutlineAndChapter] 所有大纲都有对应的章节，从第 ${calculatedStartChapterIndex + 1} 章开始`);
+            }
           } else {
             // 其他情况，从第一章开始
             calculatedStartChapterIndex = 0;
