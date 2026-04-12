@@ -71,7 +71,7 @@ export function useAppConfig() {
   const [model, setModel] = useState(() => localStorage.getItem('model') || '');
   const [outlineModel, setOutlineModel] = useState(() => localStorage.getItem('outlineModel') || '');
   const [characterModel, setCharacterModel] = useState(() => localStorage.getItem('characterModel') || '');
-  const [worldviewModel, setWorldviewModel] = useState(() => localStorage.getItem('worldview') || '');
+  const [worldviewModel, setWorldviewModel] = useState(() => localStorage.getItem('worldviewModel') || '');
   const [inspirationModel, setInspirationModel] = useState(() => localStorage.getItem('inspirationModel') || '');
   const [plotOutlineModel, setPlotOutlineModel] = useState(() => localStorage.getItem('plotOutlineModel') || '');
   const [optimizeModel, setOptimizeModel] = useState(() => localStorage.getItem('optimizeModel') || '');
