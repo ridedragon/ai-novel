@@ -576,11 +576,26 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                   onChange={e => setModel(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded p-2.5 text-sm focus:border-[var(--theme-color)] outline-none appearance-none"
                 >
-                  {modelList.map(m => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
+                  {/* 显示当前激活预设的模型列表 */}
+                  {activeApiPresetId && (
+                    <optgroup label="预设模型">
+                      {apiPresets.find(p => p.id === activeApiPresetId)?.modelList.map(m => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {/* 显示全局模型列表 */}
+                  {modelList.length > 0 && (
+                    <optgroup label="全局模型">
+                      {modelList.map(m => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
                 <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" />
               </div>
@@ -605,11 +620,26 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                     className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-xs focus:border-[var(--theme-color)] outline-none appearance-none text-gray-300"
                   >
                     <option value="">跟随默认模型</option>
-                    {modelList.map(m => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
+                    {/* 显示当前激活预设的模型列表 */}
+                    {activeApiPresetId && (
+                      <optgroup label="预设模型">
+                        {apiPresets.find(p => p.id === activeApiPresetId)?.modelList.map(m => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {/* 显示全局模型列表 */}
+                    {modelList.length > 0 && (
+                      <optgroup label="全局模型">
+                        {modelList.map(m => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                   <ChevronDown className="absolute right-3 top-2.5 w-3 h-3 text-gray-500 pointer-events-none" />
                 </div>
