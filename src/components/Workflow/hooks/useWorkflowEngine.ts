@@ -3199,10 +3199,18 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             
             // 1. 批量生成大纲（仅在需要时生成）
             if (needGenerateOutline) {
-              // 安全：始终使用用户全局配置配置
-              const outlineApiKey = globalConfigRef.current.apiKey;
-              const outlineBaseUrl = globalConfigRef.current.baseUrl;
-              const outlineModel = globalConfigRef.current.outlineModel || globalConfigRef.current.model;
+              // 核心修复：根据选择的模型关联到对应的API预设
+              const outlineModel = node.data.overrideAiConfig && node.data.model ? node.data.model : globalConfigRef.current.outlineModel || globalConfigRef.current.model;
+              let outlineApiPreset = null;
+              if (globalConfigRef.current.apiPresets && outlineModel) {
+                outlineApiPreset = globalConfigRef.current.apiPresets.find((p: any) => p.modelList.includes(outlineModel));
+                if (outlineApiPreset) {
+                  terminal.log(`[API 预设] 大纲与正文节点(大纲)使用模型 ${outlineModel} 对应的API预设: ${outlineApiPreset.name}`);
+                }
+              }
+              
+              const outlineApiKey = node.data.overrideAiConfig && node.data.apiKey ? node.data.apiKey : (outlineApiPreset && outlineApiPreset.apiKey) || globalConfigRef.current.apiKey;
+              const outlineBaseUrl = node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : (outlineApiPreset && outlineApiPreset.baseUrl) || globalConfigRef.current.baseUrl;
               
               terminal.log(`[API 配置] 节点类型: outlineAndChapter (大纲), 使用配置:`);
               terminal.log(`  - baseUrl: ${outlineBaseUrl}`);
@@ -3509,10 +3517,18 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             await syncNodeStatus(node.id, { outputEntries, currentChapterIndex }, i);
 
             // 2. 批量生成正文
-            // 安全：始终使用用户全局配置
-            const chapterApiKey = globalConfigRef.current.apiKey;
-            const chapterBaseUrl = globalConfigRef.current.baseUrl;
-            const chapterModel = globalConfigRef.current.model;
+            // 核心修复：根据选择的模型关联到对应的API预设
+            const chapterModel = node.data.overrideAiConfig && node.data.model ? node.data.model : globalConfigRef.current.model;
+            let chapterApiPreset = null;
+            if (globalConfigRef.current.apiPresets && chapterModel) {
+              chapterApiPreset = globalConfigRef.current.apiPresets.find((p: any) => p.modelList.includes(chapterModel));
+              if (chapterApiPreset) {
+                terminal.log(`[API 预设] 大纲与正文节点(正文)使用模型 ${chapterModel} 对应的API预设: ${chapterApiPreset.name}`);
+              }
+            }
+            
+            const chapterApiKey = node.data.overrideAiConfig && node.data.apiKey ? node.data.apiKey : (chapterApiPreset && chapterApiPreset.apiKey) || globalConfigRef.current.apiKey;
+            const chapterBaseUrl = node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : (chapterApiPreset && chapterApiPreset.baseUrl) || globalConfigRef.current.baseUrl;
             
             terminal.log(`[API 配置] 节点类型: outlineAndChapter (正文), 使用配置:`);
             terminal.log(`  - baseUrl: ${chapterBaseUrl}`);
@@ -4128,6 +4144,17 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         let preset =
           typePresets.find(p => p.id === node.data.presetId) || (node.data.presetType ? typePresets[0] : null);
         if (!preset && node.data.presetType && node.data.typeKey !== 'aiChat') continue;
+        
+        // 核心修复：根据选择的模型关联到对应的API预设
+        let apiPreset = null;
+        const selectedModel = node.data.overrideAiConfig && node.data.model ? node.data.model : (preset as any)?.apiConfig?.model || globalConfigRef.current.model;
+        if (globalConfigRef.current.apiPresets && selectedModel) {
+          // 查找包含该模型的API预设
+          apiPreset = globalConfigRef.current.apiPresets.find((p: any) => p.modelList.includes(selectedModel));
+          if (apiPreset) {
+            terminal.log(`[API 预设] 找到模型 ${selectedModel} 对应的API预设: ${apiPreset.name}`);
+          }
+        }
 
         let refContext = '';
         const attachments: any[] = [];
@@ -4359,16 +4386,24 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             }
           }
           
+          // 核心修复：优先使用API预设的配置
+          const selectedModel = node.data.overrideAiConfig && node.data.model ? node.data.model : (usePresetApiConfig && nApi.model) || globalConfigRef.current.model;
+          let apiPreset = null;
+          if (globalConfigRef.current.apiPresets && selectedModel) {
+            apiPreset = globalConfigRef.current.apiPresets.find((p: any) => p.modelList.includes(selectedModel));
+            if (apiPreset) {
+              terminal.log(`[API 预设] 章节节点使用模型 ${selectedModel} 对应的API预设: ${apiPreset.name}`);
+            }
+          }
+          
           const engCfg = {
             apiKey: node.data.overrideAiConfig && node.data.apiKey 
               ? node.data.apiKey 
-              : (usePresetApiConfig && nApi.apiKey) || globalConfigRef.current.apiKey,
+              : (apiPreset && apiPreset.apiKey) || (usePresetApiConfig && nApi.apiKey) || globalConfigRef.current.apiKey,
             baseURL: node.data.overrideAiConfig && node.data.baseUrl 
               ? node.data.baseUrl 
-              : (usePresetApiConfig && nApi.baseUrl) || globalConfigRef.current.baseUrl,
-            model: node.data.overrideAiConfig && node.data.model 
-              ? node.data.model 
-              : (usePresetApiConfig && nApi.model) || globalConfigRef.current.model,
+              : (apiPreset && apiPreset.baseUrl) || (usePresetApiConfig && nApi.baseUrl) || globalConfigRef.current.baseUrl,
+            model: selectedModel,
             temperature:
               node.data.overrideAiConfig && node.data.temperature !== undefined
                 ? node.data.temperature
@@ -5212,14 +5247,15 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             ? node.data.maxTokens
             : (preset as any)?.maxReplyLength || (preset as any)?.max_tokens || globalConfig.maxReplyLength;
 
+        // 核心修复：优先使用API预设的配置
         const finalApiKey =
           node.data.overrideAiConfig && node.data.apiKey 
             ? node.data.apiKey 
-            : (usePresetApiConfig && nApi.apiKey) || globalConfig.apiKey;
+            : (apiPreset && apiPreset.apiKey) || (usePresetApiConfig && nApi.apiKey) || globalConfig.apiKey;
         const finalBaseUrl =
           node.data.overrideAiConfig && node.data.baseUrl 
             ? node.data.baseUrl 
-            : (usePresetApiConfig && nApi.baseUrl) || globalConfig.baseUrl;
+            : (apiPreset && apiPreset.baseUrl) || (usePresetApiConfig && nApi.baseUrl) || globalConfig.baseUrl;
 
         terminal.log(`[API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
         terminal.log(`  - baseUrl: ${finalBaseUrl}`);
