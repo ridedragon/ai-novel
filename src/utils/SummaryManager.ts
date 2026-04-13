@@ -432,6 +432,11 @@ export const checkAndGenerateSummary = async (
 >> Volume:      ${targetVolumeId || 'default'}
 >> Context Scope: ${contextScope}
 >> -----------------------------------------------------------
+>> Request Details:
+>>  - API Key:     ${apiKey ? '***' : 'Missing'}
+>>  - Source Text: ${sourceText.length > 200 ? sourceText.slice(0, 200) + '...' : sourceText}
+>>  - Prompt:      ${prompt.length > 200 ? prompt.slice(0, 200) + '...' : prompt}
+>> -----------------------------------------------------------
       `);
 
       const completion = await openai.chat.completions.create(
