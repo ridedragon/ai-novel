@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
 import { Chapter, ChapterVersion, GeneratorPreset, Novel, OutlineItem, PromptItem, RegexScript } from '../types';
-import { processTextWithRegex } from '../utils/aiHelpers';
+import { processTextWithRegex, getApiConfig } from '../utils/aiHelpers';
 import { AutoWriteEngine } from '../utils/auto-write';
 import { workflowManager } from '../utils/WorkflowManager';
 
@@ -152,6 +152,7 @@ export function useAutoWriteManager() {
       onAnalysisResult?: (result: string) => void;
       onError: (msg: string) => void;
       onStreamingStatusChange?: (isStreaming: boolean) => void;
+      activeApiPreset?: any;
     }) => {
       const { targetId, activeNovelId, novelsRef, setChapters } = params;
 
@@ -159,9 +160,16 @@ export function useAutoWriteManager() {
 
       const activePreset =
         params.optimizePresets.find(p => p.id === params.activeOptimizePresetId) || params.optimizePresets[0];
-      const finalApiKey = activePreset.apiConfig?.apiKey || params.apiKey;
-      const finalBaseUrl = activePreset.apiConfig?.baseUrl || params.baseUrl;
-      const finalModel = activePreset.apiConfig?.model || params.optimizeModel;
+      const config = getApiConfig(
+        params.activeApiPreset,
+        params.optimizeModel,
+        params.apiKey,
+        params.baseUrl,
+        params.optimizeModel
+      );
+      const finalApiKey = config.apiKey;
+      const finalBaseUrl = config.baseUrl;
+      const finalModel = config.model;
 
       terminal.log('[Optimize] API Config:', { 
         hasApiKey: !!finalApiKey, 
@@ -248,9 +256,16 @@ export function useAutoWriteManager() {
         try {
           const analysisPreset =
             params.analysisPresets.find(p => p.id === params.activeAnalysisPresetId) || params.analysisPresets[0];
-          const anaModel = analysisPreset.apiConfig?.model || params.analysisModel;
-          const anaApiKey = analysisPreset.apiConfig?.apiKey || params.apiKey;
-          const anaBaseUrl = analysisPreset.apiConfig?.baseUrl || params.baseUrl;
+          const analysisConfig = getApiConfig(
+            params.activeApiPreset,
+            params.analysisModel,
+            params.apiKey,
+            params.baseUrl,
+            params.analysisModel
+          );
+          const anaModel = analysisConfig.model;
+          const anaApiKey = analysisConfig.apiKey;
+          const anaBaseUrl = analysisConfig.baseUrl;
 
           terminal.log(`
 >> AI REQUEST [手动润色: 优化前分析]
