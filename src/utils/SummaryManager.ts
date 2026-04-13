@@ -223,7 +223,11 @@ export interface SummaryConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
+  smallSummaryApiKey: string;
+  smallSummaryBaseUrl: string;
   smallSummaryModel: string;
+  bigSummaryApiKey: string;
+  bigSummaryBaseUrl: string;
   bigSummaryModel: string;
   smallSummaryInterval: number;
   bigSummaryInterval: number;
@@ -280,7 +284,11 @@ export const checkAndGenerateSummary = async (
     apiKey,
     baseUrl,
     model,
+    smallSummaryApiKey,
+    smallSummaryBaseUrl,
     smallSummaryModel,
+    bigSummaryApiKey,
+    bigSummaryBaseUrl,
     bigSummaryModel,
     smallSummaryInterval,
     bigSummaryInterval,
@@ -410,7 +418,9 @@ export const checkAndGenerateSummary = async (
     if (!sourceText) return;
 
     try {
-      const openai = new OpenAI({ apiKey, baseURL: baseUrl, dangerouslyAllowBrowser: true });
+      const currentApiKey = type === 'small' ? smallSummaryApiKey : bigSummaryApiKey;
+      const currentBaseUrl = type === 'small' ? smallSummaryBaseUrl : bigSummaryBaseUrl;
+      const openai = new OpenAI({ apiKey: currentApiKey, baseURL: currentBaseUrl, dangerouslyAllowBrowser: true });
       let prompt = type === 'small' ? smallSummaryPrompt : bigSummaryPrompt;
       const currentModel = type === 'small' ? smallSummaryModel : bigSummaryModel;
 
@@ -425,7 +435,7 @@ export const checkAndGenerateSummary = async (
 >> AI REQUEST [Summary ${type}] 
 >> -----------------------------------------------------------
 >> Model:       ${currentModel}
->> Base URL:    ${baseUrl}
+>> Base URL:    ${currentBaseUrl}
 >> Temperature: 0.5
 >> Type:        ${type === 'small' ? 'Small Summary' : 'Big Summary'}
 >> Range:       ${rangeStr}
@@ -433,7 +443,7 @@ export const checkAndGenerateSummary = async (
 >> Context Scope: ${contextScope}
 >> -----------------------------------------------------------
 >> Request Details:
->>  - API Key:     ${apiKey ? '***' : 'Missing'}
+>>  - API Key:     ${currentApiKey ? '***' : 'Missing'}
 >>  - Source Text: ${sourceText.length > 200 ? sourceText.slice(0, 200) + '...' : sourceText}
 >>  - Prompt:      ${prompt.length > 200 ? prompt.slice(0, 200) + '...' : prompt}
 >> -----------------------------------------------------------

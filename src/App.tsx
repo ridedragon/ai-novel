@@ -443,8 +443,23 @@ function App() {
         config.apiPresets
       );
       
-      const finalSmallSummaryModel = activeApiPreset?.defaultModel || config.smallSummaryModel || config.outlineModel || finalApiConfig.model;
-      const finalBigSummaryModel = activeApiPreset?.defaultModel || config.bigSummaryModel || config.outlineModel || finalApiConfig.model;
+      const smallSummaryApiConfig = getApiConfig(
+        activeApiPreset,
+        config.smallSummaryModel,
+        config.apiKey,
+        config.baseUrl,
+        config.model,
+        config.apiPresets
+      );
+      
+      const bigSummaryApiConfig = getApiConfig(
+        activeApiPreset,
+        config.bigSummaryModel,
+        config.apiKey,
+        config.baseUrl,
+        config.model,
+        config.apiPresets
+      );
       
       const result = await checkAndGenerateSummary(
         chapterId,
@@ -456,8 +471,12 @@ function App() {
           apiKey: finalApiConfig.apiKey,
           baseUrl: finalApiConfig.baseUrl,
           model: finalApiConfig.model,
-          smallSummaryModel: finalSmallSummaryModel,
-          bigSummaryModel: finalBigSummaryModel,
+          smallSummaryApiKey: smallSummaryApiConfig.apiKey,
+          smallSummaryBaseUrl: smallSummaryApiConfig.baseUrl,
+          smallSummaryModel: smallSummaryApiConfig.model,
+          bigSummaryApiKey: bigSummaryApiConfig.apiKey,
+          bigSummaryBaseUrl: bigSummaryApiConfig.baseUrl,
+          bigSummaryModel: bigSummaryApiConfig.model,
           smallSummaryInterval: Number(config.smallSummaryInterval),
           bigSummaryInterval: Number(config.bigSummaryInterval),
           smallSummaryPrompt: config.smallSummaryPrompt,
