@@ -15,7 +15,8 @@ import {
   Trash2,
   Unlink,
   Upload,
-  X
+  X,
+  Code2
 } from 'lucide-react'
 import React from 'react'
 import { Chapter, CompletionPreset, Novel, PromptItem } from '../../types'
@@ -23,6 +24,7 @@ import { Chapter, CompletionPreset, Novel, PromptItem } from '../../types'
 interface AdvancedSettingsModalProps {
   isOpen: boolean
   onClose: () => void
+  onOpenRegexManager?: () => void
   // Preset State & Actions
   completionPresets: CompletionPreset[]
   activePresetId: string
@@ -101,7 +103,7 @@ interface AdvancedSettingsModalProps {
 
 export const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = (props) => {
   const {
-    isOpen, onClose, completionPresets, activePresetId, handlePresetChange,
+    isOpen, onClose, onOpenRegexManager, completionPresets, activePresetId, handlePresetChange,
     handleImportPreset, handleExportPreset, handleDeletePreset, handleSavePreset,
     handleResetPreset, handleOpenRenameModal, handleOpenSaveAsModal,
     contextLength, setContextLength, maxReplyLength, setMaxReplyLength,
@@ -138,6 +140,11 @@ export const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = (prop
             <span className="font-semibold text-gray-200">对话补全源</span>
           </div>
           <div className="flex items-center gap-2">
+            {onOpenRegexManager && (
+              <button onClick={onOpenRegexManager} className="p-1.5 hover:bg-gray-700 rounded transition-colors" title="正则脚本管理">
+                <Code2 className="w-4 h-4 text-gray-400" />
+              </button>
+            )}
             <button onClick={handleSavePreset} className="p-1.5 hover:bg-gray-700 rounded transition-colors" title="保存"><Save className="w-4 h-4 text-gray-400" /></button>
             <button
               className="p-1.5 hover:bg-gray-700 rounded transition-colors"

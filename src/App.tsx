@@ -111,6 +111,11 @@ function App() {
   const [showAnalysisResultModal, setShowAnalysisResultModal] = useState(false);
   const [showRegexModal, setShowRegexModal] = useState(false);
   const [showGeneratorSettingsModal, setShowGeneratorSettingsModal] = useState(false);
+
+  // 正则编辑器相关状态
+  const [showRegexEditor, setShowRegexEditor] = useState(false);
+  const [editingRegexScript, setEditingRegexScript] = useState<any>(null);
+  const [regexEditorMode, setRegexEditorMode] = useState<'global' | 'preset'>('global');
   const [generatorSettingsType, setGeneratorSettingsType] = useState<
     'outline' | 'character' | 'worldview' | 'inspiration' | 'plotOutline' | 'optimize' | 'analysis'
   >('outline');
@@ -387,6 +392,93 @@ function App() {
     const activePreset = completion.completionPresets.find(p => p.id === completion.activePresetId);
     return [...config.globalRegexScripts, ...(activePreset?.regexScripts || [])];
   }, [config.globalRegexScripts, completion.completionPresets, completion.activePresetId]);
+
+  // 正则脚本管理函数
+  const handleAddNewRegex = useCallback((type: 'global' | 'preset') => {
+    const newScript = {
+      id: `regex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      scriptName: '新正则脚本',
+      findRegex: '',
+      replaceString: '',
+      placement: [1, 2],
+      disabled: false,
+      runOnEdit: false,
+      trimStrings: []
+    };
+    
+    if (type === 'global') {
+      config.setGlobalRegexScripts(prev => [...prev, newScript]);
+    } else {
+      const activePreset = completion.completionPresets.find(p => p.id === completion.activePresetId);
+      if (activePreset) {
+        const updatedScripts = [...(activePreset.regexScripts || []), newScript];
+        completion.updateRegexScripts(activePreset.id, updatedScripts);
+      }
+    }
+    
+    setEditingRegexScript(newScript);
+    setRegexEditorMode(type);
+    setShowRegexEditor(true);
+  }, [config, completion]);
+
+  const handleDeleteRegex = useCallback((id: string, type: 'global' | 'preset') => {
+    if (type === 'global') {
+      config.setGlobalRegexScripts(prev => prev.filter(s => s.id !== id));
+    } else {
+      const activePreset = completion.completionPresets.find(p => p.id === completion.activePresetId);
+      if (activePreset) {
+        const updatedScripts = (activePreset.regexScripts || []).filter(s => s.id !== id);
+        completion.updateRegexScripts(activePreset.id, updatedScripts);
+      }
+    }
+  }, [config, completion]);
+
+  const handleEditRegex = useCallback((script: any, type: 'global' | 'preset') => {
+    setEditingRegexScript({...script});
+    setRegexEditorMode(type);
+    setShowRegexEditor(true);
+  }, []);
+
+  const handleToggleRegexDisabled = useCallback((id: string, type: 'global' | 'preset') => {
+    if (type === 'global') {
+      config.setGlobalRegexScripts(prev => prev.map(s => 
+        s.id === id ? {...s, disabled: !s.disabled} : s
+      ));
+    } else {
+      const activePreset = completion.completionPresets.find(p => p.id === completion.activePresetId);
+      if (activePreset) {
+        const updatedScripts = (activePreset.regexScripts || []).map(s => 
+          s.id === id ? {...s, disabled: !s.disabled} : s
+        );
+        completion.updateRegexScripts(activePreset.id, updatedScripts);
+      }
+    }
+  }, [config, completion]);
+
+  const handleSaveRegex = useCallback(() => {
+    if (!editingRegexScript) return;
+    
+    if (regexEditorMode === 'global') {
+      config.setGlobalRegexScripts(prev => prev.map(s => 
+        s.id === editingRegexScript.id ? editingRegexScript : s
+      ));
+    } else {
+      const activePreset = completion.completionPresets.find(p => p.id === completion.activePresetId);
+      if (activePreset) {
+        let updatedScripts = [...(activePreset.regexScripts || [])];
+        const existingIndex = updatedScripts.findIndex(s => s.id === editingRegexScript.id);
+        if (existingIndex >= 0) {
+          updatedScripts[existingIndex] = editingRegexScript;
+        } else {
+          updatedScripts.push(editingRegexScript);
+        }
+        completion.updateRegexScripts(activePreset.id, updatedScripts);
+      }
+    }
+    
+    setShowRegexEditor(false);
+    setEditingRegexScript(null);
+  }, [editingRegexScript, regexEditorMode, config, completion]);
 
 
 
@@ -1595,6 +1687,10 @@ function App() {
           <AdvancedSettingsModal
             isOpen={showAdvancedSettings}
             onClose={() => setShowAdvancedSettings(false)}
+            onOpenRegexManager={() => {
+              setShowAdvancedSettings(false);
+              setShowRegexModal(true);
+            }}
             {...completion}
             maxRetries={config.maxRetries}
             setMaxRetries={config.setMaxRetries}
@@ -1814,17 +1910,17 @@ function App() {
             onClose={() => setShowRegexModal(false)}
             {...completion}
             globalRegexScripts={config.globalRegexScripts}
-            handleAddNewRegex={() => {}}
-            handleDeleteRegex={() => {}}
-            handleEditRegex={() => {}}
-            handleToggleRegexDisabled={() => {}}
-            showRegexEditor={false}
-            setShowRegexEditor={() => {}}
-            editingRegexScript={null}
-            setEditingRegexScript={() => {}}
-            regexEditorMode="global"
-            setRegexEditorMode={() => {}}
-            handleSaveRegex={() => {}}
+            handleAddNewRegex={handleAddNewRegex}
+            handleDeleteRegex={handleDeleteRegex}
+            handleEditRegex={handleEditRegex}
+            handleToggleRegexDisabled={handleToggleRegexDisabled}
+            showRegexEditor={showRegexEditor}
+            setShowRegexEditor={setShowRegexEditor}
+            editingRegexScript={editingRegexScript}
+            setEditingRegexScript={setEditingRegexScript}
+            regexEditorMode={regexEditorMode}
+            setRegexEditorMode={setRegexEditorMode}
+            handleSaveRegex={handleSaveRegex}
           />
         )}
         {showGeneratorSettingsModal && (
