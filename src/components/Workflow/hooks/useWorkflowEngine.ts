@@ -5936,15 +5936,33 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
   // 辅助功能：获取整合后的模型列表 (两端共用)
   const getConsolidatedModelList = useCallback(() => {
-    const list = [...(globalConfigRef.current?.modelList || [])];
-    if (globalConfigRef.current?.model) list.push(globalConfigRef.current.model);
-    if (globalConfigRef.current?.outlineModel) list.push(globalConfigRef.current.outlineModel);
-    if (globalConfigRef.current?.characterModel) list.push(globalConfigRef.current.characterModel);
-    if (globalConfigRef.current?.worldviewModel) list.push(globalConfigRef.current.worldviewModel);
-    if (globalConfigRef.current?.inspirationModel) list.push(globalConfigRef.current.inspirationModel);
-    if (globalConfigRef.current?.plotOutlineModel) list.push(globalConfigRef.current.plotOutlineModel);
-    if (globalConfigRef.current?.optimizeModel) list.push(globalConfigRef.current.optimizeModel);
-    if (globalConfigRef.current?.analysisModel) list.push(globalConfigRef.current.analysisModel);
+    const modelMap = new Map<string, { model: string; preset?: any }>();
+    
+    // 添加全局配置中的模型
+    if (globalConfigRef.current?.modelList) {
+      globalConfigRef.current.modelList.forEach((model: string) => {
+        modelMap.set(model, { model });
+      });
+    }
+    if (globalConfigRef.current?.model) modelMap.set(globalConfigRef.current.model, { model: globalConfigRef.current.model });
+    if (globalConfigRef.current?.outlineModel) modelMap.set(globalConfigRef.current.outlineModel, { model: globalConfigRef.current.outlineModel });
+    if (globalConfigRef.current?.characterModel) modelMap.set(globalConfigRef.current.characterModel, { model: globalConfigRef.current.characterModel });
+    if (globalConfigRef.current?.worldviewModel) modelMap.set(globalConfigRef.current.worldviewModel, { model: globalConfigRef.current.worldviewModel });
+    if (globalConfigRef.current?.inspirationModel) modelMap.set(globalConfigRef.current.inspirationModel, { model: globalConfigRef.current.inspirationModel });
+    if (globalConfigRef.current?.plotOutlineModel) modelMap.set(globalConfigRef.current.plotOutlineModel, { model: globalConfigRef.current.plotOutlineModel });
+    if (globalConfigRef.current?.optimizeModel) modelMap.set(globalConfigRef.current.optimizeModel, { model: globalConfigRef.current.optimizeModel });
+    if (globalConfigRef.current?.analysisModel) modelMap.set(globalConfigRef.current.analysisModel, { model: globalConfigRef.current.analysisModel });
+
+    // 添加 API 预设中的模型
+    if (globalConfigRef.current?.apiPresets) {
+      globalConfigRef.current.apiPresets.forEach((preset: any) => {
+        if (preset.modelList) {
+          preset.modelList.forEach((model: string) => {
+            modelMap.set(model, { model, preset });
+          });
+        }
+      });
+    }
 
     const presetTypes = [
       'outline',
@@ -5964,7 +5982,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         if (saved) {
           const presets = JSON.parse(saved) as GeneratorPreset[];
           presets.forEach(p => {
-            if (p.apiConfig?.model) list.push(p.apiConfig.model);
+            if (p.apiConfig?.model) modelMap.set(p.apiConfig.model, { model: p.apiConfig.model });
           });
         }
       } catch (e) {}
@@ -5973,10 +5991,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
     Object.values(allPresets)
       .flat()
       .forEach(p => {
-        if (p.apiConfig?.model) list.push(p.apiConfig.model);
+        if (p.apiConfig?.model) modelMap.set(p.apiConfig.model, { model: p.apiConfig.model });
       });
 
-    return Array.from(new Set(list.filter(Boolean)));
+    return Array.from(modelMap.values()).map(item => item.model);
   }, [options.globalConfig, allPresets]);
 
   return {

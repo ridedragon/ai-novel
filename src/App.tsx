@@ -439,7 +439,8 @@ function App() {
         config.outlineModel || config.model,
         config.apiKey,
         config.baseUrl,
-        config.model
+        config.model,
+        config.apiPresets
       );
       
       const finalSmallSummaryModel = activeApiPreset?.defaultModel || config.smallSummaryModel || config.outlineModel || finalApiConfig.model;
@@ -886,6 +887,7 @@ function App() {
                   if (inspirationUserPrompt) setInspirationUserPrompt('');
                 },
                 inspirationAbortControllerRef,
+                apiPresets: config.apiPresets,
               }),
             onStopGeneration: () => inspirationAbortControllerRef.current?.abort(),
             onSendToModule: handleSendToModule,
@@ -998,6 +1000,7 @@ function App() {
                   if (characterUserPrompt) setCharacterUserPrompt('');
                 },
                 characterAbortControllerRef,
+                apiPresets: config.apiPresets,
               }),
             onStopGeneration: () => characterAbortControllerRef.current?.abort(),
             onSendToModule: handleSendToModule,
@@ -1110,6 +1113,7 @@ function App() {
                   if (worldviewUserPrompt) setWorldviewUserPrompt('');
                 },
                 worldviewAbortControllerRef,
+                apiPresets: config.apiPresets,
               }),
             onStopGeneration: () => worldviewAbortControllerRef.current?.abort(),
             onSendToModule: handleSendToModule,
@@ -1223,6 +1227,7 @@ function App() {
                 },
                 outlineAbortControllerRef,
                 onStatusUpdate: () => {},
+                apiPresets: config.apiPresets,
               }),
             onStopGeneration: () => outlineAbortControllerRef.current?.abort(),
             onReturnToMainWithContent: handleReturnToMainWithContent,
@@ -1331,6 +1336,7 @@ function App() {
                   if (plotOutlineUserPrompt) setPlotOutlineUserPrompt('');
                 },
                 generateAbortControllerRef: plotOutlineAbortControllerRef,
+                apiPresets: config.apiPresets,
               }),
             onStopGeneration: () => plotOutlineAbortControllerRef.current?.abort(),
             onSendToModule: handleSendToModule,
@@ -1499,6 +1505,7 @@ function App() {
               onStreamingStatusChange: (isStreaming) => {
                 setIsStreaming(isStreaming);
               },
+              apiPresets: config.apiPresets,
             });
             } finally {
               // 确保无论如何都清除重新生成标记
