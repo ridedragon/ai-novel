@@ -113,7 +113,7 @@ export const ModelConfigPanel = ({
             <select
               className={isMobile ? inputClass : "w-32 bg-[#161922] border border-gray-700 rounded-lg px-2 text-[10px] text-gray-400 outline-none cursor-pointer"}
               onChange={(e) => onUpdate({ model: e.target.value })}
-              value={isMobile ? (data.model || '') : ""}
+              value={data.model || ""}
             >
               <option value="" disabled>{isMobile ? "选择模型..." : "快速选择..."}</option>
               {consolidatedModelList.map((m: any) => (

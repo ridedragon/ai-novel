@@ -5937,25 +5937,26 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
   // 辅助功能：获取整合后的模型列表 (两端共用)
   const getConsolidatedModelList = useCallback(() => {
     const modelMap = new Map<string, { model: string; preset?: any }>();
+    const globalConfig = options.globalConfig;
     
     // 添加全局配置中的模型
-    if (globalConfigRef.current?.modelList) {
-      globalConfigRef.current.modelList.forEach((model: string) => {
+    if (globalConfig?.modelList) {
+      globalConfig.modelList.forEach((model: string) => {
         modelMap.set(model, { model });
       });
     }
-    if (globalConfigRef.current?.model) modelMap.set(globalConfigRef.current.model, { model: globalConfigRef.current.model });
-    if (globalConfigRef.current?.outlineModel) modelMap.set(globalConfigRef.current.outlineModel, { model: globalConfigRef.current.outlineModel });
-    if (globalConfigRef.current?.characterModel) modelMap.set(globalConfigRef.current.characterModel, { model: globalConfigRef.current.characterModel });
-    if (globalConfigRef.current?.worldviewModel) modelMap.set(globalConfigRef.current.worldviewModel, { model: globalConfigRef.current.worldviewModel });
-    if (globalConfigRef.current?.inspirationModel) modelMap.set(globalConfigRef.current.inspirationModel, { model: globalConfigRef.current.inspirationModel });
-    if (globalConfigRef.current?.plotOutlineModel) modelMap.set(globalConfigRef.current.plotOutlineModel, { model: globalConfigRef.current.plotOutlineModel });
-    if (globalConfigRef.current?.optimizeModel) modelMap.set(globalConfigRef.current.optimizeModel, { model: globalConfigRef.current.optimizeModel });
-    if (globalConfigRef.current?.analysisModel) modelMap.set(globalConfigRef.current.analysisModel, { model: globalConfigRef.current.analysisModel });
+    if (globalConfig?.model) modelMap.set(globalConfig.model, { model: globalConfig.model });
+    if (globalConfig?.outlineModel) modelMap.set(globalConfig.outlineModel, { model: globalConfig.outlineModel });
+    if (globalConfig?.characterModel) modelMap.set(globalConfig.characterModel, { model: globalConfig.characterModel });
+    if (globalConfig?.worldviewModel) modelMap.set(globalConfig.worldviewModel, { model: globalConfig.worldviewModel });
+    if (globalConfig?.inspirationModel) modelMap.set(globalConfig.inspirationModel, { model: globalConfig.inspirationModel });
+    if (globalConfig?.plotOutlineModel) modelMap.set(globalConfig.plotOutlineModel, { model: globalConfig.plotOutlineModel });
+    if (globalConfig?.optimizeModel) modelMap.set(globalConfig.optimizeModel, { model: globalConfig.optimizeModel });
+    if (globalConfig?.analysisModel) modelMap.set(globalConfig.analysisModel, { model: globalConfig.analysisModel });
 
     // 添加 API 预设中的模型
-    if (globalConfigRef.current?.apiPresets) {
-      globalConfigRef.current.apiPresets.forEach((preset: any) => {
+    if (globalConfig?.apiPresets) {
+      globalConfig.apiPresets.forEach((preset: any) => {
         if (preset.modelList) {
           preset.modelList.forEach((model: string) => {
             modelMap.set(model, { model, preset });
