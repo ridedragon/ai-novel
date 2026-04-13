@@ -230,6 +230,11 @@ function App() {
     [novelData.chapters, novelData.activeChapterId],
   );
 
+  const activeApiPreset = useMemo(
+    () => config.apiPresets.find(p => p.id === config.activeApiPresetId),
+    [config.apiPresets, config.activeApiPresetId],
+  );
+  
   const activePreset = useMemo(
     () => completion.completionPresets.find(p => p.id === completion.activePresetId),
     [completion.completionPresets, completion.activePresetId],
@@ -430,15 +435,15 @@ function App() {
       terminal.log(`[Summary Debug] Calling checkAndGenerateSummary for chapter ${chapterId}`);
       
       const finalApiConfig = getApiConfig(
-        activePreset?.apiConfig,
+        activeApiPreset,
         config.outlineModel || config.model,
         config.apiKey,
         config.baseUrl,
         config.model
       );
       
-      const finalSmallSummaryModel = activePreset?.apiConfig?.model || config.smallSummaryModel || config.outlineModel || finalApiConfig.model;
-      const finalBigSummaryModel = activePreset?.apiConfig?.model || config.bigSummaryModel || config.outlineModel || finalApiConfig.model;
+      const finalSmallSummaryModel = activeApiPreset?.model || config.smallSummaryModel || config.outlineModel || finalApiConfig.model;
+      const finalBigSummaryModel = activeApiPreset?.model || config.bigSummaryModel || config.outlineModel || finalApiConfig.model;
       
       const result = await checkAndGenerateSummary(
         chapterId,
@@ -1420,8 +1425,8 @@ function App() {
               activeChapter: regenerateChapter,
               activeNovel: novelData.activeNovel,
               activeOutlineSetId: novelData.activeOutlineSetId,
-              apiKey: activePreset?.apiConfig?.apiKey || config.apiKey,
-              baseUrl: activePreset?.apiConfig?.baseUrl || config.baseUrl,
+              apiKey: activeApiPreset?.apiKey || config.apiKey,
+              baseUrl: activeApiPreset?.baseUrl || config.baseUrl,
               contextLength: activePreset?.contextLength || 4000,
               includeFullOutlineInAutoWrite: false,
               systemPrompt: novelData.activeNovel.systemPrompt || '',
@@ -1436,9 +1441,9 @@ function App() {
               maxReplyLength: completion.maxReplyLength,
               max_tokens: completion.max_tokens,
               maxRetries: config.maxRetries,
-              outlineModel: activePreset?.apiConfig?.model || config.outlineModel || config.model,
-              model: activePreset?.apiConfig?.model || config.model,
-              presetApiConfig: activePreset?.apiConfig,
+              outlineModel: activeApiPreset?.model || config.outlineModel || config.model,
+              model: activeApiPreset?.model || config.model,
+              presetApiConfig: activeApiPreset,
               longTextMode: config.longTextMode,
               contextScope: config.contextScope,
               contextChapterCount: Number(config.contextChapterCount) || 1,
