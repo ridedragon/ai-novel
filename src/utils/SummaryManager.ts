@@ -420,6 +420,20 @@ export const checkAndGenerateSummary = async (
         prompt = `【分卷总结专项指令】：当前正在进行“分卷创作模式”，你必须仅针对下方提供的本卷内容进行大总结。严禁提及或猜测任何不属于下方内容的剧情。\n\n${prompt}`;
       }
 
+      // 详细日志记录
+      terminal.log(`
+>> AI REQUEST [Summary ${type}] 
+>> -----------------------------------------------------------
+>> Model:       ${currentModel}
+>> Base URL:    ${baseUrl}
+>> Temperature: 0.5
+>> Type:        ${type === 'small' ? 'Small Summary' : 'Big Summary'}
+>> Range:       ${rangeStr}
+>> Volume:      ${targetVolumeId || 'default'}
+>> Context Scope: ${contextScope}
+>> -----------------------------------------------------------
+      `);
+
       const completion = await openai.chat.completions.create(
         {
           model: currentModel,
@@ -474,7 +488,12 @@ export const checkAndGenerateSummary = async (
         if (lastCreated) pendingSummaries.push(lastCreated);
       }
     } catch (e) {
-      errorLog(`[Summary] Failed to generate ${type} summary: ${(e as any).message}`);
+      const error = e as any;
+      errorLog(`[Summary] Failed to generate ${type} summary: ${error.message}`);
+      if (error.status) {
+        errorLog(`[Summary] Error status: ${error.status}`);
+        errorLog(`[Summary] Error details: ${JSON.stringify(error, null, 2)}`);
+      }
     }
   };
 
