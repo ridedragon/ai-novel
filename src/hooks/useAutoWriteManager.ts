@@ -153,6 +153,7 @@ export function useAutoWriteManager() {
       onError: (msg: string) => void;
       onStreamingStatusChange?: (isStreaming: boolean) => void;
       activeApiPreset?: any;
+      apiPresets?: any[];
     }) => {
       const { targetId, activeNovelId, novelsRef, setChapters } = params;
 
@@ -165,7 +166,8 @@ export function useAutoWriteManager() {
         params.optimizeModel,
         params.apiKey,
         params.baseUrl,
-        params.optimizeModel
+        params.optimizeModel,
+        params.apiPresets
       );
       const finalApiKey = config.apiKey;
       const finalBaseUrl = config.baseUrl;
@@ -261,7 +263,8 @@ export function useAutoWriteManager() {
             params.analysisModel,
             params.apiKey,
             params.baseUrl,
-            params.analysisModel
+            params.analysisModel,
+            params.apiPresets
           );
           const anaModel = analysisConfig.model;
           const anaApiKey = analysisConfig.apiKey;

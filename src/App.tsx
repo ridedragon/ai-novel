@@ -1376,6 +1376,7 @@ function App() {
               activeNovelId: novelData.activeNovelId,
               getActiveScripts,
               activeApiPreset,
+              apiPresets: config.apiPresets,
               onError: m =>
                 setDialog({ isOpen: true, type: 'alert', title: '错误', message: m, onConfirm: closeDialog }),
               onStreamingStatusChange: (isStreaming) => {
