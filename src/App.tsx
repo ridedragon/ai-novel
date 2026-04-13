@@ -219,6 +219,7 @@ function App() {
   };
 
   // 对话框状态
+  const [dialogInputValue, setDialogInputValue] = useState('');
   const [dialog, setDialog] = useState<any>({
     isOpen: false,
     type: 'alert',
@@ -227,7 +228,10 @@ function App() {
     inputValue: '',
     onConfirm: () => {},
   });
-  const closeDialog = () => setDialog((prev: any) => ({ ...prev, isOpen: false }));
+  const closeDialog = () => {
+    setDialog((prev: any) => ({ ...prev, isOpen: false }));
+    setDialogInputValue('');
+  };
 
   // --- 3. 派生状态与业务逻辑 ---
   const activeChapter = useMemo(
@@ -671,7 +675,13 @@ function App() {
           handleRecalibrateSummaries={() => {}}
           isLoading={autoWrite.isLoading}
         />
-        <GlobalDialog isOpen={dialog.isOpen} {...dialog} onCancel={closeDialog} />
+        <GlobalDialog 
+          isOpen={dialog.isOpen} 
+          {...dialog} 
+          inputValue={dialogInputValue}
+          setInputValue={setDialogInputValue}
+          onCancel={closeDialog} 
+        />
       </Suspense>
     );
   }
@@ -813,7 +823,8 @@ function App() {
             })
           }
           handleMoveChapterOrder={novelData.moveChapterOrder}
-          handleAddVolume={() =>
+          handleAddVolume={() => {
+            setDialogInputValue('');
             setDialog({
               isOpen: true,
               type: 'prompt',
@@ -823,21 +834,21 @@ function App() {
                 if (n) novelData.addVolume(n);
                 closeDialog();
               },
-            })
-          }
-          handleRenameVolume={(id, t) =>
+            });
+          }}
+          handleRenameVolume={(id, t) => {
+            setDialogInputValue(t);
             setDialog({
               isOpen: true,
               type: 'prompt',
               title: '重命名',
               message: '',
-              inputValue: t,
               onConfirm: (n: any) => {
                 if (n) novelData.renameVolume(id, n);
                 closeDialog();
               },
-            })
-          }
+            });
+          }}
           handleDeleteVolume={id =>
             setDialog({
               isOpen: true,
@@ -2109,7 +2120,13 @@ function App() {
     </NovelEditorLayout>
 
     <Suspense fallback={null}>
-      <GlobalDialog isOpen={dialog.isOpen} {...dialog} onCancel={closeDialog} />
+      <GlobalDialog 
+        isOpen={dialog.isOpen} 
+        {...dialog} 
+        inputValue={dialogInputValue}
+        setInputValue={setDialogInputValue}
+        onCancel={closeDialog} 
+      />
     </Suspense>
     </>
   );
