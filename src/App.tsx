@@ -57,7 +57,7 @@ import { ensureChapterVersions } from './utils/chapterUtils';
 import { handleExportNovel, handleExportVolume } from './utils/exportUtils';
 import { keepAliveManager } from './utils/KeepAliveManager';
 import { storage } from './utils/storage';
-import { checkAndGenerateSummary } from './utils/SummaryManager';
+import { checkAndGenerateSummary, isSummaryChapter, recalibrateSummaries } from './utils/SummaryManager';
 import { initializeBuiltinSkills } from './skills/builtinSkills';
 import { skillRegistry } from './skills/SkillRegistry';
 
@@ -668,13 +668,36 @@ function App() {
           setNewNovelData={setNewNovelData}
         />
         <GlobalSettingsModal
-          isOpen={showSettings}
-          onClose={() => setShowSettings(false)}
-          {...config}
-          handleScanSummaries={() => {}}
-          handleRecalibrateSummaries={() => {}}
-          isLoading={autoWrite.isLoading}
-        />
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
+            {...config}
+            handleScanSummaries={async () => {
+              if (!novelData.activeNovelId) return;
+              
+              const activeNovel = novelData.novels.find(n => n.id === novelData.activeNovelId);
+              if (!activeNovel) return;
+              
+              // 获取最后一个剧情章节
+              const storyChapters = activeNovel.chapters?.filter(c => !isSummaryChapter(c)) || [];
+              if (storyChapters.length === 0) return;
+              
+              const lastChapter = storyChapters[storyChapters.length - 1];
+              
+              // 调用 checkAndGenerateSummary 函数，forceFinal 设为 true 以补全所有缺失的总结
+              await handleChapterComplete(lastChapter.id, lastChapter.content || '', activeNovel, true);
+            }}
+            handleRecalibrateSummaries={async () => {
+              if (!novelData.activeNovelId) return;
+              
+              const activeNovel = novelData.novels.find(n => n.id === novelData.activeNovelId);
+              if (!activeNovel) return;
+              
+              // 调用 recalibrateSummaries 函数校准总结索引
+              const recalibratedChapters = recalibrateSummaries(activeNovel.chapters || []);
+              novelData.updateNovel(novelData.activeNovelId, { ...activeNovel, chapters: recalibratedChapters });
+            }}
+            isLoading={autoWrite.isLoading}
+          />
         <GlobalDialog 
           isOpen={dialog.isOpen} 
           {...dialog} 
@@ -1682,8 +1705,31 @@ function App() {
             {...config}
             stream={completion.stream}
             setStream={completion.setStream}
-            handleScanSummaries={() => {}}
-            handleRecalibrateSummaries={() => {}}
+            handleScanSummaries={async () => {
+              if (!novelData.activeNovelId) return;
+              
+              const activeNovel = novelData.novels.find(n => n.id === novelData.activeNovelId);
+              if (!activeNovel) return;
+              
+              // 获取最后一个剧情章节
+              const storyChapters = activeNovel.chapters?.filter(c => !isSummaryChapter(c)) || [];
+              if (storyChapters.length === 0) return;
+              
+              const lastChapter = storyChapters[storyChapters.length - 1];
+              
+              // 调用 checkAndGenerateSummary 函数，forceFinal 设为 true 以补全所有缺失的总结
+              await handleChapterComplete(lastChapter.id, lastChapter.content || '', activeNovel, true);
+            }}
+            handleRecalibrateSummaries={async () => {
+              if (!novelData.activeNovelId) return;
+              
+              const activeNovel = novelData.novels.find(n => n.id === novelData.activeNovelId);
+              if (!activeNovel) return;
+              
+              // 调用 recalibrateSummaries 函数校准总结索引
+              const recalibratedChapters = recalibrateSummaries(activeNovel.chapters || []);
+              novelData.updateNovel(novelData.activeNovelId, { ...activeNovel, chapters: recalibratedChapters });
+            }}
             isLoading={autoWrite.isLoading}
           />
         )}
