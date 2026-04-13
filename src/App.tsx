@@ -249,25 +249,11 @@ function App() {
     if (!novelData.activeNovelId) return;
 
     setCollapsedVolumesByNovel(prev => {
-      const currentNovelState = prev[novelData.activeNovelId!] || {};
-      let changed = false;
-      const nextNovelState = { ...currentNovelState };
-
+      const nextNovelState: Record<string, boolean> = {};
+      
       novelData.volumes.forEach(volume => {
-        if (!(volume.id in nextNovelState)) {
-          nextNovelState[volume.id] = Boolean(volume.collapsed);
-          changed = true;
-        }
+        nextNovelState[volume.id] = Boolean(volume.collapsed);
       });
-
-      Object.keys(nextNovelState).forEach(volumeId => {
-        if (!novelData.volumes.some(volume => volume.id === volumeId)) {
-          delete nextNovelState[volumeId];
-          changed = true;
-        }
-      });
-
-      if (!changed) return prev;
 
       return {
         ...prev,
@@ -787,22 +773,29 @@ function App() {
           activeChapterId={novelData.activeChapterId}
           setActiveChapterId={novelData.setActiveChapterId}
           setShowOutline={setShowOutline}
-          handleToggleVolumeCollapse={vid =>
+          handleToggleVolumeCollapse={vid => {
             setCollapsedVolumesByNovel(prev => {
               if (!novelData.activeNovelId) return prev;
 
               const currentNovelState = prev[novelData.activeNovelId] || {};
               const fallbackCollapsed = novelData.volumes.find(v => v.id === vid)?.collapsed ?? false;
+              const newCollapsed = !(currentNovelState[vid] ?? fallbackCollapsed);
+
+              novelData.setVolumes(prevVolumes => 
+                prevVolumes.map(v => 
+                  v.id === vid ? { ...v, collapsed: newCollapsed } : v
+                )
+              );
 
               return {
                 ...prev,
                 [novelData.activeNovelId]: {
                   ...currentNovelState,
-                  [vid]: !(currentNovelState[vid] ?? fallbackCollapsed),
+                  [vid]: newCollapsed,
                 },
               };
-            })
-          }
+            });
+          }}
           handleExportVolume={vid => {
             const vol = novelData.volumes.find(v => v.id === vid);
             if (vol) handleExportVolume(vol, novelData.chapters);
