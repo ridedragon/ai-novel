@@ -1317,6 +1317,27 @@ export const useWorkflowEngine = (options: {
               else volRetryCount++;
             } catch (volErr: any) {
               if (volErr.name === 'AbortError' || /aborted/i.test(volErr.message)) throw volErr;
+              
+              // 特殊处理连接/网络错误
+              const isNetworkError = 
+                volErr.name === 'ConnectionError' || 
+                volErr.name === 'NetworkError' ||
+                /connection/i.test(volErr.message) || 
+                /network/i.test(volErr.message) ||
+                /ECONNREFUSED/i.test(volErr.message) ||
+                !volErr.status; // No status usually means network error
+
+              if (isNetworkError) {
+                terminal.error(`${logPrefix} [网络错误] SaveToVolume Connection error!`);
+                terminal.error(`请检查以下配置：`);
+                terminal.error(`  - baseUrl: ${volOpenai.baseURL}`);
+                terminal.error(`  - 网络连接是否正常？`);
+                terminal.error(`  - API服务是否可访问？`);
+                terminal.error(`  - 手机端请确保使用电脑的IP地址而不是localhost！`);
+                // Provide a more helpful error message to the user
+                volErr.message = `SaveToVolume连接错误，请检查：\n1. 网络连接\n2. API地址配置 (baseUrl: ${volOpenai.baseURL})\n3. 手机端请使用电脑IP而非localhost\n4. API服务是否正常运行`;
+              }
+              
               if (volRetryCount < maxVolRetries) {
                 volRetryCount++;
                 terminal.error(`${logPrefix} SaveToVolume Retry API 报错: ${volErr.message}`);
