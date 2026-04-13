@@ -274,7 +274,7 @@ export const LoopConfiguratorPanel = ({
                           <select
                             className="w-28 bg-gray-800 border border-gray-700 rounded-lg px-2 text-[10px] text-gray-400 outline-none cursor-pointer"
                             onChange={e => onUpdate({ model: e.target.value })}
-                            value=""
+                            value={data.model || ""}
                           >
                             <option value="" disabled>快速选择...</option>
                             {consolidatedModelList.map((m: string) => (

@@ -228,7 +228,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
   const editingNode = nodes.find(n => n.id === editingNodeId) || null;
 
-  const consolidatedModelList = useMemo(() => getConsolidatedModelList(), [getConsolidatedModelList]);
+  const consolidatedModelList = useMemo(() => getConsolidatedModelList(), [getConsolidatedModelList, globalConfig]);
 
   // 获取工作流中所有“初始化目录”节点定义的文件夹名（即便尚未运行创建）
   const pendingFolders = nodes
