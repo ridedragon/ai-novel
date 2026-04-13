@@ -442,8 +442,8 @@ function App() {
         config.model
       );
       
-      const finalSmallSummaryModel = activeApiPreset?.model || config.smallSummaryModel || config.outlineModel || finalApiConfig.model;
-      const finalBigSummaryModel = activeApiPreset?.model || config.bigSummaryModel || config.outlineModel || finalApiConfig.model;
+      const finalSmallSummaryModel = activeApiPreset?.defaultModel || config.smallSummaryModel || config.outlineModel || finalApiConfig.model;
+      const finalBigSummaryModel = activeApiPreset?.defaultModel || config.bigSummaryModel || config.outlineModel || finalApiConfig.model;
       
       const result = await checkAndGenerateSummary(
         chapterId,
@@ -1441,8 +1441,8 @@ function App() {
               maxReplyLength: completion.maxReplyLength,
               max_tokens: completion.max_tokens,
               maxRetries: config.maxRetries,
-              outlineModel: activeApiPreset?.model || config.outlineModel || config.model,
-              model: activeApiPreset?.model || config.model,
+              outlineModel: activeApiPreset?.defaultModel || config.outlineModel || config.model,
+              model: activeApiPreset?.defaultModel || config.model,
               presetApiConfig: activeApiPreset,
               longTextMode: config.longTextMode,
               contextScope: config.contextScope,

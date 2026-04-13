@@ -11,7 +11,7 @@ export const getApiConfig = (
 ) => {
   const finalApiKey = presetConfig?.apiKey || globalApiKey;
   const finalBaseUrl = presetConfig?.baseUrl || globalBaseUrl;
-  let finalModel = presetConfig?.model || featureModel || globalModel;
+  let finalModel = presetConfig?.defaultModel || presetConfig?.model || featureModel || globalModel;
   return { apiKey: finalApiKey, baseUrl: finalBaseUrl, model: finalModel };
 };
 
