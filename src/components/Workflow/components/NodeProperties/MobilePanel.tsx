@@ -50,6 +50,17 @@ export const MobilePanel = React.memo(
       const list = [...(globalConfig?.modelList || [])];
       if (globalConfig?.model) list.push(globalConfig.model);
 
+      // 添加 API 预设中的模型
+      if (globalConfig?.apiPresets) {
+        globalConfig.apiPresets.forEach((preset: any) => {
+          if (preset.modelList) {
+            preset.modelList.forEach((model: string) => {
+              list.push(model);
+            });
+          }
+        });
+      }
+
       // 整合预设
       const presetTypes = [
         'outline',
