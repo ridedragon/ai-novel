@@ -8,10 +8,18 @@ export const getApiConfig = (
   globalApiKey: string,
   globalBaseUrl: string,
   globalModel: string,
+  apiPresets: any[] = [],
 ) => {
-  const finalApiKey = presetConfig?.apiKey || globalApiKey;
-  const finalBaseUrl = presetConfig?.baseUrl || globalBaseUrl;
-  let finalModel = presetConfig?.defaultModel || presetConfig?.model || featureModel || globalModel;
+  // 首先尝试根据 featureModel 找到对应的预设
+  let modelPreset = null;
+  if (featureModel && apiPresets.length > 0) {
+    modelPreset = apiPresets.find(preset => preset.modelList.includes(featureModel));
+  }
+  
+  // 优先级：模型对应的预设 > 传入的 presetConfig > 全局配置
+  const finalApiKey = modelPreset?.apiKey || presetConfig?.apiKey || globalApiKey;
+  const finalBaseUrl = modelPreset?.baseUrl || presetConfig?.baseUrl || globalBaseUrl;
+  let finalModel = modelPreset?.defaultModel || presetConfig?.defaultModel || presetConfig?.model || featureModel || globalModel;
   return { apiKey: finalApiKey, baseUrl: finalBaseUrl, model: finalModel };
 };
 

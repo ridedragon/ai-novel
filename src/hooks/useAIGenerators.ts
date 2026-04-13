@@ -59,6 +59,7 @@ export function useAIGenerators() {
       onSuccess: () => void;
       outlineAbortControllerRef: React.MutableRefObject<AbortController | null>;
       forcedTargetEnd?: number;
+      apiPresets?: any[];
     }) => {
       const { mode, source, activeNovel, activeOutlineSetId, outlineAbortControllerRef } = params;
       let currentPresetId = params.activeOutlinePresetId;
@@ -72,6 +73,7 @@ export function useAIGenerators() {
         params.globalApiKey,
         params.globalBaseUrl,
         params.globalModel,
+        params.apiPresets,
       );
 
       if (!apiConfig.apiKey) {
@@ -332,6 +334,7 @@ export function useAIGenerators() {
       selectedRefs: any;
       onNovelsUpdate: (updater: (prev: Novel[]) => Novel[]) => void;
       onError: (msg: string) => void;
+      apiPresets?: any[];
     }) => {
       const { index, activeNovel, activeNovelId, activeOutlineSetId, activeOutlinePresetId } = params;
       const activePreset = params.outlinePresets.find(p => p.id === activeOutlinePresetId) || params.outlinePresets[0];
@@ -341,6 +344,7 @@ export function useAIGenerators() {
         params.globalApiKey,
         params.globalBaseUrl,
         '',
+        params.apiPresets,
       );
 
       if (!apiConfig.apiKey) {
@@ -503,6 +507,7 @@ export function useAIGenerators() {
       onError: (msg: string) => void;
       onSuccess: () => void;
       characterAbortControllerRef: React.MutableRefObject<AbortController | null>;
+      apiPresets?: any[];
     }) => {
       const { mode, source, activeNovel, activeCharacterSetId, characterAbortControllerRef } = params;
       let currentPresetId = params.activeCharacterPresetId;
@@ -516,6 +521,7 @@ export function useAIGenerators() {
         params.globalApiKey,
         params.globalBaseUrl,
         params.globalModel,
+        params.apiPresets,
       );
 
       if (!apiConfig.apiKey) {
@@ -741,6 +747,7 @@ export function useAIGenerators() {
       onError: (msg: string) => void;
       onSuccess: () => void;
       worldviewAbortControllerRef: React.MutableRefObject<AbortController | null>;
+      apiPresets?: any[];
     }) => {
       const { mode, source, activeNovel, activeWorldviewSetId, worldviewAbortControllerRef } = params;
       let currentPresetId = params.activeWorldviewPresetId;
@@ -754,6 +761,7 @@ export function useAIGenerators() {
         params.globalApiKey,
         params.globalBaseUrl,
         params.globalModel,
+        params.apiPresets,
       );
 
       if (!apiConfig.apiKey) {
@@ -979,6 +987,7 @@ export function useAIGenerators() {
       onError: (msg: string) => void;
       onSuccess: () => void;
       inspirationAbortControllerRef: React.MutableRefObject<AbortController | null>;
+      apiPresets?: any[];
     }) => {
       const { mode, source, activeNovel, activeInspirationSetId, inspirationAbortControllerRef } = params;
       let currentPresetId = params.activeInspirationPresetId;
@@ -993,6 +1002,7 @@ export function useAIGenerators() {
         params.globalApiKey,
         params.globalBaseUrl,
         params.globalModel,
+        params.apiPresets,
       );
 
       if (!apiConfig.apiKey) {
@@ -1216,6 +1226,7 @@ export function useAIGenerators() {
       onError: (msg: string) => void;
       onSuccess: () => void;
       generateAbortControllerRef: React.MutableRefObject<AbortController | null>;
+      apiPresets?: any[];
     }) => {
       const { mode, activeNovel, activePlotOutlineSetId, generateAbortControllerRef } = params;
       let currentPresetId = params.activePlotOutlinePresetId;
@@ -1230,6 +1241,7 @@ export function useAIGenerators() {
         params.globalApiKey,
         params.globalBaseUrl,
         params.globalModel,
+        params.apiPresets,
       );
 
       if (!apiConfig.apiKey) {
@@ -1494,6 +1506,7 @@ export function useAIGenerators() {
         isRegenerating?: boolean;
         onChainOfThoughtUpdate?: (content: string) => void;
         onStreamingStatusChange?: (isStreaming: boolean) => void;
+        apiPresets?: any[];
       }) => {
         const { apiKey, activeChapter, activeNovel, generateAbortControllerRef } = params;
 
@@ -1525,7 +1538,7 @@ export function useAIGenerators() {
         while (attempt < maxAttempts) {
           try {
             if (generateAbortControllerRef.current?.signal.aborted) break;
-            const config = getApiConfig(params.presetApiConfig, '', params.apiKey, params.baseUrl, params.model);
+            const config = getApiConfig(params.presetApiConfig, '', params.apiKey, params.baseUrl, params.model, params.apiPresets);
 
             logAiParams('对话续写生成', config.model, params.temperature, params.topP, params.topK);
 
