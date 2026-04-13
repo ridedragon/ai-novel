@@ -256,9 +256,15 @@ export function useAutoWriteManager() {
 >> AI REQUEST [手动润色: 优化前分析]
 >> -----------------------------------------------------------
 >> Model:       ${anaModel}
+>> Base URL:    ${anaBaseUrl}
 >> Temperature: ${analysisPreset.temperature ?? 1.0}
 >> Top P:       ${analysisPreset.topP ?? 1.0}
 >> Top K:       ${analysisPreset.topK ?? 200}
+>> -----------------------------------------------------------
+>> Request Details:
+>>  - API Key:     ${anaApiKey ? '***' : 'Missing'}
+>>  - Content:     ${sourceContentToUse.length > 200 ? sourceContentToUse.slice(0, 200) + '...' : sourceContentToUse}
+>>  - Preset:      ${analysisPreset.name || analysisPreset.id}
 >> -----------------------------------------------------------
           `);
 
@@ -340,9 +346,16 @@ export function useAutoWriteManager() {
 >> AI REQUEST [手动润色: 正文优化]
 >> -----------------------------------------------------------
 >> Model:       ${finalModel}
+>> Base URL:    ${finalBaseUrl}
 >> Temperature: ${activePreset.temperature ?? 1.0}
 >> Top P:       ${activePreset.topP ?? 1.0}
 >> Top K:       ${activePreset.topK ?? 200}
+>> -----------------------------------------------------------
+>> Request Details:
+>>  - API Key:     ${finalApiKey ? '***' : 'Missing'}
+>>  - Content:     ${sourceContentToUse.length > 200 ? sourceContentToUse.slice(0, 200) + '...' : sourceContentToUse}
+>>  - Preset:      ${activePreset.name || activePreset.id}
+>>  - Analysis Used: ${currentAnalysisResult ? 'Yes' : 'No'}
 >> -----------------------------------------------------------
         `);
 
