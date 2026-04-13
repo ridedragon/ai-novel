@@ -51,6 +51,15 @@ export const ModelConfigPanel = ({
             {(() => {
               const apis: any[] = [];
               if (globalConfig?.apiKey) apis.push({ name: '主设置 API', key: globalConfig.apiKey, url: globalConfig.baseUrl });
+              // 添加全局 API 预设
+              if (globalConfig?.apiPresets) {
+                globalConfig.apiPresets.forEach((preset: any) => {
+                  if (preset.apiKey && preset.baseUrl) {
+                    apis.push({ name: `API预设: ${preset.name}`, key: preset.apiKey, url: preset.baseUrl });
+                  }
+                });
+              }
+              // 添加节点类型预设
               Object.values(allPresets).flat().forEach((p: any) => {
                 if (p.apiConfig?.apiKey && p.apiConfig?.baseUrl) {
                   apis.push({ name: `预设: ${p.name}`, key: p.apiConfig.apiKey, url: p.apiConfig.baseUrl });
