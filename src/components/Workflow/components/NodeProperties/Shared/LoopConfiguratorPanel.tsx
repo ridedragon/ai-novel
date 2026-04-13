@@ -204,32 +204,36 @@ export const LoopConfiguratorPanel = ({
                             className={inputClass}
                             value=""
                             onChange={e => {
-                              const [key, url] = e.target.value.split('|');
+                              const [key, url, model] = e.target.value.split('|');
                               if (key && url) {
-                                onUpdate({ apiKey: key, baseUrl: url });
+                                const updates: any = { apiKey: key, baseUrl: url };
+                                if (model) {
+                                  updates.model = model;
+                                }
+                                onUpdate(updates);
                               }
                             }}
                           >
                             <option value="" disabled>从现有配置中选择...</option>
                             {(() => {
                               const apis: any[] = [];
-                              if (globalConfig?.apiKey) apis.push({ name: '主设置 API', key: globalConfig.apiKey, url: globalConfig.baseUrl });
+                              if (globalConfig?.apiKey) apis.push({ name: '主设置 API', key: globalConfig.apiKey, url: globalConfig.baseUrl, model: globalConfig.model });
                               // 添加全局 API 预设
                               if (globalConfig?.apiPresets) {
                                 globalConfig.apiPresets.forEach((preset: any) => {
                                   if (preset.apiKey && preset.baseUrl) {
-                                    apis.push({ name: `API预设: ${preset.name}`, key: preset.apiKey, url: preset.baseUrl });
+                                    apis.push({ name: `API预设: ${preset.name}`, key: preset.apiKey, url: preset.baseUrl, model: preset.defaultModel });
                                   }
                                 });
                               }
                               // 添加节点类型预设
                               Object.values(allPresets).flat().forEach((p: any) => {
                                 if (p.apiConfig?.apiKey && p.apiConfig?.baseUrl) {
-                                  apis.push({ name: `预设: ${p.name}`, key: p.apiConfig.apiKey, url: p.apiConfig.baseUrl });
+                                  apis.push({ name: `预设: ${p.name}`, key: p.apiConfig.apiKey, url: p.apiConfig.baseUrl, model: p.apiConfig.model });
                                 }
                               });
                               return apis.filter((v, i, a) => a.findIndex(t => t.url === v.url) === i).map((api, idx) => (
-                                <option key={idx} value={`${api.key}|${api.url}`}>{api.name} ({api.url})</option>
+                                <option key={idx} value={`${api.key}|${api.url}|${api.model || ''}`}>{api.name} ({api.url})</option>
                               ));
                             })()}
                           </select>
