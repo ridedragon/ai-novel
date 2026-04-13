@@ -567,15 +567,67 @@ export class AutoWriteEngine {
               lastUpdateTime = now;
 
               // 支持流式分章节更新
-              const liveContents =
+              let liveContents =
                 batchItems.length > 1
                   ? this.splitBatchContent(fullGeneratedContent, batchItems, precompiledRegexes)
                   : [fullGeneratedContent];
 
+              // 优化：在流式传输过程中，处理未完成的章节内容
+              if (batchItems.length > 1) {
+                // 检查是否有未分配的内容
+                const hasContent = liveContents.some(content => content.trim());
+                if (hasContent) {
+                  // 如果只有第一个章节有内容，且还有其他章节，尝试分配剩余内容
+                  const firstContent = liveContents[0] || '';
+                  if (firstContent.trim() && liveContents.length > 1) {
+                    // 检查是否有章节标题的开始标记
+                    const chapterMarkers = [];
+                    for (let i = 1; i < batchItems.length; i++) {
+                      const chapterTitle = batchItems[i].item.title;
+                      const markerIndex = fullGeneratedContent.indexOf(`### ${chapterTitle}`);
+                      if (markerIndex !== -1) {
+                        chapterMarkers.push({ index: markerIndex, bIdx: i });
+                      }
+                    }
+
+                    // 如果找到章节标记，重新分配内容
+                    if (chapterMarkers.length > 0) {
+                      chapterMarkers.sort((a, b) => a.index - b.index);
+                      
+                      // 更新第一个章节的内容
+                      liveContents[0] = fullGeneratedContent.substring(0, chapterMarkers[0].index).trim();
+                      
+                      // 更新其他章节的内容
+                      for (let i = 0; i < chapterMarkers.length; i++) {
+                        const currentMarker = chapterMarkers[i];
+                        const nextMarker = i < chapterMarkers.length - 1 ? chapterMarkers[i + 1] : null;
+                        const start = currentMarker.index;
+                        const end = nextMarker ? nextMarker.index : fullGeneratedContent.length;
+                        
+                        // 寻找标题行的结尾
+                        const titleLineEnd = fullGeneratedContent.indexOf('\n', start);
+                        const contentStart = titleLineEnd !== -1 ? titleLineEnd + 1 : start;
+                        
+                        liveContents[currentMarker.bIdx] = fullGeneratedContent.substring(contentStart, end).trim();
+                      }
+                    }
+                  }
+                }
+              }
+
               this.novel = {
                 ...this.novel,
                 chapters: (this.novel.chapters || []).map(c => {
-                  const bIdx = batchItems.findIndex(b => b.id === c.id);
+                  // 优先通过ID匹配，如果匹配不到，则通过标题和分卷ID匹配
+                  let bIdx = batchItems.findIndex(b => b.id === c.id);
+                  if (bIdx === -1) {
+                    bIdx = batchItems.findIndex(b => {
+                      const titleMatch = b.item.title === c.title;
+                      const volumeMatch = (b.volumeId && c.volumeId === b.volumeId) || 
+                                         (!b.volumeId && (!c.volumeId || c.volumeId === ''));
+                      return titleMatch && volumeMatch;
+                    });
+                  }
                   if (bIdx !== -1) {
                     const updatedContent = liveContents[bIdx] || '';
                     // 多章节模式下，如果后续章节还没有内容，不要清空它们
@@ -640,7 +692,17 @@ export class AutoWriteEngine {
               };
               // 核心修复 4.2：流式更新期间仅发送增量章节数据 (Delta Update)，显著减轻跨进程通信 (IPC) 压力
               // 我们仅提取本次 batch 涉及的章节传递给 UI，避免传递整个小说对象
-              const deltaChapters = (this.novel.chapters || []).filter(c => batchItems.some(b => b.id === c.id));
+              const deltaChapters = (this.novel.chapters || []).filter(c => {
+                const idMatch = batchItems.some(b => b.id === c.id);
+                if (idMatch) return true;
+                // 备用匹配：通过标题和分卷ID匹配
+                return batchItems.some(b => {
+                  const titleMatch = b.item.title === c.title;
+                  const volumeMatch = (b.volumeId && c.volumeId === b.volumeId) || 
+                                     (!b.volumeId && (!c.volumeId || c.volumeId === ''));
+                  return titleMatch && volumeMatch;
+                });
+              });
               onNovelUpdate({ ...this.novel, chapters: deltaChapters });
             }
             // 优化 4.3：将高频流式统计改为 console.debug，不再发送给 VSCode Terminal
