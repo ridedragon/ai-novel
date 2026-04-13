@@ -256,9 +256,11 @@ export function useAutoWriteManager() {
 >> AI REQUEST [手动润色: 优化前分析]
 >> -----------------------------------------------------------
 >> Model:       ${anaModel}
+>> Base URL:    ${anaBaseUrl}
 >> Temperature: ${analysisPreset.temperature ?? 1.0}
 >> Top P:       ${analysisPreset.topP ?? 1.0}
 >> Top K:       ${analysisPreset.topK ?? 200}
+>> Chapter ID:  ${targetId}
 >> -----------------------------------------------------------
           `);
 
@@ -325,7 +327,13 @@ export function useAutoWriteManager() {
           if (params.onAnalysisResult) params.onAnalysisResult(currentAnalysisResult);
           setChapters(prev => prev.map(c => (c.id === targetId ? { ...c, analysisResult: currentAnalysisResult } : c)));
         } catch (e: any) {
-          if (e.name !== 'AbortError') terminal.error('[Optimize] Analysis phase failed', e);
+          if (e.name !== 'AbortError') {
+            terminal.error('[Optimize] Analysis phase failed', e);
+            if (e.status) {
+              terminal.error(`[Optimize] Analysis error status: ${e.status}`);
+              terminal.error(`[Optimize] Analysis error details: ${JSON.stringify(e, null, 2)}`);
+            }
+          }
         }
       }
 
@@ -340,9 +348,11 @@ export function useAutoWriteManager() {
 >> AI REQUEST [手动润色: 正文优化]
 >> -----------------------------------------------------------
 >> Model:       ${finalModel}
+>> Base URL:    ${finalBaseUrl}
 >> Temperature: ${activePreset.temperature ?? 1.0}
 >> Top P:       ${activePreset.topP ?? 1.0}
 >> Top K:       ${activePreset.topK ?? 200}
+>> Chapter ID:  ${targetId}
 >> -----------------------------------------------------------
         `);
 
@@ -476,7 +486,13 @@ export function useAutoWriteManager() {
           }),
         );
       } catch (err: any) {
-        if (err.name !== 'AbortError') params.onError(err.message || '优化出错');
+        if (err.name !== 'AbortError') {
+          params.onError(err.message || '优化出错');
+          if (err.status) {
+            terminal.error(`[Optimize] Optimization error status: ${err.status}`);
+            terminal.error(`[Optimize] Optimization error details: ${JSON.stringify(err, null, 2)}`);
+          }
+        }
       } finally {
         stopOptimize(targetId);
       }
