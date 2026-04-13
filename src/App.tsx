@@ -1369,6 +1369,7 @@ function App() {
               novelsRef: novelData.novelsRef,
               activeNovelId: novelData.activeNovelId,
               getActiveScripts,
+              activeApiPreset,
               onError: m =>
                 setDialog({ isOpen: true, type: 'alert', title: '错误', message: m, onConfirm: closeDialog }),
               onStreamingStatusChange: (isStreaming) => {
@@ -1485,6 +1486,7 @@ function App() {
                   novelsRef: novelData.novelsRef,
                   activeNovelId: novelData.activeNovelId,
                   getActiveScripts,
+                  activeApiPreset,
                   onError: m =>
                     setDialog({ isOpen: true, type: 'alert', title: '错误', message: m, onConfirm: closeDialog }),
                 });
