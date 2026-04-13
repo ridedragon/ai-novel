@@ -437,8 +437,8 @@ function App() {
         config.model
       );
       
-      const finalSmallSummaryModel = activePreset?.apiConfig?.model || config.smallSummaryModel || config.outlineModel || config.model;
-      const finalBigSummaryModel = activePreset?.apiConfig?.model || config.bigSummaryModel || config.outlineModel || config.model;
+      const finalSmallSummaryModel = activePreset?.apiConfig?.model || config.smallSummaryModel || config.outlineModel || finalApiConfig.model;
+      const finalBigSummaryModel = activePreset?.apiConfig?.model || config.bigSummaryModel || config.outlineModel || finalApiConfig.model;
       
       const result = await checkAndGenerateSummary(
         chapterId,
@@ -1420,8 +1420,8 @@ function App() {
               activeChapter: regenerateChapter,
               activeNovel: novelData.activeNovel,
               activeOutlineSetId: novelData.activeOutlineSetId,
-              apiKey: config.apiKey,
-              baseUrl: config.baseUrl,
+              apiKey: activePreset?.apiConfig?.apiKey || config.apiKey,
+              baseUrl: activePreset?.apiConfig?.baseUrl || config.baseUrl,
               contextLength: activePreset?.contextLength || 4000,
               includeFullOutlineInAutoWrite: false,
               systemPrompt: novelData.activeNovel.systemPrompt || '',
@@ -1436,8 +1436,8 @@ function App() {
               maxReplyLength: completion.maxReplyLength,
               max_tokens: completion.max_tokens,
               maxRetries: config.maxRetries,
-              outlineModel: config.outlineModel || config.model,
-              model: config.model,
+              outlineModel: activePreset?.apiConfig?.model || config.outlineModel || config.model,
+              model: activePreset?.apiConfig?.model || config.model,
               presetApiConfig: activePreset?.apiConfig,
               longTextMode: config.longTextMode,
               contextScope: config.contextScope,
