@@ -618,7 +618,16 @@ export class AutoWriteEngine {
               this.novel = {
                 ...this.novel,
                 chapters: (this.novel.chapters || []).map(c => {
-                  const bIdx = batchItems.findIndex(b => b.id === c.id);
+                  // 优先通过ID匹配，如果匹配不到，则通过标题和分卷ID匹配
+                  let bIdx = batchItems.findIndex(b => b.id === c.id);
+                  if (bIdx === -1) {
+                    bIdx = batchItems.findIndex(b => {
+                      const titleMatch = b.item.title === c.title;
+                      const volumeMatch = (b.volumeId && c.volumeId === b.volumeId) || 
+                                         (!b.volumeId && (!c.volumeId || c.volumeId === ''));
+                      return titleMatch && volumeMatch;
+                    });
+                  }
                   if (bIdx !== -1) {
                     const updatedContent = liveContents[bIdx] || '';
                     // 多章节模式下，如果后续章节还没有内容，不要清空它们
@@ -683,7 +692,17 @@ export class AutoWriteEngine {
               };
               // 核心修复 4.2：流式更新期间仅发送增量章节数据 (Delta Update)，显著减轻跨进程通信 (IPC) 压力
               // 我们仅提取本次 batch 涉及的章节传递给 UI，避免传递整个小说对象
-              const deltaChapters = (this.novel.chapters || []).filter(c => batchItems.some(b => b.id === c.id));
+              const deltaChapters = (this.novel.chapters || []).filter(c => {
+                const idMatch = batchItems.some(b => b.id === c.id);
+                if (idMatch) return true;
+                // 备用匹配：通过标题和分卷ID匹配
+                return batchItems.some(b => {
+                  const titleMatch = b.item.title === c.title;
+                  const volumeMatch = (b.volumeId && c.volumeId === b.volumeId) || 
+                                     (!b.volumeId && (!c.volumeId || c.volumeId === ''));
+                  return titleMatch && volumeMatch;
+                });
+              });
               onNovelUpdate({ ...this.novel, chapters: deltaChapters });
             }
             // 优化 4.3：将高频流式统计改为 console.debug，不再发送给 VSCode Terminal
