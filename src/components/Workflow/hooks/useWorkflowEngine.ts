@@ -435,49 +435,71 @@ export const useWorkflowEngine = (options: {
         localNovel = clearNovelContentByVolumes(localNovel, [userSpecifiedTargetVolumeId], true, keepContent);
         await updateLocalAndGlobal(localNovel);
       }
-      // 从特定节点开始运行且没有指定目标卷时，清除对应卷的章节列表
+      // 从特定节点开始运行时，清除章节列表的逻辑（增强补丁）
       // 两种情况都需要清除：1) 未勾选保持内容 2) 勾选了保持内容但未勾选保留章节
       else if (startIndex > 0 && (!keepContent.enabled || !keepContent.types.includes('chapter'))) {
-        // 确定当前节点所在的卷
-        let targetVolumeIdToClear: string | undefined;
+        // 补丁1：收集所有可能的目标卷ID
+        const volumeIdsToClear = new Set<string>();
         
-        // 尝试从起始节点获取目标卷ID
         if (startIndex < sortedNodes.length) {
           const startNode = sortedNodes[startIndex];
           
-          // 策略1：使用起始节点的 targetVolumeId
+          // 从起始节点获取目标卷ID
           if (startNode.data.targetVolumeId) {
-            targetVolumeIdToClear = startNode.data.targetVolumeId as string;
-          } 
-          // 策略2：使用起始节点的 folderName 匹配卷
-          else if (startNode.data.folderName && localNovel.volumes) {
+            volumeIdsToClear.add(startNode.data.targetVolumeId as string);
+          }
+          if (startNode.data.folderName && localNovel.volumes) {
             const matchingVol = localNovel.volumes.find(v => v.title === startNode.data.folderName);
             if (matchingVol) {
-              targetVolumeIdToClear = matchingVol.id;
-            }
-          }
-          // 策略3：如果是章节节点，尝试从最近的章节获取卷ID
-          else if (startNode.data.typeKey === 'chapter' && localNovel.chapters && localNovel.chapters.length > 0) {
-            // 找到最近的章节的卷ID
-            for (let k = localNovel.chapters.length - 1; k >= 0; k--) {
-              if (localNovel.chapters[k].volumeId) {
-                targetVolumeIdToClear = localNovel.chapters[k].volumeId;
-                break;
-              }
-            }
-          }
-          // 策略4：尝试从工作流管理器的 activeVolumeAnchor 获取
-          else {
-            const activeVolumeAnchor = workflowManager.getActiveVolumeAnchor();
-            if (activeVolumeAnchor) {
-              targetVolumeIdToClear = activeVolumeAnchor;
+              volumeIdsToClear.add(matchingVol.id);
             }
           }
         }
         
-        // 如果找到了目标卷ID，清除该卷的内容
-        if (targetVolumeIdToClear) {
-          localNovel = clearNovelContentByVolumes(localNovel, [targetVolumeIdToClear], true, keepContent);
+        // 补丁2：检查后续所有节点的卷信息
+        for (let i = startIndex; i < sortedNodes.length; i++) {
+          const node = sortedNodes[i];
+          if (node.data.targetVolumeId) {
+            volumeIdsToClear.add(node.data.targetVolumeId as string);
+          }
+          if (node.data.folderName && localNovel.volumes) {
+            const matchingVol = localNovel.volumes.find(v => v.title === node.data.folderName);
+            if (matchingVol) {
+              volumeIdsToClear.add(matchingVol.id);
+            }
+          }
+        }
+        
+        // 补丁3：直接清除章节（不依赖 clearNovelContentByVolumes）
+        if (volumeIdsToClear.size > 0) {
+          terminal.log(`${logPrefix} [PATCH] 准备清除以下卷的章节: ${Array.from(volumeIdsToClear).join(', ')}`);
+          
+          // 直接过滤章节列表
+          const chaptersBefore = localNovel.chapters?.length || 0;
+          localNovel = {
+            ...localNovel,
+            chapters: (localNovel.chapters || []).filter(chapter => {
+              // 保留不在清除列表中的章节
+              if (!chapter.volumeId || !volumeIdsToClear.has(chapter.volumeId)) {
+                return true;
+              }
+              // 检查是否需要保留章节
+              if (keepContent.enabled && keepContent.types.includes('chapter')) {
+                return true;
+              }
+              // 清除章节
+              return false;
+            })
+          };
+          
+          const chaptersAfter = localNovel.chapters?.length || 0;
+          terminal.log(`${logPrefix} [PATCH] 章节清除完成: ${chaptersBefore} → ${chaptersAfter}`);
+          
+          // 同时也调用 clearNovelContentByVolumes 来清除其他内容（大纲、角色等）
+          for (const volId of volumeIdsToClear) {
+            localNovel = clearNovelContentByVolumes(localNovel, [volId], true, keepContent);
+          }
+          
           await updateLocalAndGlobal(localNovel);
         }
       }
