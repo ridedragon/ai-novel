@@ -456,7 +456,9 @@ export const checkAndGenerateSummary = async (
             { role: 'system', content: 'You are a professional editor helper.' },
             { role: 'user', content: `${sourceText}\n\n${prompt}` },
           ],
-          temperature: 0.5,
+          temperature: 1,
+          top_p: 0.95,
+          top_k: 50,
         },
         { signal },
       );
