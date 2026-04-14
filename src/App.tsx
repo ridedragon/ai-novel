@@ -1497,7 +1497,8 @@ function App() {
                 prev.map(ch => (ch.id === novelData.activeChapterId ? { ...ch, content: c } : ch)),
               );
               
-              // 检查是否启用了自动优化，如果是，则在保存后自动优化内容
+              // 检查是否启用了自动优化，如果是，则在保存后自动触发一次优化
+              // 这样用户可以在编辑过程中自由修改内容，只有在保存时才会触发优化
               if (config.autoOptimize && novelData.activeChapterId) {
                 await autoWrite.handleOptimize({
                   targetId: novelData.activeChapterId,
