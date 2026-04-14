@@ -235,6 +235,7 @@ export interface SummaryConfig {
   bigSummaryPrompt: string;
   contextChapterCount?: number;
   contextScope?: string;
+  maxRetries?: number; // 失败重试次数
   runId?: string | null; // 核心修复 (Bug 2): 支持执行锁校验
 }
 
@@ -417,22 +418,27 @@ export const checkAndGenerateSummary = async (
 
     if (!sourceText) return;
 
-    try {
-      const currentApiKey = type === 'small' ? smallSummaryApiKey : bigSummaryApiKey;
-      const currentBaseUrl = type === 'small' ? smallSummaryBaseUrl : bigSummaryBaseUrl;
-      const openai = new OpenAI({ apiKey: currentApiKey, baseURL: currentBaseUrl, dangerouslyAllowBrowser: true });
-      let prompt = type === 'small' ? smallSummaryPrompt : bigSummaryPrompt;
-      const currentModel = type === 'small' ? smallSummaryModel : bigSummaryModel;
+    const maxRetries = config.maxRetries || 3; // 默认重试3次
+    let retryCount = 0;
+    let success = false;
 
-      // 在本卷模式下，通过系统指令强力约束 AI 的总结范围
-      const isVolMode = contextScope === 'volume' || contextScope === 'currentVolume';
-      if (isVolMode && type === 'big') {
-        prompt = `【分卷总结专项指令】：当前正在进行“分卷创作模式”，你必须仅针对下方提供的本卷内容进行大总结。严禁提及或猜测任何不属于下方内容的剧情。\n\n${prompt}`;
-      }
+    while (retryCount <= maxRetries && !success) {
+      try {
+        const currentApiKey = type === 'small' ? smallSummaryApiKey : bigSummaryApiKey;
+        const currentBaseUrl = type === 'small' ? smallSummaryBaseUrl : bigSummaryBaseUrl;
+        const openai = new OpenAI({ apiKey: currentApiKey, baseURL: currentBaseUrl, dangerouslyAllowBrowser: true });
+        let prompt = type === 'small' ? smallSummaryPrompt : bigSummaryPrompt;
+        const currentModel = type === 'small' ? smallSummaryModel : bigSummaryModel;
 
-      // 详细日志记录
-      terminal.log(`
->> AI REQUEST [Summary ${type}] 
+        // 在本卷模式下，通过系统指令强力约束 AI 的总结范围
+        const isVolMode = contextScope === 'volume' || contextScope === 'currentVolume';
+        if (isVolMode && type === 'big') {
+          prompt = `【分卷总结专项指令】：当前正在进行“分卷创作模式”，你必须仅针对下方提供的本卷内容进行大总结。严禁提及或猜测任何不属于下方内容的剧情。\n\n${prompt}`;
+        }
+
+        // 详细日志记录
+        terminal.log(`
+>> AI REQUEST [Summary ${type}] ${retryCount > 0 ? `(重试 ${retryCount})` : ''}
 >> -----------------------------------------------------------
 >> Model:       ${currentModel}
 >> Base URL:    ${currentBaseUrl}
@@ -449,67 +455,79 @@ export const checkAndGenerateSummary = async (
 >> -----------------------------------------------------------
       `);
 
-      const completion = await openai.chat.completions.create(
-        {
-          model: currentModel,
-          messages: [
-            { role: 'system', content: 'You are a professional editor helper.' },
-            { role: 'user', content: `${sourceText}\n\n${prompt}` },
-          ],
-          temperature: 1,
-          top_p: 0.95,
-          top_k: 50,
-        },
-        { signal },
-      );
-
-      if (!checkActive()) return;
-      const summaryContent = completion.choices[0]?.message?.content || '';
-      if (summaryContent && checkActive()) {
-        const existingIndex = currentChaptersSnapshot.findIndex(
-          c => c.subtype === subtype && c.summaryRange === rangeStr,
+        const completion = await openai.chat.completions.create(
+          {
+            model: currentModel,
+            messages: [
+              { role: 'system', content: 'You are a professional editor helper.' },
+              { role: 'user', content: `${sourceText}\n\n${prompt}` },
+            ],
+            temperature: 1,
+            top_p: 0.95,
+            top_k: 50,
+          },
+          { signal },
         );
-        if (existingIndex !== -1) {
-          currentChaptersSnapshot[existingIndex] = {
-            ...currentChaptersSnapshot[existingIndex],
-            content: summaryContent,
-          };
-        } else {
-          // Get actual chapter titles for the range
-          const startChapter = getSnapshotStoryChapters()[start - 1];
-          const endChapter = getSnapshotStoryChapters()[end - 1];
-          const startTitle = startChapter?.title || `Chapter ${start}`;
-          const endTitle = endChapter?.title || `Chapter ${end}`;
-          
-          const newChapter: Chapter = {
-            id: Date.now() + Math.floor(Math.random() * 10000),
-            title: `${type === 'small' ? '🔹小总结' : '🔸大总结'}：${startTitle} 到 ${endTitle}`,
-            content: summaryContent,
-            subtype: subtype,
-            summaryRange: rangeStr,
-            summaryRangeVolume: rangeStrVolume,
-            volumeId: targetVolumeId || undefined,
-          };
-          const snapIdx = currentChaptersSnapshot.findIndex(c => c.id === lastChapterId);
-          if (snapIdx !== -1) {
-            let insertAt = snapIdx + 1;
-            while (insertAt < currentChaptersSnapshot.length && isSummaryChapter(currentChaptersSnapshot[insertAt])) {
-              insertAt++;
-            }
-            currentChaptersSnapshot.splice(insertAt, 0, newChapter);
+
+        if (!checkActive()) return;
+        const summaryContent = completion.choices[0]?.message?.content || '';
+        if (summaryContent && checkActive()) {
+          const existingIndex = currentChaptersSnapshot.findIndex(
+            c => c.subtype === subtype && c.summaryRange === rangeStr,
+          );
+          if (existingIndex !== -1) {
+            currentChaptersSnapshot[existingIndex] = {
+              ...currentChaptersSnapshot[existingIndex],
+              content: summaryContent,
+            };
           } else {
-            currentChaptersSnapshot.push(newChapter);
+            // Get actual chapter titles for the range
+            const startChapter = getSnapshotStoryChapters()[start - 1];
+            const endChapter = getSnapshotStoryChapters()[end - 1];
+            const startTitle = startChapter?.title || `Chapter ${start}`;
+            const endTitle = endChapter?.title || `Chapter ${end}`;
+            
+            const newChapter: Chapter = {
+              id: Date.now() + Math.floor(Math.random() * 10000),
+              title: `${type === 'small' ? '🔹小总结' : '🔸大总结'}：${startTitle} 到 ${endTitle}`,
+              content: summaryContent,
+              subtype: subtype,
+              summaryRange: rangeStr,
+              summaryRangeVolume: rangeStrVolume,
+              volumeId: targetVolumeId || undefined,
+            };
+            const snapIdx = currentChaptersSnapshot.findIndex(c => c.id === lastChapterId);
+            if (snapIdx !== -1) {
+              let insertAt = snapIdx + 1;
+              while (insertAt < currentChaptersSnapshot.length && isSummaryChapter(currentChaptersSnapshot[insertAt])) {
+                insertAt++;
+              }
+              currentChaptersSnapshot.splice(insertAt, 0, newChapter);
+            } else {
+              currentChaptersSnapshot.push(newChapter);
+            }
           }
+          const lastCreated = currentChaptersSnapshot.find(c => c.subtype === subtype && c.summaryRange === rangeStr);
+          if (lastCreated) pendingSummaries.push(lastCreated);
+          success = true;
         }
-        const lastCreated = currentChaptersSnapshot.find(c => c.subtype === subtype && c.summaryRange === rangeStr);
-        if (lastCreated) pendingSummaries.push(lastCreated);
-      }
-    } catch (e) {
-      const error = e as any;
-      errorLog(`[Summary] Failed to generate ${type} summary: ${error.message}`);
-      if (error.status) {
-        errorLog(`[Summary] Error status: ${error.status}`);
-        errorLog(`[Summary] Error details: ${JSON.stringify(error, null, 2)}`);
+      } catch (e) {
+        const error = e as any;
+        retryCount++;
+        errorLog(`[Summary] Failed to generate ${type} summary (尝试 ${retryCount}/${maxRetries}): ${error.message}`);
+        if (error.status) {
+          errorLog(`[Summary] Error status: ${error.status}`);
+          errorLog(`[Summary] Error details: ${JSON.stringify(error, null, 2)}`);
+        }
+        
+        if (retryCount < maxRetries) {
+          // 指数退避策略
+          const delay = 1500 * Math.pow(2, retryCount - 1);
+          terminal.log(`[Summary] 等待 ${delay}ms 后重试...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          errorLog(`[Summary] 已达到最大重试次数，生成 ${type} summary 失败`);
+        }
       }
     }
   };
