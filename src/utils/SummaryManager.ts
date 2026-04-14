@@ -79,6 +79,14 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
   // 4. 逐卷装配
   volumeOrder.forEach(vid => {
     const volStories = storiesByVol.get(vid) || [];
+    
+    // 确保分卷内的章节按照 globalIndex 排序
+    volStories.sort((a, b) => {
+      if (a.globalIndex !== undefined && b.globalIndex !== undefined) {
+        return a.globalIndex - b.globalIndex;
+      }
+      return 0;
+    });
 
     volStories.forEach(story => {
       finalResult.push(story);
