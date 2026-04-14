@@ -449,10 +449,27 @@ export const useWorkflowEngine = (options: {
           }
         }
         
+        // 兜底：如果起始节点没有目标卷，尝试从最后一章获取卷ID
+        if (!targetVolumeIdToClear && localNovel.chapters && localNovel.chapters.length > 0) {
+          const lastChapter = localNovel.chapters[localNovel.chapters.length - 1];
+          if (lastChapter.volumeId) {
+            targetVolumeIdToClear = lastChapter.volumeId;
+          }
+        }
+        
+        // 兜底：如果还是没有找到，尝试使用第一个卷
+        if (!targetVolumeIdToClear && localNovel.volumes && localNovel.volumes.length > 0) {
+          targetVolumeIdToClear = localNovel.volumes[0].id;
+        }
+        
         // 如果找到了目标卷ID，清除该卷的内容
         if (targetVolumeIdToClear) {
+          terminal.log(`${logPrefix} 从特定节点开始运行，清除卷 ${targetVolumeIdToClear} 的内容，keepContent: ${JSON.stringify(keepContent)}`);
           localNovel = clearNovelContentByVolumes(localNovel, [targetVolumeIdToClear], true, keepContent);
           await updateLocalAndGlobal(localNovel);
+          terminal.log(`${logPrefix} 清除后章节数量: ${localNovel.chapters?.length || 0}`);
+        } else {
+          terminal.log(`${logPrefix} 无法确定目标卷，跳过清除操作`);
         }
       }
       
