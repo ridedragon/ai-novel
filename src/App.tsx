@@ -2,6 +2,13 @@ import { BookOpen, Download, GitBranch, Home, Menu, Network, Settings, Zap } fro
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import terminal from 'virtual:terminal';
 
+// 扩展 Window 接口以包含 autoOptimizeTimeout 属性
+declare global {
+  interface Window {
+    autoOptimizeTimeout: NodeJS.Timeout | undefined;
+  }
+}
+
 // 导入重构后的 Hooks
 import { useAIGenerators } from './hooks/useAIGenerators';
 import { useAppConfig } from './hooks/useAppConfig';
@@ -1498,11 +1505,39 @@ function App() {
               );
             setIsEditingChapter(!isEditingChapter);
           }}
-          onChapterContentChange={content =>
+          onChapterContentChange={content => {
             novelData.setChapters(prev =>
               prev.map(c => (c.id === novelData.activeChapterId ? { ...c, content } : c)),
-            )
-          }
+            );
+            // 检查是否开启了自动优化，如果是，则触发自动优化（带防抖）
+            if (config.autoOptimize && novelData.activeChapterId) {
+              // 清除之前的定时器
+              if (window.autoOptimizeTimeout) {
+                clearTimeout(window.autoOptimizeTimeout);
+              }
+              // 设置新的定时器，500ms 后触发自动优化
+              window.autoOptimizeTimeout = setTimeout(() => {
+                terminal.log(`[App] Auto-optimization triggered for chapter ${novelData.activeChapterId} due to content change.`);
+                autoWrite.handleOptimize({
+                  targetId: novelData.activeChapterId,
+                  initialContent: content,
+                  ...config,
+                  ...generators,
+                  setChapters: novelData.setChapters,
+                  novelsRef: novelData.novelsRef,
+                  activeNovelId: novelData.activeNovelId,
+                  getActiveScripts,
+                  activeApiPreset,
+                  apiPresets: config.apiPresets,
+                  onError: m =>
+                    setDialog({ isOpen: true, type: 'alert', title: '错误', message: m, onConfirm: closeDialog }),
+                  onStreamingStatusChange: (isStreaming) => {
+                    setIsStreaming(isStreaming);
+                  },
+                });
+              }, 500);
+            }
+          }}
           onOptimize={(tid, content) =>
             autoWrite.handleOptimize({
               targetId: tid || novelData.activeChapterId!,
@@ -1521,7 +1556,7 @@ function App() {
                 setIsStreaming(isStreaming);
               },
             })
-          }
+          },
           onStopOptimize={autoWrite.stopOptimize}
           onRegenerate={async (chapterId) => {
             const chapter = novelData.chapters.find(c => c.id === chapterId);
