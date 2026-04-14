@@ -18,9 +18,19 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
 
   const startTime = Date.now();
 
-  // 1. 分离剧情章与总结章
+  // 1. 分离剧情章与总结章，并确保剧情章按原始顺序排列
   const allStories = chapters.filter(c => !isSummaryChapter(c));
   const allSummaries = chapters.filter(c => isSummaryChapter(c));
+  
+  // 确保剧情章按照原始顺序排列，防止章节顺序被打乱
+  allStories.sort((a, b) => {
+    // 优先使用 globalIndex 排序
+    if (a.globalIndex !== undefined && b.globalIndex !== undefined) {
+      return a.globalIndex - b.globalIndex;
+    }
+    // 如果没有 globalIndex，则使用在原始数组中的位置排序
+    return chapters.indexOf(a) - chapters.indexOf(b);
+  });
 
   if (allStories.length === 0) return chapters;
 
