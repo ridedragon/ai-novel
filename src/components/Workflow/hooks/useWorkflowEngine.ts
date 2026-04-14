@@ -430,8 +430,9 @@ export const useWorkflowEngine = (options: {
         localNovel = clearNovelContentByVolumes(localNovel, [userSpecifiedTargetVolumeId], mode === 'full', keepContent);
         await updateLocalAndGlobal(localNovel);
       } 
-      // 从特定节点开始运行且没有指定目标卷时，清除对应卷的章节列表（如果没有勾选保留）
-      else if (startIndex > 0 && !keepContent.enabled) {
+      // 从特定节点开始运行且没有指定目标卷时，清除对应卷的章节列表
+      // 两种情况都需要清除：1) 未勾选保持内容 2) 勾选了保持内容但未勾选保留章节
+      else if (startIndex > 0 && (!keepContent.enabled || !keepContent.types.includes('chapter'))) {
         // 确定当前节点所在的卷
         let targetVolumeIdToClear: string | undefined;
         
