@@ -231,11 +231,10 @@ export const storage = {
       ...incomingChapters.map(chapter => chapterMap.get(chapter.id)),
     ];
 
+    // 修复：只使用 incoming.volumes，因为它包含了删除操作后的最新分卷列表
     const mergedVolumesMap = new Map<string, any>();
-    (existing.volumes || []).forEach(volume => mergedVolumesMap.set(volume.id, volume));
     (incoming.volumes || []).forEach(volume => {
-      const prev = mergedVolumesMap.get(volume.id);
-      mergedVolumesMap.set(volume.id, { ...prev, ...volume });
+      mergedVolumesMap.set(volume.id, volume);
     });
 
     const pickRicherArray = <T,>(incomingArray: T[] | undefined, existingArray: T[] | undefined): T[] | undefined => {
