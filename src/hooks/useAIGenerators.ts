@@ -1538,7 +1538,7 @@ export function useAIGenerators() {
         while (attempt < maxAttempts) {
           try {
             if (generateAbortControllerRef.current?.signal.aborted) break;
-            const config = getApiConfig(params.presetApiConfig, '', params.apiKey, params.baseUrl, params.model, params.apiPresets);
+            const config = getApiConfig(params.presetApiConfig, params.model, params.apiKey, params.baseUrl, params.model, params.apiPresets);
 
             logAiParams('对话续写生成', config.model, params.temperature, params.topP, params.topK);
 
