@@ -476,12 +476,40 @@ export const checkAndGenerateSummary = async (
           // Get actual chapter titles for the range
           const startChapter = getSnapshotStoryChapters()[start - 1];
           const endChapter = getSnapshotStoryChapters()[end - 1];
-          const startTitle = startChapter?.title || `Chapter ${start}`;
-          const endTitle = endChapter?.title || `Chapter ${end}`;
+          
+          // 修复：使用分卷内章节编号生成总结标题，避免同时显示全局和分卷编号
+          const startChapterName = startChapter?.title ? startChapter.title.replace(/^第[一二三四五六七八九十百千\d]+章\s+/, '') : `Chapter ${startVolume || start}`;
+          const endChapterName = endChapter?.title ? endChapter.title.replace(/^第[一二三四五六七八九十百千\d]+章\s+/, '') : `Chapter ${endVolume || end}`;
+          
+          // 使用分卷内编号生成标题
+          const volumeStartNum = startVolume || start;
+          const volumeEndNum = endVolume || end;
+          const chineseNumber = (num: number) => {
+            const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+            const units = ['', '十', '百', '千'];
+            if (num === 0) return '零';
+            if (num < 10) return digits[num];
+            if (num < 20) return '十' + (num % 10 === 0 ? '' : digits[num % 10]);
+            let result = '';
+            let temp = num;
+            let unitIndex = 0;
+            while (temp > 0) {
+              const digit = temp % 10;
+              if (digit > 0) {
+                result = digits[digit] + units[unitIndex] + result;
+              }
+              temp = Math.floor(temp / 10);
+              unitIndex++;
+            }
+            return result;
+          };
+          
+          const startVolumeTitle = `第${chineseNumber(volumeStartNum)}章`;
+          const endVolumeTitle = `第${chineseNumber(volumeEndNum)}章`;
           
           const newChapter: Chapter = {
             id: Date.now() + Math.floor(Math.random() * 10000),
-            title: `${type === 'small' ? '🔹小总结' : '🔸大总结'}：${startTitle} 到 ${endTitle}`,
+            title: `${type === 'small' ? '🔹小总结' : '🔸大总结'}：${startVolumeTitle} 到 ${endVolumeTitle} ${startChapterName} 到 ${endChapterName}`,
             content: summaryContent,
             subtype: subtype,
             summaryRange: rangeStr,
