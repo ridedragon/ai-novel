@@ -495,10 +495,9 @@ export const useWorkflowEngine = (options: {
           const chaptersAfter = localNovel.chapters?.length || 0;
           terminal.log(`${logPrefix} [PATCH] 章节清除完成: ${chaptersBefore} → ${chaptersAfter}`);
           
-          // 同时也调用 clearNovelContentByVolumes 来清除其他内容（大纲、角色等）
-          for (const volId of volumeIdsToClear) {
-            localNovel = clearNovelContentByVolumes(localNovel, [volId], true, keepContent);
-          }
+          // 重要修复：不再调用 clearNovelContentByVolumes 来清除其他内容（大纲、角色等）
+          // 这样可以保留已有的大纲，让 outlineAndChapter 节点能够继续生成正文
+          terminal.log(`${logPrefix} [PATCH] 保留大纲、角色、世界观等内容，以便从断点继续`);
           
           await updateLocalAndGlobal(localNovel);
         }
@@ -3469,16 +3468,21 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
               outlineResponse = parsedOutlineResponse;
 
-              // 确保生成的大纲数量不超过批次大小，并且不超过剩余需要生成的章节数
-              const actualNeededCount = Math.min(batchSize, chapterCount - startChapterIndex);
-              if (outlineEntries.length < actualNeededCount) {
-                terminal.error(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 少于需要的数量 (${actualNeededCount})，终止工作`);
-                await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_outline_count', title: '大纲生成错误', content: `生成的大纲数量 ${outlineEntries.length} 少于需要的数量 ${actualNeededCount}` }] }, i);
-                throw new Error(`生成的大纲数量 ${outlineEntries.length} 少于需要的数量 ${actualNeededCount}`);
-              } else if (outlineEntries.length > actualNeededCount) {
-                // 如果生成的大纲数量超过需要的数量，截断多余的
-                terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 超过需要的数量 (${actualNeededCount})，将截断多余部分`);
-                outlineEntries = outlineEntries.slice(0, actualNeededCount);
+              // 只有在生成了新大纲时才检查大纲数量
+              // 如果使用的是现有大纲，不需要进行此检查
+              if (needGenerateOutline) {
+                const actualNeededCount = Math.min(batchSize, chapterCount - startChapterIndex);
+                if (outlineEntries.length < actualNeededCount) {
+                  terminal.error(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 少于需要的数量 (${actualNeededCount})，终止工作`);
+                  await syncNodeStatus(node.id, { status: 'failed', outputEntries: [{ id: 'err_outline_count', title: '大纲生成错误', content: `生成的大纲数量 ${outlineEntries.length} 少于需要的数量 ${actualNeededCount}` }] }, i);
+                  throw new Error(`生成的大纲数量 ${outlineEntries.length} 少于需要的数量 ${actualNeededCount}`);
+                } else if (outlineEntries.length > actualNeededCount) {
+                  // 如果生成的大纲数量超过需要的数量，截断多余的
+                  terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 超过需要的数量 (${actualNeededCount})，将截断多余部分`);
+                  outlineEntries = outlineEntries.slice(0, actualNeededCount);
+                }
+              } else {
+                terminal.log(`[OutlineAndChapter] 使用现有大纲，共 ${outlineEntries.length} 个，跳过数量检查`);
               }
 
               // 保存大纲到对应文件夹（与大纲节点的 upSets 逻辑一致）
