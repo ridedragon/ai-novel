@@ -69,18 +69,43 @@ export function useNovelData() {
           if (originalNovel && 
           updatedNovel.chapters && 
           originalNovel.chapters) {
-            // If updatedNovel.chapters is a full list (length >= original), use it directly (no merge)
-            // If it's shorter (delta), merge it with original
+            // 关键修复：检测是否是要清除章节的情况
+            // 如果更新的章节数少于原始章节数，说明我们很可能是在有意清除章节
+            const isIntentionallyClearingChapters = 
+              updatedNovel.chapters.length < originalNovel.chapters.length;
+            
+            // 找到被清除的章节ID，并添加到黑名单中
+            if (isIntentionallyClearingChapters) {
+              const updatedChapterIds = new Set(updatedNovel.chapters.map((c: Chapter) => c.id));
+              originalNovel.chapters.forEach((c: Chapter) => {
+                if (!updatedChapterIds.has(c.id)) {
+                  deletedChapterIdsRef.current.add(c.id);
+                  // 同时删除这些章节的存储内容
+                  storage.deleteChapterContent(c.id).catch(() => {});
+                  storage.deleteChapterVersions(c.id).catch(() => {});
+                }
+              });
+              terminal.log(`[NOVEL_DATA] 检测到有意清除章节，将 ${originalNovel.chapters.length - updatedNovel.chapters.length} 个章节加入黑名单`);
+            }
+            
+            // 如果是有意清除章节，直接使用更新后的章节列表（不合并）
+            if (isIntentionallyClearingChapters) {
+              return updatedNovel;
+            }
+            
+            // 只有在不是有意清除章节的情况下（比如流式更新），才进行合并
             if (updatedNovel.chapters.length >= originalNovel.chapters.length) {
               return updatedNovel;
             } else {
-              // 合并章节：用更新的章节替换原始章节中的对应项
-              const mergedChapters = originalNovel.chapters.map((originalChapter: Chapter) => {
-                const updatedChapter = updatedNovel.chapters?.find(
-                  (uc: Chapter) => uc.id === originalChapter.id
-                );
-                return updatedChapter || originalChapter;
-              });
+              // 合并章节：用更新的章节替换原始章节中的对应项，但跳过黑名单中的章节
+              const mergedChapters = originalNovel.chapters
+                .filter((originalChapter: Chapter) => !deletedChapterIdsRef.current.has(originalChapter.id))
+                .map((originalChapter: Chapter) => {
+                  const updatedChapter = updatedNovel.chapters?.find(
+                    (uc: Chapter) => uc.id === originalChapter.id
+                  );
+                  return updatedChapter || originalChapter;
+                });
               
               // 添加可能新增的章节
               updatedNovel.chapters?.forEach((updatedChapter: Chapter) => {
