@@ -425,7 +425,30 @@ export const useWorkflowEngine = (options: {
         workflowManager.clearStartVolumeLock();
       }
 
-      if (userSpecifiedTargetVolumeId && mode) {
+      // 从特定节点开始运行时，清除对应卷的章节列表（如果没有勾选保留）
+      if (startIndex > 0 && !keepContent.enabled) {
+        // 确定当前节点所在的卷
+        let targetVolumeIdToClear: string | undefined;
+        
+        // 尝试从起始节点获取目标卷ID
+        if (startIndex < sortedNodes.length) {
+          const startNode = sortedNodes[startIndex];
+          if (startNode.data.targetVolumeId) {
+            targetVolumeIdToClear = startNode.data.targetVolumeId as string;
+          } else if (startNode.data.folderName && localNovel.volumes) {
+            const matchingVol = localNovel.volumes.find(v => v.title === startNode.data.folderName);
+            if (matchingVol) {
+              targetVolumeIdToClear = matchingVol.id;
+            }
+          }
+        }
+        
+        // 如果找到了目标卷ID，清除该卷的内容
+        if (targetVolumeIdToClear) {
+          localNovel = clearNovelContentByVolumes(localNovel, [targetVolumeIdToClear], true, keepContent);
+          await updateLocalAndGlobal(localNovel);
+        }
+      } else if (userSpecifiedTargetVolumeId && mode) {
         localNovel = clearNovelContentByVolumes(localNovel, [userSpecifiedTargetVolumeId], mode === 'full', keepContent);
         await updateLocalAndGlobal(localNovel);
       }
