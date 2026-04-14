@@ -383,11 +383,19 @@ export class AutoWriteEngine {
           if (batchItems.length > 1) {
             taskDescription = `你正在创作连续的小说故事。请一次性撰写以下 ${batchItems.length} 章的内容。\n**重要：请严格使用 "### 章节标题" 作为每一章的分隔符。**\n\n`;
             batchItems.forEach((b, idx) => {
-              taskDescription += `第 ${idx + 1} 部分：\n标题：${b.item.title}\n大纲：${b.item.summary}\n\n`;
+              const chapter = this.novel.chapters?.find(c => c.id === b.id);
+              const chapterTitle = chapter?.title || b.item.title;
+              taskDescription += `第 ${idx + 1} 部分：\n标题：${chapterTitle}\n大纲：${b.item.summary}\n\n`;
             });
-            taskDescription += `\n请开始撰写，确保内容连贯，不要包含任何多余的解释，直接输出正文。格式示例：\n### ${batchItems[0].item.title}\n(第一章正文...)\n### ${batchItems[1].item.title}\n(第二章正文...)\n`;
+            const firstChapter = this.novel.chapters?.find(c => c.id === batchItems[0].id);
+            const firstChapterTitle = firstChapter?.title || batchItems[0].item.title;
+            const secondChapter = this.novel.chapters?.find(c => c.id === batchItems[1]?.id);
+            const secondChapterTitle = secondChapter?.title || batchItems[1]?.item.title || '第二章';
+            taskDescription += `\n请开始撰写，确保内容连贯，不要包含任何多余的解释，直接输出正文。格式示例：\n### ${firstChapterTitle}\n(第一章正文...)\n### ${secondChapterTitle}\n(第二章正文...)\n`;
           } else {
-            taskDescription = `你正在创作连续的小说故事。\n当前章节：${batchItems[0].item.title}\n本章大纲：${batchItems[0].item.summary}\n\n请根据大纲和前文剧情，撰写本章正文。文笔要生动流畅。`;
+            const chapter = this.novel.chapters?.find(c => c.id === batchItems[0].id);
+            const chapterTitle = chapter?.title || batchItems[0].item.title;
+            taskDescription = `你正在创作连续的小说故事。\n当前章节：${chapterTitle}\n本章大纲：${batchItems[0].item.summary}\n\n请根据大纲和前文剧情，撰写本章正文。文笔要生动流畅。`;
           }
 
           const messages: any[] = [];
