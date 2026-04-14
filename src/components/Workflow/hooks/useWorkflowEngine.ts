@@ -444,12 +444,33 @@ export const useWorkflowEngine = (options: {
         // 尝试从起始节点获取目标卷ID
         if (startIndex < sortedNodes.length) {
           const startNode = sortedNodes[startIndex];
+          
+          // 策略1：使用起始节点的 targetVolumeId
           if (startNode.data.targetVolumeId) {
             targetVolumeIdToClear = startNode.data.targetVolumeId as string;
-          } else if (startNode.data.folderName && localNovel.volumes) {
+          } 
+          // 策略2：使用起始节点的 folderName 匹配卷
+          else if (startNode.data.folderName && localNovel.volumes) {
             const matchingVol = localNovel.volumes.find(v => v.title === startNode.data.folderName);
             if (matchingVol) {
               targetVolumeIdToClear = matchingVol.id;
+            }
+          }
+          // 策略3：如果是章节节点，尝试从最近的章节获取卷ID
+          else if (startNode.data.typeKey === 'chapter' && localNovel.chapters && localNovel.chapters.length > 0) {
+            // 找到最近的章节的卷ID
+            for (let k = localNovel.chapters.length - 1; k >= 0; k--) {
+              if (localNovel.chapters[k].volumeId) {
+                targetVolumeIdToClear = localNovel.chapters[k].volumeId;
+                break;
+              }
+            }
+          }
+          // 策略4：尝试从工作流管理器的 activeVolumeAnchor 获取
+          else {
+            const activeVolumeAnchor = workflowManager.getActiveVolumeAnchor();
+            if (activeVolumeAnchor) {
+              targetVolumeIdToClear = activeVolumeAnchor;
             }
           }
         }
