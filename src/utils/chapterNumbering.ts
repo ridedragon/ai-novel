@@ -201,6 +201,14 @@ export const recalibrateChapterNumbering = (chapters: Chapter[]): Chapter[] => {
   const storyChapters = chapters.filter(c => !c.subtype || c.subtype === 'story');
   const summaryChapters = chapters.filter(c => c.subtype === 'small_summary' || c.subtype === 'big_summary');
 
+  // 先按照 globalIndex 排序 storyChapters，确保章节顺序正确
+  storyChapters.sort((a, b) => {
+    if (a.globalIndex !== undefined && b.globalIndex !== undefined) {
+      return a.globalIndex - b.globalIndex;
+    }
+    return 0;
+  });
+
   // 重新分配 globalIndex
   storyChapters.forEach((chapter, index) => {
     chapter.globalIndex = index + 1;
@@ -215,6 +223,13 @@ export const recalibrateChapterNumbering = (chapters: Chapter[]): Chapter[] => {
   });
 
   Object.values(chaptersByVolume).forEach(volChapters => {
+    // 按 globalIndex 排序分卷内的章节，确保顺序正确
+    volChapters.sort((a, b) => {
+      if (a.globalIndex !== undefined && b.globalIndex !== undefined) {
+        return a.globalIndex - b.globalIndex;
+      }
+      return 0;
+    });
     volChapters.forEach((chapter, index) => {
       chapter.volumeIndex = index + 1;
     });

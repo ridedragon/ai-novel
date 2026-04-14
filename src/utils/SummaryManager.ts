@@ -22,7 +22,7 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
   const allStories = chapters.filter(c => !isSummaryChapter(c));
   const allSummaries = chapters.filter(c => isSummaryChapter(c));
   
-  // 确保剧情章按照原始顺序排列，防止章节顺序被打乱
+  // 确保剧情章按照 globalIndex 排序，防止章节顺序被打乱
   allStories.sort((a, b) => {
     // 优先使用 globalIndex 排序
     if (a.globalIndex !== undefined && b.globalIndex !== undefined) {
