@@ -1491,11 +1491,33 @@ function App() {
           activeChapter={activeChapter}
           activeChapterId={novelData.activeChapterId}
           isEditingChapter={isEditingChapter}
-          onToggleEdit={c => {
-            if (isEditingChapter && c !== undefined)
+          onToggleEdit={async c => {
+            if (isEditingChapter && c !== undefined) {
               novelData.setChapters(prev =>
                 prev.map(ch => (ch.id === novelData.activeChapterId ? { ...ch, content: c } : ch)),
               );
+              
+              // 检查是否启用了自动优化，如果是，则在保存后自动优化内容
+              if (config.autoOptimize && novelData.activeChapterId) {
+                await autoWrite.handleOptimize({
+                  targetId: novelData.activeChapterId,
+                  initialContent: c,
+                  ...config,
+                  ...generators,
+                  setChapters: novelData.setChapters,
+                  novelsRef: novelData.novelsRef,
+                  activeNovelId: novelData.activeNovelId,
+                  getActiveScripts,
+                  activeApiPreset,
+                  apiPresets: config.apiPresets,
+                  onError: m =>
+                    setDialog({ isOpen: true, type: 'alert', title: '错误', message: m, onConfirm: closeDialog }),
+                  onStreamingStatusChange: (isStreaming) => {
+                    setIsStreaming(isStreaming);
+                  },
+                });
+              }
+            }
             setIsEditingChapter(!isEditingChapter);
           }}
           onChapterContentChange={content =>
