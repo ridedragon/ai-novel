@@ -177,7 +177,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
 
   useEffect(() => {
     // 核心修复：智能合并更新，防止丢失 syncNodeStatus 中的最新数据
-    // 策略：比较 nodes 和 nodesRef.current，保留数据更完整的版本
+    // 策略：比较 nodes 和 nodesRef.current，但优先保留 nodes 中的最新用户修改
     
     if (nodesRef.current.length === 0 && nodes.length > 0) {
       // 首次加载：直接使用 nodes 初始化 ref
@@ -194,29 +194,15 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
       // 节点列表变化（添加/删除节点），更新 ref
       nodesRef.current = nodes;
     } else {
-      // 节点 ID 列表相同，合并数据：保留数据更丰富的版本
+      // 节点 ID 列表相同，合并数据：优先使用 nodes (React state) 作为用户最新修改
       const mergedNodes = nodes.map(n => {
         const refNode = nodesRef.current.find(r => r.id === n.id);
         if (!refNode) return n;
         
-        // 比较两个节点的数据丰富程度
-        // 如果 refNode 有更多的数据（如 volumes、splitRules、volumeContent），优先使用 refNode
-        const refDataKeys = Object.keys(refNode.data || {}).filter(k => refNode.data[k] !== undefined && refNode.data[k] !== null && refNode.data[k] !== '');
-        const nodeDataKeys = Object.keys(n.data || {}).filter(k => n.data[k] !== undefined && n.data[k] !== null && n.data[k] !== '');
+        // 合并策略：nodes (React state) 优先，只有 nodes 没有的字段才从 refNode 补充
+        const baseData = { ...refNode.data, ...n.data };
         
-        // 特殊检查：如果 refNode 有 volumes 或 splitRules 数据，优先使用 refNode
-        const hasVolumeData = (refNode.data.volumes && (refNode.data.volumes as any[]).length > 0) ||
-          (refNode.data.splitRules && (refNode.data.splitRules as any[]).length > 0) ||
-          refNode.data.volumeContent;
-        
-        if (hasVolumeData) {
-          // 调试：确认保留了 refNode 中的分卷数据
-          console.log(`[useEffect] 保留节点 ${n.id} 的分卷数据, volumes数量: ${(refNode.data.volumes as any[])?.length || 0}`);
-          return refNode;
-        }
-        
-        // 否则使用数据更丰富的版本
-        return refDataKeys.length >= nodeDataKeys.length ? refNode : n;
+        return { ...n, data: baseData };
       });
       nodesRef.current = mergedNodes;
     }
