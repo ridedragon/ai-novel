@@ -1,6 +1,13 @@
 import { Chapter, Novel, NovelVolume } from '../types';
 
 /**
+ * 判断是否为总结章节
+ */
+const isSummaryChapter = (c: Chapter): boolean =>
+  c.subtype === 'small_summary' ||
+  c.subtype === 'big_summary';
+
+/**
  * 双编号系统工具类
  * 支持两种章节编号模式：
  * - 'global': 全书连续编号 (第1章, 第2章, ..., 第10章)
@@ -201,9 +208,34 @@ export const recalibrateChapterNumbering = (chapters: Chapter[]): Chapter[] => {
   const storyChapters = chapters.filter(c => !c.subtype || c.subtype === 'story');
   const summaryChapters = chapters.filter(c => c.subtype === 'small_summary' || c.subtype === 'big_summary');
 
+  // 先按照 globalIndex 排序 storyChapters，确保章节顺序正确
+  storyChapters.sort((a, b) => {
+    if (a.globalIndex !== undefined && b.globalIndex !== undefined) {
+      return a.globalIndex - b.globalIndex;
+    }
+    // 如果没有 globalIndex，尝试通过 volumeId 和 volumeIndex 排序
+    if (a.volumeId && b.volumeId && a.volumeId === b.volumeId) {
+      if (a.volumeIndex !== undefined && b.volumeIndex !== undefined) {
+        return a.volumeIndex - b.volumeIndex;
+      }
+    }
+    return 0;
+  });
+
   // 重新分配 globalIndex
   storyChapters.forEach((chapter, index) => {
     chapter.globalIndex = index + 1;
+  });
+
+  // 确定分卷的正确顺序 - 按照 storyChapters 中 volumeId 出现的顺序
+  const volumeOrder: (string | undefined)[] = [];
+  const seenVolumes = new Set<string | undefined>();
+  storyChapters.forEach(chapter => {
+    const volId = chapter.volumeId || 'uncategorized';
+    if (!seenVolumes.has(volId)) {
+      seenVolumes.add(volId);
+      volumeOrder.push(volId);
+    }
   });
 
   // 按分卷分组重新分配 volumeIndex
@@ -214,22 +246,61 @@ export const recalibrateChapterNumbering = (chapters: Chapter[]): Chapter[] => {
     chaptersByVolume[volId].push(chapter);
   });
 
-  Object.values(chaptersByVolume).forEach(volChapters => {
+  // 为每个分卷重新分配 volumeIndex
+  Object.keys(chaptersByVolume).forEach(volId => {
+    const volChapters = chaptersByVolume[volId];
+    // 按 globalIndex 排序分卷内的章节，确保顺序正确
+    volChapters.sort((a, b) => {
+      if (a.globalIndex !== undefined && b.globalIndex !== undefined) {
+        return a.globalIndex - b.globalIndex;
+      }
+      return 0;
+    });
     volChapters.forEach((chapter, index) => {
       chapter.volumeIndex = index + 1;
     });
   });
 
-  // 合并回总结章节
-  const result: Chapter[] = [];
-  let storyIdx = 0;
-  chapters.forEach(chapter => {
-    if (!chapter.subtype || chapter.subtype === 'story') {
-      result.push(storyChapters[storyIdx]);
-      storyIdx++;
-    } else {
-      result.push(chapter);
+  // 构建最终结果数组 - 按照 globalIndex 顺序排列所有章节
+  const result: Chapter[] = [...storyChapters];
+
+  // 为每个总结章节找到正确的位置插入
+  summaryChapters.forEach(summary => {
+    // 找到总结应该跟随的剧情章节
+    let insertIndex = result.length; // 默认插入到末尾
+    
+    // 如果有 summaryRange，尝试找到对应的剧情章节
+    if (summary.summaryRange) {
+      const rangeParts = summary.summaryRange.split('-').map(Number);
+      if (rangeParts.length === 2 && !isNaN(rangeParts[1])) {
+        const endGlobalIndex = rangeParts[1];
+        const targetStoryIndex = storyChapters.findIndex(c => c.globalIndex === endGlobalIndex);
+        if (targetStoryIndex !== -1) {
+          // 插入到目标剧情章节之后
+          insertIndex = targetStoryIndex + 1;
+          // 跳过已经在该位置之后的其他总结章节
+          while (insertIndex < result.length && isSummaryChapter(result[insertIndex])) {
+            insertIndex++;
+          }
+        }
+      }
     }
+    
+    // 如果没有找到合适的位置，或者没有 summaryRange，尝试通过 volumeId 找到分卷末尾
+    if (insertIndex === result.length && summary.volumeId) {
+      const lastChapterInVolume = [...storyChapters].reverse().find(c => c.volumeId === summary.volumeId);
+      if (lastChapterInVolume) {
+        const targetIndex = storyChapters.indexOf(lastChapterInVolume);
+        if (targetIndex !== -1) {
+          insertIndex = targetIndex + 1;
+          while (insertIndex < result.length && isSummaryChapter(result[insertIndex])) {
+            insertIndex++;
+          }
+        }
+      }
+    }
+    
+    result.splice(insertIndex, 0, summary);
   });
 
   return result;
