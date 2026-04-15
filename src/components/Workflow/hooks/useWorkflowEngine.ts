@@ -3763,8 +3763,6 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                     streamTokenCount++;
 
                     if (content) {
-                      console.log('[Workflow Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
-                      terminal.log('[Workflow Stream] 收到数据:', { content: content.substring(0, 30) + (content.length > 30 ? '...' : ''), length: content.length });
                     }
 
                     const now = Date.now();
