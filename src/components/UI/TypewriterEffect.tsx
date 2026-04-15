@@ -62,6 +62,10 @@ export const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
       return;
     }
 
+    // 重置时间戳，确保动画从新文本开始
+    lastUpdateTimeRef.current = 0;
+    
+    // 如果新文本比当前显示的短，直接更新
     if (text.length < displayedTextRef.current.length) {
       setDisplayedText(text);
       displayedTextRef.current = text;
