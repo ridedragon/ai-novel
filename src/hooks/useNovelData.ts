@@ -79,9 +79,9 @@ export function useNovelData() {
                      uc.volumeIndex === oc.volumeIndex;
             });
           
-          // 如果是流式更新，直接返回，跳过合并和其他耗时操作
+          // 如果是流式更新，创建一个新的对象引用，确保 React 重新渲染
           if (isStreamingUpdate) {
-            return updatedNovel;
+            return { ...updatedNovel };
           }
           
           // 关键修复：只要原始小说存在并且有章节，就进行合并
