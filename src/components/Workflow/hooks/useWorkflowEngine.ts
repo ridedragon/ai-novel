@@ -3329,7 +3329,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               const outlineBaseUrl = node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : (outlineApiPreset && outlineApiPreset.baseUrl) || globalConfigRef.current.baseUrl;
               
               terminal.log(`[API 配置] 节点类型: outlineAndChapter (大纲), 使用配置:`);
-              terminal.log(`  - baseUrl: ${outlineBaseUrl}`);
+              terminal.log(`  - baseUrl: \`${outlineBaseUrl}\``);
               terminal.log(`  - model: ${outlineModel}`);
               
               const outlineOpenai = new OpenAI({
@@ -3701,7 +3701,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             const chapterBaseUrl = node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : (chapterApiPreset && chapterApiPreset.baseUrl) || globalConfigRef.current.baseUrl;
             
             terminal.log(`[API 配置] 节点类型: outlineAndChapter (正文), 使用配置:`);
-            terminal.log(`  - baseUrl: ${chapterBaseUrl}`);
+            terminal.log(`  - baseUrl: \`${chapterBaseUrl}\``);
             terminal.log(`  - model: ${chapterModel}`);
             
             const chapterOpenai = new OpenAI({
