@@ -3776,12 +3776,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
                 // 使用流式输出
                 try {
-                  console.log('[Workflow Stream] 开始流式传输');
-                  terminal.log('[Workflow Stream] 开始流式传输');
-
                   let lastUpdateTime = 0;
-                  let streamTokenCount = 0;
-                  let streamUpdateCount = 0;
 
                   const stream = await chapterOpenai.chat.completions.create({
                     ...chapterCompletionParams,
@@ -3796,17 +3791,10 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
                     const content = chunk.choices[0]?.delta?.content || '';
                     batchChapterResponse += content;
-                    streamTokenCount++;
-
-                    if (content) {
-                    }
 
                     const now = Date.now();
                     if (now - lastUpdateTime > 50) {
-                      streamUpdateCount++;
                       lastUpdateTime = now;
-                      console.log('[Workflow Stream] 更新UI:', { contentLength: batchChapterResponse.length, receivedSoFar: batchChapterResponse.length });
-                      terminal.log('[Workflow Stream] 更新UI:', { contentLength: batchChapterResponse.length, receivedSoFar: batchChapterResponse.length });
 
                       // 实时分割并更新章节内容
                       try {
@@ -3858,7 +3846,6 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
 
                             const chapterContent = tempContents.get(outlineEntry.title) || '';
                             if (chapterContent) {
-                              currentChapter.content = chapterContent;
                               // 实时更新到本地和全局状态（非异步，避免阻塞流式循环）
                               const volumeStateMap = new Map();
                               (activeNovelRef.current?.volumes || []).forEach(v => volumeStateMap.set(v.id, v.collapsed));
@@ -3869,14 +3856,18 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                                   ...v,
                                   collapsed: volumeStateMap.has(v.id) ? volumeStateMap.get(v.id) : v.collapsed,
                                 })),
+                                chapters: (localNovel.chapters || []).map(ch => {
+                                  if (ch.id === currentChapter.id) {
+                                    return { ...ch, content: chapterContent };
+                                  }
+                                  return ch;
+                                }),
                               };
                               localNovel = mergedNovel;
 
                               if (onUpdateNovel) {
                                 onUpdateNovel(mergedNovel);
                               }
-                              console.log('[Workflow Stream] 实时更新章节:', outlineEntry.title, '内容长度:', chapterContent.length);
-                              terminal.log('[Workflow Stream] 实时更新章节:', outlineEntry.title, '内容长度:', chapterContent.length);
                             }
                           }
                         }
@@ -3886,11 +3877,6 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                       }
                     }
                   }
-
-                  console.log('[Workflow Stream] 流式传输结束');
-                  console.log('[Workflow Stream] 最终内容长度:', batchChapterResponse.length);
-                  console.log('[Workflow Stream] 内容预览:', batchChapterResponse.substring(0, 100) + (batchChapterResponse.length > 100 ? '...' : ''));
-                  terminal.log('[Workflow Stream] 流式传输结束');
                   // 关闭流式状态
                   onStreamingStatusChange?.(false);
                   success = true;

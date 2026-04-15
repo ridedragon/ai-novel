@@ -23,24 +23,20 @@ export class KeepAliveManager {
       // 在现代浏览器中，Wake Lock 已经足够维持工作流运行。
 
       this.isEnabled = true;
-      terminal.log('[KeepAlive] System enabled (Wake Lock mode)');
 
       // 2. Request Wake Lock (Screen)
       if ('wakeLock' in navigator) {
         try {
           // @ts-ignore
           this.wakeLock = await navigator.wakeLock.request('screen');
-          terminal.log('[KeepAlive] Wake Lock acquired successfully');
 
           // Re-acquire on visibility change
           document.addEventListener('visibilitychange', this.handleVisibilityChange);
         } catch (err) {
-          terminal.warn(`[KeepAlive] Wake Lock Warning: ${err instanceof Error ? err.message : String(err)}`);
           console.warn('[KeepAlive] Wake Lock failed:', err);
         }
       }
     } catch (err) {
-      terminal.log(`[KeepAlive] Critical Start Error: ${err instanceof Error ? err.message : String(err)}`);
       console.error('[KeepAlive] Failed to start:', err);
       // Usually due to lack of user interaction. UI should handle this.
       throw err;
@@ -54,13 +50,11 @@ export class KeepAliveManager {
     if (this.wakeLock) {
       this.wakeLock.release().then(() => {
         this.wakeLock = null;
-        terminal.log('[KeepAlive] Wake Lock released');
       });
     }
 
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.isEnabled = false;
-    terminal.log('[KeepAlive] Stopped');
   }
 
   private handleVisibilityChange = async () => {
@@ -73,7 +67,6 @@ export class KeepAliveManager {
         }
         // @ts-ignore
         this.wakeLock = await navigator.wakeLock.request('screen');
-        terminal.log('[KeepAlive] Wake Lock re-acquired');
       } catch (err) {
         // 降低日志频率，不再使用 terminal.log 轰炸
         console.warn('[KeepAlive] Re-acquire Wake Lock failed:', err);
