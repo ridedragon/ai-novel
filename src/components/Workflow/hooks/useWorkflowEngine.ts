@@ -472,34 +472,43 @@ export const useWorkflowEngine = (options: {
         
         // 补丁3：直接清除章节（不依赖 clearNovelContentByVolumes）
         if (volumeIdsToClear.size > 0) {
-          terminal.log(`${logPrefix} [PATCH] 准备清除以下卷的章节: ${Array.from(volumeIdsToClear).join(', ')}`);
+          // 检查起始节点是否为大纲与正文生成节点
+          const startNode = startIndex < sortedNodes.length ? sortedNodes[startIndex] : null;
+          const isOutlineAndChapterNode = startNode?.data.typeKey === 'outlineAndChapter';
           
-          // 直接过滤章节列表
-          const chaptersBefore = localNovel.chapters?.length || 0;
-          localNovel = {
-            ...localNovel,
-            chapters: (localNovel.chapters || []).filter(chapter => {
-              // 保留不在清除列表中的章节
-              if (!chapter.volumeId || !volumeIdsToClear.has(chapter.volumeId)) {
-                return true;
-              }
-              // 检查是否需要保留章节
-              if (keepContent.enabled && keepContent.types.includes('chapter')) {
-                return true;
-              }
-              // 清除章节
-              return false;
-            })
-          };
-          
-          const chaptersAfter = localNovel.chapters?.length || 0;
-          terminal.log(`${logPrefix} [PATCH] 章节清除完成: ${chaptersBefore} → ${chaptersAfter}`);
+          // 如果是大纲与正文生成节点，不清除章节，保留已有的章节结构
+          if (isOutlineAndChapterNode) {
+            terminal.log(`${logPrefix} [PATCH] 起始节点为大纲与正文生成节点，保留现有章节结构`);
+          } else {
+            terminal.log(`${logPrefix} [PATCH] 准备清除以下卷的章节: ${Array.from(volumeIdsToClear).join(', ')}`);
+            
+            // 直接过滤章节列表
+            const chaptersBefore = localNovel.chapters?.length || 0;
+            localNovel = {
+              ...localNovel,
+              chapters: (localNovel.chapters || []).filter(chapter => {
+                // 保留不在清除列表中的章节
+                if (!chapter.volumeId || !volumeIdsToClear.has(chapter.volumeId)) {
+                  return true;
+                }
+                // 检查是否需要保留章节
+                if (keepContent.enabled && keepContent.types.includes('chapter')) {
+                  return true;
+                }
+                // 清除章节
+                return false;
+              })
+            };
+            
+            const chaptersAfter = localNovel.chapters?.length || 0;
+            terminal.log(`${logPrefix} [PATCH] 章节清除完成: ${chaptersBefore} → ${chaptersAfter}`);
+            
+            await updateLocalAndGlobal(localNovel);
+          }
           
           // 重要修复：不再调用 clearNovelContentByVolumes 来清除其他内容（大纲、角色等）
           // 这样可以保留已有的大纲，让 outlineAndChapter 节点能够继续生成正文
           terminal.log(`${logPrefix} [PATCH] 保留大纲、角色、世界观等内容，以便从断点继续`);
-          
-          await updateLocalAndGlobal(localNovel);
         }
       }
       
