@@ -185,6 +185,12 @@ class WorkflowManager {
   }
 
   public start(workflowId: string, startIndex: number = 0, snapshot?: WorkflowContextSnapshot) {
+    // 核心修复：在启动新执行前先完全终止旧的执行实例
+    if (this.state.isRunning || this.state.isPaused) {
+      terminal.log(`[WorkflowManager] Terminating previous execution before starting new one`);
+      this.stop();
+    }
+    
     // 核心修复 (Bug 2): 生成并锁定本次运行的唯一 ID
     this.currentRunId = `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     // 创建新的AbortController用于终止AI请求
