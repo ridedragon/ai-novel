@@ -464,7 +464,7 @@ export function useAutoWriteManager() {
           // 节流处理：每 50ms 更新一次 UI，实现流畅的流式输出效果
           if (now - lastUpdateTime > 50) {
             lastUpdateTime = now;
-            setChapters(prev =>
+            (setChapters as any)(prev =>
               prev.map(c => {
                 if (c.id === targetId) {
                   return {
@@ -476,6 +476,7 @@ export function useAutoWriteManager() {
                 }
                 return c;
               }),
+              true // skipNormalization: true for streaming updates
             );
           }
         }
