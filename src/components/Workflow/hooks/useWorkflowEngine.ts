@@ -3230,9 +3230,18 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           // 只有当没有发现空章节时，才考虑使用节点保存的进度
           // 如果有章节内容为空，必须优先从该空章节开始
           const savedChapterIndex = (node.data.currentChapterIndex as number) || 0;
+          // 核心修复：当大纲集长度发生变化时，重新计算起始章节索引
+          // 避免因删除大纲导致的章节索引不匹配问题
           if (firstEmptyChapterIndex === -1 && savedChapterIndex > calculatedStartChapterIndex) {
-            startChapterIndex = savedChapterIndex;
-            terminal.log(`[OutlineAndChapter] 使用节点保存的进度: 从第 ${startChapterIndex + 1} 章开始`);
+            // 检查大纲集长度是否与保存的索引匹配
+            if (outlineCount >= savedChapterIndex) {
+              startChapterIndex = savedChapterIndex;
+              terminal.log(`[OutlineAndChapter] 使用节点保存的进度: 从第 ${startChapterIndex + 1} 章开始`);
+            } else {
+              // 如果大纲集长度小于保存的索引，使用大纲集长度作为起始索引
+              startChapterIndex = outlineCount;
+              terminal.log(`[OutlineAndChapter] 大纲集长度变化，调整起始章节索引为: 从第 ${startChapterIndex + 1} 章开始`);
+            }
           }
           
           let currentChapterIndex = startChapterIndex;
