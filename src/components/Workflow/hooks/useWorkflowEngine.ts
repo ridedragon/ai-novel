@@ -3329,7 +3329,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               const outlineBaseUrl = node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : (outlineApiPreset && outlineApiPreset.baseUrl) || globalConfigRef.current.baseUrl;
               
               terminal.log(`[API 配置] 节点类型: outlineAndChapter (大纲), 使用配置:`);
-              terminal.log(`  - baseUrl: ${outlineBaseUrl}`);
+              terminal.log(`  - baseUrl: \`${outlineBaseUrl}\``);
               terminal.log(`  - model: ${outlineModel}`);
               
               const outlineOpenai = new OpenAI({
@@ -3701,7 +3701,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
             const chapterBaseUrl = node.data.overrideAiConfig && node.data.baseUrl ? node.data.baseUrl : (chapterApiPreset && chapterApiPreset.baseUrl) || globalConfigRef.current.baseUrl;
             
             terminal.log(`[API 配置] 节点类型: outlineAndChapter (正文), 使用配置:`);
-            terminal.log(`  - baseUrl: ${chapterBaseUrl}`);
+            terminal.log(`  - baseUrl: \`${chapterBaseUrl}\``);
             terminal.log(`  - model: ${chapterModel}`);
             
             const chapterOpenai = new OpenAI({
@@ -4595,7 +4595,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           };
           
           terminal.log(`[API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
-          terminal.log(`  - baseUrl: ${engCfg.baseURL}`);
+          terminal.log(`  - baseUrl: \`${engCfg.baseURL}\``);
           terminal.log(`  - model: ${engCfg.model}`);
 
           const engine = new AutoWriteEngine(engCfg, localNovel);
@@ -5443,12 +5443,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         // 核心修复：添加移动端API配置检查
         if (isMobile) {
           terminal.log(`[Mobile API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
-          terminal.log(`  - baseUrl: ${finalBaseUrl}`);
+          terminal.log(`  - baseUrl: \`${finalBaseUrl}\``);
           terminal.log(`  - model: ${fModel}`);
           terminal.log(`  - apiKey: ${finalApiKey ? '已设置' : '未设置'}`);
         } else {
           terminal.log(`[API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
-          terminal.log(`  - baseUrl: ${finalBaseUrl}`);
+          terminal.log(`  - baseUrl: \`${finalBaseUrl}\``);
           terminal.log(`  - model: ${fModel}`);
         }
 
