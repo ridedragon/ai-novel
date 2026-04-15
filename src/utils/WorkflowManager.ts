@@ -1199,6 +1199,16 @@ class WorkflowManager {
       this.notify();
     }
   }
+
+  // 设置AbortController
+  public setAbortController(controller: AbortController) {
+    this.abortController = controller;
+  }
+
+  // 获取AbortController
+  public getAbortController(): AbortController | null {
+    return this.abortController;
+  }
 }
 
 export const workflowManager = new WorkflowManager();

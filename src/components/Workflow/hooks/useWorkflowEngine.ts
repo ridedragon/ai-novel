@@ -359,9 +359,13 @@ export const useWorkflowEngine = (options: {
 
     setError(null);
     stopRequestedRef.current = false;
-    abortControllerRef.current = new AbortController();
-    // 将abortController设置到WorkflowManager中
-    workflowManager.setAbortController(abortControllerRef.current);
+    // 使用WorkflowManager中创建的AbortController
+    const existingController = workflowManager.getAbortController();
+    abortControllerRef.current = existingController ? existingController : new AbortController();
+    // 确保WorkflowManager中有AbortController
+    if (!existingController) {
+      workflowManager.setAbortController(abortControllerRef.current);
+    }
 
     try {
       await keepAliveManager.enable();
