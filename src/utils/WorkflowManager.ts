@@ -187,8 +187,6 @@ class WorkflowManager {
   public start(workflowId: string, startIndex: number = 0, snapshot?: WorkflowContextSnapshot) {
     // 核心修复 (Bug 2): 生成并锁定本次运行的唯一 ID
     this.currentRunId = `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    // 创建新的AbortController用于终止AI请求
-    this.abortController = new AbortController();
     terminal.log(
       `[WorkflowManager] Starting workflow: ${workflowId} at index ${startIndex} (RunID: ${this.currentRunId})`,
     );
@@ -1200,14 +1198,9 @@ class WorkflowManager {
     }
   }
 
-  // 设置AbortController
+  // 设置AbortController用于终止AI请求
   public setAbortController(controller: AbortController) {
     this.abortController = controller;
-  }
-
-  // 获取AbortController
-  public getAbortController(): AbortController | null {
-    return this.abortController;
   }
 }
 
