@@ -1199,6 +1199,13 @@ class WorkflowManager {
       this.notify();
     }
   }
+
+  /**
+   * Set the abort controller for the current workflow execution
+   */
+  public setAbortController(controller: AbortController) {
+    this.abortController = controller;
+  }
 }
 
 export const workflowManager = new WorkflowManager();
