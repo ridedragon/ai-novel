@@ -64,6 +64,26 @@ export function useNovelData() {
         next = next.map((updatedNovel: Novel) => {
           const originalNovel = originalNovelsMap.get(updatedNovel.id);
           
+          // 关键修复：检测流式更新
+          // 流式更新的特征：章节数量相同，只有内容和版本信息发生变化
+          const isStreamingUpdate = originalNovel && 
+            updatedNovel.chapters && 
+            originalNovel.chapters &&
+            updatedNovel.chapters.length === originalNovel.chapters.length &&
+            updatedNovel.chapters.every((uc, idx) => {
+              const oc = originalNovel!.chapters![idx];
+              return uc.id === oc.id && 
+                     uc.title === oc.title &&
+                     uc.volumeId === oc.volumeId &&
+                     uc.globalIndex === oc.globalIndex &&
+                     uc.volumeIndex === oc.volumeIndex;
+            });
+          
+          // 如果是流式更新，直接返回，跳过合并和其他耗时操作
+          if (isStreamingUpdate) {
+            return updatedNovel;
+          }
+          
           // 关键修复：只要原始小说存在并且有章节，就进行合并
           // AutoWriteEngine 发送的 deltaChapters 只有正在更新的章节，所以数量会少于原始章节数
           if (originalNovel && 
