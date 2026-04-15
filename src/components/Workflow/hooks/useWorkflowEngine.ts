@@ -3501,16 +3501,42 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                 const actualNeededCount = Math.min(batchSize, chapterCount - startChapterIndex);
                 
                 // 修复：确保至少有一个大纲条目，避免因空响应导致工作流终止
+                // 但只在该章节确实不存在大纲时才创建
                 if (outlineEntries.length === 0) {
-                  terminal.warn(`[OutlineAndChapter] 生成的大纲数量为0，创建默认大纲条目`);
-                  outlineEntries = [{ title: `第${startChapterIndex + 1}章`, content: '默认大纲内容' }];
+                  const chapterIdx = startChapterIndex;
+                  const expectedChapterTitle = `第${chapterIdx + 1}章`;
+                  const existingOutlineItem = outlineSet?.items?.find((item: any) => 
+                    item.title === expectedChapterTitle || 
+                    (parseAnyNumber(item.title) === chapterIdx + 1)
+                  );
+                  
+                  if (!existingOutlineItem) {
+                    terminal.warn(`[OutlineAndChapter] 生成的大纲数量为0，创建默认大纲条目`);
+                    outlineEntries = [{ title: expectedChapterTitle, content: '默认大纲内容' }];
+                  } else {
+                    terminal.log(`[OutlineAndChapter] 第${chapterIdx + 1}章已有大纲，使用现有大纲`);
+                    outlineEntries = [{ title: existingOutlineItem.title, content: existingOutlineItem.summary }];
+                  }
                 }
                 
                 if (outlineEntries.length < actualNeededCount) {
                   // 修复：如果大纲数量不足，创建默认大纲条目补充
+                  // 但只在对应章节确实不存在大纲时才创建
                   terminal.warn(`[OutlineAndChapter] 生成的大纲数量 (${outlineEntries.length}) 少于需要的数量 (${actualNeededCount})，补充默认大纲`);
                   for (let j = outlineEntries.length; j < actualNeededCount; j++) {
-                    outlineEntries.push({ title: `第${startChapterIndex + j + 1}章`, content: '默认大纲内容' });
+                    const chapterIdx = startChapterIndex + j;
+                    const expectedChapterTitle = `第${chapterIdx + 1}章`;
+                    const existingOutlineItem = outlineSet?.items?.find((item: any) => 
+                      item.title === expectedChapterTitle || 
+                      (parseAnyNumber(item.title) === chapterIdx + 1)
+                    );
+                    
+                    if (!existingOutlineItem) {
+                      outlineEntries.push({ title: expectedChapterTitle, content: '默认大纲内容' });
+                    } else {
+                      terminal.log(`[OutlineAndChapter] 第${chapterIdx + 1}章已有大纲，使用现有大纲`);
+                      outlineEntries.push({ title: existingOutlineItem.title, content: existingOutlineItem.summary });
+                    }
                   }
                 } else if (outlineEntries.length > actualNeededCount) {
                   // 如果生成的大纲数量超过需要的数量，截断多余的
@@ -3525,7 +3551,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               if (outlineSet) {
                 outlineEntries.forEach((entry, i) => {
                   const chapterIdx = startChapterIndex + i;
-                  const existingIdx = outlineSet.items.findIndex((ni: any) => ni.title === entry.title);
+                  const expectedChapterNum = chapterIdx + 1;
+                  // 使用与前面检查一致的逻辑，检查标题或章节编号是否匹配
+                  const existingIdx = outlineSet.items.findIndex((ni: any) => 
+                    ni.title === entry.title || 
+                    (parseAnyNumber(ni.title) === expectedChapterNum)
+                  );
                   const ni = { title: entry.title, summary: entry.content };
                   if (existingIdx !== -1) {
                     outlineSet.items[existingIdx] = { ...outlineSet.items[existingIdx], ...ni };
