@@ -64,6 +64,7 @@ class WorkflowManager {
   private listeners: Set<StateListener> = new Set();
   private nodeUpdateListeners: Set<NodeUpdateListener> = new Set();
   private saveTimeout: ReturnType<typeof setTimeout> | null = null;
+  private abortController: AbortController | null = null;
 
   constructor() {
     // 构造函数中恢复执行状态
@@ -186,6 +187,8 @@ class WorkflowManager {
   public start(workflowId: string, startIndex: number = 0, snapshot?: WorkflowContextSnapshot) {
     // 核心修复 (Bug 2): 生成并锁定本次运行的唯一 ID
     this.currentRunId = `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // 创建新的AbortController用于终止AI请求
+    this.abortController = new AbortController();
     terminal.log(
       `[WorkflowManager] Starting workflow: ${workflowId} at index ${startIndex} (RunID: ${this.currentRunId})`,
     );
@@ -1114,6 +1117,11 @@ class WorkflowManager {
 
   public pause(index: number) {
     terminal.log(`[WorkflowManager] Pausing workflow at index ${index}`);
+    // 终止AI请求
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
     this.state = {
       ...this.state,
       isRunning: false,
@@ -1128,6 +1136,11 @@ class WorkflowManager {
 
   public stop() {
     terminal.log(`[WorkflowManager] Stopping/Completing workflow (RunID reset)`);
+    // 终止AI请求
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
     this.currentRunId = null;
     this.state = {
       ...this.state,
