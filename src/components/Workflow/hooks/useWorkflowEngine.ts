@@ -4595,7 +4595,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
           };
           
           terminal.log(`[API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
-          terminal.log(`  - baseUrl: ${engCfg.baseURL}`);
+          terminal.log(`  - baseUrl: \`${engCfg.baseURL}\``);
           terminal.log(`  - model: ${engCfg.model}`);
 
           const engine = new AutoWriteEngine(engCfg, localNovel);
@@ -5443,12 +5443,12 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
         // 核心修复：添加移动端API配置检查
         if (isMobile) {
           terminal.log(`[Mobile API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
-          terminal.log(`  - baseUrl: ${finalBaseUrl}`);
+          terminal.log(`  - baseUrl: \`${finalBaseUrl}\``);
           terminal.log(`  - model: ${fModel}`);
           terminal.log(`  - apiKey: ${finalApiKey ? '已设置' : '未设置'}`);
         } else {
           terminal.log(`[API 配置] 节点类型: ${node.data.typeKey}, 使用配置:`);
-          terminal.log(`  - baseUrl: ${finalBaseUrl}`);
+          terminal.log(`  - baseUrl: \`${finalBaseUrl}\``);
           terminal.log(`  - model: ${fModel}`);
         }
 
