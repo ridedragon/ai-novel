@@ -278,7 +278,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
         return;
       }
       runWorkflow({
-        startIndex: firstLoopRestartIndex,
+        startIndex: selectedStartIndex,
         targetVolumeId: selectedStartVolumeId,
         mode: 'full',
         keepContent: keepContent,
@@ -1040,8 +1040,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                   <select
                     value={selectedStartIndex}
                     onChange={(e) => setSelectedStartIndex(parseInt(e.target.value, 10) || 0)}
-                    disabled={restartMode === 'full'}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 outline-none disabled:opacity-50"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 outline-none"
                   >
                     {orderedNodes.map((n, idx) => (
                       <option key={n.id} value={idx}>
@@ -1049,11 +1048,7 @@ const WorkflowEditorContent = (props: WorkflowEditorProps) => {
                       </option>
                     ))}
                   </select>
-                  {restartMode === 'full' && (
-                    <p className="text-xs text-amber-400">
-                      完全重写模式会自动从第一个循环开始的第一个节点启动。
-                    </p>
-                  )}
+
                 </div>
 
                 <div className="space-y-2">

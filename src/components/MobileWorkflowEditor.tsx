@@ -206,7 +206,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
         return;
       }
       runWorkflow({
-        startIndex: firstLoopRestartIndex,
+        startIndex: selectedStartIndex,
         targetVolumeId: selectedStartVolumeId,
         mode: 'full',
         keepContent: keepContent,
@@ -917,8 +917,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
                 <select
                   value={selectedStartIndex}
                   onChange={e => setSelectedStartIndex(parseInt(e.target.value, 10) || 0)}
-                  disabled={restartMode === 'full'}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-2xl px-4 py-3 text-sm text-gray-100 outline-none disabled:opacity-50"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-2xl px-4 py-3 text-sm text-gray-100 outline-none"
                 >
                   {orderedNodes.map((n, idx) => (
                     <option key={n.id} value={idx}>
@@ -926,9 +925,7 @@ const MobileWorkflowEditorContent: React.FC<WorkflowEditorProps> = props => {
                     </option>
                   ))}
                 </select>
-                {restartMode === 'full' && (
-                  <p className="text-[11px] text-amber-400 mt-2">完全重写模式会自动从第一个循环起点启动。</p>
-                )}
+
               </div>
 
               <div>
