@@ -153,7 +153,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     // 解析标记内容
     useEffect(() => {
       if (isMobile) {
-        const regex = /【\*(.*?)\*】/g;
+        const regex = /【\*([\s\S]*?)\*】/g;
         const matches: Array<{ start: number; end: number; text: string; color: string }> = [];
         let match;
         
@@ -423,7 +423,15 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
         edits.forEach(edit => {
           const selection = originalSelections[edit.index];
           if (selection) {
-            newContent = newContent.substring(0, selection.start) + edit.content + newContent.substring(selection.end);
+            // 清理AI返回内容中的标记符号
+            let cleanedContent = edit.content;
+            // 移除可能残留的标记符号
+            cleanedContent = cleanedContent.replace(/【\*/g, '');
+            cleanedContent = cleanedContent.replace(/\*】/g, '');
+            cleanedContent = cleanedContent.replace(/【/g, '');
+            cleanedContent = cleanedContent.replace(/】/g, '');
+            
+            newContent = newContent.substring(0, selection.start) + cleanedContent + newContent.substring(selection.end);
           }
         });
 

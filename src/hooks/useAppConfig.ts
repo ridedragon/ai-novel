@@ -398,7 +398,7 @@ export function useAppConfig() {
             {
               id: 'edit_sys',
               role: 'system',
-              content: '你是一个专业的文本编辑助手。请根据用户的要求修改选中的文本。返回JSON格式的结果，包含一个edits数组，每个元素包含index（选择的序号，从0开始）和content（修改后的文本）。不要包含任何解释。\n\n格式示例：\n{\n  "edits": [\n    {\n      "index": 0,\n      "content": "修改后的文本1"\n    },\n    {\n      "index": 1,\n      "content": "修改后的文本2"\n    }\n  ]\n}',
+              content: '你是一个专业的文本编辑助手。请根据用户的要求修改选中的文本。返回JSON格式的结果，包含一个edits数组，每个元素包含index（选择的序号，从0开始）和content（修改后的文本）。不要包含任何解释。\n\n重要：不要在返回的内容中包含任何标记符号（如【*、*】等），只返回纯文本内容。\n\n格式示例：\n{\n  "edits": [\n    {\n      "index": 0,\n      "content": "修改后的文本1"\n    },\n    {\n      "index": 1,\n      "content": "修改后的文本2"\n    }\n  ]\n}',
               enabled: true
             }
           ],
