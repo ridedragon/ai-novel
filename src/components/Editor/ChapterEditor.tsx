@@ -150,10 +150,13 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
 
     useEffect(() => {
       if (activeChapter) {
-        setLocalContent(activeChapter.content || '');
-        if (!isStreaming && !isEditingChapter) {
-          isDirtyRef.current = false;
-          setHasUnsavedChanges(false);
+        // 只有在非编辑模式下才更新localContent，避免编辑时光标位置丢失
+        if (!isEditingChapter) {
+          setLocalContent(activeChapter.content || '');
+          if (!isStreaming) {
+            isDirtyRef.current = false;
+            setHasUnsavedChanges(false);
+          }
         }
       }
 
@@ -162,7 +165,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
           if (contentScrollRef.current) {
             contentScrollRef.current.scrollTop = 0;
           }
-          if (textareaRef.current) {
+          if (textareaRef.current && !isEditingChapter) {
             textareaRef.current.scrollTop = 0;
           }
         });
@@ -175,20 +178,60 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
         // 保存当前选择状态
         const selection = window.getSelection();
         let range = null;
+        let offset = 0;
         if (selection && selection.rangeCount > 0) {
           range = selection.getRangeAt(0);
+          // 计算光标位置相对于文本开头的偏移量
+          const tempRange = range.cloneRange();
+          tempRange.selectNodeContents(textareaRef.current);
+          tempRange.setEnd(range.startContainer, range.startOffset);
+          offset = tempRange.toString().length;
         }
         
         // 重新设置内容以更新高亮
         textareaRef.current.innerHTML = getHighlightedContent(localContent) || '<div>在此处输入章节正文...</div>';
         
         // 恢复选择状态
-        if (range && selection) {
+        if (selection) {
           selection.removeAllRanges();
-          selection.addRange(range);
+          if (offset > 0) {
+            // 根据偏移量重新设置光标位置
+            const newRange = document.createRange();
+            let currentOffset = 0;
+            let found = false;
+            
+            function findNode(node: Node, targetOffset: number): boolean {
+              if (node.nodeType === Node.TEXT_NODE) {
+                const nodeLength = node.textContent?.length || 0;
+                if (currentOffset + nodeLength >= targetOffset) {
+                  newRange.setStart(node, targetOffset - currentOffset);
+                  newRange.collapse(true);
+                  return true;
+                } else {
+                  currentOffset += nodeLength;
+                }
+              } else if (node.nodeType === Node.ELEMENT_NODE) {
+                for (let i = 0; i < node.childNodes.length; i++) {
+                  if (findNode(node.childNodes[i], targetOffset)) {
+                    return true;
+                  }
+                }
+              }
+              return false;
+            }
+            
+            findNode(textareaRef.current, offset);
+            selection.addRange(newRange);
+          } else {
+            // 如果偏移量为0，将光标设置到开头
+            const newRange = document.createRange();
+            newRange.setStart(textareaRef.current, 0);
+            newRange.collapse(true);
+            selection.addRange(newRange);
+          }
         }
       }
-    }, [selections, isEditingChapter]);
+    }, [selections, isEditingChapter, localContent]);
 
     useEffect(() => {
       const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -277,16 +320,18 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       // 首先移除所有标签，包括 <novel></novel> 这样的标签
       let processed = text.replace(/<[^>]+>/g, '');
       // 然后转换特殊字符为HTML实体
+      // 最后将换行符转换为<br>标签
       return processed
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
     };
 
     // 生成带有高亮的文本
     const getHighlightedContent = (content: string) => {
-      // 处理连续的换行符，只保留一个
-      const processedContent = content.replace(/\n+/g, '\n');
+      // 保留所有换行符
+      const processedContent = content;
       
       if (selections.length === 0) return textToHtml(processedContent);
       
@@ -736,8 +781,8 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                     const target = e.target as HTMLElement;
                     // 使用 innerText 并保留换行符
                     let value = target.innerText || '';
-                    // 确保换行符被正确保留，并处理连续的换行符
-                    value = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n+/g, '\n');
+                    // 确保换行符被正确保留
+                    value = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
                     // 移除标签
                     value = value.replace(/<[^>]+>/g, '');
                     handleLocalChange({ target: { value } } as any);
@@ -754,9 +799,9 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                   {activeChapter.content ? (
                     <div className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
                       {isStreaming ? (
-                        <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap" />
+                        <TypewriterEffect text={activeChapter.content.replace(/<[^>]+>/g, '')} isStreaming={isStreaming} className="whitespace-pre-wrap" />
                       ) : (
-                        <ReactMarkdown>{activeChapter.content}</ReactMarkdown>
+                        <ReactMarkdown>{activeChapter.content.replace(/<[^>]+>/g, '')}</ReactMarkdown>
                       )}
                     </div>
                   ) : (
