@@ -110,10 +110,11 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     const [selectedText, setSelectedText] = useState('');
     const [selectionStart, setSelectionStart] = useState(-1);
     const [selectionEnd, setSelectionEnd] = useState(-1);
+    const [selections, setSelections] = useState<Array<{ start: number; end: number; text: string }>>([]);
     const [aiEditPrompt, setAiEditPrompt] = useState('');
     const [isAiProcessing, setIsAiProcessing] = useState(false);
     const [aiError, setAiError] = useState<string | null>(null);
-    const [retryData, setRetryData] = useState<{ prompt: string; selection: { start: number; end: number; text: string } } | null>(null);
+    const [retryData, setRetryData] = useState<{ prompt: string; selections: Array<{ start: number; end: number; text: string }> } | null>(null);
 
     useEffect(() => {
       if (activeChapter) {
@@ -179,7 +180,18 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
         const end = textareaRef.current.selectionEnd;
         setSelectionStart(start);
         setSelectionEnd(end);
-        setSelectedText(localContent.substring(start, end));
+        const selectedText = localContent.substring(start, end);
+        setSelectedText(selectedText);
+        
+        // 添加新选择到多选列表
+        if (start !== end) {
+          const newSelection = { start, end, text: selectedText };
+          // 检查是否已经存在相同的选择
+          const exists = selections.some(s => s.start === start && s.end === end);
+          if (!exists) {
+            setSelections([...selections, newSelection]);
+          }
+        }
       }
     };
 
@@ -201,7 +213,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     };
 
     const handleAiEdit = async () => {
-      if (!aiEditPrompt.trim() || selectionStart === -1 || selectionEnd === -1 || selectionStart >= selectionEnd) {
+      if (!aiEditPrompt.trim() || selections.length === 0) {
         onError?.('请先选择要修改的文本并输入修改要求');
         return;
       }
@@ -216,7 +228,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       setAiError(null);
       setRetryData(null);
 
-      const originalSelection = { start: selectionStart, end: selectionEnd, text: selectedText };
+      const originalSelections = [...selections];
 
       try {
         const OpenAI = (await import('openai')).default;
@@ -226,14 +238,19 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
           dangerouslyAllowBrowser: true,
         });
 
+        // 构建请求消息，包含所有选择的文本
+        const selectionsText = originalSelections.map((sel, index) => {
+          return `选择 ${index + 1}: ${sel.text}`;
+        }).join('\n\n');
+
         const messages = [
           {
             role: 'system' as const,
-            content: '你是一个专业的文本编辑助手。请根据用户的要求修改选中的文本。直接返回修改后的文本，不要包含任何解释。'
+            content: '你是一个专业的文本编辑助手。请根据用户的要求修改选中的文本。返回JSON格式的结果，包含一个edits数组，每个元素包含index（选择的序号，从0开始）和content（修改后的文本）。不要包含任何解释。'
           },
           {
             role: 'user' as const,
-            content: `修改要求：${aiEditPrompt}\n\n原文本：${selectedText}`
+            content: `修改要求：${aiEditPrompt}\n\n${selectionsText}`
           }
         ];
 
@@ -260,18 +277,42 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
           }
         }
 
-        const newContent = localContent.substring(0, selectionStart) + result + localContent.substring(selectionEnd);
+        // 解析JSON结果
+        let edits: Array<{ index: number; content: string }> = [];
+        try {
+          edits = JSON.parse(result);
+          if (!Array.isArray(edits)) {
+            throw new Error('Invalid JSON format: expected array');
+          }
+        } catch (parseError) {
+          throw new Error('Failed to parse AI response as JSON');
+        }
+
+        // 按照选择的结束位置从后往前排序，避免替换时位置偏移
+        const sortedSelections = [...originalSelections].sort((a, b) => b.end - a.end);
+
+        // 应用修改
+        let newContent = localContent;
+        edits.forEach(edit => {
+          const selection = originalSelections[edit.index];
+          if (selection) {
+            newContent = newContent.substring(0, selection.start) + edit.content + newContent.substring(selection.end);
+          }
+        });
+
         setLocalContent(newContent);
         onChapterContentChange(newContent);
 
+        // 清空选择和输入
         setSelectionStart(-1);
         setSelectionEnd(-1);
         setSelectedText('');
+        setSelections([]);
         setAiEditPrompt('');
 
       } catch (error: any) {
         setAiError(error.message || 'AI 编辑失败');
-        setRetryData({ prompt: aiEditPrompt, selection: originalSelection });
+        setRetryData({ prompt: aiEditPrompt, selections: originalSelections });
         onError?.(error.message || 'AI 编辑失败');
       } finally {
         setIsAiProcessing(false);
@@ -281,9 +322,14 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     const handleRetry = () => {
       if (retryData) {
         setAiEditPrompt(retryData.prompt);
-        setSelectionStart(retryData.selection.start);
-        setSelectionEnd(retryData.selection.end);
-        setSelectedText(retryData.selection.text);
+        setSelections(retryData.selections);
+        // 设置最后一个选择为当前选择
+        if (retryData.selections.length > 0) {
+          const lastSelection = retryData.selections[retryData.selections.length - 1];
+          setSelectionStart(lastSelection.start);
+          setSelectionEnd(lastSelection.end);
+          setSelectedText(lastSelection.text);
+        }
         setAiError(null);
         setRetryData(null);
       }
@@ -556,12 +602,12 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
           </div>
 
           {isEditingChapter && (
-            <div className="border-t border-slate-200 dark:border-white/5 bg-white dark:bg-[#09090b] p-3 md:p-4 custom-bg-transition">
+            <div className="border-t border-slate-200 dark:border-white/5 bg-white dark:bg-[#09090b] p-3 md:p-4 custom-bg-transition safe-area-bottom">
               <div className="max-w-4xl mx-auto">
-                {selectedText && (
+                {selections.length > 0 && (
                   <div className="mb-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                     <Check className="w-3 h-3" />
-                    <span>已选中文本 ({selectedText.length} 字)</span>
+                    <span>已选中 {selections.length} 个文本片段</span>
                   </div>
                 )}
                 
@@ -571,33 +617,33 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                     value={aiEditPrompt}
                     onChange={(e) => setAiEditPrompt(e.target.value)}
                     placeholder="请输入修改要求（如：让这段更有画面感..."
-                    className="flex-1 px-3 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-lg text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                    className="flex-1 px-3 py-3 md:py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-lg text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                     disabled={isAiProcessing}
                   />
-                  <div className="flex gap-2">
+                  <div className="flex flex-col md:flex-row gap-2">
                     {aiError && (
                       <button
                         onClick={handleRetry}
-                        className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+                        className="px-4 py-3 md:py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-1"
                       >
                         <RotateCcw className="w-4 h-4" />
-                        重试
+                        <span className="hidden sm:inline">重试</span>
                       </button>
                     )}
                     <button
                       onClick={handleAiEdit}
-                      disabled={isAiProcessing || !aiEditPrompt.trim() || !selectedText}
-                      className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isAiProcessing || !aiEditPrompt.trim() || selections.length === 0}
+                      className="px-4 py-3 md:py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isAiProcessing ? (
                         <>
                           <RefreshCw className="w-4 h-4 animate-spin" />
-                          处理中...
+                          <span className="hidden sm:inline">处理中...</span>
                         </>
                       ) : (
                         <>
                           <Send className="w-4 h-4" />
-                          发送
+                          <span className="hidden sm:inline">发送</span>
                         </>
                       )}
                     </button>
