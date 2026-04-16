@@ -349,6 +349,13 @@ export class AutoWriteEngine {
 
       while (attempt < maxAttempts && this.isRunning) {
         try {
+          const baseMaxTokens = this.config.max_tokens || this.config.maxReplyLength;
+          const batchMaxTokens =
+            baseMaxTokens * batchItems.length > 128000
+              ? 128000
+              : baseMaxTokens * (batchItems.length > 1 ? 1.5 : 1);
+
+          const requestStartTime = Date.now();
           terminal.log(`
 >> AI REQUEST [全自动正文创作]
 >> -----------------------------------------------------------
@@ -356,6 +363,11 @@ export class AutoWriteEngine {
 >> Temperature: ${this.config.temperature}
 >> Top P:       ${this.config.topP}
 >> Top K:       ${this.config.topK}
+>> Max Tokens:  ${Math.round(batchMaxTokens)}
+>> Stream:      ${this.config.stream}
+>> Batch Size:  ${batchItems.length}
+>> Chapters:    ${batchItems.map(b => b.item.title).join(', ')}
+>> Request Time: ${new Date().toISOString()}
 >> -----------------------------------------------------------
           `);
 
@@ -487,12 +499,6 @@ export class AutoWriteEngine {
           console.log('Messages Structure:', messages);
           console.groupEnd();
 
-          const baseMaxTokens = this.config.max_tokens || this.config.maxReplyLength;
-          const batchMaxTokens =
-            baseMaxTokens * batchItems.length > 128000
-              ? 128000
-              : baseMaxTokens * (batchItems.length > 1 ? 1.5 : 1);
-
           let requestParams: any = {
               model: this.config.model,
               messages: messages,
@@ -531,7 +537,14 @@ export class AutoWriteEngine {
             } catch (apiError: any) {
               if (apiError.status === 400) {
                 const errorBody = apiError.error?.message || apiError.message || 'Unknown error';
-                terminal.warn(`API 400 错误: ${errorBody}`);
+                terminal.warn(`
+>> AI REQUEST ERROR [全自动正文创作]
+>> -----------------------------------------------------------
+>> Status Code:  ${apiError.status}
+>> Error:        ${errorBody}
+>> Request Time: ${new Date().toISOString()}
+>> -----------------------------------------------------------
+                `);
                 
                 if (requestParams.top_k && fallbackMode < 1) {
                   terminal.warn('尝试移除 top_k 参数重试');
@@ -546,6 +559,14 @@ export class AutoWriteEngine {
                   throw apiError;
                 }
               } else {
+                terminal.error(`
+>> AI REQUEST ERROR [全自动正文创作]
+>> -----------------------------------------------------------
+>> Error:        ${apiError.message}
+>> Stack:        ${apiError.stack?.substring(0, 500)}
+>> Request Time: ${new Date().toISOString()}
+>> -----------------------------------------------------------
+                `);
                 throw apiError;
               }
             }
@@ -736,6 +757,19 @@ export class AutoWriteEngine {
           }
 
           if (!fullGeneratedContent) throw new Error('Empty response received');
+          
+          const requestEndTime = Date.now();
+          const responseTime = requestEndTime - requestStartTime;
+          terminal.log(`
+>> AI RESPONSE [全自动正文创作]
+>> -----------------------------------------------------------
+>> Status:      SUCCESS
+>> Response Time: ${responseTime}ms
+>> Content Length: ${fullGeneratedContent.length} characters
+>> Chapters Generated: ${batchItems.length}
+>> Response Time: ${new Date().toISOString()}
+>> -----------------------------------------------------------
+          `);
 
           // Split logic
           // 优化：重用预编译正则
@@ -993,6 +1027,7 @@ export class AutoWriteEngine {
           console.log('Messages:', analysisMessages);
           console.groupEnd();
 
+          const analysisRequestStartTime = Date.now();
           terminal.log(`
 >> AI REQUEST [工作流: 优化前分析]
 >> -----------------------------------------------------------
@@ -1000,6 +1035,9 @@ export class AutoWriteEngine {
 >> Temperature: ${analysisPreset.temperature ?? 1.0}
 >> Top P:       ${analysisPreset.topP ?? 1.0}
 >> Top K:       ${analysisPreset.topK ?? 200}
+>> Chapter ID:  ${chapterId}
+>> Content Length: ${sourceContent.length} characters
+>> Request Time: ${new Date().toISOString()}
 >> -----------------------------------------------------------
           `);
 
@@ -1066,6 +1104,18 @@ export class AutoWriteEngine {
               throw anaErr;
             }
           }
+          const analysisRequestEndTime = Date.now();
+          const analysisResponseTime = analysisRequestEndTime - analysisRequestStartTime;
+          terminal.log(`
+>> AI RESPONSE [工作流: 优化前分析]
+>> -----------------------------------------------------------
+>> Status:      SUCCESS
+>> Response Time: ${analysisResponseTime}ms
+>> Analysis Length: ${currentAnalysisResult.length} characters
+>> Chapter ID:  ${chapterId}
+>> Response Time: ${new Date().toISOString()}
+>> -----------------------------------------------------------
+          `);
           terminal.log(
             `[Analysis Result] chapter ${chapterId}:\n${currentAnalysisResult.slice(0, 500)}${
               currentAnalysisResult.length > 500 ? '...' : ''
@@ -1124,6 +1174,7 @@ export class AutoWriteEngine {
         messages.push({ role: 'user', content: `请基于以下修改建议优化正文：\n\n${currentAnalysisResult}` });
       }
 
+      const optimizeRequestStartTime = Date.now();
       terminal.log(`
 >> AI REQUEST [工作流: 正文优化/润色]
 >> -----------------------------------------------------------
@@ -1131,6 +1182,10 @@ export class AutoWriteEngine {
 >> Temperature: ${activePreset.temperature ?? 1.0}
 >> Top P:       ${activePreset.topP ?? 1.0}
 >> Top K:       ${activePreset.topK ?? 200}
+>> Chapter ID:  ${chapterId}
+>> Source Length: ${sourceContent.length} characters
+>> Analysis Used: ${currentAnalysisResult ? 'Yes' : 'No'}
+>> Request Time: ${new Date().toISOString()}
 >> -----------------------------------------------------------
       `);
 
@@ -1198,6 +1253,18 @@ export class AutoWriteEngine {
           throw optErr;
         }
       }
+      const optimizeRequestEndTime = Date.now();
+      const optimizeResponseTime = optimizeRequestEndTime - optimizeRequestStartTime;
+      terminal.log(`
+>> AI RESPONSE [工作流: 正文优化/润色]
+>> -----------------------------------------------------------
+>> Status:      SUCCESS
+>> Response Time: ${optimizeResponseTime}ms
+>> Optimized Length: ${optimizedContent.length} characters
+>> Chapter ID:  ${chapterId}
+>> Response Time: ${new Date().toISOString()}
+>> -----------------------------------------------------------
+      `);
       terminal.log(`[Optimization Result] chapter ${chapterId} length: ${optimizedContent.length}`);
       if (optimizedContent) {
         // 核心修复：对优化后的正文也要应用正则脚本
