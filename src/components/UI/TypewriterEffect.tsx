@@ -53,9 +53,12 @@ export const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   }, [text, speed]);
 
   useEffect(() => {
+    // 处理连续的换行符，只保留一个
+    const processedText = text.replace(/\n+/g, '\n');
+    
     if (!isStreaming) {
-      setDisplayedText(text);
-      displayedTextRef.current = text;
+      setDisplayedText(processedText);
+      displayedTextRef.current = processedText;
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
@@ -66,9 +69,9 @@ export const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
     lastUpdateTimeRef.current = 0;
     
     // 如果新文本比当前显示的短，直接更新
-    if (text.length < displayedTextRef.current.length) {
-      setDisplayedText(text);
-      displayedTextRef.current = text;
+    if (processedText.length < displayedTextRef.current.length) {
+      setDisplayedText(processedText);
+      displayedTextRef.current = processedText;
     }
 
     animationFrameRef.current = requestAnimationFrame(animate);
