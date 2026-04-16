@@ -1693,6 +1693,15 @@ function App() {
               },
             })
           }
+          editModel={config.editModel}
+          apiKey={config.apiKey}
+          baseUrl={config.baseUrl}
+          apiPresets={config.apiPresets}
+          activeApiPresetId={config.activeApiPresetId}
+          maxRetries={config.maxRetries}
+          onError={(msg) =>
+            setDialog({ isOpen: true, type: 'alert', title: '错误', message: msg, onConfirm: closeDialog })
+          }
         />
       )}
 

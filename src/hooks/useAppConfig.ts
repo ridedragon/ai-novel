@@ -78,6 +78,7 @@ export function useAppConfig() {
   const [analysisModel, setAnalysisModel] = useState(() => localStorage.getItem('analysisModel') || '');
   const [smallSummaryModel, setSmallSummaryModel] = useState(() => localStorage.getItem('smallSummaryModel') || '');
   const [bigSummaryModel, setBigSummaryModel] = useState(() => localStorage.getItem('bigSummaryModel') || '');
+  const [editModel, setEditModel] = useState(() => localStorage.getItem('editModel') || '');
 
   const [modelList, setModelList] = useState<string[]>(() => {
     try {
@@ -171,6 +172,7 @@ export function useAppConfig() {
     localStorage.setItem('analysisModel', analysisModel);
     localStorage.setItem('smallSummaryModel', smallSummaryModel);
     localStorage.setItem('bigSummaryModel', bigSummaryModel);
+    localStorage.setItem('editModel', editModel);
     localStorage.setItem('modelList', JSON.stringify(modelList));
   }, [
     model,
@@ -183,6 +185,7 @@ export function useAppConfig() {
     analysisModel,
     smallSummaryModel,
     bigSummaryModel,
+    editModel,
     modelList,
   ]);
 
@@ -398,6 +401,8 @@ export function useAppConfig() {
     setSmallSummaryModel,
     bigSummaryModel,
     setBigSummaryModel,
+    editModel,
+    setEditModel,
     modelList,
     setModelList,
     newModelInput,

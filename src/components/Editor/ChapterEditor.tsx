@@ -12,6 +12,10 @@ import {
   StopCircle,
   Trash2,
   Wand2,
+  Send,
+  X,
+  Check,
+  RotateCcw,
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -48,10 +52,19 @@ interface ChapterEditorProps {
   isStreaming?: boolean;
 
   onDeleteChapter: (chapterId: number) => void;
+  
+  editModel: string;
+  apiKey: string;
+  baseUrl: string;
+  apiPresets: any[];
+  activeApiPresetId: string;
+  maxRetries: number;
+  onError?: (msg: string) => void;
 }
 
 export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
-  ({    activeChapter,
+  ({
+    activeChapter,
     activeChapterId,
     isEditingChapter,
     onToggleEdit,
@@ -77,6 +90,13 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     chainOfThoughtContent,
     isStreaming = false,
     onDeleteChapter,
+    editModel,
+    apiKey,
+    baseUrl,
+    apiPresets,
+    activeApiPresetId,
+    maxRetries,
+    onError,
   }) => {
     const contentScrollRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -87,19 +107,23 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     const syncTimeoutRef = useRef<number | null>(null);
     const isDirtyRef = useRef(false);
 
-    // 当章节切换、进入编辑模式或章节内容变化时，初始化本地状态
+    const [selectedText, setSelectedText] = useState('');
+    const [selectionStart, setSelectionStart] = useState(-1);
+    const [selectionEnd, setSelectionEnd] = useState(-1);
+    const [aiEditPrompt, setAiEditPrompt] = useState('');
+    const [isAiProcessing, setIsAiProcessing] = useState(false);
+    const [aiError, setAiError] = useState<string | null>(null);
+    const [retryData, setRetryData] = useState<{ prompt: string; selection: { start: number; end: number; text: string } } | null>(null);
+
     useEffect(() => {
       if (activeChapter) {
         setLocalContent(activeChapter.content || '');
-        // 只有在非流式传输且不是编辑模式时，才重置脏状态
         if (!isStreaming && !isEditingChapter) {
           isDirtyRef.current = false;
           setHasUnsavedChanges(false);
         }
       }
 
-      // 使用 requestAnimationFrame 确保在内容渲染后再滚动到顶部
-      // 只有在章节切换时才滚动，流式传输时不滚动
       if (!isStreaming) {
         requestAnimationFrame(() => {
           if (contentScrollRef.current) {
@@ -112,7 +136,6 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       }
     }, [activeChapterId, isEditingChapter, activeChapter?.content, isStreaming]);
 
-    // 添加 beforeunload 事件，防止意外关闭丢失数据
     useEffect(() => {
       const handleBeforeUnload = (e: BeforeUnloadEvent) => {
         if (isDirtyRef.current) {
@@ -125,14 +148,12 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, []);
 
-    // 处理输入：仅更新本地状态，解除全局渲染锁定
     const handleLocalChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newValue = e.target.value;
       setLocalContent(newValue);
       isDirtyRef.current = true;
       setHasUnsavedChanges(true);
 
-      // 采用 500ms 防抖同步回全局状态，保证后台保存
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       syncTimeoutRef.current = setTimeout(() => {
         terminal.log(`[EDITOR] 正在同步内容到全局状态: ${activeChapter?.title} (字数: ${newValue.length})`);
@@ -143,14 +164,128 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       }, 500) as unknown as number;
     };
 
-    // 退出编辑时立即同步
     const handleToggleEditWithSync = () => {
       if (isEditingChapter) {
         if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-        // 显式传入最新内容进行保存
         onToggleEdit(localContent);
       } else {
         onToggleEdit();
+      }
+    };
+
+    const handleSelectionChange = () => {
+      if (textareaRef.current) {
+        const start = textareaRef.current.selectionStart;
+        const end = textareaRef.current.selectionEnd;
+        setSelectionStart(start);
+        setSelectionEnd(end);
+        setSelectedText(localContent.substring(start, end));
+      }
+    };
+
+    const getApiConfig = () => {
+      let finalApiKey = apiKey;
+      let finalBaseUrl = baseUrl;
+      let finalModel = editModel;
+
+      const activePreset = apiPresets.find(p => p.id === activeApiPresetId);
+      if (activePreset) {
+        finalApiKey = activePreset.apiKey;
+        finalBaseUrl = activePreset.baseUrl;
+        if (!finalModel && activePreset.defaultModel) {
+          finalModel = activePreset.defaultModel;
+        }
+      }
+
+      return { apiKey: finalApiKey, baseUrl: finalBaseUrl, model: finalModel };
+    };
+
+    const handleAiEdit = async () => {
+      if (!aiEditPrompt.trim() || selectionStart === -1 || selectionEnd === -1 || selectionStart >= selectionEnd) {
+        onError?.('请先选择要修改的文本并输入修改要求');
+        return;
+      }
+
+      const config = getApiConfig();
+      if (!config.apiKey || !config.model) {
+        onError?.('请先配置 API Key 和编辑模型');
+        return;
+      }
+
+      setIsAiProcessing(true);
+      setAiError(null);
+      setRetryData(null);
+
+      const originalSelection = { start: selectionStart, end: selectionEnd, text: selectedText };
+
+      try {
+        const OpenAI = (await import('openai')).default;
+        const openai = new OpenAI({
+          apiKey: config.apiKey,
+          baseURL: config.baseUrl,
+          dangerouslyAllowBrowser: true,
+        });
+
+        const messages = [
+          {
+            role: 'system' as const,
+            content: '你是一个专业的文本编辑助手。请根据用户的要求修改选中的文本。直接返回修改后的文本，不要包含任何解释。'
+          },
+          {
+            role: 'user' as const,
+            content: `修改要求：${aiEditPrompt}\n\n原文本：${selectedText}`
+          }
+        ];
+
+        let attempt = 0;
+        let success = false;
+        let result = '';
+
+        while (attempt < maxRetries + 1 && !success) {
+          try {
+            const completion = await openai.chat.completions.create({
+            model: config.model,
+            messages,
+            temperature: 0.7,
+          });
+
+            result = completion.choices[0]?.message?.content || '';
+            
+            if (!result) throw new Error('Empty response');
+            success = true;
+          } catch (err) {
+            attempt++;
+            if (attempt > maxRetries) throw err;
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        }
+
+        const newContent = localContent.substring(0, selectionStart) + result + localContent.substring(selectionEnd);
+        setLocalContent(newContent);
+        onChapterContentChange(newContent);
+
+        setSelectionStart(-1);
+        setSelectionEnd(-1);
+        setSelectedText('');
+        setAiEditPrompt('');
+
+      } catch (error: any) {
+        setAiError(error.message || 'AI 编辑失败');
+        setRetryData({ prompt: aiEditPrompt, selection: originalSelection });
+        onError?.(error.message || 'AI 编辑失败');
+      } finally {
+        setIsAiProcessing(false);
+      }
+    };
+
+    const handleRetry = () => {
+      if (retryData) {
+        setAiEditPrompt(retryData.prompt);
+        setSelectionStart(retryData.selection.start);
+        setSelectionEnd(retryData.selection.end);
+        setSelectedText(retryData.selection.text);
+        setAiError(null);
+        setRetryData(null);
       }
     };
 
@@ -166,10 +301,8 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
 
     return (
       <div className="flex-1 flex flex-col min-h-0">
-        {/* Toolbar */}
         <div className="min-h-[3.5rem] h-auto md:h-16 px-1.5 md:px-10 border-b border-slate-200 dark:border-white/5 flex flex-row flex-wrap md:flex-nowrap items-center justify-between bg-white dark:bg-[#09090b] shrink-0 gap-y-2 md:gap-y-0 gap-x-1 md:gap-x-0 py-2 md:py-0 custom-header-transition overflow-visible">
           <div className="flex items-center gap-1 md:gap-8 min-w-0 shrink-0">
-            {/* 版本切换 */}
             <div className="flex items-center bg-slate-100 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/5 overflow-hidden p-0.5 h-9 md:h-10 shrink-0">
               <button
                 onClick={onPrevVersion}
@@ -211,7 +344,6 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
               </button>
             </div>
 
-            {/* Auto开关 */}
             <div className="flex items-center gap-2">
               <div
                 className={`flex items-center bg-slate-100 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/5 overflow-hidden p-0.5 h-9 md:h-10 shrink-0 transition-all duration-300 ${longTextMode ? 'w-auto opacity-100 mr-2' : 'w-0 opacity-0 p-0 border-0'}`}
@@ -243,7 +375,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                   className={`w-6 h-3 rounded-full relative cursor-pointer transition-colors ${longTextMode ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-700'}`}
                 >
                   <div
-                    className={`absolute top-0.5 w-2 h-2 bg-white rounded-full transition-all shadow-sm ${longTextMode ? 'translate-x-3' : 'translate-x-0.5'}`}
+                    className={`absolute top-0.5 left-0.5 w-2 h-2 bg-white rounded-full transition-all shadow-sm ${longTextMode ? 'translate-x-3' : ''}`}
                   ></div>
                 </div>
               </div>
@@ -259,7 +391,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                   className={`w-6 h-3 rounded-full relative cursor-pointer transition-colors ${autoOptimize ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'}`}
                 >
                   <div
-                    className={`absolute top-0.5 w-2 h-2 bg-white rounded-full transition-all shadow-sm ${autoOptimize ? 'translate-x-3' : 'translate-x-0.5'}`}
+                    className={`absolute top-0.5 left-0.5 w-2 h-2 bg-white rounded-full transition-all shadow-sm ${autoOptimize ? 'translate-x-3' : ''}`}
                   ></div>
                 </div>
               </div>
@@ -267,7 +399,6 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
           </div>
 
           <div className="flex items-center gap-1 md:gap-4 ml-auto">
-            {/* 润色按钮组 */}
             <div className="flex items-center h-9 md:h-10 overflow-hidden shrink-0">
               {activeChapter && optimizingChapterIds.has(activeChapter.id) ? (
                 <button
@@ -295,7 +426,6 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
               </button>
             </div>
 
-            {/* 重新生成按钮 */}
             <div className="flex items-center h-9 md:h-10 overflow-hidden shrink-0">
               <button
                 onClick={() => activeChapter && onRegenerate(activeChapter.id)}
@@ -307,7 +437,6 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
               </button>
             </div>
 
-            {/* 右侧工具 */}
             <div className="flex items-center gap-1 h-9 md:h-10 shrink-0">
               <button
                 onClick={onShowAnalysisResult}
@@ -343,84 +472,144 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
           </div>
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto px-4 md:px-10 pt-10 md:pt-20 pb-40 custom-scrollbar bg-white dark:bg-[#09090b] custom-bg-transition">
-          <div className="max-w-4xl mx-auto">
-            <div className="mb-8 md:mb-16 text-center">
-              <h1 className="text-2xl md:text-5xl font-serif font-bold text-slate-900 dark:text-slate-100 tracking-wide mb-4 md:mb-6 px-4">
-                {(() => {
-                  if ((activeChapter.subtype === 'small_summary' || activeChapter.subtype === 'big_summary')) {
-                    const isVolumeMode = contextScope === 'currentVolume';
-                    const targetRange = isVolumeMode ? (activeChapter.summaryRangeVolume || activeChapter.summaryRange) : activeChapter.summaryRange;
-                    const prefix = activeChapter.subtype === 'small_summary' ? '🔹小总结' : '🔸大总结';
-                    return `${prefix} (${targetRange})`;
-                  }
-                  const chapterName = extractChapterName(activeChapter.title);
-                  return chapterName || activeChapter.title;
-                })()}
-              </h1>
-              <div className="flex items-center justify-center gap-2 md:gap-4 text-slate-300 dark:text-slate-500/60">
-                <div className="h-[1px] w-8 md:w-16 bg-slate-200 dark:bg-[#1e2433]"></div>
-                <span className="text-[9px] md:text-[11px] font-mono uppercase tracking-[0.2em] md:tracking-[0.3em]">
-                  {activeChapter.content ? activeChapter.content.length : 0} Words
-                </span>
-                {hasUnsavedChanges && (
-                  <span className="text-[9px] text-amber-500 font-medium animate-pulse">保存中...</span>
-                )}
-                {!hasUnsavedChanges && lastSavedTime && (
-                  <span className="text-[9px] text-green-500/60 font-medium" title={`最后保存: ${lastSavedTime.toLocaleTimeString()}`}>
-                    已保存
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-4 md:px-10 pt-10 md:pt-20 pb-40 custom-scrollbar bg-white dark:bg-[#09090b] custom-bg-transition">
+            <div className="max-w-4xl mx-auto">
+              <div className="mb-8 md:mb-16 text-center">
+                <h1 className="text-2xl md:text-5xl font-serif font-bold text-slate-900 dark:text-slate-100 tracking-wide mb-4 md:mb-6 px-4">
+                  {(() => {
+                    if ((activeChapter.subtype === 'small_summary' || activeChapter.subtype === 'big_summary')) {
+                      const isVolumeMode = contextScope === 'currentVolume';
+                      const targetRange = isVolumeMode ? (activeChapter.summaryRangeVolume || activeChapter.summaryRange) : activeChapter.summaryRange;
+                      const prefix = activeChapter.subtype === 'small_summary' ? '🔹小总结' : '🔸大总结';
+                      return `${prefix} (${targetRange})`;
+                    }
+                    const chapterName = extractChapterName(activeChapter.title);
+                    return chapterName || activeChapter.title;
+                  })()}
+                </h1>
+                <div className="flex items-center justify-center gap-2 md:gap-4 text-slate-300 dark:text-slate-500/60">
+                  <div className="h-[1px] w-8 md:w-16 bg-slate-200 dark:bg-[#1e2433]"></div>
+                  <span className="text-[9px] md:text-[11px] font-mono uppercase tracking-[0.2em] md:tracking-[0.3em]">
+                    {activeChapter.content ? activeChapter.content.length : 0} Words
                   </span>
-                )}
-                <div className="h-[1px] w-8 md:w-16 bg-slate-200 dark:bg-[#1e2433]"></div>
+                  {hasUnsavedChanges && (
+                    <span className="text-[9px] text-amber-500 font-medium animate-pulse">保存中...</span>
+                  )}
+                  {!hasUnsavedChanges && lastSavedTime && (
+                    <span className="text-[9px] text-green-500/60 font-medium" title={`最后保存: ${lastSavedTime.toLocaleTimeString()}`}>
+                      已保存
+                    </span>
+                  )}
+                  <div className="h-[1px] w-8 md:w-16 bg-slate-200 dark:bg-[#1e2433]"></div>
+                </div>
               </div>
+
+              {isEditingChapter ? (
+                <textarea
+                  ref={textareaRef}
+                  value={localContent}
+                  onChange={handleLocalChange}
+                  onSelect={handleSelectionChange}
+                  className="w-full h-full min-h-[500px] md:min-h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 leading-[1.8] outline-none resize-none font-serif selection:bg-primary/30 px-2 md:px-0 placeholder-slate-400"
+                  placeholder="在此处输入章节正文..."
+                />
+              ) : (
+                <article
+                  ref={contentScrollRef}
+                  className="writing-area text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 selection:bg-primary/30 font-serif leading-[1.8] px-2 md:px-0"
+                >
+                  {activeChapter.content ? (
+                    <div className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
+                      {isStreaming ? (
+                        <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap" />
+                      ) : (
+                        <ReactMarkdown className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
+                          {activeChapter.content.replace(/<[^>]+>/g, '')}
+                        </ReactMarkdown>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-slate-500 italic text-center py-20">
+                      {activeChapter && optimizingChapterIds.has(activeChapter.id)
+                        ? 'AI 正在分析并准备润色，请稍候...'
+                        : '暂无内容，请开始创作...'}
+                    </div>
+                  )}
+                </article>
+              )}
             </div>
 
-            {isEditingChapter ? (
-              <textarea
-                ref={textareaRef}
-                value={localContent}
-                onChange={handleLocalChange}
-                className="w-full h-[500px] md:h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 leading-[1.8] outline-none resize-none font-serif selection:bg-primary/30 px-2 md:px-0 placeholder-slate-400"
-                placeholder="在此处输入章节正文..."
-              />
-            ) : (
-              <article
-                ref={contentScrollRef}
-                className="writing-area text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 selection:bg-primary/30 font-serif leading-[1.8] px-2 md:px-0"
-              >
-                {activeChapter.content ? (
-                  <div className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
-                    {isStreaming ? (
-                      <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap" />
-                    ) : (
-                      <ReactMarkdown className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
-                        {activeChapter.content.replace(/<[^>]+>/g, '')}
-                      </ReactMarkdown>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-slate-500 italic text-center py-20">
-                    {activeChapter && optimizingChapterIds.has(activeChapter.id)
-                      ? 'AI 正在分析并准备润色，请稍候...'
-                      : '暂无内容，请开始创作...'}
-                  </div>
-                )}
-              </article>
+            {showChainOfThought && (
+              <div className="mt-8 border-t border-slate-200 dark:border-white/5 pt-6">
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  思维链
+                </h3>
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 text-sm text-slate-600 dark:text-slate-300 font-mono whitespace-pre-wrap">
+                  {chainOfThoughtContent || '暂无思维链内容'}
+                </div>
+              </div>
             )}
           </div>
-          
-          {/* 思维链显示区域 */}
-          {showChainOfThought && (
-            <div className="mt-8 border-t border-slate-200 dark:border-white/5 pt-6">
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                思维链
-              </h3>
-              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 text-sm text-slate-600 dark:text-slate-300 font-mono whitespace-pre-wrap">
-                {chainOfThoughtContent || '暂无思维链内容'}
+
+          {isEditingChapter && (
+            <div className="border-t border-slate-200 dark:border-white/5 bg-white dark:bg-[#09090b] p-3 md:p-4 custom-bg-transition">
+              <div className="max-w-4xl mx-auto">
+                {selectedText && (
+                  <div className="mb-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <Check className="w-3 h-3" />
+                    <span>已选中文本 ({selectedText.length} 字)</span>
+                  </div>
+                )}
+                
+                <div className="flex flex-col md:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={aiEditPrompt}
+                    onChange={(e) => setAiEditPrompt(e.target.value)}
+                    placeholder="请输入修改要求（如：让这段更有画面感..."
+                    className="flex-1 px-3 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-lg text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                    disabled={isAiProcessing}
+                  />
+                  <div className="flex gap-2">
+                    {aiError && (
+                      <button
+                        onClick={handleRetry}
+                        className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        重试
+                      </button>
+                    )}
+                    <button
+                      onClick={handleAiEdit}
+                      disabled={isAiProcessing || !aiEditPrompt.trim() || !selectedText}
+                      className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isAiProcessing ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          处理中...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          发送
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                
+                {aiError && (
+                  <div className="mt-2 text-xs text-red-500 flex items-center gap-1">
+                    <X className="w-3 h-3" />
+                    {aiError}
+                  </div>
+                )}
               </div>
             </div>
           )}
