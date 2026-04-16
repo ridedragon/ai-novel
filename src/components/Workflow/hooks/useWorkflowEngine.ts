@@ -5849,9 +5849,11 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
       if (isAbort) {
         workflowManager.pause(workflowManager.getState().currentNodeIndex);
       } else {
+        const realIdx = workflowManager.getState().currentNodeIndex;
+        // 关键修复：在设置错误前先暂停工作流，确保当前节点索引被正确保存
+        workflowManager.pause(realIdx);
         workflowManager.setError(e.message);
         setError(`执行失败: ${e.message}`);
-        const realIdx = workflowManager.getState().currentNodeIndex;
         const failedNode = getOrderedNodes()[realIdx];
         if (failedNode)
           setNodes(nds =>
