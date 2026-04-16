@@ -67,7 +67,7 @@ export const NovelEditorLayout: React.FC<NovelEditorLayoutProps> = ({
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 bg-white dark:bg-[#09090b] flex flex-col relative overflow-hidden w-full custom-bg-transition">
+        <main className="flex-1 bg-white dark:bg-[#09090b] flex flex-col relative overflow-hidden w-full custom-bg-transition pb-16 md:pb-0">
           {children}
           
           {/* Footer */}
