@@ -53,8 +53,8 @@ export const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   }, [text, speed]);
 
   useEffect(() => {
-    // 处理连续的换行符，只保留一个
-    const processedText = text.replace(/\n+/g, '\n');
+    // 处理连续的换行符，只保留一个，并移除标签
+    const processedText = text.replace(/<[^>]+>/g, '').replace(/\n+/g, '\n');
     
     if (!isStreaming) {
       setDisplayedText(processedText);
