@@ -379,22 +379,33 @@ export class AutoWriteEngine {
 
           const worldInfoMessages = buildWorldInfoMessages(this.novel, outlineSetId);
 
+          // 处理章节标题，去除前置的程序自动编号（如"第二十九章 "）
+          const processChapterTitle = (title: string) => {
+            // 匹配中文数字章节编号格式，如"第一章 "、"第二十九章 "等
+            const chapterNumberRegex = /^第[一二三四五六七八九十百千]+章\s+/;
+            return title.replace(chapterNumberRegex, '');
+          };
+          
           let taskDescription = '';
           if (batchItems.length > 1) {
             taskDescription = `你正在创作连续的小说故事。请一次性撰写以下 ${batchItems.length} 章的内容。\n**重要：请严格使用 "### 章节标题" 作为每一章的分隔符。**\n\n`;
             batchItems.forEach((b, idx) => {
               const chapter = this.novel.chapters?.find(c => c.id === b.id);
-              const chapterTitle = chapter?.title || b.item.title;
+              const originalTitle = chapter?.title || b.item.title;
+              const chapterTitle = processChapterTitle(originalTitle);
               taskDescription += `第 ${idx + 1} 部分：\n标题：${chapterTitle}\n大纲：${b.item.summary}\n\n`;
             });
             const firstChapter = this.novel.chapters?.find(c => c.id === batchItems[0].id);
-            const firstChapterTitle = firstChapter?.title || batchItems[0].item.title;
+            const originalFirstTitle = firstChapter?.title || batchItems[0].item.title;
+            const firstChapterTitle = processChapterTitle(originalFirstTitle);
             const secondChapter = this.novel.chapters?.find(c => c.id === batchItems[1]?.id);
-            const secondChapterTitle = secondChapter?.title || batchItems[1]?.item.title || '第二章';
+            const originalSecondTitle = secondChapter?.title || batchItems[1]?.item.title || '第二章';
+            const secondChapterTitle = processChapterTitle(originalSecondTitle);
             taskDescription += `\n请开始撰写，确保内容连贯，不要包含任何多余的解释，直接输出正文。格式示例：\n### ${firstChapterTitle}\n(第一章正文...)\n### ${secondChapterTitle}\n(第二章正文...)\n`;
           } else {
             const chapter = this.novel.chapters?.find(c => c.id === batchItems[0].id);
-            const chapterTitle = chapter?.title || batchItems[0].item.title;
+            const originalTitle = chapter?.title || batchItems[0].item.title;
+            const chapterTitle = processChapterTitle(originalTitle);
             taskDescription = `你正在创作连续的小说故事。\n当前章节：${chapterTitle}\n本章大纲：${batchItems[0].item.summary}\n\n请根据大纲和前文剧情，撰写本章正文。文笔要生动流畅。`;
           }
 
