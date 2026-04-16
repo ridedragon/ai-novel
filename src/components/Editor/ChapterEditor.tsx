@@ -133,8 +133,43 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     const [retryData, setRetryData] = useState<{ prompt: string; selections: Array<{ start: number; end: number; text: string; color: string }> } | null>(null);
 
     const [showEditPresetDropdown, setShowEditPresetDropdown] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+    const [markedContent, setMarkedContent] = useState<Array<{ start: number; end: number; text: string; color: string }>>([]);
 
     const activeEditPreset = editPresets.find(p => p.id === activeEditPresetId);
+
+    // 检测设备类型
+    useEffect(() => {
+      const checkIsMobile = () => {
+        setIsMobile(window.innerWidth < 768);
+      };
+      
+      checkIsMobile();
+      window.addEventListener('resize', checkIsMobile);
+      return () => window.removeEventListener('resize', checkIsMobile);
+    }, []);
+
+    // 解析标记内容
+    useEffect(() => {
+      if (isMobile) {
+        const regex = /【\*(.*?)\*】/g;
+        const matches: Array<{ start: number; end: number; text: string; color: string }> = [];
+        let match;
+        
+        while ((match = regex.exec(localContent)) !== null) {
+          const start = match.index;
+          const end = start + match[0].length;
+          const text = match[1];
+          const colorIndex = matches.length % selectionColors.length;
+          const color = selectionColors[colorIndex];
+          matches.push({ start, end, text, color });
+        }
+        
+        setMarkedContent(matches);
+      } else {
+        setMarkedContent([]);
+      }
+    }, [isMobile, localContent, selectionColors]);
 
     useEffect(() => {
       const handleClickOutside = (e: MouseEvent) => {
@@ -230,8 +265,9 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     };
 
     const handleAiEdit = async () => {
-      if (!aiEditPrompt.trim() || selections.length === 0) {
-        onError?.('请先选择要修改的文本并输入修改要求');
+      const targetContent = isMobile ? markedContent : selections;
+      if (!aiEditPrompt.trim() || targetContent.length === 0) {
+        onError?.('请先标记要修改的文本并输入修改要求');
         return;
       }
 
@@ -257,7 +293,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       setAiError(null);
       setRetryData(null);
 
-      const originalSelections = [...selections];
+      const originalSelections = [...targetContent];
 
       try {
         const OpenAI = (await import('openai')).default;
@@ -380,11 +416,9 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
           throw new Error('Failed to parse AI response as JSON');
         }
 
-        // 按照选择的结束位置从后往前排序，避免替换时位置偏移
-        const sortedSelections = [...originalSelections].sort((a, b) => b.end - a.end);
-
         // 应用修改
         let newContent = localContent;
+        
         edits.forEach(edit => {
           const selection = originalSelections[edit.index];
           if (selection) {
@@ -648,9 +682,9 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                   ref={textareaRef}
                   value={localContent}
                   onChange={handleLocalChange}
-                  onSelect={handleSelectionChange}
+                  onSelect={isMobile ? undefined : handleSelectionChange}
                   className="w-full h-full min-h-[500px] md:min-h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 leading-[1.8] outline-none resize-none font-serif selection:bg-primary/30 px-2 md:px-0 placeholder-slate-400"
-                  placeholder="在此处输入章节正文..."
+                  placeholder={isMobile ? "在此处输入章节正文，使用【*内容*】标记需要修改的部分..." : "在此处输入章节正文..."}
                 />
               ) : (
                 <article
@@ -829,40 +863,65 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                   </button>
                 </div>
 
-                {selections.length > 0 && (
-                  <div className="mb-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                    <Check className="w-3 h-3" />
-                    <span>已选中 {selections.length} 个文本片段</span>
-                  </div>
-                )}
-                
-                {selections.length > 0 && (
-                  <div className="mb-3 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
-                    <div className="flex flex-wrap gap-2">
-                      {selections.map((selection, index) => (
-                        <div 
-                          key={`${selection.start}-${selection.end}`}
-                          className={`${selection.color} px-2 py-1 rounded-md flex items-center gap-1 text-xs`}
-                        >
-                          <span className="max-w-[200px] truncate">{selection.text.substring(0, 50)}{selection.text.length > 50 ? '...' : ''}</span>
-                          <button
-                            onClick={() => {
-                              setSelections(selections.filter((_, i) => i !== index));
-                              // 如果删除的是当前选择，重置选择状态
-                              if (selectionStart >= selection.start && selectionEnd <= selection.end) {
-                                setSelectionStart(-1);
-                                setSelectionEnd(-1);
-                                setSelectedText('');
-                              }
-                            }}
-                            className="text-slate-500 hover:text-red-500 transition-colors"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
+                {isMobile ? (
+                  markedContent.length > 0 && (
+                    <>
+                      <div className="mb-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                        <Check className="w-3 h-3" />
+                        <span>已标记 {markedContent.length} 个文本片段</span>
+                      </div>
+                      <div className="mb-3 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="flex flex-wrap gap-2">
+                          {markedContent.map((mark, index) => (
+                            <div 
+                              key={`${mark.start}-${mark.end}`}
+                              className={`${mark.color} px-2 py-1 rounded-md flex items-center gap-1 text-xs`}
+                            >
+                              <span className="max-w-[200px] truncate">{mark.text.substring(0, 50)}{mark.text.length > 50 ? '...' : ''}</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      </div>
+                    </>
+                  )
+                ) : (
+                  <>
+                    {selections.length > 0 && (
+                      <div className="mb-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                        <Check className="w-3 h-3" />
+                        <span>已选中 {selections.length} 个文本片段</span>
+                      </div>
+                    )}
+                    
+                    {selections.length > 0 && (
+                      <div className="mb-3 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="flex flex-wrap gap-2">
+                          {selections.map((selection, index) => (
+                            <div 
+                              key={`${selection.start}-${selection.end}`}
+                              className={`${selection.color} px-2 py-1 rounded-md flex items-center gap-1 text-xs`}
+                            >
+                              <span className="max-w-[200px] truncate">{selection.text.substring(0, 50)}{selection.text.length > 50 ? '...' : ''}</span>
+                              <button
+                                onClick={() => {
+                                  setSelections(selections.filter((_, i) => i !== index));
+                                  // 如果删除的是当前选择，重置选择状态
+                                  if (selectionStart >= selection.start && selectionEnd <= selection.end) {
+                                    setSelectionStart(-1);
+                                    setSelectionEnd(-1);
+                                    setSelectedText('');
+                                  }
+                                }}
+                                className="text-slate-500 hover:text-red-500 transition-colors"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
                 
                 <div className="flex flex-col md:flex-row gap-2">
