@@ -184,6 +184,19 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
     if (!storiesByVolume.has(c.volumeId)) storiesByVolume.set(c.volumeId, []);
     storiesByVolume.get(c.volumeId)!.push(c);
   });
+  
+  // 对每个分卷内的剧情章进行排序，确保顺序正确
+  storiesByVolume.forEach(stories => {
+    stories.sort((a, b) => {
+      // 优先使用 globalIndex 排序
+      if (a.globalIndex !== undefined && b.globalIndex !== undefined) {
+        return a.globalIndex - b.globalIndex;
+      }
+      // 如果没有 globalIndex，则使用在原始数组中的位置排序
+      return storyChapters.indexOf(a) - storyChapters.indexOf(b);
+    });
+  });
+  
   const idToVolumeIdx = new Map<number, number>();
   storiesByVolume.forEach(stories => {
     stories.forEach((c, i) => idToVolumeIdx.set(c.id, i + 1));
