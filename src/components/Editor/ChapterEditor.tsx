@@ -658,11 +658,11 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                   className="writing-area text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 selection:bg-primary/30 font-serif leading-[1.8] px-2 md:px-0"
                 >
                   {activeChapter.content ? (
-                    <div className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
+                    <div className="prose dark:prose-invert prose-2xl max-w-none">
                       {isStreaming ? (
-                        <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap" />
+                        <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap leading-relaxed" />
                       ) : (
-                        <ReactMarkdown className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
+                        <ReactMarkdown className="prose dark:prose-invert prose-2xl max-w-none">
                           {activeChapter.content.replace(/<[^>]+>/g, '')}
                         </ReactMarkdown>
                       )}
