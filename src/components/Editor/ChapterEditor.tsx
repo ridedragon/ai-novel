@@ -123,14 +123,16 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     const isDirtyRef = useRef(false);
 
     const [selectedText, setSelectedText] = useState('');
-    const [selectionStart, setSelectionStart] = useState(-1);
-    const [selectionEnd, setSelectionEnd] = useState(-1);
-    const [selections, setSelections] = useState<Array<{ start: number; end: number; text: string; color: string }>>([]);
-    const selectionColors = ['bg-blue-100 dark:bg-blue-900/30', 'bg-green-100 dark:bg-green-900/30', 'bg-yellow-100 dark:bg-yellow-900/30', 'bg-purple-100 dark:bg-purple-900/30', 'bg-pink-100 dark:bg-pink-900/30'];
-    const [aiEditPrompt, setAiEditPrompt] = useState('');
-    const [isAiProcessing, setIsAiProcessing] = useState(false);
-    const [aiError, setAiError] = useState<string | null>(null);
-    const [retryData, setRetryData] = useState<{ prompt: string; selections: Array<{ start: number; end: number; text: string; color: string }> } | null>(null);
+  const [selectionStart, setSelectionStart] = useState(-1);
+  const [selectionEnd, setSelectionEnd] = useState(-1);
+  const [selections, setSelections] = useState<Array<{ start: number; end: number; text: string; color: string }>>([]);
+  const selectionColors = ['bg-blue-100 dark:bg-blue-900/30', 'bg-green-100 dark:bg-green-900/30', 'bg-yellow-100 dark:bg-yellow-900/30', 'bg-purple-100 dark:bg-purple-900/30', 'bg-pink-100 dark:bg-pink-900/30'];
+  const [aiEditPrompt, setAiEditPrompt] = useState('');
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [retryData, setRetryData] = useState<{ prompt: string; selections: Array<{ start: number; end: number; text: string; color: string }> } | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [sentences, setSentences] = useState<Array<{ text: string; start: number; end: number }>>([]);
 
     const [showEditPresetDropdown, setShowEditPresetDropdown] = useState(false);
 
@@ -146,6 +148,16 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+      const checkMobile = () => {
+        setIsMobile(window.innerWidth < 768);
+      };
+      
+      checkMobile();
+      window.addEventListener('resize', checkMobile);
+      return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
     useEffect(() => {
@@ -168,6 +180,28 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
         });
       }
     }, [activeChapterId, isEditingChapter, activeChapter?.content, isStreaming]);
+
+    useEffect(() => {
+      if (localContent) {
+        // 分割句子
+        const splitSentences = (text: string) => {
+          const sentenceRegex = /[^.!?。！？]+[.!?。！？]+/g;
+          const sentences: Array<{ text: string; start: number; end: number }> = [];
+          let match;
+          while ((match = sentenceRegex.exec(text)) !== null) {
+            sentences.push({
+              text: match[0],
+              start: match.index,
+              end: match.index + match[0].length
+            });
+          }
+          return sentences;
+        };
+        setSentences(splitSentences(localContent));
+      } else {
+        setSentences([]);
+      }
+    }, [localContent]);
 
     useEffect(() => {
       const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -427,6 +461,23 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
       }
     };
 
+    const handleSentenceClick = (sentence: { text: string; start: number; end: number }) => {
+      if (isMobile && isEditingChapter) {
+        const colorIndex = selections.length % selectionColors.length;
+        const color = selectionColors[colorIndex];
+        const newSelection = { start: sentence.start, end: sentence.end, text: sentence.text, color };
+        
+        // 检查是否已经存在相同的选择
+        const exists = selections.some(s => s.start === sentence.start && s.end === sentence.end);
+        if (!exists) {
+          setSelections([...selections, newSelection]);
+          setSelectionStart(sentence.start);
+          setSelectionEnd(sentence.end);
+          setSelectedText(sentence.text);
+        }
+      }
+    };
+
     if (!activeChapter) {
       return (
         <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
@@ -644,14 +695,55 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
               </div>
 
               {isEditingChapter ? (
-                <textarea
-                  ref={textareaRef}
-                  value={localContent}
-                  onChange={handleLocalChange}
-                  onSelect={handleSelectionChange}
-                  className="w-full h-full min-h-[500px] md:min-h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 leading-[1.8] outline-none resize-none font-serif selection:bg-primary/30 px-2 md:px-0 placeholder-slate-400"
-                  placeholder="在此处输入章节正文..."
-                />
+                isMobile ? (
+                  <div className="w-full h-full min-h-[500px] md:min-h-[600px] relative bg-transparent px-2 md:px-0">
+                    <textarea
+                      value={localContent}
+                      onChange={handleLocalChange}
+                      className="w-full h-full min-h-[500px] md:min-h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 leading-[1.8] outline-none resize-none font-serif px-2 md:px-0 placeholder-slate-400"
+                      placeholder="在此处输入章节正文..."
+                    />
+                    <div className="absolute inset-0 pointer-events-none overflow-auto">
+                      <div className="min-h-[500px] md:min-h-[600px] p-2">
+                        {localContent && (
+                          <div className="text-[18px] md:text-[21px] text-transparent leading-[1.8] font-serif">
+                            {sentences.length > 0 && sentences.map((sentence, index) => {
+                              const isSelected = selections.some(s => s.start === sentence.start && s.end === sentence.end);
+                              const selection = selections.find(s => s.start === sentence.start && s.end === sentence.end);
+                              return (
+                                <span
+                                  key={index}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleSentenceClick(sentence);
+                                  }}
+                                  className={`cursor-pointer transition-all duration-200 ${isSelected ? (selection?.color || 'bg-blue-100 dark:bg-blue-900/30') : 'hover:bg-slate-100/50 dark:hover:bg-white/10'} py-1 px-2 rounded-md relative`}
+                                >
+                                  {sentence.text}
+                                  {isSelected && (
+                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-xs rounded-full flex items-center justify-center">
+                                      {selections.findIndex(s => s.start === sentence.start && s.end === sentence.end) + 1}
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <textarea
+                    ref={textareaRef}
+                    value={localContent}
+                    onChange={handleLocalChange}
+                    onSelect={handleSelectionChange}
+                    className="w-full h-full min-h-[500px] md:min-h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 leading-[1.8] outline-none resize-none font-serif selection:bg-primary/30 px-2 md:px-0 placeholder-slate-400"
+                    placeholder="在此处输入章节正文..."
+                  />
+                )
               ) : (
                 <article
                   ref={contentScrollRef}
@@ -787,17 +879,19 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
               <div className="max-w-4xl mx-auto">
                 {/* 预设选择器 */}
                 <div className="mb-3 flex items-center gap-2">
-                  <div className="relative edit-preset-dropdown">
+                  <div className="relative edit-preset-dropdown flex-1">
                     <button
                       onClick={() => setShowEditPresetDropdown(!showEditPresetDropdown)}
-                      className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-lg text-sm transition-colors hover:bg-slate-200 dark:hover:bg-white/10"
+                      className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-lg text-sm transition-colors hover:bg-slate-200 dark:hover:bg-white/10 w-full justify-between"
                     >
-                      <Settings className="w-4 h-4" />
-                      <span className="truncate max-w-[150px]">{activeEditPreset?.name || '选择预设'}</span>
+                      <div className="flex items-center gap-2">
+                        <Settings className="w-4 h-4" />
+                        <span className="truncate max-w-[150px]">{activeEditPreset?.name || '选择预设'}</span>
+                      </div>
                       <ChevronDown className="w-4 h-4" />
                     </button>
                     {showEditPresetDropdown && (
-                      <div className="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50">
+                      <div className="absolute bottom-full left-0 mb-2 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50">
                         <div className="p-2 max-h-64 overflow-y-auto custom-scrollbar">
                           {editPresets.map((preset) => (
                             <button
@@ -825,26 +919,28 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                     title="编辑预设"
                   >
                     <Edit2 className="w-4 h-4" />
-                    <span className="hidden sm:inline">编辑</span>
                   </button>
                 </div>
 
                 {selections.length > 0 && (
                   <div className="mb-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                     <Check className="w-3 h-3" />
-                    <span>已选中 {selections.length} 个文本片段</span>
+                    <span>已选中 {selections.length} 个句子</span>
                   </div>
                 )}
                 
                 {selections.length > 0 && (
-                  <div className="mb-3 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                  <div className="mb-3 max-h-24 overflow-y-auto pr-2 custom-scrollbar">
                     <div className="flex flex-wrap gap-2">
                       {selections.map((selection, index) => (
                         <div 
                           key={`${selection.start}-${selection.end}`}
                           className={`${selection.color} px-2 py-1 rounded-md flex items-center gap-1 text-xs`}
                         >
-                          <span className="max-w-[200px] truncate">{selection.text.substring(0, 50)}{selection.text.length > 50 ? '...' : ''}</span>
+                          <span className="w-4 h-4 bg-primary text-white text-xs rounded-full flex items-center justify-center mr-1">
+                            {index + 1}
+                          </span>
+                          <span className="max-w-[150px] truncate">{selection.text.substring(0, 30)}{selection.text.length > 30 ? '...' : ''}</span>
                           <button
                             onClick={() => {
                               setSelections(selections.filter((_, i) => i !== index));
@@ -865,39 +961,39 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                   </div>
                 )}
                 
-                <div className="flex flex-col md:flex-row gap-2">
+                <div className="flex flex-col gap-2">
                   <input
                     type="text"
                     value={aiEditPrompt}
                     onChange={(e) => setAiEditPrompt(e.target.value)}
                     placeholder="请输入修改要求（如：让这段更有画面感..."
-                    className="flex-1 px-3 py-3 md:py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-lg text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                    className="flex-1 px-3 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-lg text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                     disabled={isAiProcessing}
                   />
-                  <div className="flex flex-col md:flex-row gap-2">
+                  <div className="flex gap-2">
                     {aiError && (
                       <button
                         onClick={handleRetry}
-                        className="px-4 py-3 md:py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-1"
+                        className="flex-1 px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-1"
                       >
                         <RotateCcw className="w-4 h-4" />
-                        <span className="hidden sm:inline">重试</span>
+                        <span>重试</span>
                       </button>
                     )}
                     <button
                       onClick={handleAiEdit}
                       disabled={isAiProcessing || !aiEditPrompt.trim() || selections.length === 0}
-                      className="px-4 py-3 md:py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 px-4 py-3 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isAiProcessing ? (
                         <>
                           <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span className="hidden sm:inline">处理中...</span>
+                          <span>处理中...</span>
                         </>
                       ) : (
                         <>
                           <Send className="w-4 h-4" />
-                          <span className="hidden sm:inline">发送</span>
+                          <span>发送</span>
                         </>
                       )}
                     </button>
