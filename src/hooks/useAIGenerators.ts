@@ -1606,7 +1606,15 @@ export function useAIGenerators() {
             }
 
             messages.push(...contextMessages);
-            const chapterTitle = activeChapter?.title || '当前章节';
+            // 处理章节标题，去除前置的程序自动编号（如"第二十九章 "）
+            const processChapterTitle = (title: string) => {
+              // 匹配中文数字章节编号格式，如"第一章 "、"第二十九章 "等
+              const chapterNumberRegex = /^第[一二三四五六七八九十百千]+章\s+/;
+              return title.replace(chapterNumberRegex, '');
+            };
+            
+            const originalTitle = activeChapter?.title || '当前章节';
+            const chapterTitle = processChapterTitle(originalTitle);
             const currentChapterContent = activeChapter.content || '';
             if (currentChapterContent) {
               messages.push({
