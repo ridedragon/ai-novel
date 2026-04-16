@@ -60,7 +60,7 @@ import { ensureChapterVersions } from './utils/chapterUtils';
 import { handleExportNovel, handleExportVolume } from './utils/exportUtils';
 import { keepAliveManager } from './utils/KeepAliveManager';
 import { storage } from './utils/storage';
-import { checkAndGenerateSummary, isSummaryChapter, recalibrateSummaries } from './utils/SummaryManager';
+import { checkAndGenerateSummary, isSummaryChapter, recalibrateSummaries, sortChapters } from './utils/SummaryManager';
 import { initializeBuiltinSkills } from './skills/builtinSkills';
 import { skillRegistry } from './skills/SkillRegistry';
 
@@ -721,9 +721,20 @@ function App() {
               const activeNovel = novelData.novels.find(n => n.id === novelData.activeNovelId);
               if (!activeNovel) return;
               
-              // 调用 recalibrateSummaries 函数校准总结索引
-              const recalibratedChapters = recalibrateSummaries(activeNovel.chapters || []);
-              novelData.updateNovel(novelData.activeNovelId, { ...activeNovel, chapters: recalibratedChapters });
+              // 正确的处理流程：先排序章节，再校准总结，最后再次排序
+              let currentChapters = activeNovel.chapters || [];
+              
+              // 1. 先排序章节
+              currentChapters = sortChapters(currentChapters);
+              
+              // 2. 再校准总结，此时章节已经排序
+              currentChapters = recalibrateSummaries(currentChapters);
+              
+              // 3. 最后再次排序，确保最终顺序正确
+              currentChapters = sortChapters(currentChapters);
+              
+              // 更新小说数据
+              novelData.updateNovel(novelData.activeNovelId, { ...activeNovel, chapters: currentChapters });
             }}
             isLoading={autoWrite.isLoading}
           />
@@ -1768,9 +1779,20 @@ function App() {
               const activeNovel = novelData.novels.find(n => n.id === novelData.activeNovelId);
               if (!activeNovel) return;
               
-              // 调用 recalibrateSummaries 函数校准总结索引
-              const recalibratedChapters = recalibrateSummaries(activeNovel.chapters || []);
-              novelData.updateNovel(novelData.activeNovelId, { ...activeNovel, chapters: recalibratedChapters });
+              // 正确的处理流程：先排序章节，再校准总结，最后再次排序
+              let currentChapters = activeNovel.chapters || [];
+              
+              // 1. 先排序章节
+              currentChapters = sortChapters(currentChapters);
+              
+              // 2. 再校准总结，此时章节已经排序
+              currentChapters = recalibrateSummaries(currentChapters);
+              
+              // 3. 最后再次排序，确保最终顺序正确
+              currentChapters = sortChapters(currentChapters);
+              
+              // 更新小说数据
+              novelData.updateNovel(novelData.activeNovelId, { ...activeNovel, chapters: currentChapters });
             }}
             isLoading={autoWrite.isLoading}
           />
