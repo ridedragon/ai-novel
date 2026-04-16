@@ -172,15 +172,14 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       }
     }, [activeChapterId, isEditingChapter, activeChapter?.content, isStreaming]);
 
-    // 当selections变化时，更新高亮显示
+    // 当selections或localContent变化时，更新高亮显示并恢复光标位置
     useEffect(() => {
       if (isEditingChapter && textareaRef.current) {
         // 保存当前选择状态
         const selection = window.getSelection();
-        let range = null;
         let offset = 0;
         if (selection && selection.rangeCount > 0) {
-          range = selection.getRangeAt(0);
+          const range = selection.getRangeAt(0);
           // 计算光标位置相对于文本开头的偏移量
           const tempRange = range.cloneRange();
           tempRange.selectNodeContents(textareaRef.current);
@@ -198,7 +197,6 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
             // 根据偏移量重新设置光标位置
             const newRange = document.createRange();
             let currentOffset = 0;
-            let found = false;
             
             function findNode(node: Node, targetOffset: number): boolean {
               if (node.nodeType === Node.TEXT_NODE) {
@@ -779,13 +777,37 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                   contentEditable
                   onInput={(e) => {
                     const target = e.target as HTMLElement;
+                    // 保存当前光标位置
+                    const selection = window.getSelection();
+                    let offset = 0;
+                    if (selection && selection.rangeCount > 0) {
+                      const range = selection.getRangeAt(0);
+                      const tempRange = range.cloneRange();
+                      tempRange.selectNodeContents(target);
+                      tempRange.setEnd(range.startContainer, range.startOffset);
+                      offset = tempRange.toString().length;
+                    }
+                    
                     // 使用 innerText 并保留换行符
                     let value = target.innerText || '';
                     // 确保换行符被正确保留
                     value = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
                     // 移除标签
                     value = value.replace(/<[^>]+>/g, '');
-                    handleLocalChange({ target: { value } } as any);
+                    
+                    // 更新本地内容
+                    setLocalContent(value);
+                    isDirtyRef.current = true;
+                    setHasUnsavedChanges(true);
+
+                    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+                    syncTimeoutRef.current = setTimeout(() => {
+                      terminal.log(`[EDITOR] 正在同步内容到全局状态: ${activeChapter?.title} (字数: ${value.length})`);
+                      onChapterContentChange(value);
+                      isDirtyRef.current = false;
+                      setHasUnsavedChanges(false);
+                      setLastSavedTime(new Date());
+                    }, 500) as unknown as number;
                   }}
                   onSelect={handleSelectionChange}
                   className="w-full h-full min-h-[500px] md:min-h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 leading-[1.8] outline-none font-serif selection:bg-primary/30 px-2 md:px-0 placeholder-slate-400 whitespace-pre-wrap"
