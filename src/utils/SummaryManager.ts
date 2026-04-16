@@ -167,7 +167,14 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
  */
 export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
   // 1. 剧情章物理索引参考
-  const storyChapters = chapters.filter(c => !isSummaryChapter(c));
+  const storyChapters = chapters.filter(c => !isSummaryChapter(c)).sort((a, b) => {
+    // 优先使用 globalIndex 排序
+    if (a.globalIndex !== undefined && b.globalIndex !== undefined) {
+      return a.globalIndex - b.globalIndex;
+    }
+    // 如果没有 globalIndex，则使用在原始数组中的位置排序
+    return chapters.indexOf(a) - chapters.indexOf(b);
+  });
   const idToGlobalIdx = new Map<number, number>();
   storyChapters.forEach((c, i) => idToGlobalIdx.set(c.id, i + 1));
 
@@ -235,10 +242,16 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
     
     // 计算新的范围，确保不跨越分卷边界
     const newStartVolume = Math.max(1, currentEndVolume - span + 1);
-    const newStart = idToGlobalIdx.get(volumeStories[newStartVolume - 1]?.id) || newStartVolume;
+    
+    // 确保 newStartVolume 不超过当前分卷的章节数
+    const validStartVolume = Math.min(newStartVolume, volumeStories.length);
+    
+    // 获取起始章节的全局索引
+    const startChapter = volumeStories[validStartVolume - 1];
+    const newStart = startChapter ? idToGlobalIdx.get(startChapter.id) || validStartVolume : validStartVolume;
     
     const newRange = `${newStart}-${currentEnd}`;
-    const newRangeVolume = `${newStartVolume}-${currentEndVolume}`;
+    const newRangeVolume = `${validStartVolume}-${currentEndVolume}`;
 
     const hasChanged = newRange !== chapter.summaryRange || chapter.volumeId !== anchor.volumeId || newRangeVolume !== chapter.summaryRangeVolume;
 
