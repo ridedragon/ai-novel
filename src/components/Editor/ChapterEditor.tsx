@@ -193,17 +193,17 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
         }
       }
 
-      if (!isStreaming) {
+      if (!isStreaming && activeChapterId) {
         requestAnimationFrame(() => {
           if (contentScrollRef.current) {
             contentScrollRef.current.scrollTop = 0;
           }
-          if (textareaRef.current) {
+          if (textareaRef.current && !isEditingChapter) {
             textareaRef.current.scrollTop = 0;
           }
         });
       }
-    }, [activeChapterId, isEditingChapter, activeChapter?.content, isStreaming]);
+    }, [activeChapterId, isStreaming]);
 
     useEffect(() => {
       const handleBeforeUnload = (e: BeforeUnloadEvent) => {
