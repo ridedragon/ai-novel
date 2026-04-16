@@ -169,6 +169,14 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       }
     }, [activeChapterId, isEditingChapter, activeChapter?.content, isStreaming]);
 
+    // 当localContent变化时，更新高亮显示
+    useEffect(() => {
+      if (isEditingChapter && textareaRef.current) {
+        // 重新设置内容以更新高亮
+        textareaRef.current.innerHTML = getHighlightedContent(localContent) || '<p>在此处输入章节正文...</p>';
+      }
+    }, [localContent, selections, isEditingChapter]);
+
     useEffect(() => {
       const handleBeforeUnload = (e: BeforeUnloadEvent) => {
         if (isDirtyRef.current) {
@@ -207,27 +215,52 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     };
 
     const handleSelectionChange = () => {
-      if (textareaRef.current) {
-        const start = textareaRef.current.selectionStart;
-        const end = textareaRef.current.selectionEnd;
-        setSelectionStart(start);
-        setSelectionEnd(end);
-        const selectedText = localContent.substring(start, end);
-        setSelectedText(selectedText);
-        
-        // 添加新选择到多选列表
-        if (start !== end) {
-          const colorIndex = selections.length % selectionColors.length;
-          const color = selectionColors[colorIndex];
-          const newSelection = { start, end, text: selectedText, color };
-          // 检查是否已经存在相同的选择
-          const exists = selections.some(s => s.start === start && s.end === end);
-          if (!exists) {
-            setSelections([...selections, newSelection]);
-          }
+    if (textareaRef.current) {
+      const start = textareaRef.current.selectionStart;
+      const end = textareaRef.current.selectionEnd;
+      setSelectionStart(start);
+      setSelectionEnd(end);
+      const selectedText = localContent.substring(start, end);
+      setSelectedText(selectedText);
+      
+      // 添加新选择到多选列表
+      if (start !== end) {
+        const colorIndex = selections.length % selectionColors.length;
+        const color = selectionColors[colorIndex];
+        const newSelection = { start, end, text: selectedText, color };
+        // 检查是否已经存在相同的选择
+        const exists = selections.some(s => s.start === start && s.end === end);
+        if (!exists) {
+          setSelections([...selections, newSelection]);
         }
       }
-    };
+    }
+  };
+
+  // 生成带有高亮的文本
+  const getHighlightedContent = (content: string) => {
+    if (selections.length === 0) return content;
+    
+    // 按照开始位置排序
+    const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
+    
+    let result = '';
+    let lastIndex = 0;
+    
+    sortedSelections.forEach((selection, index) => {
+      // 添加选择之前的文本
+      result += content.substring(lastIndex, selection.start);
+      // 添加带有高亮的选择文本
+      result += `<mark class="${selection.color}">${content.substring(selection.start, selection.end)}</mark>`;
+      // 更新lastIndex
+      lastIndex = selection.end;
+    });
+    
+    // 添加最后一个选择之后的文本
+    result += content.substring(lastIndex);
+    
+    return result;
+  };
 
     const handleAiEdit = async () => {
       if (!aiEditPrompt.trim() || selections.length === 0) {
@@ -644,13 +677,16 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
               </div>
 
               {isEditingChapter ? (
-                <textarea
+                <div
                   ref={textareaRef}
-                  value={localContent}
-                  onChange={handleLocalChange}
+                  contentEditable
+                  onInput={(e) => {
+                    const target = e.target as HTMLElement;
+                    handleLocalChange({ target: { value: target.innerText } } as any);
+                  }}
                   onSelect={handleSelectionChange}
-                  className="w-full h-full min-h-[500px] md:min-h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 leading-[1.8] outline-none resize-none font-serif selection:bg-primary/30 px-2 md:px-0 placeholder-slate-400"
-                  placeholder="在此处输入章节正文..."
+                  className="w-full h-full min-h-[500px] md:min-h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 leading-[1.8] outline-none font-serif selection:bg-primary/30 px-2 md:px-0 placeholder-slate-400"
+                  dangerouslySetInnerHTML={{ __html: getHighlightedContent(localContent) || '<p>在此处输入章节正文...</p>' }}
                 />
               ) : (
                 <article
@@ -662,9 +698,7 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                       {isStreaming ? (
                         <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap" />
                       ) : (
-                        <ReactMarkdown className="prose dark:prose-invert prose-2xl max-w-none [&_p]:mb-0 [&_p]:mt-0">
-                          {activeChapter.content.replace(/<[^>]+>/g, '')}
-                        </ReactMarkdown>
+                        <div dangerouslySetInnerHTML={{ __html: getHighlightedContent(activeChapter.content.replace(/<[^>]+>/g, '')) }} />
                       )}
                     </div>
                   ) : (
