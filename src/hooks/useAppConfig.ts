@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { RegexScript, ApiPreset } from '../types';
+import { RegexScript, ApiPreset, GeneratorPreset, GeneratorPrompt } from '../types';
 import { adjustColor, hexToRgb } from '../utils/uiUtils';
 
 export function useAppConfig() {
@@ -362,6 +362,85 @@ export function useAppConfig() {
     twoStepOptimizationRef.current = twoStepOptimization;
   }, [twoStepOptimization]);
 
+  // --- 文本编辑预设 ---
+  const [editPresets, setEditPresets] = useState<GeneratorPreset[]>(() => {
+    try {
+      const saved = localStorage.getItem('editPresets');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+      // 默认文本编辑预设
+      return [
+        {
+          id: 'edit_default',
+          name: '默认编辑',
+          prompts: [
+            {
+              id: 'edit_sys',
+              role: 'system',
+              content: '你是一个专业的文本编辑助手。请根据用户的要求修改选中的文本。返回JSON格式的结果，包含一个edits数组，每个元素包含index（选择的序号，从0开始）和content（修改后的文本）。不要包含任何解释。\n\n格式示例：\n{\n  "edits": [\n    {\n      "index": 0,\n      "content": "修改后的文本1"\n    },\n    {\n      "index": 1,\n      "content": "修改后的文本2"\n    }\n  ]\n}',
+              enabled: true
+            }
+          ],
+          temperature: 0.7,
+          topP: 1.0,
+          topK: 200
+        }
+      ];
+    } catch (e) {
+      return [];
+    }
+  });
+  
+  const [activeEditPresetId, setActiveEditPresetId] = useState(() => {
+    try {
+      return localStorage.getItem('activeEditPresetId') || 'edit_default';
+    } catch (e) {
+      return 'edit_default';
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('editPresets', JSON.stringify(editPresets));
+  }, [editPresets]);
+
+  useEffect(() => {
+    localStorage.setItem('activeEditPresetId', activeEditPresetId);
+  }, [activeEditPresetId]);
+
+  const handleAddEditPreset = useCallback(() => {
+    const newPreset: GeneratorPreset = {
+      id: `edit_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      name: '新编辑预设',
+      prompts: [
+        {
+          id: `edit_${Date.now()}_1`,
+          role: 'system',
+          content: '你是一个专业的文本编辑助手。请根据用户的要求修改选中的文本。',
+          enabled: true
+        }
+      ],
+      temperature: 0.7,
+      topP: 1.0,
+      topK: 200
+    };
+    setEditPresets(prev => [...prev, newPreset]);
+    setActiveEditPresetId(newPreset.id);
+  }, []);
+
+  const handleDeleteEditPreset = useCallback((id: string) => {
+    setEditPresets(prev => prev.filter(preset => preset.id !== id));
+    if (activeEditPresetId === id) {
+      setActiveEditPresetId(editPresets[0]?.id || '');
+    }
+  }, [activeEditPresetId, editPresets]);
+
+  const handleUpdateEditPreset = useCallback((id: string, updates: Partial<GeneratorPreset>) => {
+    setEditPresets(prev => prev.map(preset => 
+      preset.id === id ? { ...preset, ...updates } : preset
+    ));
+  }, []);
+
   // --- 移动端状态监听 ---
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
@@ -456,5 +535,13 @@ export function useAppConfig() {
     handleUpdateApiPreset,
     handleDeleteApiPreset,
     handleSwitchApiPreset,
+    // 文本编辑预设
+    editPresets,
+    setEditPresets,
+    activeEditPresetId,
+    setActiveEditPresetId,
+    handleAddEditPreset,
+    handleDeleteEditPreset,
+    handleUpdateEditPreset,
   };
 }

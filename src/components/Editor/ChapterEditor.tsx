@@ -3,7 +3,9 @@ import {
   BookOpen,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Edit,
+  Edit2,
   FileText,
   RefreshCw,
   Save,
@@ -17,6 +19,7 @@ import {
   Check,
   RotateCcw,
 } from 'lucide-react';
+import { GeneratorPreset } from '../../types';
 import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import terminal from 'virtual:terminal';
@@ -61,6 +64,12 @@ interface ChapterEditorProps {
   activeApiPresetId: string;
   maxRetries: number;
   onError?: (msg: string) => void;
+  
+  // 文本编辑预设
+  editPresets: GeneratorPreset[];
+  activeEditPresetId: string;
+  setActiveEditPresetId: (id: string) => void;
+  onShowEditPresetSettings: () => void;
 }
 
 export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
@@ -98,6 +107,10 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     activeApiPresetId,
     maxRetries,
     onError,
+    editPresets,
+    activeEditPresetId,
+    setActiveEditPresetId,
+    onShowEditPresetSettings,
   }) => {
     const contentScrollRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -117,6 +130,22 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     const [isAiProcessing, setIsAiProcessing] = useState(false);
     const [aiError, setAiError] = useState<string | null>(null);
     const [retryData, setRetryData] = useState<{ prompt: string; selections: Array<{ start: number; end: number; text: string; color: string }> } | null>(null);
+
+    const [showEditPresetDropdown, setShowEditPresetDropdown] = useState(false);
+
+    const activeEditPreset = editPresets.find(p => p.id === activeEditPresetId);
+
+    useEffect(() => {
+      const handleClickOutside = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (!target.closest('.edit-preset-dropdown')) {
+          setShowEditPresetDropdown(false);
+        }
+      };
+      
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     useEffect(() => {
       if (activeChapter) {
@@ -205,6 +234,11 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
         return;
       }
 
+      if (!activeEditPreset) {
+        onError?.('请先选择一个编辑预设');
+        return;
+      }
+
       const config = getApiConfig(
         null, 
         editModel, 
@@ -237,16 +271,27 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
           return `选择 ${index + 1}: ${sel.text}`;
         }).join('\n\n');
 
+        // 使用预设中的提示词
+        const presetMessages = activeEditPreset.prompts
+          .filter(p => p.enabled)
+          .map(p => ({
+            role: p.role as const,
+            content: p.content
+          }));
+
+        // 添加用户的修改要求和选择的文本
         const messages = [
-          {
-            role: 'system' as const,
-            content: '你是一个专业的文本编辑助手。请根据用户的要求修改选中的文本。返回JSON格式的结果，包含一个edits数组，每个元素包含index（选择的序号，从0开始）和content（修改后的文本）。不要包含任何解释。\n\n格式示例：\n{\n  "edits": [\n    {\n      "index": 0,\n      "content": "修改后的文本1"\n    },\n    {\n      "index": 1,\n      "content": "修改后的文本2"\n    }\n  ]\n}'
-          },
+          ...presetMessages,
           {
             role: 'user' as const,
             content: `修改要求：${aiEditPrompt}\n\n${selectionsText}`
           }
         ];
+
+        // 使用预设中的参数
+        const temperature = activeEditPreset.temperature ?? 0.7;
+        const topP = activeEditPreset.topP ?? 1.0;
+        const topK = activeEditPreset.topK ?? 200;
 
         // 详细日志：文本编辑模型请求
         const requestStartTime = Date.now();
@@ -255,7 +300,9 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
 >> -----------------------------------------------------------
 >> Model:       ${config.model}
 >> Base URL:    ${config.baseUrl}
->> Temperature: 0.7
+>> Temperature: ${temperature}
+>> Top P:       ${topP}
+>> Top K:       ${topK}
 >> API Key:     ${config.apiKey ? '***' : 'Missing'}
 >> Selections:  ${selections.length}
 >> Request Time: ${new Date().toISOString()}
@@ -274,7 +321,9 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
             const completion = await openai.chat.completions.create({
             model: config.model,
             messages,
-            temperature: 0.7,
+            temperature: temperature,
+            top_p: topP,
+            // 注意：OpenAI SDK 不直接支持 topK 参数，我们这里只使用 temperature 和 topP
           });
 
             result = completion.choices[0]?.message?.content || '';
@@ -640,6 +689,50 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
           {isEditingChapter && (
             <div className="border-t border-slate-200 dark:border-white/5 bg-white dark:bg-[#09090b] p-3 md:p-4 custom-bg-transition safe-area-bottom">
               <div className="max-w-4xl mx-auto">
+                {/* 预设选择器 */}
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="relative edit-preset-dropdown">
+                    <button
+                      onClick={() => setShowEditPresetDropdown(!showEditPresetDropdown)}
+                      className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-lg text-sm transition-colors hover:bg-slate-200 dark:hover:bg-white/10"
+                    >
+                      <Settings className="w-4 h-4" />
+                      <span className="truncate max-w-[150px]">{activeEditPreset?.name || '选择预设'}</span>
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                    {showEditPresetDropdown && (
+                      <div className="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50">
+                        <div className="p-2 max-h-64 overflow-y-auto custom-scrollbar">
+                          {editPresets.map((preset) => (
+                            <button
+                              key={preset.id}
+                              onClick={() => {
+                                setActiveEditPresetId(preset.id);
+                                setShowEditPresetDropdown(false);
+                              }}
+                              className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                                preset.id === activeEditPresetId
+                                  ? 'bg-primary/10 text-primary'
+                                  : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={onShowEditPresetSettings}
+                    className="flex items-center gap-1 px-3 py-2 bg-primary/10 text-primary border border-primary/30 rounded-lg text-sm transition-colors hover:bg-primary/20"
+                    title="编辑预设"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">编辑</span>
+                  </button>
+                </div>
+
                 {selections.length > 0 && (
                   <div className="mb-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                     <Check className="w-3 h-3" />
