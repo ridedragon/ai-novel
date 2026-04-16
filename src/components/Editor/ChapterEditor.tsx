@@ -946,7 +946,7 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                     )}
                     <button
                       onClick={handleAiEdit}
-                      disabled={isAiProcessing || !aiEditPrompt.trim() || (isMobile ? markedContent.length === 0 : selections.length === 0)}
+                      disabled={isAiProcessing || !aiEditPrompt.trim() || !activeEditPreset || (isMobile ? markedContent.length === 0 : selections.length === 0)}
                       className="px-4 py-3 md:py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isAiProcessing ? (
