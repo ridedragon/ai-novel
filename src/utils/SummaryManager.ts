@@ -38,11 +38,25 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
   const summariesByParentId = new Map<number, Chapter[]>();
   const globalOrphans: Chapter[] = [];
 
+  // 创建一个映射，用于快速查找剧情章 by globalIndex
+  const globalIndexToStory = new Map<number, Chapter>();
+  allStories.forEach(story => {
+    if (story.globalIndex !== undefined) {
+      globalIndexToStory.set(story.globalIndex, story);
+    }
+  });
+
   allSummaries.forEach(s => {
     const range = s.summaryRange?.split('-').map(Number);
     if (range && range.length === 2 && !isNaN(range[1]) && range[1] > 0) {
-      // 获取该总结理论上应该跟随的剧情章 (基于全局物理索引)
-      const targetStory = allStories[range[1] - 1];
+      // 首先尝试通过 globalIndex 查找目标剧情章
+      let targetStory = globalIndexToStory.get(range[1]);
+      
+      // 如果通过 globalIndex 找不到，则尝试通过数组索引查找
+      if (!targetStory && range[1] <= allStories.length) {
+        targetStory = allStories[range[1] - 1];
+      }
+      
       if (targetStory) {
         // 确保总结章节的volumeId与目标剧情章一致
         s.volumeId = targetStory.volumeId;
@@ -177,6 +191,14 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
   });
   const idToGlobalIdx = new Map<number, number>();
   storyChapters.forEach((c, i) => idToGlobalIdx.set(c.id, i + 1));
+  
+  // 创建一个映射，用于快速查找剧情章 by globalIndex
+  const globalIndexToStory = new Map<number, Chapter>();
+  storyChapters.forEach(story => {
+    if (story.globalIndex !== undefined) {
+      globalIndexToStory.set(story.globalIndex, story);
+    }
+  });
 
   // 按分卷分组剧情章，用于计算本卷内的索引
   const storiesByVolume = new Map<string | undefined, Chapter[]>();
@@ -213,7 +235,14 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
     // 首先尝试根据 summaryRange 寻找挂载点
     const range = chapter.summaryRange?.split('-').map(Number);
     if (range && range.length === 2 && !isNaN(range[1]) && range[1] > 0) {
-      const targetStory = storyChapters[range[1] - 1];
+      // 首先尝试通过 globalIndex 查找目标剧情章
+      let targetStory = globalIndexToStory.get(range[1]);
+      
+      // 如果通过 globalIndex 找不到，则尝试通过数组索引查找
+      if (!targetStory && range[1] <= storyChapters.length) {
+        targetStory = storyChapters[range[1] - 1];
+      }
+      
       if (targetStory) {
         anchor = targetStory;
       }
