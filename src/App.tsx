@@ -718,23 +718,23 @@ function App() {
             handleRecalibrateSummaries={async () => {
               if (!novelData.activeNovelId) return;
               
+              // 直接获取当前章节并手动处理，避免重复规范化
               const activeNovel = novelData.novels.find(n => n.id === novelData.activeNovelId);
               if (!activeNovel) return;
               
-              // 正确的处理流程：先排序章节，再校准总结，最后再次排序
-              let currentChapters = activeNovel.chapters || [];
+              let currentChapters = [...(activeNovel.chapters || [])];
               
               // 1. 先排序章节
               currentChapters = sortChapters(currentChapters);
               
-              // 2. 再校准总结，此时章节已经排序
+              // 2. 再校准总结，此时章节已经排序，且 recalibrateSummaries 会优先根据 summaryRange 寻找挂载点
               currentChapters = recalibrateSummaries(currentChapters);
               
               // 3. 最后再次排序，确保最终顺序正确
               currentChapters = sortChapters(currentChapters);
               
-              // 更新小说数据
-              novelData.updateNovel(novelData.activeNovelId, { ...activeNovel, chapters: currentChapters });
+              // 使用 skipNormalization: true 来避免重复执行 normalizeChapters
+              novelData.setChapters(currentChapters, true);
             }}
             isLoading={autoWrite.isLoading}
           />
@@ -1776,23 +1776,23 @@ function App() {
             handleRecalibrateSummaries={async () => {
               if (!novelData.activeNovelId) return;
               
+              // 直接获取当前章节并手动处理，避免重复规范化
               const activeNovel = novelData.novels.find(n => n.id === novelData.activeNovelId);
               if (!activeNovel) return;
               
-              // 正确的处理流程：先排序章节，再校准总结，最后再次排序
-              let currentChapters = activeNovel.chapters || [];
+              let currentChapters = [...(activeNovel.chapters || [])];
               
               // 1. 先排序章节
               currentChapters = sortChapters(currentChapters);
               
-              // 2. 再校准总结，此时章节已经排序
+              // 2. 再校准总结，此时章节已经排序，且 recalibrateSummaries 会优先根据 summaryRange 寻找挂载点
               currentChapters = recalibrateSummaries(currentChapters);
               
               // 3. 最后再次排序，确保最终顺序正确
               currentChapters = sortChapters(currentChapters);
               
-              // 更新小说数据
-              novelData.updateNovel(novelData.activeNovelId, { ...activeNovel, chapters: currentChapters });
+              // 使用 skipNormalization: true 来避免重复执行 normalizeChapters
+              novelData.setChapters(currentChapters, true);
             }}
             isLoading={autoWrite.isLoading}
           />
