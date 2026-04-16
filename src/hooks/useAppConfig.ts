@@ -240,7 +240,27 @@ export function useAppConfig() {
   const [globalRegexScripts, setGlobalRegexScripts] = useState<RegexScript[]>(() => {
     try {
       const saved = localStorage.getItem('globalRegexScripts');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        return JSON.parse(saved);
+      }
+      // 默认正则脚本
+      return [
+        {
+          id: 'merge_newlines',
+          scriptName: '合并连续换行符',
+          findRegex: '\\n\\n+',
+          replaceString: '\n',
+          trimStrings: [],
+          placement: [2], // 应用于 AI 输出
+          disabled: false,
+          markdownOnly: false,
+          promptOnly: false,
+          runOnEdit: false,
+          substituteRegex: 0,
+          minDepth: null,
+          maxDepth: null
+        }
+      ];
     } catch (e) {
       return [];
     }
