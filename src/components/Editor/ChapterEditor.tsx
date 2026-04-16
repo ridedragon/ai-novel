@@ -237,37 +237,29 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     }
   };
 
-  // 将纯文本转换为HTML，保留换行
+  // 将纯文本转换为HTML，正确处理特殊字符
   const textToHtml = (text: string) => {
     return text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\n/g, '<br>');
+      .replace(/>/g, '&gt;');
   };
 
   // 生成带有高亮的文本
   const getHighlightedContent = (content: string) => {
-    let processedContent = textToHtml(content);
+    if (selections.length === 0) return textToHtml(content);
     
-    if (selections.length === 0) return processedContent;
-    
-    // 先处理选择的文本，需要计算HTML位置
-    // 这里简化处理，直接在原始文本中处理，然后再转换
     let result = '';
     let lastIndex = 0;
     
     const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
     
     sortedSelections.forEach((selection) => {
-      // 添加选择之前的文本
       result += textToHtml(content.substring(lastIndex, selection.start));
-      // 添加带有高亮的选择文本
       result += `<mark class="${selection.color}">${textToHtml(content.substring(selection.start, selection.end))}</mark>`;
       lastIndex = selection.end;
     });
     
-    // 添加最后一个选择之后的文本
     result += textToHtml(content.substring(lastIndex));
     
     return result;
