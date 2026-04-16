@@ -38,11 +38,25 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
   const summariesByParentId = new Map<number, Chapter[]>();
   const globalOrphans: Chapter[] = [];
 
+  // 创建一个映射，用于快速查找剧情章 by globalIndex
+  const globalIndexToStory = new Map<number, Chapter>();
+  allStories.forEach(story => {
+    if (story.globalIndex !== undefined) {
+      globalIndexToStory.set(story.globalIndex, story);
+    }
+  });
+
   allSummaries.forEach(s => {
     const range = s.summaryRange?.split('-').map(Number);
     if (range && range.length === 2 && !isNaN(range[1]) && range[1] > 0) {
-      // 获取该总结理论上应该跟随的剧情章 (基于全局物理索引)
-      const targetStory = allStories[range[1] - 1];
+      // 首先尝试通过 globalIndex 查找目标剧情章
+      let targetStory = globalIndexToStory.get(range[1]);
+      
+      // 如果通过 globalIndex 找不到，则尝试通过数组索引查找
+      if (!targetStory && range[1] <= allStories.length) {
+        targetStory = allStories[range[1] - 1];
+      }
+      
       if (targetStory) {
         // 确保总结章节的volumeId与目标剧情章一致
         s.volumeId = targetStory.volumeId;
@@ -177,6 +191,14 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
   });
   const idToGlobalIdx = new Map<number, number>();
   storyChapters.forEach((c, i) => idToGlobalIdx.set(c.id, i + 1));
+  
+  // 创建一个映射，用于快速查找剧情章 by globalIndex
+  const globalIndexToStory = new Map<number, Chapter>();
+  storyChapters.forEach(story => {
+    if (story.globalIndex !== undefined) {
+      globalIndexToStory.set(story.globalIndex, story);
+    }
+  });
 
   // 按分卷分组剧情章，用于计算本卷内的索引
   const storiesByVolume = new Map<string | undefined, Chapter[]>();
@@ -184,6 +206,19 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
     if (!storiesByVolume.has(c.volumeId)) storiesByVolume.set(c.volumeId, []);
     storiesByVolume.get(c.volumeId)!.push(c);
   });
+  
+  // 对每个分卷内的剧情章进行排序，确保顺序正确
+  storiesByVolume.forEach(stories => {
+    stories.sort((a, b) => {
+      // 优先使用 globalIndex 排序
+      if (a.globalIndex !== undefined && b.globalIndex !== undefined) {
+        return a.globalIndex - b.globalIndex;
+      }
+      // 如果没有 globalIndex，则使用在原始数组中的位置排序
+      return storyChapters.indexOf(a) - storyChapters.indexOf(b);
+    });
+  });
+  
   const idToVolumeIdx = new Map<number, number>();
   storiesByVolume.forEach(stories => {
     stories.forEach((c, i) => idToVolumeIdx.set(c.id, i + 1));
@@ -200,7 +235,14 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
     // 首先尝试根据 summaryRange 寻找挂载点
     const range = chapter.summaryRange?.split('-').map(Number);
     if (range && range.length === 2 && !isNaN(range[1]) && range[1] > 0) {
-      const targetStory = storyChapters[range[1] - 1];
+      // 首先尝试通过 globalIndex 查找目标剧情章
+      let targetStory = globalIndexToStory.get(range[1]);
+      
+      // 如果通过 globalIndex 找不到，则尝试通过数组索引查找
+      if (!targetStory && range[1] <= storyChapters.length) {
+        targetStory = storyChapters[range[1] - 1];
+      }
+      
       if (targetStory) {
         anchor = targetStory;
       }
@@ -236,9 +278,19 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
     
     const currentEnd = idToGlobalIdx.get(anchor.id) || 1;
     const currentEndVolume = anchorVolumeIndex;
-    const oldRange = chapter.summaryRange || '1-1';
-    const [oldS, oldE] = oldRange.split('-').map(Number);
-    const span = Math.max(1, (oldE || 1) - (oldS || 1) + 1);
+    
+    // 计算 span 时，优先使用合理的默认值，而不是依赖可能无效的 oldRange
+    // 对于小总结，默认 span 为 3；对于大总结，默认 span 为 6
+    let span = chapter.subtype === 'small_summary' ? 3 : 6;
+    
+    // 如果 oldRange 有效，则使用它来计算 span
+    const oldRange = chapter.summaryRange;
+    if (oldRange) {
+      const [oldS, oldE] = oldRange.split('-').map(Number);
+      if (!isNaN(oldS) && !isNaN(oldE) && oldE >= oldS) {
+        span = Math.max(1, oldE - oldS + 1);
+      }
+    }
     
     // 计算新的范围，确保不跨越分卷边界
     const newStartVolume = Math.max(1, currentEndVolume - span + 1);
@@ -257,11 +309,11 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
 
     if (hasChanged) {
       // Get actual chapter titles for the new range
-      const [newStart, newEnd] = newRange.split('-').map(Number);
-      const startChapter = storyChapters[newStart - 1];
-      const endChapter = storyChapters[newEnd - 1];
-      const startTitle = startChapter?.title || `Chapter ${newStart}`;
-      const endTitle = endChapter?.title || `Chapter ${newEnd}`;
+      const [rangeStart, rangeEnd] = newRange.split('-').map(Number);
+      const startChapter = storyChapters[rangeStart - 1];
+      const endChapter = storyChapters[rangeEnd - 1];
+      const startTitle = startChapter?.title || `Chapter ${rangeStart}`;
+      const endTitle = endChapter?.title || `Chapter ${rangeEnd}`;
       
       const newTitle = chapter.title.replace(/\s*\(\d+-\d+\)/, '').replace(/：.*$/, `：${startTitle} 到 ${endTitle}`);
       
