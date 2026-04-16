@@ -142,3 +142,22 @@ button:focus-visible {
   background-color: #09090b;
   color-scheme: dark;
 }
+
+/* 确保写作区域没有额外的行间距 */
+.writing-area,
+.writing-area * {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* 移除 prose 类的默认段落间距 */
+.prose p,
+.prose br {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.prose :where(p):not(:where([class~="not-prose"] *)) {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
