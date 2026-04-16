@@ -493,6 +493,16 @@ export class AutoWriteEngine {
             }
           }
 
+          // 详细日志：完整的提示词内容
+          terminal.log(`
+>> AI REQUEST [全自动正文创作 - 详细提示词]
+>> -----------------------------------------------------------
+>> Messages Count: ${messages.length}
+>> Messages Details:
+${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length > 500 ? msg.content.slice(0, 500) + '...' : msg.content}`).join('\n')}
+>> -----------------------------------------------------------
+          `);
+          
           // 调试：F12 打印发送给 AI 的全部内容
           console.group(`[AI REQUEST] 工作流正文创作 - ${this.novel.title}`);
           console.log('Final Message Count:', messages.length);

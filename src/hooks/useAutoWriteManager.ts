@@ -292,6 +292,16 @@ export function useAutoWriteManager() {
             .map(p => ({ role: p.role, content: p.content.replace('{{content}}', sourceContentToUse!) }))
             .filter(m => m.content?.trim());
 
+          // 详细日志：完整的提示词内容
+          terminal.log(`
+>> AI REQUEST [手动润色: 优化前分析 - 详细提示词]
+>> -----------------------------------------------------------
+>> Messages Count: ${messages.length}
+>> Messages Details:
+${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length > 500 ? msg.content.slice(0, 500) + '...' : msg.content}`).join('\n')}
+>> -----------------------------------------------------------
+          `);
+          
           console.group(`[AI REQUEST] 手动润色 - 优化前分析 - Chapter ${targetId}`);
           console.log('Messages:', messages);
           console.groupEnd();
@@ -397,6 +407,16 @@ export function useAutoWriteManager() {
           else messages.push({ role: 'user', content: `请基于以下建议优化正文：\n\n${currentAnalysisResult}` });
         }
 
+        // 详细日志：完整的提示词内容
+        terminal.log(`
+>> AI REQUEST [手动润色: 正文优化 - 详细提示词]
+>> -----------------------------------------------------------
+>> Messages Count: ${messages.length}
+>> Messages Details:
+${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length > 500 ? msg.content.slice(0, 500) + '...' : msg.content}`).join('\n')}
+>> -----------------------------------------------------------
+        `);
+        
         console.group(`[AI REQUEST] 手动润色 - 正文优化 - Chapter ${targetId}`);
         console.log('Messages:', messages);
         console.groupEnd();
