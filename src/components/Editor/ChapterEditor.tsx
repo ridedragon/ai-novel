@@ -114,7 +114,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     onShowEditPresetSettings,
   }) => {
     const contentScrollRef = useRef<HTMLDivElement>(null);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const textareaRef = useRef<HTMLDivElement>(null);
 
     const [localContent, setLocalContent] = useState('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -169,13 +169,26 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       }
     }, [activeChapterId, isEditingChapter, activeChapter?.content, isStreaming]);
 
-    // 当localContent变化时，更新高亮显示
+    // 当selections变化时，更新高亮显示
     useEffect(() => {
       if (isEditingChapter && textareaRef.current) {
+        // 保存当前选择状态
+        const selection = window.getSelection();
+        let range = null;
+        if (selection && selection.rangeCount > 0) {
+          range = selection.getRangeAt(0);
+        }
+        
         // 重新设置内容以更新高亮
-        textareaRef.current.innerHTML = getHighlightedContent(localContent) || '<p>在此处输入章节正文...</p>';
+        textareaRef.current.innerHTML = getHighlightedContent(localContent) || '<div>在此处输入章节正文...</div>';
+        
+        // 恢复选择状态
+        if (range && selection) {
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
       }
-    }, [localContent, selections, isEditingChapter]);
+    }, [selections, isEditingChapter]);
 
     useEffect(() => {
       const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -215,61 +228,99 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     };
 
     const handleSelectionChange = () => {
-    if (textareaRef.current) {
-      const start = textareaRef.current.selectionStart;
-      const end = textareaRef.current.selectionEnd;
-      setSelectionStart(start);
-      setSelectionEnd(end);
-      const selectedText = localContent.substring(start, end);
-      setSelectedText(selectedText);
-      
-      // 添加新选择到多选列表
-      if (start !== end) {
-        const colorIndex = selections.length % selectionColors.length;
-        const color = selectionColors[colorIndex];
-        const newSelection = { start, end, text: selectedText, color };
-        // 检查是否已经存在相同的选择
-        const exists = selections.some(s => s.start === start && s.end === end);
-        if (!exists) {
-          setSelections([...selections, newSelection]);
+      if (textareaRef.current) {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const startContainer = range.startContainer;
+          const endContainer = range.endContainer;
+          
+          // 确保选择在编辑器内部
+          if (textareaRef.current.contains(startContainer) && textareaRef.current.contains(endContainer)) {
+            // 计算选择的偏移量
+            let start = 0;
+            let end = 0;
+            let currentNode = textareaRef.current.firstChild;
+            
+            // 遍历节点计算偏移量
+            while (currentNode) {
+              if (currentNode === startContainer) {
+                start += range.startOffset;
+              }
+              if (currentNode === endContainer) {
+                end += range.endOffset;
+                break;
+              }
+              if (currentNode.nodeType === Node.TEXT_NODE) {
+                const textLength = currentNode.textContent?.length || 0;
+                if (currentNode === startContainer) {
+                  start += range.startOffset;
+                } else {
+                  start += textLength;
+                }
+                if (currentNode === endContainer) {
+                  end += range.endOffset;
+                } else {
+                  end += textLength;
+                }
+              }
+              currentNode = currentNode.nextSibling;
+            }
+            
+            setSelectionStart(start);
+            setSelectionEnd(end);
+            const selectedText = localContent.substring(start, end);
+            setSelectedText(selectedText);
+            
+            // 添加新选择到多选列表
+            if (start !== end) {
+              const colorIndex = selections.length % selectionColors.length;
+              const color = selectionColors[colorIndex];
+              const newSelection = { start, end, text: selectedText, color };
+              // 检查是否已经存在相同的选择
+              const exists = selections.some(s => s.start === start && s.end === end);
+              if (!exists) {
+                setSelections([...selections, newSelection]);
+              }
+            }
+          }
         }
       }
-    }
-  };
+    };
 
-  // 将纯文本转换为HTML，正确处理特殊字符并移除标签
-  const textToHtml = (text: string) => {
-    // 首先移除所有标签，包括 <novel></novel> 这样的标签
-    let processed = text.replace(/<[^>]+>/g, '');
-    // 然后转换特殊字符为HTML实体
-    return processed
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  };
+    // 将纯文本转换为HTML，正确处理特殊字符并移除标签
+    const textToHtml = (text: string) => {
+      // 首先移除所有标签，包括 <novel></novel> 这样的标签
+      let processed = text.replace(/<[^>]+>/g, '');
+      // 然后转换特殊字符为HTML实体
+      return processed
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    };
 
-  // 生成带有高亮的文本
-  const getHighlightedContent = (content: string) => {
-    // 处理连续的换行符，只保留一个
-    const processedContent = content.replace(/\n+/g, '\n');
-    
-    if (selections.length === 0) return textToHtml(processedContent);
-    
-    let result = '';
-    let lastIndex = 0;
-    
-    const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
-    
-    sortedSelections.forEach((selection) => {
-      result += textToHtml(processedContent.substring(lastIndex, selection.start));
-      result += `<mark class="${selection.color}">${textToHtml(processedContent.substring(selection.start, selection.end))}</mark>`;
-      lastIndex = selection.end;
-    });
-    
-    result += textToHtml(processedContent.substring(lastIndex));
-    
-    return result;
-  };
+    // 生成带有高亮的文本
+    const getHighlightedContent = (content: string) => {
+      // 处理连续的换行符，只保留一个
+      const processedContent = content.replace(/\n+/g, '\n');
+      
+      if (selections.length === 0) return textToHtml(processedContent);
+      
+      let result = '';
+      let lastIndex = 0;
+      
+      const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
+      
+      sortedSelections.forEach((selection) => {
+        result += textToHtml(processedContent.substring(lastIndex, selection.start));
+        result += `<mark class="${selection.color}">${textToHtml(processedContent.substring(selection.start, selection.end))}</mark>`;
+        lastIndex = selection.end;
+      });
+      
+      result += textToHtml(processedContent.substring(lastIndex));
+      
+      return result;
+    };
 
     const handleAiEdit = async () => {
       if (!aiEditPrompt.trim() || selections.length === 0) {
@@ -416,7 +467,7 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
           } else {
             throw new Error('Invalid JSON format: expected object with edits array or array');
           }
-        } catch (parseError) {
+        } catch (parseError: any) {
           terminal.error(`[Text Edit] JSON parse error: ${parseError.message}`);
           terminal.error(`[Text Edit] Response content: ${result}`);
           throw new Error('Failed to parse AI response as JSON');
