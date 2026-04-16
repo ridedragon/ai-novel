@@ -247,7 +247,10 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
 
   // 生成带有高亮的文本
   const getHighlightedContent = (content: string) => {
-    if (selections.length === 0) return textToHtml(content);
+    // 处理连续的换行符，只保留一个
+    const processedContent = content.replace(/\n+/g, '\n');
+    
+    if (selections.length === 0) return textToHtml(processedContent);
     
     let result = '';
     let lastIndex = 0;
@@ -255,12 +258,12 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
     
     sortedSelections.forEach((selection) => {
-      result += textToHtml(content.substring(lastIndex, selection.start));
-      result += `<mark class="${selection.color}">${textToHtml(content.substring(selection.start, selection.end))}</mark>`;
+      result += textToHtml(processedContent.substring(lastIndex, selection.start));
+      result += `<mark class="${selection.color}">${textToHtml(processedContent.substring(selection.start, selection.end))}</mark>`;
       lastIndex = selection.end;
     });
     
-    result += textToHtml(content.substring(lastIndex));
+    result += textToHtml(processedContent.substring(lastIndex));
     
     return result;
   };
@@ -687,8 +690,8 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                     const target = e.target as HTMLElement;
                     // 使用 innerText 并保留换行符
                     let value = target.innerText || '';
-                    // 确保换行符被正确保留
-                    value = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                    // 确保换行符被正确保留，并处理连续的换行符
+                    value = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n+/g, '\n');
                     handleLocalChange({ target: { value } } as any);
                   }}
                   onSelect={handleSelectionChange}
