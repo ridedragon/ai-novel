@@ -339,7 +339,10 @@ export function useNovelData() {
         return chapter;
       });
 
-      const result = sortChapters(recalibrateSummaries(renumberedTitles));
+      // 先排序章节，确保总结章节能找到正确的挂载点
+      const sortedChapters = sortChapters(renumberedTitles);
+      // 再校准总结，此时章节已经排序，能找到正确的挂载点
+      const result = sortChapters(recalibrateSummaries(sortedChapters));
       
       // 确保所有原始章节都被保留
       if (result.length < chapterList.length) {
