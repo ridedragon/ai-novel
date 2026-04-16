@@ -240,7 +240,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
         const messages = [
           {
             role: 'system' as const,
-            content: '你是一个专业的文本编辑助手。请根据用户的要求修改选中的文本。返回JSON格式的结果，包含一个edits数组，每个元素包含index（选择的序号，从0开始）和content（修改后的文本）。不要包含任何解释。'
+            content: '你是一个专业的文本编辑助手。请根据用户的要求修改选中的文本。返回JSON格式的结果，包含一个edits数组，每个元素包含index（选择的序号，从0开始）和content（修改后的文本）。不要包含任何解释。\n\n格式示例：\n{\n  "edits": [\n    {\n      "index": 0,\n      "content": "修改后的文本1"\n    },\n    {\n      "index": 1,\n      "content": "修改后的文本2"\n    }\n  ]\n}'
           },
           {
             role: 'user' as const,
