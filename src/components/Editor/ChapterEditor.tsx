@@ -248,6 +248,23 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
           }
         ];
 
+        // 详细日志：文本编辑模型请求
+        const requestStartTime = Date.now();
+        terminal.log(`
+>> AI REQUEST [文本编辑模型]
+>> -----------------------------------------------------------
+>> Model:       ${config.model}
+>> Base URL:    ${config.baseUrl}
+>> Temperature: 0.7
+>> API Key:     ${config.apiKey ? '***' : 'Missing'}
+>> Selections:  ${selections.length}
+>> Request Time: ${new Date().toISOString()}
+>> -----------------------------------------------------------
+>> Messages Details:
+${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length > 500 ? msg.content.slice(0, 500) + '...' : msg.content}`).join('\n')}
+>> -----------------------------------------------------------
+        `);
+
         let attempt = 0;
         let success = false;
         let result = '';
@@ -263,6 +280,23 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
             result = completion.choices[0]?.message?.content || '';
             
             if (!result) throw new Error('Empty response');
+            
+            // 详细日志：文本编辑模型响应
+            const requestEndTime = Date.now();
+            const responseTime = requestEndTime - requestStartTime;
+            terminal.log(`
+>> AI RESPONSE [文本编辑模型]
+>> -----------------------------------------------------------
+>> Status:      SUCCESS
+>> Response Time: ${responseTime}ms
+>> Content Length: ${result.length} characters
+>> Response Time: ${new Date().toISOString()}
+>> -----------------------------------------------------------
+>> Response Content:
+>> ${result.length > 500 ? result.slice(0, 500) + '...' : result}
+>> -----------------------------------------------------------
+            `);
+            
             success = true;
           } catch (err) {
             attempt++;
