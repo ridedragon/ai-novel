@@ -662,96 +662,98 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                       {isStreaming ? (
                         <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap leading-[1.8]" />
                       ) : (
-                        <ReactMarkdown
-                          components={{
-                            p: ({ children, ...props }) => (
-                              <p {...props} style={{ margin: 0, marginBottom: '1em', lineHeight: 1.8 }}>
-                                {children}
-                              </p>
-                            ),
-                            h1: ({ children, ...props }) => (
-                              <h1 {...props} style={{ margin: '1.5em 0 0.5em 0', fontSize: '1.5em', fontWeight: 'bold', lineHeight: 1.8 }}>
-                                {children}
-                              </h1>
-                            ),
-                            h2: ({ children, ...props }) => (
-                              <h2 {...props} style={{ margin: '1.5em 0 0.5em 0', fontSize: '1.3em', fontWeight: 'bold', lineHeight: 1.8 }}>
-                                {children}
-                              </h2>
-                            ),
-                            h3: ({ children, ...props }) => (
-                              <h3 {...props} style={{ margin: '1.5em 0 0.5em 0', fontSize: '1.2em', fontWeight: 'bold', lineHeight: 1.8 }}>
-                                {children}
-                              </h3>
-                            ),
-                            h4: ({ children, ...props }) => (
-                              <h4 {...props} style={{ margin: '1.5em 0 0.5em 0', fontSize: '1.1em', fontWeight: 'bold', lineHeight: 1.8 }}>
-                                {children}
-                              </h4>
-                            ),
-                            h5: ({ children, ...props }) => (
-                              <h5 {...props} style={{ margin: '1.5em 0 0.5em 0', fontSize: '1em', fontWeight: 'bold', lineHeight: 1.8 }}>
-                                {children}
-                              </h5>
-                            ),
-                            h6: ({ children, ...props }) => (
-                              <h6 {...props} style={{ margin: '1.5em 0 0.5em 0', fontSize: '0.9em', fontWeight: 'bold', lineHeight: 1.8 }}>
-                                {children}
-                              </h6>
-                            ),
-                            ul: ({ children, ...props }) => (
-                              <ul {...props} style={{ margin: '1em 0', paddingLeft: '2em', lineHeight: 1.8 }}>
-                                {children}
-                              </ul>
-                            ),
-                            ol: ({ children, ...props }) => (
-                              <ol {...props} style={{ margin: '1em 0', paddingLeft: '2em', lineHeight: 1.8 }}>
-                                {children}
-                              </ol>
-                            ),
-                            li: ({ children, ...props }) => (
-                              <li {...props} style={{ margin: '0.25em 0', lineHeight: 1.8 }}>
-                                {children}
-                              </li>
-                            ),
-                            blockquote: ({ children, ...props }) => (
-                              <blockquote {...props} style={{ margin: '1em 0', paddingLeft: '1em', borderLeft: '4px solid #e2e8f0', fontStyle: 'italic', lineHeight: 1.8 }}>
-                                {children}
-                              </blockquote>
-                            ),
-                            code: ({ children, ...props }) => (
-                              <code {...props} style={{ backgroundColor: '#f1f5f9', padding: '0.2em 0.4em', borderRadius: '0.25em', fontFamily: 'monospace', fontSize: '0.9em' }}>
-                                {children}
-                              </code>
-                            ),
-                            pre: ({ children, ...props }) => (
-                              <pre {...props} style={{ backgroundColor: '#f1f5f9', padding: '1em', borderRadius: '0.5em', overflowX: 'auto', lineHeight: 1.8 }}>
-                                {children}
-                              </pre>
-                            ),
-                            a: ({ children, ...props }) => (
-                              <a {...props} style={{ color: '#6366f1', textDecoration: 'underline' }}>
-                                {children}
-                              </a>
-                            ),
-                            strong: ({ children, ...props }) => (
-                              <strong {...props} style={{ fontWeight: 'bold' }}>
-                                {children}
-                              </strong>
-                            ),
-                            em: ({ children, ...props }) => (
-                              <em {...props} style={{ fontStyle: 'italic' }}>
-                                {children}
-                              </em>
-                            ),
-                            hr: ({ ...props }) => (
-                              <hr {...props} style={{ margin: '2em 0', border: 'none', borderTop: '1px solid #e2e8f0' }} />
-                            ),
-                            br: ({ ...props }) => <br {...props} />,
-                          }}
-                        >
-                          {activeChapter.content.replace(/<[^>]+>/g, '')}
-                        </ReactMarkdown>
+                        <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
+                          <ReactMarkdown
+                            components={{
+                              p: ({ children, ...props }) => (
+                                <span {...props} style={{ display: 'inline' }}>
+                                  {children}
+                                </span>
+                              ),
+                              h1: ({ children, ...props }) => (
+                                <h1 {...props} style={{ margin: '1.5em 0 0.5em 0', fontSize: '1.5em', fontWeight: 'bold', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                                  {children}
+                                </h1>
+                              ),
+                              h2: ({ children, ...props }) => (
+                                <h2 {...props} style={{ margin: '1.5em 0 0.5em 0', fontSize: '1.3em', fontWeight: 'bold', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                                  {children}
+                                </h2>
+                              ),
+                              h3: ({ children, ...props }) => (
+                                <h3 {...props} style={{ margin: '1.5em 0 0.5em 0', fontSize: '1.2em', fontWeight: 'bold', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                                  {children}
+                                </h3>
+                              ),
+                              h4: ({ children, ...props }) => (
+                                <h4 {...props} style={{ margin: '1.5em 0 0.5em 0', fontSize: '1.1em', fontWeight: 'bold', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                                  {children}
+                                </h4>
+                              ),
+                              h5: ({ children, ...props }) => (
+                                <h5 {...props} style={{ margin: '1.5em 0 0.5em 0', fontSize: '1em', fontWeight: 'bold', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                                  {children}
+                                </h5>
+                              ),
+                              h6: ({ children, ...props }) => (
+                                <h6 {...props} style={{ margin: '1.5em 0 0.5em 0', fontSize: '0.9em', fontWeight: 'bold', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                                  {children}
+                                </h6>
+                              ),
+                              ul: ({ children, ...props }) => (
+                                <ul {...props} style={{ margin: '1em 0', paddingLeft: '2em', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                                  {children}
+                                </ul>
+                              ),
+                              ol: ({ children, ...props }) => (
+                                <ol {...props} style={{ margin: '1em 0', paddingLeft: '2em', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                                  {children}
+                                </ol>
+                              ),
+                              li: ({ children, ...props }) => (
+                                <li {...props} style={{ margin: '0.25em 0', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                                  {children}
+                                </li>
+                              ),
+                              blockquote: ({ children, ...props }) => (
+                                <blockquote {...props} style={{ margin: '1em 0', paddingLeft: '1em', borderLeft: '4px solid #e2e8f0', fontStyle: 'italic', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                                  {children}
+                                </blockquote>
+                              ),
+                              code: ({ children, ...props }) => (
+                                <code {...props} style={{ backgroundColor: '#f1f5f9', padding: '0.2em 0.4em', borderRadius: '0.25em', fontFamily: 'monospace', fontSize: '0.9em', whiteSpace: 'normal' }}>
+                                  {children}
+                                </code>
+                              ),
+                              pre: ({ children, ...props }) => (
+                                <pre {...props} style={{ backgroundColor: '#f1f5f9', padding: '1em', borderRadius: '0.5em', overflowX: 'auto', lineHeight: 1.8, whiteSpace: 'normal' }}>
+                                  {children}
+                                </pre>
+                              ),
+                              a: ({ children, ...props }) => (
+                                <a {...props} style={{ color: '#6366f1', textDecoration: 'underline' }}>
+                                  {children}
+                                </a>
+                              ),
+                              strong: ({ children, ...props }) => (
+                                <strong {...props} style={{ fontWeight: 'bold' }}>
+                                  {children}
+                                </strong>
+                              ),
+                              em: ({ children, ...props }) => (
+                                <em {...props} style={{ fontStyle: 'italic' }}>
+                                  {children}
+                                </em>
+                              ),
+                              hr: ({ ...props }) => (
+                                <hr {...props} style={{ margin: '2em 0', border: 'none', borderTop: '1px solid #e2e8f0' }} />
+                              ),
+                              br: ({ ...props }) => <br {...props} />,
+                            }}
+                          >
+                            {activeChapter.content.replace(/<[^>]+>/g, '')}
+                          </ReactMarkdown>
+                        </div>
                       )}
                     </div>
                   ) : (
