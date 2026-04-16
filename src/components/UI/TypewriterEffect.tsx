@@ -82,11 +82,17 @@ export const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
 
   return (
     <div className={className}>
-      {displayedText.split('\n').map((line, index) => (
-        <p key={index} className="mb-4 last:mb-0">
-          {line}
+      {displayedText.includes('\n') ? (
+        displayedText.split('\n').map((line, index) => (
+          <p key={index} className="mb-4 last:mb-0">
+            {line}
+          </p>
+        ))
+      ) : (
+        <p className="mb-4">
+          {displayedText}
         </p>
-      ))}
+      )}
       {isStreaming && displayedText.length < text.length && (
         <span className="inline-block w-2 h-5 bg-current animate-pulse ml-1"></span>
       )}

@@ -662,12 +662,10 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                       {isStreaming ? (
                         <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap leading-relaxed" />
                       ) : (
-                        <ReactMarkdown className="prose dark:prose-invert prose-2xl max-w-none">
-                          {activeChapter.content.replace(/<[^>]+>/g, '')}
-                        </ReactMarkdown>
+                        <p className="mb-4 last:mb-0">{activeChapter.content.replace(/<[^>]+>/g, '')}</p>
                       )}
                     </div>
-                  ) : (
+                  ) :
                     <div className="text-slate-500 italic text-center py-20">
                       {activeChapter && optimizingChapterIds.has(activeChapter.id)
                         ? 'AI 正在分析并准备润色，请稍候...'
