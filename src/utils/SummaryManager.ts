@@ -249,9 +249,19 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
     
     const currentEnd = idToGlobalIdx.get(anchor.id) || 1;
     const currentEndVolume = anchorVolumeIndex;
-    const oldRange = chapter.summaryRange || '1-1';
-    const [oldS, oldE] = oldRange.split('-').map(Number);
-    const span = Math.max(1, (oldE || 1) - (oldS || 1) + 1);
+    
+    // 计算 span 时，优先使用合理的默认值，而不是依赖可能无效的 oldRange
+    // 对于小总结，默认 span 为 3；对于大总结，默认 span 为 6
+    let span = chapter.subtype === 'small_summary' ? 3 : 6;
+    
+    // 如果 oldRange 有效，则使用它来计算 span
+    const oldRange = chapter.summaryRange;
+    if (oldRange) {
+      const [oldS, oldE] = oldRange.split('-').map(Number);
+      if (!isNaN(oldS) && !isNaN(oldE) && oldE >= oldS) {
+        span = Math.max(1, oldE - oldS + 1);
+      }
+    }
     
     // 计算新的范围，确保不跨越分卷边界
     const newStartVolume = Math.max(1, currentEndVolume - span + 1);
@@ -270,11 +280,11 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
 
     if (hasChanged) {
       // Get actual chapter titles for the new range
-      const [newStart, newEnd] = newRange.split('-').map(Number);
-      const startChapter = storyChapters[newStart - 1];
-      const endChapter = storyChapters[newEnd - 1];
-      const startTitle = startChapter?.title || `Chapter ${newStart}`;
-      const endTitle = endChapter?.title || `Chapter ${newEnd}`;
+      const [rangeStart, rangeEnd] = newRange.split('-').map(Number);
+      const startChapter = storyChapters[rangeStart - 1];
+      const endChapter = storyChapters[rangeEnd - 1];
+      const startTitle = startChapter?.title || `Chapter ${rangeStart}`;
+      const endTitle = endChapter?.title || `Chapter ${rangeEnd}`;
       
       const newTitle = chapter.title.replace(/\s*\(\d+-\d+\)/, '').replace(/：.*$/, `：${startTitle} 到 ${endTitle}`);
       
