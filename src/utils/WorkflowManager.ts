@@ -1135,8 +1135,8 @@ class WorkflowManager {
       currentNodeIndex: index,
     };
     
-    // 保存状态
-    this.debouncedSaveExecutionState();
+    // 立即保存状态，而不是使用防抖，确保暂停状态被及时保存
+    this.saveExecutionState();
     this.notify();
   }
 
@@ -1196,6 +1196,8 @@ class WorkflowManager {
       this.state.isRunning = false;
       this.state.isPaused = true;
     }
+    // 保存状态到 localStorage
+    this.debouncedSaveExecutionState();
     this.notify();
   }
 
