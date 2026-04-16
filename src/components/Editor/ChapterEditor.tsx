@@ -662,7 +662,9 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                       {isStreaming ? (
                         <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap leading-[1.8]" />
                       ) : (
-                        activeChapter.content.replace(/<[^>]+>/g, '').replace(/\n\s*\n/g, '\n')
+                        <ReactMarkdown className="prose prose-slate dark:prose-invert max-w-none">
+                          {activeChapter.content}
+                        </ReactMarkdown>
                       )}
                     </div>
                   ) : (
