@@ -27,6 +27,7 @@ import { Chapter } from '../../types';
 import { extractChapterName } from '../../utils/chapterNumbering';
 import { TypewriterEffect } from '../UI/TypewriterEffect';
 import { getApiConfig } from '../../utils/aiHelpers';
+import { resolveEditPresetMacros } from '../../utils/editPresetMacros';
 
 interface ChapterEditorProps {
   activeChapter: Chapter | undefined;
@@ -271,12 +272,18 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
           return `选择 ${index + 1}: ${sel.text}`;
         }).join('\n\n');
 
-        // 使用预设中的提示词
+        // 构建宏解析上下文
+        const macroContext = {
+          currentChapterContent: localContent,
+          currentChapterTitle: activeChapter?.title
+        };
+
+        // 使用预设中的提示词，并解析宏
         const presetMessages = activeEditPreset.prompts
           .filter(p => p.enabled)
           .map(p => ({
-            role: p.role as const,
-            content: p.content
+            role: p.role as 'system' | 'user' | 'assistant',
+            content: resolveEditPresetMacros(p.content, macroContext)
           }));
 
         // 添加用户的修改要求和选择的文本

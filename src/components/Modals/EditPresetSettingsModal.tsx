@@ -337,6 +337,14 @@ export const EditPresetSettingsModal: React.FC<EditPresetSettingsModalProps> = (
                                   <Plus className="w-3 h-3" /> 添加消息
                               </button>
                           </div>
+
+                          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-xs text-amber-400">
+                              <div className="font-bold mb-1">💡 可用宏</div>
+                              <ul className="list-disc list-inside space-y-1">
+                                  <li><code className="bg-amber-500/20 px-1 rounded">&#123;&#123;current_chapter&#125;&#125;</code> - 当前章节全部内容</li>
+                                  <li><code className="bg-amber-500/20 px-1 rounded">&#123;&#123;current_chapter_title&#125;&#125;</code> - 当前章节标题</li>
+                              </ul>
+                          </div>
                           
                           <div className="hidden md:block border border-gray-700 rounded-lg overflow-hidden">
                               <table className="w-full text-left text-sm">
