@@ -713,7 +713,7 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                       {isStreaming ? (
                         <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap" />
                       ) : (
-                        <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: getHighlightedContent(activeChapter.content) }} />
+                        <ReactMarkdown>{activeChapter.content}</ReactMarkdown>
                       )}
                     </div>
                   ) : (
