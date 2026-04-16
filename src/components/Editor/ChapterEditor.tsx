@@ -665,7 +665,7 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                         <p className="mb-4 last:mb-0">{activeChapter.content.replace(/<[^>]+>/g, '')}</p>
                       )}
                     </div>
-                  ) :
+                  ) : (
                     <div className="text-slate-500 italic text-center py-20">
                       {activeChapter && optimizingChapterIds.has(activeChapter.id)
                         ? 'AI 正在分析并准备润色，请稍候...'
