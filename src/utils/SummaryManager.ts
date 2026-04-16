@@ -186,13 +186,26 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
   return chapters.map((chapter, index) => {
     if (!isSummaryChapter(chapter)) return chapter;
 
-    // 【深度修复】：不仅要对齐 range，还要强制纠正 volumeId
-    // 逻辑：总结章节必须属于它在数组位置上紧邻的那个剧情章所属的分卷
+    // 【深度修复】：优先根据 summaryRange 寻找挂载点，而不是根据数组位置
+    // 这样即使总结章节跑到了错误的数组位置，也能找到正确的挂载点
     let anchor: Chapter | null = null;
-    for (let i = index - 1; i >= 0; i--) {
-      if (!isSummaryChapter(chapters[i])) {
-        anchor = chapters[i];
-        break;
+    
+    // 首先尝试根据 summaryRange 寻找挂载点
+    const range = chapter.summaryRange?.split('-').map(Number);
+    if (range && range.length === 2 && !isNaN(range[1]) && range[1] > 0) {
+      const targetStory = storyChapters[range[1] - 1];
+      if (targetStory) {
+        anchor = targetStory;
+      }
+    }
+    
+    // 如果根据 summaryRange 找不到挂载点，再回退到根据数组位置寻找
+    if (!anchor) {
+      for (let i = index - 1; i >= 0; i--) {
+        if (!isSummaryChapter(chapters[i])) {
+          anchor = chapters[i];
+          break;
+        }
       }
     }
 
