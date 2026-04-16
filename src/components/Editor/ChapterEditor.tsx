@@ -23,6 +23,7 @@ import terminal from 'virtual:terminal';
 import { Chapter } from '../../types';
 import { extractChapterName } from '../../utils/chapterNumbering';
 import { TypewriterEffect } from '../UI/TypewriterEffect';
+import { getApiConfig } from '../../utils/aiHelpers';
 
 interface ChapterEditorProps {
   activeChapter: Chapter | undefined;
@@ -198,30 +199,20 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       }
     };
 
-    const getApiConfig = () => {
-      let finalApiKey = apiKey;
-      let finalBaseUrl = baseUrl;
-      let finalModel = editModel;
-
-      const activePreset = apiPresets.find(p => p.id === activeApiPresetId);
-      if (activePreset) {
-        finalApiKey = activePreset.apiKey;
-        finalBaseUrl = activePreset.baseUrl;
-        if (!finalModel && activePreset.defaultModel) {
-          finalModel = activePreset.defaultModel;
-        }
-      }
-
-      return { apiKey: finalApiKey, baseUrl: finalBaseUrl, model: finalModel };
-    };
-
     const handleAiEdit = async () => {
       if (!aiEditPrompt.trim() || selections.length === 0) {
         onError?.('请先选择要修改的文本并输入修改要求');
         return;
       }
 
-      const config = getApiConfig();
+      const config = getApiConfig(
+        null, 
+        editModel, 
+        apiKey, 
+        baseUrl, 
+        '', 
+        apiPresets
+      );
       if (!config.apiKey || !config.model) {
         onError?.('请先配置 API Key 和编辑模型');
         return;
