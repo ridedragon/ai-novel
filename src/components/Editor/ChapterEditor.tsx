@@ -110,11 +110,12 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     const [selectedText, setSelectedText] = useState('');
     const [selectionStart, setSelectionStart] = useState(-1);
     const [selectionEnd, setSelectionEnd] = useState(-1);
-    const [selections, setSelections] = useState<Array<{ start: number; end: number; text: string }>>([]);
+    const [selections, setSelections] = useState<Array<{ start: number; end: number; text: string; color: string }>>([]);
+    const selectionColors = ['bg-blue-100 dark:bg-blue-900/30', 'bg-green-100 dark:bg-green-900/30', 'bg-yellow-100 dark:bg-yellow-900/30', 'bg-purple-100 dark:bg-purple-900/30', 'bg-pink-100 dark:bg-pink-900/30'];
     const [aiEditPrompt, setAiEditPrompt] = useState('');
     const [isAiProcessing, setIsAiProcessing] = useState(false);
     const [aiError, setAiError] = useState<string | null>(null);
-    const [retryData, setRetryData] = useState<{ prompt: string; selections: Array<{ start: number; end: number; text: string }> } | null>(null);
+    const [retryData, setRetryData] = useState<{ prompt: string; selections: Array<{ start: number; end: number; text: string; color: string }> } | null>(null);
 
     useEffect(() => {
       if (activeChapter) {
@@ -185,7 +186,9 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
         
         // 添加新选择到多选列表
         if (start !== end) {
-          const newSelection = { start, end, text: selectedText };
+          const colorIndex = selections.length % selectionColors.length;
+          const color = selectionColors[colorIndex];
+          const newSelection = { start, end, text: selectedText, color };
           // 检查是否已经存在相同的选择
           const exists = selections.some(s => s.start === start && s.end === end);
           if (!exists) {
@@ -608,6 +611,35 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
                   <div className="mb-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                     <Check className="w-3 h-3" />
                     <span>已选中 {selections.length} 个文本片段</span>
+                  </div>
+                )}
+                
+                {selections.length > 0 && (
+                  <div className="mb-3 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="flex flex-wrap gap-2">
+                      {selections.map((selection, index) => (
+                        <div 
+                          key={`${selection.start}-${selection.end}`}
+                          className={`${selection.color} px-2 py-1 rounded-md flex items-center gap-1 text-xs`}
+                        >
+                          <span className="max-w-[200px] truncate">{selection.text.substring(0, 50)}{selection.text.length > 50 ? '...' : ''}</span>
+                          <button
+                            onClick={() => {
+                              setSelections(selections.filter((_, i) => i !== index));
+                              // 如果删除的是当前选择，重置选择状态
+                              if (selectionStart >= selection.start && selectionEnd <= selection.end) {
+                                setSelectionStart(-1);
+                                setSelectionEnd(-1);
+                                setSelectedText('');
+                              }
+                            }}
+                            className="text-slate-500 hover:text-red-500 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
                 
