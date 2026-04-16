@@ -662,7 +662,7 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                       {isStreaming ? (
                         <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap leading-relaxed" />
                       ) : (
-                        <p className="mb-4 last:mb-0">{activeChapter.content.replace(/<[^>]+>/g, '')}</p>
+                        <p className="mb-4 last:mb-0 whitespace-pre-wrap">{activeChapter.content.replace(/<[^>]+>/g, '')}</p>
                       )}
                     </div>
                   ) : (
