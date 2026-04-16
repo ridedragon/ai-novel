@@ -308,11 +308,19 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
         // 解析JSON结果
         let edits: Array<{ index: number; content: string }> = [];
         try {
-          edits = JSON.parse(result);
-          if (!Array.isArray(edits)) {
-            throw new Error('Invalid JSON format: expected array');
+          const parsed = JSON.parse(result);
+          // 检查是否是包含 edits 数组的对象
+          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.edits)) {
+            edits = parsed.edits;
+          } else if (Array.isArray(parsed)) {
+            // 兼容旧格式：直接返回数组
+            edits = parsed;
+          } else {
+            throw new Error('Invalid JSON format: expected object with edits array or array');
           }
         } catch (parseError) {
+          terminal.error(`[Text Edit] JSON parse error: ${parseError.message}`);
+          terminal.error(`[Text Edit] Response content: ${result}`);
           throw new Error('Failed to parse AI response as JSON');
         }
 
