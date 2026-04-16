@@ -39,6 +39,9 @@ const CreateNovelModal = lazy(() =>
 const GeneratorSettingsModal = lazy(() =>
   import('./components/Modals/GeneratorSettingsModal').then(m => ({ default: m.GeneratorSettingsModal })),
 );
+const EditPresetSettingsModal = lazy(() =>
+  import('./components/Modals/EditPresetSettingsModal').then(m => ({ default: m.EditPresetSettingsModal })),
+);
 const GlobalDialog = lazy(() => import('./components/Modals/GlobalDialog').then(m => ({ default: m.GlobalDialog })));
 const OutlineEditModal = lazy(() =>
   import('./components/Modals/OutlineEditModal').then(m => ({ default: m.OutlineEditModal })),
@@ -131,6 +134,15 @@ function App() {
   const [showGeneratorApiConfig, setShowGeneratorApiConfig] = useState(false);
   const [editingGeneratorPromptIndex, setEditingGeneratorPromptIndex] = useState<number | null>(null);
   const [tempEditingPrompt, setTempEditingPrompt] = useState<GeneratorPrompt | null>(null);
+
+  // 编辑预设模态框状态
+  const [showEditPresetSettingsModal, setShowEditPresetSettingsModal] = useState(false);
+  const [showEditPresetApiConfig, setShowEditPresetApiConfig] = useState(false);
+  const [showEditPresetPromptEditModal, setShowEditPresetPromptEditModal] = useState(false);
+  const [editingEditPresetPromptIndex, setEditingEditPresetPromptIndex] = useState<number | null>(null);
+  const [tempEditingEditPresetPrompt, setTempEditingEditPresetPrompt] = useState<GeneratorPrompt | null>(null);
+  const [isEditPresetDragEnabled, setIsEditPresetDragEnabled] = useState(false);
+  const [draggedEditPresetPromptIndex, setDraggedEditPresetPromptIndex] = useState<number | null>(null);
 
   const [showSkillManager, setShowSkillManager] = useState(false);
   const [skillsCount, setSkillsCount] = useState(0);
@@ -469,6 +481,23 @@ function App() {
     setShowRegexEditor(false);
     setEditingRegexScript(null);
   }, [editingRegexScript, regexEditorMode, config, completion]);
+
+  // 保存编辑预设提示词
+  const handleSaveEditPresetPrompt = useCallback(() => {
+    if (editingEditPresetPromptIndex !== null && tempEditingEditPresetPrompt) {
+      const currentPresets = config.editPresets;
+      const activeId = config.activeEditPresetId;
+      const currentPreset = currentPresets.find(p => p.id === activeId);
+      if (currentPreset) {
+        const newPrompts = [...currentPreset.prompts];
+        newPrompts[editingEditPresetPromptIndex] = tempEditingEditPresetPrompt;
+        config.handleUpdateEditPreset(activeId, { prompts: newPrompts });
+      }
+      setShowEditPresetPromptEditModal(false);
+      setTempEditingEditPresetPrompt(null);
+      setEditingEditPresetPromptIndex(null);
+    }
+  }, [editingEditPresetPromptIndex, tempEditingEditPresetPrompt, config]);
 
 
 
@@ -1702,6 +1731,10 @@ function App() {
           onError={(msg) =>
             setDialog({ isOpen: true, type: 'alert', title: '错误', message: msg, onConfirm: closeDialog })
           }
+          editPresets={config.editPresets}
+          activeEditPresetId={config.activeEditPresetId}
+          setActiveEditPresetId={config.setActiveEditPresetId}
+          onShowEditPresetSettings={() => setShowEditPresetSettingsModal(true)}
         />
       )}
 
@@ -2171,6 +2204,32 @@ function App() {
           />
         )}
         <SkillManager isOpen={showSkillManager} onClose={() => setShowSkillManager(false)} />
+        {showEditPresetSettingsModal && (
+          <EditPresetSettingsModal
+            isOpen={showEditPresetSettingsModal}
+            onClose={() => setShowEditPresetSettingsModal(false)}
+            editPresets={config.editPresets}
+            setEditPresets={config.setEditPresets}
+            activeEditPresetId={config.activeEditPresetId}
+            setActiveEditPresetId={config.setActiveEditPresetId}
+            handleAddEditPreset={config.handleAddEditPreset}
+            handleDeleteEditPreset={config.handleDeleteEditPreset}
+            handleUpdateEditPreset={config.handleUpdateEditPreset}
+            showEditPresetApiConfig={showEditPresetApiConfig}
+            setShowEditPresetApiConfig={setShowEditPresetApiConfig}
+            showEditPresetPromptEditModal={showEditPresetPromptEditModal}
+            setShowEditPresetPromptEditModal={setShowEditPresetPromptEditModal}
+            editingEditPresetPromptIndex={editingEditPresetPromptIndex}
+            setEditingEditPresetPromptIndex={setEditingEditPresetPromptIndex}
+            tempEditingEditPresetPrompt={tempEditingEditPresetPrompt}
+            setTempEditingEditPresetPrompt={setTempEditingEditPresetPrompt}
+            handleSaveEditPresetPrompt={handleSaveEditPresetPrompt}
+            isDragEnabled={isEditPresetDragEnabled}
+            setIsDragEnabled={setIsEditPresetDragEnabled}
+            draggedEditPresetPromptIndex={draggedEditPresetPromptIndex}
+            setDraggedEditPresetPromptIndex={setDraggedEditPresetPromptIndex}
+          />
+        )}
       </Suspense>
     </NovelEditorLayout>
 
