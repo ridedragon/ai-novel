@@ -237,27 +237,38 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     }
   };
 
+  // 将纯文本转换为HTML，保留换行
+  const textToHtml = (text: string) => {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
+  };
+
   // 生成带有高亮的文本
   const getHighlightedContent = (content: string) => {
-    if (selections.length === 0) return content;
+    let processedContent = textToHtml(content);
     
-    // 按照开始位置排序
-    const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
+    if (selections.length === 0) return processedContent;
     
+    // 先处理选择的文本，需要计算HTML位置
+    // 这里简化处理，直接在原始文本中处理，然后再转换
     let result = '';
     let lastIndex = 0;
     
-    sortedSelections.forEach((selection, index) => {
+    const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
+    
+    sortedSelections.forEach((selection) => {
       // 添加选择之前的文本
-      result += content.substring(lastIndex, selection.start);
+      result += textToHtml(content.substring(lastIndex, selection.start));
       // 添加带有高亮的选择文本
-      result += `<mark class="${selection.color}">${content.substring(selection.start, selection.end)}</mark>`;
-      // 更新lastIndex
+      result += `<mark class="${selection.color}">${textToHtml(content.substring(selection.start, selection.end))}</mark>`;
       lastIndex = selection.end;
     });
     
     // 添加最后一个选择之后的文本
-    result += content.substring(lastIndex);
+    result += textToHtml(content.substring(lastIndex));
     
     return result;
   };
@@ -682,11 +693,15 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                   contentEditable
                   onInput={(e) => {
                     const target = e.target as HTMLElement;
-                    handleLocalChange({ target: { value: target.innerText } } as any);
+                    // 使用 innerText 并保留换行符
+                    let value = target.innerText || '';
+                    // 确保换行符被正确保留
+                    value = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                    handleLocalChange({ target: { value } } as any);
                   }}
                   onSelect={handleSelectionChange}
-                  className="w-full h-full min-h-[500px] md:min-h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 leading-[1.8] outline-none font-serif selection:bg-primary/30 px-2 md:px-0 placeholder-slate-400"
-                  dangerouslySetInnerHTML={{ __html: getHighlightedContent(localContent) || '<p>在此处输入章节正文...</p>' }}
+                  className="w-full h-full min-h-[500px] md:min-h-[600px] bg-transparent text-[18px] md:text-[21px] text-slate-800 dark:text-slate-200/90 leading-[1.8] outline-none font-serif selection:bg-primary/30 px-2 md:px-0 placeholder-slate-400 whitespace-pre-wrap"
+                  dangerouslySetInnerHTML={{ __html: getHighlightedContent(localContent) || '<div>在此处输入章节正文...</div>' }}
                 />
               ) : (
                 <article
@@ -698,7 +713,7 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                       {isStreaming ? (
                         <TypewriterEffect text={activeChapter.content} isStreaming={isStreaming} className="whitespace-pre-wrap" />
                       ) : (
-                        <div dangerouslySetInnerHTML={{ __html: getHighlightedContent(activeChapter.content.replace(/<[^>]+>/g, '')) }} />
+                        <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: getHighlightedContent(activeChapter.content) }} />
                       )}
                     </div>
                   ) : (
