@@ -718,23 +718,42 @@ function App() {
             handleRecalibrateSummaries={async () => {
               if (!novelData.activeNovelId) return;
               
-              // 直接获取当前章节并手动处理，避免重复规范化
-              const activeNovel = novelData.novels.find(n => n.id === novelData.activeNovelId);
-              if (!activeNovel) return;
-              
-              let currentChapters = [...(activeNovel.chapters || [])];
-              
-              // 1. 先排序章节
-              currentChapters = sortChapters(currentChapters);
-              
-              // 2. 再校准总结，此时章节已经排序，且 recalibrateSummaries 会优先根据 summaryRange 寻找挂载点
-              currentChapters = recalibrateSummaries(currentChapters);
-              
-              // 3. 最后再次排序，确保最终顺序正确
-              currentChapters = sortChapters(currentChapters);
-              
-              // 使用 skipNormalization: true 来避免重复执行 normalizeChapters
-              novelData.setChapters(currentChapters, true);
+              // 直接使用 setChapters 函数的回调形式，确保触发完整的状态更新
+              novelData.setChapters(prevChapters => {
+                let currentChapters = [...prevChapters];
+                
+                // 1. 先排序章节
+                currentChapters = sortChapters(currentChapters);
+                
+                // 2. 再校准总结，此时章节已经排序，且 recalibrateSummaries 会优先根据 summaryRange 寻找挂载点
+                currentChapters = recalibrateSummaries(currentChapters);
+                
+                // 3. 最后再次排序，确保最终顺序正确
+                currentChapters = sortChapters(currentChapters);
+                
+                // 4. 强制更新所有总结章节的 volumeId，确保它们与挂载点一致
+                currentChapters = currentChapters.map((chapter, index) => {
+                  if (!isSummaryChapter(chapter)) return chapter;
+                  
+                  // 找到前一个非总结章节作为挂载点
+                  let anchor: Chapter | null = null;
+                  for (let i = index - 1; i >= 0; i--) {
+                    if (!isSummaryChapter(currentChapters[i])) {
+                      anchor = currentChapters[i];
+                      break;
+                    }
+                  }
+                  
+                  if (anchor && chapter.volumeId !== anchor.volumeId) {
+                    terminal.log(`[FIX] 强制修正总结章节 ${chapter.title} 的分卷归属为 ${anchor.volumeId}`);
+                    return { ...chapter, volumeId: anchor.volumeId };
+                  }
+                  
+                  return chapter;
+                });
+                
+                return currentChapters;
+              });
             }}
             isLoading={autoWrite.isLoading}
           />
@@ -1776,23 +1795,42 @@ function App() {
             handleRecalibrateSummaries={async () => {
               if (!novelData.activeNovelId) return;
               
-              // 直接获取当前章节并手动处理，避免重复规范化
-              const activeNovel = novelData.novels.find(n => n.id === novelData.activeNovelId);
-              if (!activeNovel) return;
-              
-              let currentChapters = [...(activeNovel.chapters || [])];
-              
-              // 1. 先排序章节
-              currentChapters = sortChapters(currentChapters);
-              
-              // 2. 再校准总结，此时章节已经排序，且 recalibrateSummaries 会优先根据 summaryRange 寻找挂载点
-              currentChapters = recalibrateSummaries(currentChapters);
-              
-              // 3. 最后再次排序，确保最终顺序正确
-              currentChapters = sortChapters(currentChapters);
-              
-              // 使用 skipNormalization: true 来避免重复执行 normalizeChapters
-              novelData.setChapters(currentChapters, true);
+              // 直接使用 setChapters 函数的回调形式，确保触发完整的状态更新
+              novelData.setChapters(prevChapters => {
+                let currentChapters = [...prevChapters];
+                
+                // 1. 先排序章节
+                currentChapters = sortChapters(currentChapters);
+                
+                // 2. 再校准总结，此时章节已经排序，且 recalibrateSummaries 会优先根据 summaryRange 寻找挂载点
+                currentChapters = recalibrateSummaries(currentChapters);
+                
+                // 3. 最后再次排序，确保最终顺序正确
+                currentChapters = sortChapters(currentChapters);
+                
+                // 4. 强制更新所有总结章节的 volumeId，确保它们与挂载点一致
+                currentChapters = currentChapters.map((chapter, index) => {
+                  if (!isSummaryChapter(chapter)) return chapter;
+                  
+                  // 找到前一个非总结章节作为挂载点
+                  let anchor: Chapter | null = null;
+                  for (let i = index - 1; i >= 0; i--) {
+                    if (!isSummaryChapter(currentChapters[i])) {
+                      anchor = currentChapters[i];
+                      break;
+                    }
+                  }
+                  
+                  if (anchor && chapter.volumeId !== anchor.volumeId) {
+                    terminal.log(`[FIX] 强制修正总结章节 ${chapter.title} 的分卷归属为 ${anchor.volumeId}`);
+                    return { ...chapter, volumeId: anchor.volumeId };
+                  }
+                  
+                  return chapter;
+                });
+                
+                return currentChapters;
+              });
             }}
             isLoading={autoWrite.isLoading}
           />
