@@ -290,14 +290,13 @@ export const useWorkflowEngine = (options: {
         return sets || [];
       }
       
-      return (sets || []).map(set => {
-        if (affectedVolumeTitles.has(set.name) || 
-            [...affectedVolumeTitles].some(volumeTitle => 
-              set.name.includes(volumeTitle) || volumeTitle.includes(set.name)
-            )) {
-          return { ...set, [setName]: [] };
-        }
-        return set;
+      // 过滤掉与受影响卷相关的集合，而不是仅清空内容
+      // 这样可以确保旧的集合被完全移除，避免与新创建的集合冲突
+      return (sets || []).filter(set => {
+        return !(affectedVolumeTitles.has(set.name) || 
+                 [...affectedVolumeTitles].some(volumeTitle => 
+                   set.name.includes(volumeTitle) || volumeTitle.includes(set.name)
+                 ));
       });
     };
 
