@@ -44,6 +44,8 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
       // 获取该总结理论上应该跟随的剧情章 (基于全局物理索引)
       const targetStory = allStories[range[1] - 1];
       if (targetStory) {
+        // 确保总结章节的volumeId与目标剧情章一致
+        s.volumeId = targetStory.volumeId;
         if (!summariesByParentId.has(targetStory.id)) summariesByParentId.set(targetStory.id, []);
         summariesByParentId.get(targetStory.id)!.push(s);
         return;
@@ -203,13 +205,25 @@ export const recalibrateSummaries = (chapters: Chapter[]): Chapter[] => {
       return chapter;
     }
 
+    // 确保总结章节的volumeId与挂载点一致
+    const targetVolumeId = anchor.volumeId;
+    
+    // 获取当前分卷的所有剧情章节
+    const volumeStories = storiesByVolume.get(targetVolumeId) || [];
+    
+    // 找到挂载点在分卷内的索引
+    const anchorVolumeIndex = volumeStories.findIndex(s => s.id === anchor.id) + 1;
+    
     const currentEnd = idToGlobalIdx.get(anchor.id) || 1;
-    const currentEndVolume = idToVolumeIdx.get(anchor.id) || 1;
+    const currentEndVolume = anchorVolumeIndex;
     const oldRange = chapter.summaryRange || '1-1';
     const [oldS, oldE] = oldRange.split('-').map(Number);
     const span = Math.max(1, (oldE || 1) - (oldS || 1) + 1);
-    const newStart = Math.max(1, currentEnd - span + 1);
+    
+    // 计算新的范围，确保不跨越分卷边界
     const newStartVolume = Math.max(1, currentEndVolume - span + 1);
+    const newStart = idToGlobalIdx.get(volumeStories[newStartVolume - 1]?.id) || newStartVolume;
+    
     const newRange = `${newStart}-${currentEnd}`;
     const newRangeVolume = `${newStartVolume}-${currentEndVolume}`;
 
