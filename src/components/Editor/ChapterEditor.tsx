@@ -29,6 +29,8 @@ import { TypewriterEffect } from '../UI/TypewriterEffect';
 import { getApiConfig } from '../../utils/aiHelpers';
 import { resolveEditPresetMacros } from '../../utils/editPresetMacros';
 
+const selectionColors = ['bg-blue-100 dark:bg-blue-900/30', 'bg-green-100 dark:bg-green-900/30', 'bg-yellow-100 dark:bg-yellow-900/30', 'bg-purple-100 dark:bg-purple-900/30', 'bg-pink-100 dark:bg-pink-900/30'];
+
 interface ChapterEditorProps {
   activeChapter: Chapter | undefined;
   activeChapterId: number | null;
@@ -126,7 +128,6 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     const [selectionStart, setSelectionStart] = useState(-1);
     const [selectionEnd, setSelectionEnd] = useState(-1);
     const [selections, setSelections] = useState<Array<{ start: number; end: number; text: string; color: string }>>([]);
-    const selectionColors = ['bg-blue-100 dark:bg-blue-900/30', 'bg-green-100 dark:bg-green-900/30', 'bg-yellow-100 dark:bg-yellow-900/30', 'bg-purple-100 dark:bg-purple-900/30', 'bg-pink-100 dark:bg-pink-900/30'];
     const [aiEditPrompt, setAiEditPrompt] = useState('');
     const [isAiProcessing, setIsAiProcessing] = useState(false);
     const [aiError, setAiError] = useState<string | null>(null);
@@ -169,7 +170,7 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
       } else {
         setMarkedContent([]);
       }
-    }, [isMobile, localContent, selectionColors]);
+    }, [isMobile, localContent]);
 
     useEffect(() => {
       const handleClickOutside = (e: MouseEvent) => {
