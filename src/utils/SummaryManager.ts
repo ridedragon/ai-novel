@@ -85,7 +85,8 @@ export const sortChapters = (chapters: Chapter[]): Chapter[] => {
       if (a.globalIndex !== undefined && b.globalIndex !== undefined) {
         return a.globalIndex - b.globalIndex;
       }
-      return 0;
+      // 如果没有 globalIndex，则使用在原始数组中的位置排序
+      return chapters.indexOf(a) - chapters.indexOf(b);
     });
 
     volStories.forEach(story => {
