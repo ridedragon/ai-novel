@@ -1,0 +1,5 @@
+This merge updates the ChapterEditor component with significant improvements to editing functionality, including cursor position preservation, enhanced line break handling, and optimized content synchronization.
+
+| File | Changes |
+|------|---------|
+| src/components/Editor/ChapterEditor.tsx | - Modified content update logic to only update localContent when not in editing mode, preventing cursor position loss<br>- Added comprehensive cursor position preservation system that saves and restores cursor position during content updates<br>- Enhanced textToHtml function to preserve all line breaks and convert them to <br> tags<br>- Updated getHighlightedContent to preserve all line breaks instead of collapsing multiple newlines<br>- Implemented a timeout-based content synchronization mechanism with debouncing<br>- Added logging for content synchronization events<br>- Added tracking of last saved time<br>- Updated TypewriterEffect and ReactMarkdown to strip HTML tags from displayed content
