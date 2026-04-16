@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 interface TypewriterEffectProps {
   text: string;
@@ -53,8 +54,8 @@ export const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   }, [text, speed]);
 
   useEffect(() => {
-    // 处理连续的换行符，只保留一个，并移除标签
-    const processedText = text.replace(/<[^>]+>/g, '').replace(/\n+/g, '\n');
+    // 处理连续的换行符，只保留一个
+    const processedText = text.replace(/\n+/g, '\n');
     
     if (!isStreaming) {
       setDisplayedText(processedText);
@@ -85,7 +86,11 @@ export const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
 
   return (
     <div className={`${className} whitespace-pre-wrap`}>
-      {displayedText}
+      {isStreaming ? (
+        displayedText
+      ) : (
+        <ReactMarkdown>{displayedText}</ReactMarkdown>
+      )}
       {isStreaming && displayedText.length < text.length && (
         <span className="inline-block w-2 h-5 bg-current animate-pulse ml-1"></span>
       )}
