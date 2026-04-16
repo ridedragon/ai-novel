@@ -237,9 +237,12 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = React.memo(
     }
   };
 
-  // 将纯文本转换为HTML，正确处理特殊字符
+  // 将纯文本转换为HTML，正确处理特殊字符并移除标签
   const textToHtml = (text: string) => {
-    return text
+    // 首先移除所有标签，包括 <novel></novel> 这样的标签
+    let processed = text.replace(/<[^>]+>/g, '');
+    // 然后转换特殊字符为HTML实体
+    return processed
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
@@ -692,6 +695,8 @@ ${messages.map((msg, idx) => `>> ${idx + 1}. ${msg.role}: ${msg.content.length >
                     let value = target.innerText || '';
                     // 确保换行符被正确保留，并处理连续的换行符
                     value = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n+/g, '\n');
+                    // 移除标签
+                    value = value.replace(/<[^>]+>/g, '');
                     handleLocalChange({ target: { value } } as any);
                   }}
                   onSelect={handleSelectionChange}
