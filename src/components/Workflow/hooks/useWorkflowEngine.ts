@@ -21,6 +21,11 @@ import {
 import { cleanAndParseJSON, extractEntries, extractTargetEndChapter, parseAnyNumber, checkNodeHasContent } from '../utils/workflowHelpers';
 import { initializeChapterNumbering, generateChapterTitle, calculateNewChapterNumbering } from '../../../utils/chapterNumbering';
 
+// Helper function to escape special regex characters
+const escapeRegex = (str: string): string => {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
 // Helper function to normalize base URL
 const normalizeBaseUrl = (url: string): string => {
   let normalized = url.trim();
@@ -3970,12 +3975,36 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
               const chapterTitle = outlineEntry.title;
               
               // 查找章节标题在响应中的位置
-              const titleIndex = batchChapterResponse.indexOf(chapterTitle);
+              // 核心修复：使用更精确的匹配方式，避免标题被误匹配到内容中
+              let titleIndex = -1;
+              const titlePatterns = [
+                // 精确匹配：标题后紧跟换行符或空格+换行符
+                new RegExp(`(^|\\n)\\s*${escapeRegex(chapterTitle)}\\s*$`, 'm'),
+                // 匹配：标题前可能有换行，后跟换行
+                new RegExp(`\\n\\s*${escapeRegex(chapterTitle)}\\s*\\n`),
+                // 匹配：标题在开头或紧跟换行
+                new RegExp(`(?:^|\\n)\\s*${escapeRegex(chapterTitle)}(?=\\s|$)`),
+              ];
+              
+              for (const pattern of titlePatterns) {
+                const match = batchChapterResponse.match(pattern);
+                if (match) {
+                  titleIndex = match.index! + match[0].lastIndexOf(chapterTitle);
+                  break;
+                }
+              }
+              
+              // 如果精确模式匹配失败，回退到简单匹配
+              if (titleIndex === -1) {
+                titleIndex = batchChapterResponse.indexOf(chapterTitle);
+              }
+              
               if (titleIndex !== -1) {
                 // 找到下一个章节标题的位置作为结束标记
                 let nextTitleIndex = batchChapterResponse.length;
                 for (let j = i + 1; j < batchSize; j++) {
-                  const nextTitle = outlineEntries[j].title;
+                  const nextTitle = outlineEntries[j]?.title;
+                  if (!nextTitle) continue;
                   const nextIndex = batchChapterResponse.indexOf(nextTitle, titleIndex + chapterTitle.length);
                   if (nextIndex !== -1 && nextIndex < nextTitleIndex) {
                     nextTitleIndex = nextIndex;
@@ -3983,7 +4012,7 @@ ${volumeConfigs.map((v, idx) => `${idx + 1}. ${v.name} (${v.chapters})`).join('\
                   }
                 }
                 
-                // 提取章节内容
+                // 提取章节内容（确保不包含当前章节标题本身）
                 const chapterContent = batchChapterResponse
                   .slice(titleIndex + chapterTitle.length, nextTitleIndex)
                   .trim();
